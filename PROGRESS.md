@@ -9,3 +9,4 @@
 - 2026-31-01 19:39 - Enforced test rule in AGENTS: every new component/module needs unit + functional/e2e tests (Vitest/Playwright or Rust)
 - 2026-31-01 20:34 - Built My Day + List UI (Svelte) with sidebar, task rows, stores, seed data; added list route, new Vitest + Playwright coverage; lint/check/test/Playwright passing
 - 2026-31-01 23:22 - Added IDB persistence for lists/tasks (repo layer, hydration on mount, fake-indexeddb for tests); Playwright/Vitest/lint passing and merged to main
+- 2026-31-01 23:50 - Added run-command guidance to AGENTS (one-liner env for server/web/Playwright/tests)
