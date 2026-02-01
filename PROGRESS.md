@@ -11,3 +11,4 @@
 - 2026-31-01 23:22 - Added IDB persistence for lists/tasks (repo layer, hydration on mount, fake-indexeddb for tests); Playwright/Vitest/lint passing and merged to main
 - 2026-31-01 23:50 - Added run-command guidance to AGENTS (one-liner env for server/web/Playwright/tests)
 - 2026-31-01 23:55 - Server foundation pushed (SQLite migrations, list/task routes, path fixes); local server + web tests confirmed
+- 2026-02-01 00:32 - Client API sync bootstrap (env-driven headers, fetch lists/tasks from server into stores/IDB)
