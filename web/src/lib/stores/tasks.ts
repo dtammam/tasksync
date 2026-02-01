@@ -1,5 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import type { Task } from '$shared/types/task';
+import { repo } from '$lib/data/repo';
 
 const now = Date.now();
 
@@ -96,9 +97,11 @@ export const tasks = {
 	subscribe: tasksStore.subscribe,
 	add(task: Task) {
 		tasksStore.update((list) => [...list, task]);
+		void repo.saveTasks(get(tasksStore));
 	},
 	setAll(next: Task[]) {
 		tasksStore.set(next);
+		void repo.saveTasks(next);
 	},
 	toggle(id: string) {
 		tasksStore.update((list) =>
@@ -112,6 +115,15 @@ export const tasks = {
 					: task
 			)
 		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	async hydrateFromDb() {
+		const { tasks: stored } = await repo.loadAll();
+		if (stored.length) {
+			tasksStore.set(stored);
+		} else {
+			await repo.saveTasks(seedTasks);
+		}
 	}
 };
 

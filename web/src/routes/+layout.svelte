@@ -1,8 +1,15 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { onMount } from 'svelte';
+	import { lists } from '$lib/stores/lists';
+	import { tasks } from '$lib/stores/tasks';
 
 	let { children } = $props();
+
+	onMount(async () => {
+		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb()]);
+	});
 </script>
 
 <svelte:head>
