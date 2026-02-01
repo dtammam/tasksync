@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -euo pipefail
+
+echo "🧹 pre-commit: linting web client..."
+cd "$(dirname "$0")/.." || exit 1
+
+if [ -d "web" ]; then
+  (cd web && npm run lint && npm run check && npm run test)
+fi
+
+echo "🦀 pre-commit: rust fmt + clippy..."
+(cd server && cargo fmt -- --check && cargo clippy -- -D warnings)
+
+echo "✅ pre-commit checks passed"

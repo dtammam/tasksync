@@ -1,0 +1,11 @@
+[workspace]
+members = ["server"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["tasksync contributors"]
+
+[workspace.metadata]
+sqlx = { offline = true }

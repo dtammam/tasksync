@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+set -euo pipefail
+
+cd "$(dirname "$0")/.." || exit 1
+
+echo "🧪 pre-push: running web tests (unit) ..."
+(cd web && npm run test)
+
+if [ "${SKIP_PLAYWRIGHT:-0}" = "1" ]; then
+  echo "⏩ skipping Playwright (SKIP_PLAYWRIGHT=1)"
+else
+  echo "🎭 pre-push: Playwright smoke ..."
+  (cd web && npx playwright test)
+fi
+
+echo "🦀 pre-push: cargo test ..."
+(cd server && cargo test)
+
+echo "✅ pre-push checks passed"

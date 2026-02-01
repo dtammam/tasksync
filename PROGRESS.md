@@ -1,0 +1,8 @@
+- 2026-31-01 19:13 - Initialized repo scaffolding (docs/AGENTS.md, docs/ARCHITECTURE.md, web/ SvelteKit app with lint/test config, server/ Axum stub, shared/types/task.ts, root tool configs)
+- 2026-31-01 19:13 - Ran npm audit (dev deps show 3 low from cookie in @sveltejs/kit/adapter-auto); rust toolchain not available (rustc missing)
+- 2026-31-01 19:14 - Installed Rust toolchain (rustc 1.93.0), ran cargo fmt/clippy/test for tasksync-server (all ok)
+- 2026-31-01 19:19 - Added GitHub Actions CI (web lint/check/test + Playwright install/run, server fmt/clippy/test); prepared workflows directory
+- 2026-31-01 19:25 - Tightened .gitignore (logs, Playwright test-results, turbo/cache) for dependency noise
+- 2026-31-01 19:29 - Added git hooks (pre-commit: web lint/check/test + rust fmt/clippy; pre-push: web tests + Playwright smoke + server tests), set core.hooksPath, documented in README
+- 2026-31-01 19:33 - Added licenses (MIT/Apache-2.0), editorconfig, SECURITY/CONTRIBUTING, .env.example, CODEOWNERS, PR template; CI caches for npm/cargo
+- 2026-31-01 19:35 - Updated docs/AGENTS.md with hook/lint discipline, commit hygiene, security notes

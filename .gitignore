@@ -1,0 +1,38 @@
+# node / svelte
+node_modules/
+.npm/
+.svelte-kit/
+web/.svelte-kit/
+web/node_modules/
+web/build/
+web/dist/
+web/static/build/
+web/coverage/
+web/playwright-report/
+web/test-results/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# rust
+target/
+server/target/
+**/*.rs.bk
+
+# env
+.env
+.env.local
+.envrc
+
+# editors
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# misc
+*.log
+coverage/
+.turbo/
+.cache/
