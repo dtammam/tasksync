@@ -6,3 +6,4 @@
 - 2026-31-01 19:29 - Added git hooks (pre-commit: web lint/check/test + rust fmt/clippy; pre-push: web tests + Playwright smoke + server tests), set core.hooksPath, documented in README
 - 2026-31-01 19:33 - Added licenses (MIT/Apache-2.0), editorconfig, SECURITY/CONTRIBUTING, .env.example, CODEOWNERS, PR template; CI caches for npm/cargo
 - 2026-31-01 19:35 - Updated docs/AGENTS.md with hook/lint discipline, commit hygiene, security notes
+- 2026-31-01 19:39 - Enforced test rule in AGENTS: every new component/module needs unit + functional/e2e tests (Vitest/Playwright or Rust)

@@ -45,6 +45,7 @@
 - **Client**: unit tests for stores; Playwright flow for add → complete; offline add/complete; sound plays once; no jank.
 - **Server**: role enforcement (contributors cannot edit/delete/complete); sync idempotency; attachment size limit.
 - **Property tests**: version‑vector merge associativity/commutativity.
+- **New code rule**: every new component/store/module (client or server) must include at least one unit test, plus a functional/e2e test when behavior is user-visible or cross-module. Use Vitest for unit, Playwright for UI flows, Rust `cargo test`/Axum integration tests for server endpoints. Do not add untested features unless explicitly waived.
 
 ## How to Work (Cursor prompts)
 ### Implement a feature
