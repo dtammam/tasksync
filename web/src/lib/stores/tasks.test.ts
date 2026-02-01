@@ -31,3 +31,12 @@ describe('tasks store', () => {
 		expect(pendingAfter).toBeLessThan(pendingBefore);
 	});
 });
+
+describe('task creation', () => {
+	it('creates local tasks marked dirty/local', () => {
+		const created = tasks.createLocal('offline task', 'goal-management', { my_day: true });
+		expect(created?.dirty).toBe(true);
+		expect(created?.local).toBe(true);
+		expect(get(pendingCount)).toBeGreaterThan(0);
+	});
+});

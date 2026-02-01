@@ -93,11 +93,42 @@ const seedTasks: Task[] = [
 
 const tasksStore = writable<Task[]>(seedTasks);
 
+const makeLocalTask = (title: string, list_id: string, opts?: { my_day?: boolean }) => {
+	const nowTs = Date.now();
+	const id = `local-${crypto.randomUUID ? crypto.randomUUID() : nowTs.toString(36)}`;
+	const order = `local-${nowTs}`;
+	const task: Task = {
+		id,
+		title,
+		priority: 0,
+		status: 'pending',
+		list_id,
+		my_day: opts?.my_day ?? false,
+		tags: [],
+		checklist: [],
+		order,
+		attachments: [],
+		created_ts: nowTs,
+		updated_ts: nowTs,
+		dirty: true,
+		local: true
+	};
+	return task;
+};
+
 export const tasks = {
 	subscribe: tasksStore.subscribe,
 	add(task: Task) {
 		tasksStore.update((list) => [...list, task]);
 		void repo.saveTasks(get(tasksStore));
+	},
+	createLocal(title: string, list_id: string, opts?: { my_day?: boolean }) {
+		const trimmed = title.trim();
+		if (!trimmed) return;
+		const task = makeLocalTask(trimmed, list_id, opts);
+		tasksStore.update((list) => [...list, task]);
+		void repo.saveTasks(get(tasksStore));
+		return task;
 	},
 	setAll(next: Task[]) {
 		tasksStore.set(next);
@@ -127,10 +158,24 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
+	replaceWithRemote(localId: string, remote: Task) {
+		tasksStore.update((list) =>
+			list.map((task) =>
+				task.id === localId
+					? { ...remote, dirty: false, local: false }
+					: task.id === remote.id
+						? task
+						: task
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	async hydrateFromDb() {
+		const current = get(tasksStore);
 		const { tasks: stored } = await repo.loadAll();
 		if (stored.length) {
-			tasksStore.set(stored);
+			const merged = [...stored, ...current.filter((t) => !stored.some((s) => s.id === t.id))];
+			tasksStore.set(merged);
 		} else {
 			await repo.saveTasks(seedTasks);
 		}
