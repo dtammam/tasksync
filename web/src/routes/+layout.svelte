@@ -4,12 +4,14 @@
 	import { onMount } from 'svelte';
 	import { lists } from '$lib/stores/lists';
 	import { tasks } from '$lib/stores/tasks';
+	import { syncFromServer } from '$lib/sync/sync';
 
 	let { children } = $props();
 
-	onMount(async () => {
-		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb()]);
-	});
+onMount(async () => {
+	await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb()]);
+	void syncFromServer();
+});
 </script>
 
 <svelte:head>

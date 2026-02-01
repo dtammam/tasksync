@@ -4,12 +4,13 @@ Local‑first task manager with SvelteKit client and Rust (Axum + SQLite) server
 
 ## Getting Started
 - `npm install` inside `web/` then `npm run dev` to start the client.
-- (Rust) Install toolchain and run `cargo run -p tasksync-server` for the API (default port 3000).
+- (Rust) Install toolchain and run the server (default port 3000):
+  - `cd server; set DATABASE_URL=sqlite://../data/tasksync.db; set RUST_LOG=info; "%USERPROFILE%\.cargo\bin\cargo.exe" run`
 - See `docs/ARCHITECTURE.md` and `docs/AGENTS.md` for constraints and workflow.
 
 ## Project Layout
 - `web/` — SvelteKit PWA, IndexedDB/OPFS first; tests via Vitest + Playwright.
-- `server/` — Axum server scaffold with SQLite via SQLx (WAL).
+- `server/` — Axum server with SQLite via SQLx (WAL), role-enforced routes.
 - `shared/` — cross‑cutting types for client/server.
 - `docs/` — architecture and agent instructions.
 

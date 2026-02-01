@@ -19,6 +19,10 @@ export const lists = {
 		listStore.update((prev) => [...prev, list]);
 		void repo.saveLists(get(listStore));
 	},
+	setAll(next: List[]) {
+		listStore.set(next);
+		void repo.saveLists(next);
+	},
 	async hydrateFromDb() {
 		const { lists: stored } = await repo.loadAll();
 		if (stored.length) {

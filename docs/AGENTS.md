@@ -55,6 +55,7 @@
 4. Add server endpoints/migrations only if required.
 5. Write tests and ensure perf budgets.
 6. When asking the user to test locally, provide one-line commands with env vars set explicitly for each terminal (see “Run Commands”).
+7. After each interaction with the user, briefly state overall percent completion for the project/feature.
 
 **Prompt**
 ```
