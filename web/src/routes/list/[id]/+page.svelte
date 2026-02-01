@@ -1,13 +1,21 @@
 <script lang="ts">
+	import { findListName } from '$lib/stores/lists';
 	import TaskRow from '$lib/components/TaskRow.svelte';
-	import { myDayCompleted, myDayPending } from '$lib/stores/tasks';
+	import { tasksByList } from '$lib/stores/tasks';
+
+	export let data;
+
+	const listStore = tasksByList(data.listId);
+
+	$: pending = ($listStore ?? []).filter((t) => t.status === 'pending');
+	$: completed = ($listStore ?? []).filter((t) => t.status === 'done');
 </script>
 
 <header class="page-header">
 	<div>
-		<p class="eyebrow">Saturday, February 1</p>
-		<h1>My Day</h1>
-		<p class="sub">Tasks you’ve chosen for today.</p>
+		<p class="eyebrow">List</p>
+		<h1>{findListName(data.listId)}</h1>
+		<p class="sub">{pending.length} pending • {completed.length} completed</p>
 	</div>
 	<div class="actions">
 		<button disabled>New task (coming soon)</button>
@@ -15,23 +23,23 @@
 </header>
 
 <section class="block">
-	<div class="section-title">Planned</div>
+	<div class="section-title">Pending</div>
 	<div class="stack">
-		{#if $myDayPending?.length}
-			{#each $myDayPending as task (task.id)}
+		{#if pending.length}
+			{#each pending as task (task.id)}
 				<TaskRow {task} />
 			{/each}
 		{:else}
-			<p class="empty">Nothing scheduled. Add a task to My Day.</p>
+			<p class="empty">All caught up in this list.</p>
 		{/if}
 	</div>
 </section>
 
 <section class="block">
-	<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
+	<div class="section-title">Completed ({completed.length})</div>
 	<div class="stack" data-testid="completed-section">
-		{#if $myDayCompleted?.length}
-			{#each $myDayCompleted as task (task.id)}
+		{#if completed.length}
+			{#each completed as task (task.id)}
 				<TaskRow {task} />
 			{/each}
 		{:else}
