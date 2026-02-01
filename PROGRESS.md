@@ -25,3 +25,4 @@
 - 2026-02-01 15:02 - Confirmed no dupes and status stays after refresh; ready for next tasks
 - 2026-02-01 15:06 - Removed legacy client seed tasks (app starts empty; server seed only) and updated README; web lint/check/test passing
 - 2026-02-01 15:07 - Fully removed unused seed wiring from tasks store; tests/lint/check still green
+- 2026-02-01 15:28 - Stabilized Playwright e2e without client seeds (state reset + unique titles); all browsers passing
