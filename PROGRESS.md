@@ -26,3 +26,4 @@
 - 2026-02-01 15:06 - Removed legacy client seed tasks (app starts empty; server seed only) and updated README; web lint/check/test passing
 - 2026-02-01 15:07 - Fully removed unused seed wiring from tasks store; tests/lint/check still green
 - 2026-02-01 15:28 - Stabilized Playwright e2e without client seeds (state reset + unique titles); all browsers passing
+- 2026-02-01 15:54 - Added scripts/4-prepush.ps1 to run lint/check/test/Playwright + cargo test with PATH fixes; documented in README

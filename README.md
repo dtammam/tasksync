@@ -10,6 +10,7 @@ Local‑first task manager with SvelteKit client and Rust (Axum + SQLite) server
   - `VITE_SPACE_ID` (default `s1`), `VITE_USER_ID` (`admin` or `contrib`), `VITE_ROLE` (`admin|contributor`), `VITE_API_URL` pointing to the server.
 - See `docs/ARCHITECTURE.md` and `docs/AGENTS.md` for constraints and workflow.
 - Seed server data (space, users, lists) once: `cd server; set DATABASE_URL=sqlite://../data/tasksync.db; "%USERPROFILE%\\.cargo\\bin\\cargo.exe" run --bin seed` (client now starts empty; no legacy seed tasks are created locally)
+- Full test/pre-push suite from PowerShell: `scripts/4-prepush.ps1` (use `-SkipPlaywright` to omit browser run)
 
 ## Project Layout
 - `web/` — SvelteKit PWA, IndexedDB/OPFS first; tests via Vitest + Playwright.
