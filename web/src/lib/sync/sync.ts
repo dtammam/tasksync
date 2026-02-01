@@ -13,6 +13,7 @@ export const syncFromServer = async () => {
 			status: t.status as Task['status'],
 			list_id: t.list_id,
 			my_day: t.my_day === 1,
+			dirty: false,
 			priority: 0,
 			tags: [],
 			checklist: [],
@@ -37,4 +38,20 @@ export const syncFromServer = async () => {
 		console.warn('sync failed', err);
 		return { lists: 0, tasks: 0, error: true };
 	}
+};
+
+export const pushPendingToServer = async () => {
+	const dirty = tasks.getAll().filter((t) => t.dirty);
+	if (!dirty.length) return { pushed: 0 };
+	let pushed = 0;
+	for (const t of dirty) {
+		try {
+			await api.updateTaskStatus(t.id, t.status);
+			tasks.clearDirty(t.id);
+			pushed += 1;
+		} catch (err) {
+			console.warn('push failed', t.id, err);
+		}
+	}
+	return { pushed };
 };

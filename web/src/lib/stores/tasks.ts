@@ -110,10 +110,20 @@ export const tasks = {
 					? {
 							...task,
 							status: task.status === 'done' ? 'pending' : 'done',
-							updated_ts: Date.now()
+							updated_ts: Date.now(),
+							dirty: true
 						}
 					: task
 			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	getAll() {
+		return get(tasksStore);
+	},
+	clearDirty(id: string) {
+		tasksStore.update((list) =>
+			list.map((task) => (task.id === id ? { ...task, dirty: false } : task))
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
