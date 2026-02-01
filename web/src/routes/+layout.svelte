@@ -9,10 +9,15 @@
 	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
 
-	const runSync = async () => {
+const runSync = async () => {
 		try {
 			syncStatus.resetError();
-			await Promise.all([syncFromServer(), pushPendingToServer()]);
+			await syncFromServer();
+			const pushResult = await pushPendingToServer();
+			// Re-pull after successful push to persist server IDs and avoid repeat creations on refresh.
+			if (pushResult.pushed || pushResult.created) {
+				await syncFromServer();
+			}
 		} catch (err) {
 			console.warn('sync retry failed', err);
 		}

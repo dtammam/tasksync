@@ -1,9 +1,13 @@
 import { api } from '$lib/api/client';
 import { lists } from '$lib/stores/lists';
 import { tasks } from '$lib/stores/tasks';
+import { repo } from '$lib/data/repo';
 import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
 import type { List } from '$shared/types/list';
+
+const isServerId = (id: string) =>
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task => ({
 	id: t.id,
@@ -27,6 +31,7 @@ export const syncFromServer = async () => {
 	try {
 		const [remoteLists, remoteTasks] = await Promise.all([api.getLists(), api.getTasks()]);
 		const toTasks: Task[] = remoteTasks.map(mapApiTask);
+		const remoteIds = new Set(toTasks.map((t) => t.id));
 
 		const toLists: List[] = remoteLists.map((l) => ({
 			id: l.id,
@@ -40,11 +45,19 @@ export const syncFromServer = async () => {
 		const unsynced = current.filter((t) => t.dirty);
 
 		lists.setAll(toLists);
-		const merged = [
-			...toTasks,
-			...unsynced.filter((t) => !toTasks.some((remote) => remote.id === t.id))
-		];
+		const mergedMap = new Map<string, Task>();
+		for (const t of toTasks) mergedMap.set(t.id, t);
+		for (const t of unsynced) {
+			if (remoteIds.has(t.id)) {
+				// keep local dirty version to avoid status regressions until push succeeds
+				mergedMap.set(t.id, t);
+			} else {
+				mergedMap.set(t.id, t);
+			}
+		}
+		const merged = Array.from(mergedMap.values());
 		tasks.setAll(merged);
+		await repo.saveTasks(merged);
 		syncStatus.setPull('idle');
 		return { lists: toLists.length, tasks: toTasks.length };
 	} catch (err) {
@@ -64,6 +77,11 @@ export const pushPendingToServer = async () => {
 	let pushed = 0;
 	let created = 0;
 	for (const t of dirty) {
+		if (!t.local && !isServerId(t.id)) {
+			// Drop legacy seed IDs that were never created on the server.
+			tasks.remove(t.id);
+			continue;
+		}
 		try {
 			if (t.local) {
 				const createdTask = await api.createTask({
@@ -82,10 +100,17 @@ export const pushPendingToServer = async () => {
 			}
 		} catch (err) {
 			console.warn('push failed', t.id, err);
-			syncStatus.setPush('error', err instanceof Error ? err.message : String(err));
+			const msg = err instanceof Error ? err.message : String(err);
+			if (msg.includes('404')) {
+				tasks.remove(t.id);
+				continue;
+			}
+			syncStatus.setPush('error', msg);
 			return { pushed, created, error: true };
 		}
 	}
 	syncStatus.setPush('idle');
+	// Ensure persisted before the next refresh/navigation to avoid re-pushing locals.
+	await repo.saveTasks(tasks.getAll());
 	return { pushed, created };
 };
