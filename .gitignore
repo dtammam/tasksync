@@ -18,6 +18,8 @@ pnpm-debug.log*
 target/
 server/target/
 **/*.rs.bk
+data/
+server/data/
 
 # env
 .env

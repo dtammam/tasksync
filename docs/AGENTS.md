@@ -54,6 +54,7 @@
 3. Implement client logic (stores/repo), then UI.
 4. Add server endpoints/migrations only if required.
 5. Write tests and ensure perf budgets.
+6. When asking the user to test locally, provide one-line commands with env vars set explicitly for each terminal (see “Run Commands”).
 
 **Prompt**
 ```
@@ -88,6 +89,12 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 - Syncs correctly, respects roles, passes tests.
 - No new spinners; optimistic UI is immediate.
 - All budgets green in CI.
+
+## Run Commands (one-liners for manual testing)
+- **Server (Terminal 1)**: `cd server && set DATABASE_URL=sqlite://../data/tasksync.db && set RUST_LOG=info && "%USERPROFILE%\\.cargo\\bin\\cargo.exe" run`
+- **Web dev (Terminal 2)**: `cd web && npm run dev -- --host`
+- **Playwright e2e**: `cd web && npx playwright test`
+- **Web lint/check/unit**: `cd web && npm run lint && npm run check && npm run test`
 
 ## Backlog Starters
 - Sound settings panel
