@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
-
 [CmdletBinding()]
 param(
 	[switch]$SkipPlaywright
 )
+
+$ErrorActionPreference = "Stop"
 
 $repo    = Split-Path -Parent $PSScriptRoot
 $webDir  = Join-Path $repo "web"
