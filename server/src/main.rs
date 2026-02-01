@@ -2,8 +2,8 @@ mod routes;
 
 use axum::{routing::get, Router};
 use routes::{list_routes, task_routes};
-use sqlx::sqlite::SqlitePoolOptions;
-use std::{env, net::SocketAddr, path::Path};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -15,17 +15,24 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let database_url =
-        env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://./data/tasksync.db".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+        let mut path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        path.push("../data/tasksync.db");
+        let normalized = path.canonicalize().unwrap_or(path).to_string_lossy().replace('\\', "/");
+        format!("sqlite://{}", normalized)
+    });
 
-    if database_url.starts_with("sqlite://") {
-        let path = database_url.trim_start_matches("sqlite://");
-        if let Some(dir) = Path::new(path).parent() {
+    if let Some(path_str) = database_url.strip_prefix("sqlite://") {
+        let path = PathBuf::from(path_str);
+        if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
     }
 
-    let pool = SqlitePoolOptions::new().max_connections(5).connect(&database_url).await?;
+    let connect_opts =
+        SqliteConnectOptions::from_str(&database_url)?.create_if_missing(true).foreign_keys(true);
+
+    let pool = SqlitePoolOptions::new().max_connections(5).connect_with(connect_opts).await?;
 
     sqlx::migrate!().run(&pool).await?;
 
