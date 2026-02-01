@@ -13,3 +13,6 @@
 - 2026-31-01 23:55 - Server foundation pushed (SQLite migrations, list/task routes, path fixes); local server + web tests confirmed
 - 2026-02-01 00:32 - Client API sync bootstrap (env-driven headers, fetch lists/tasks from server into stores/IDB)
 - 2026-01-02 00:49 - Added client push of dirty task toggles (store dirty flag, sync helpers, layout triggers), seeded default space/users/lists via server/src/bin/seed.rs
+- 2026-01-02 09:31 - Offline task creation: new add forms, local task flagging/push-to-server, sync merge of unsynced tasks, seed server lists to match client, added unit + Playwright coverage
+- 2026-01-02 15:13 - Added helper scripts (scripts/1-seed.ps1, 2-serve.ps1, 3-web.ps1) for one-line setup/run on Windows terminals
+- 2026-01-02 15:25 - Fixed helper scripts to use absolute DATABASE_URL and create data dir before seed/run
