@@ -1,5 +1,5 @@
-const spaceId = import.meta.env.VITE_SPACE_ID ?? '';
-const userId = import.meta.env.VITE_USER_ID ?? '';
+const spaceId = import.meta.env.VITE_SPACE_ID ?? 's1';
+const userId = import.meta.env.VITE_USER_ID ?? 'admin';
 const role = import.meta.env.VITE_ROLE ?? 'admin';
 
 export const buildHeaders = () => {

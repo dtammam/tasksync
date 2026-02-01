@@ -1,6 +1,23 @@
 <script lang="ts">
 	import TaskRow from '$lib/components/TaskRow.svelte';
-	import { myDayCompleted, myDayPending } from '$lib/stores/tasks';
+	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
+	import { lists } from '$lib/stores/lists';
+
+	const listsStore = lists;
+	let newTitle = '';
+
+	$: defaultListId =
+		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
+
+	const addTask = () => {
+		if (!newTitle.trim()) return;
+		tasks.createLocal(newTitle, defaultListId, { my_day: true });
+		newTitle = '';
+	};
+
+	if (typeof window !== 'undefined') {
+		Reflect.set(window, '__addTaskMyDay', () => addTask());
+	}
 </script>
 
 <header class="page-header">
@@ -10,7 +27,17 @@
 		<p class="sub">Tasks you’ve chosen for today.</p>
 	</div>
 	<div class="actions">
-		<button disabled>New task (coming soon)</button>
+		<div class="add">
+			<input
+				type="text"
+				placeholder="Add a task"
+				bind:value={newTitle}
+				data-testid="new-task-input"
+				autocomplete="off"
+				on:keydown={(e) => e.key === 'Enter' && addTask()}
+			/>
+			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
+		</div>
 	</div>
 </header>
 
@@ -73,8 +100,8 @@
 		color: white;
 		padding: 10px 14px;
 		border-radius: 10px;
-		cursor: not-allowed;
-		opacity: 0.7;
+		cursor: pointer;
+		opacity: 1;
 	}
 
 	.block {
@@ -103,5 +130,19 @@
 
 	.empty.subtle {
 		color: #64748b;
+	}
+
+	.add {
+		display: flex;
+		gap: 8px;
+	}
+
+	.add input {
+		border-radius: 10px;
+		border: 1px solid #1f2937;
+		background: #0f172a;
+		padding: 10px 12px;
+		color: #e2e8f0;
+		min-width: 220px;
 	}
 </style>

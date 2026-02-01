@@ -41,16 +41,33 @@ async fn main() -> anyhow::Result<()> {
         .execute(&pool)
         .await?;
 
-    sqlx::query("insert or ignore into list (id, space_id, name, list_order) values ('l-inbox',?1,'Inbox','a')")
-        .bind(space_id)
-        .execute(&pool)
-        .await?;
+    let lists = vec![
+        ("l-inbox", "Inbox", "a"),
+        ("goal-management", "Goal Management", "b"),
+        ("daily-management", "Daily Management", "c"),
+        ("tasks", "Tasks", "d"),
+        ("health", "Health", "e"),
+        ("tech", "Tech Ideas", "f"),
+    ];
 
-    sqlx::query("insert or ignore into list_grant (id, space_id, list_id, user_id) values ('g-contrib-inbox',?1,'l-inbox',?2)")
+    for (id, name, order) in &lists {
+        sqlx::query(
+            "insert or ignore into list (id, space_id, name, list_order) values (?1,?2,?3,?4)",
+        )
+        .bind(id)
         .bind(space_id)
-        .bind(contrib)
+        .bind(name)
+        .bind(order)
         .execute(&pool)
         .await?;
+        sqlx::query("insert or ignore into list_grant (id, space_id, list_id, user_id) values (?1,?2,?3,?4)")
+            .bind(format!("g-contrib-{}", id))
+            .bind(space_id)
+            .bind(id)
+            .bind(contrib)
+            .execute(&pool)
+            .await?;
+    }
 
     println!("Seeded space={}, admin={}, contributor={}, list=l-inbox", space_id, admin, contrib);
     Ok(())

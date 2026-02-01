@@ -15,6 +15,7 @@ export const repo = {
 		if (!db) return;
 		const $db = await db;
 		const tx = $db.transaction('lists', 'readwrite');
+		await tx.store.clear();
 		for (const list of lists) await tx.store.put(list);
 		await tx.done;
 	},
@@ -23,6 +24,7 @@ export const repo = {
 		if (!db) return;
 		const $db = await db;
 		const tx = $db.transaction('tasks', 'readwrite');
+		await tx.store.clear();
 		for (const task of tasks) await tx.store.put(task);
 		await tx.done;
 	}

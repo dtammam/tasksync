@@ -13,3 +13,17 @@
 - 2026-31-01 23:55 - Server foundation pushed (SQLite migrations, list/task routes, path fixes); local server + web tests confirmed
 - 2026-02-01 00:32 - Client API sync bootstrap (env-driven headers, fetch lists/tasks from server into stores/IDB)
 - 2026-01-02 00:49 - Added client push of dirty task toggles (store dirty flag, sync helpers, layout triggers), seeded default space/users/lists via server/src/bin/seed.rs
+- 2026-01-02 09:31 - Offline task creation: new add forms, local task flagging/push-to-server, sync merge of unsynced tasks, seed server lists to match client, added unit + Playwright coverage
+- 2026-01-02 15:13 - Added helper scripts (scripts/1-seed.ps1, 2-serve.ps1, 3-web.ps1) for one-line setup/run on Windows terminals
+- 2026-01-02 15:25 - Fixed helper scripts to use absolute DATABASE_URL and create data dir before seed/run
+- 2026-02-01 13:16 - Filtered legacy seed task IDs out of push flow (skip non-server IDs, drop 404s) and added sync unit tests; web lint/check/test passing
+- 2026-02-01 14:05 - Stopped task re-seeding on hydrate (no refresh dupes); added store hydration test; web lint/check/test passing
+- 2026-02-01 14:09 - Sequenced sync to pull → push → pull, ensuring freshly pushed tasks persist server IDs before refresh; web lint/check/test passing
+- 2026-02-01 14:18 - Forced sync writes to await IDB persistence after pull/push to avoid re-pushing locals on fast refresh; web lint/check/test passing
+- 2026-02-01 14:56 - Cleared IDB stores before saves to avoid stale local task records causing duplicate pushes; web lint/check/test passing
+- 2026-02-01 14:59 - Local dirty tasks now win over remote copies during pull (prevents checked-off tasks flipping back to pending); added coverage; web lint/check/test passing
+- 2026-02-01 15:02 - Confirmed no dupes and status stays after refresh; ready for next tasks
+- 2026-02-01 15:06 - Removed legacy client seed tasks (app starts empty; server seed only) and updated README; web lint/check/test passing
+- 2026-02-01 15:07 - Fully removed unused seed wiring from tasks store; tests/lint/check still green
+- 2026-02-01 15:28 - Stabilized Playwright e2e without client seeds (state reset + unique titles); all browsers passing
+- 2026-02-01 15:54 - Added scripts/4-prepush.ps1 to run lint/check/test/Playwright + cargo test with PATH fixes; documented in README

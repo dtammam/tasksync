@@ -4,6 +4,7 @@ use axum::{routing::get, Router};
 use routes::{list_routes, task_routes};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
+use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -39,7 +40,13 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
         .nest("/lists", list_routes(&pool))
-        .nest("/tasks", task_routes(&pool));
+        .nest("/tasks", task_routes(&pool))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+                .allow_headers(Any),
+        );
 
     let addr: SocketAddr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = tokio::net::TcpListener::bind(addr).await?;

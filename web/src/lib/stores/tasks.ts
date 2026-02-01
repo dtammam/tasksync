@@ -2,102 +2,44 @@ import { derived, get, writable } from 'svelte/store';
 import type { Task } from '$shared/types/task';
 import { repo } from '$lib/data/repo';
 
-const now = Date.now();
+const tasksStore = writable<Task[]>([]);
 
-const seedTasks: Task[] = [
-	{
-		id: 't1',
-		title: 'Process daily considerations',
-		priority: 1,
-		status: 'pending',
-		list_id: 'goal-management',
-		my_day: true,
-		tags: ['mindful'],
-		checklist: [],
-		order: 'a',
-		attachments: [],
-		created_ts: now - 1000 * 60 * 60,
-		updated_ts: now - 1000 * 60 * 60
-	},
-	{
-		id: 't2',
-		title: 'Review calendar before sleep',
+const makeLocalTask = (title: string, list_id: string, opts?: { my_day?: boolean }) => {
+	const nowTs = Date.now();
+	const id = `local-${crypto.randomUUID ? crypto.randomUUID() : nowTs.toString(36)}`;
+	const order = `local-${nowTs}`;
+	const task: Task = {
+		id,
+		title,
 		priority: 0,
 		status: 'pending',
-		list_id: 'goal-management',
-		my_day: true,
+		list_id,
+		my_day: opts?.my_day ?? false,
 		tags: [],
 		checklist: [],
-		order: 'b',
+		order,
 		attachments: [],
-		created_ts: now - 1000 * 60 * 120,
-		updated_ts: now - 1000 * 60 * 120
-	},
-	{
-		id: 't3',
-		title: 'Finish DDR session #2',
-		priority: 2,
-		status: 'pending',
-		list_id: 'goal-management',
-		my_day: false,
-		tags: ['fitness'],
-		checklist: [],
-		order: 'c',
-		attachments: [],
-		created_ts: now - 1000 * 60 * 200,
-		updated_ts: now - 1000 * 60 * 200
-	},
-	{
-		id: 't4',
-		title: 'Call Luis',
-		priority: 0,
-		status: 'pending',
-		list_id: 'tasks',
-		my_day: false,
-		tags: [],
-		checklist: [],
-		order: 'd',
-		attachments: [],
-		created_ts: now - 1000 * 60 * 300,
-		updated_ts: now - 1000 * 60 * 300
-	},
-	{
-		id: 't5',
-		title: 'Health | floss before bed',
-		priority: 0,
-		status: 'done',
-		list_id: 'daily-management',
-		my_day: true,
-		tags: ['health'],
-		checklist: [],
-		order: 'e',
-		attachments: [],
-		created_ts: now - 1000 * 60 * 400,
-		updated_ts: now - 1000 * 60 * 100
-	},
-	{
-		id: 't6',
-		title: 'Maintenance | lubricate treadmill',
-		priority: 1,
-		status: 'pending',
-		list_id: 'goal-management',
-		my_day: false,
-		tags: ['maintenance'],
-		checklist: [],
-		order: 'f',
-		attachments: [],
-		created_ts: now - 1000 * 60 * 500,
-		updated_ts: now - 1000 * 60 * 500
-	}
-];
-
-const tasksStore = writable<Task[]>(seedTasks);
+		created_ts: nowTs,
+		updated_ts: nowTs,
+		dirty: true,
+		local: true
+	};
+	return task;
+};
 
 export const tasks = {
 	subscribe: tasksStore.subscribe,
 	add(task: Task) {
 		tasksStore.update((list) => [...list, task]);
 		void repo.saveTasks(get(tasksStore));
+	},
+	createLocal(title: string, list_id: string, opts?: { my_day?: boolean }) {
+		const trimmed = title.trim();
+		if (!trimmed) return;
+		const task = makeLocalTask(trimmed, list_id, opts);
+		tasksStore.update((list) => [...list, task]);
+		void repo.saveTasks(get(tasksStore));
+		return task;
 	},
 	setAll(next: Task[]) {
 		tasksStore.set(next);
@@ -127,12 +69,26 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
+	remove(id: string) {
+		tasksStore.update((list) => list.filter((t) => t.id !== id));
+		void repo.saveTasks(get(tasksStore));
+	},
+	replaceWithRemote(localId: string, remote: Task) {
+		tasksStore.update((list) =>
+			list.map((task) =>
+				task.id === localId
+					? { ...remote, dirty: false, local: false }
+					: task.id === remote.id
+						? task
+						: task
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	async hydrateFromDb() {
 		const { tasks: stored } = await repo.loadAll();
 		if (stored.length) {
 			tasksStore.set(stored);
-		} else {
-			await repo.saveTasks(seedTasks);
 		}
 	}
 };

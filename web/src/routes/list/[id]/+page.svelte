@@ -1,11 +1,23 @@
 <script lang="ts">
 	import { findListName } from '$lib/stores/lists';
 	import TaskRow from '$lib/components/TaskRow.svelte';
-	import { tasksByList } from '$lib/stores/tasks';
+	import { tasks, tasksByList } from '$lib/stores/tasks';
 
 	export let data;
 
 	const listStore = tasksByList(data.listId);
+
+	let newTitle = '';
+
+	const addTask = () => {
+		if (!newTitle.trim()) return;
+		tasks.createLocal(newTitle, data.listId, { my_day: false });
+		newTitle = '';
+	};
+
+	if (typeof window !== 'undefined') {
+		Reflect.set(window, '__addTaskList', () => addTask());
+	}
 
 	$: pending = ($listStore ?? []).filter((t) => t.status === 'pending');
 	$: completed = ($listStore ?? []).filter((t) => t.status === 'done');
@@ -18,7 +30,17 @@
 		<p class="sub">{pending.length} pending • {completed.length} completed</p>
 	</div>
 	<div class="actions">
-		<button disabled>New task (coming soon)</button>
+		<div class="add">
+			<input
+				type="text"
+				placeholder="Add a task"
+				bind:value={newTitle}
+				data-testid="new-task-input"
+				autocomplete="off"
+				on:keydown={(e) => e.key === 'Enter' && addTask()}
+			/>
+			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
+		</div>
 	</div>
 </header>
 
@@ -81,8 +103,8 @@
 		color: white;
 		padding: 10px 14px;
 		border-radius: 10px;
-		cursor: not-allowed;
-		opacity: 0.7;
+		cursor: pointer;
+		opacity: 1;
 	}
 
 	.block {
@@ -111,5 +133,19 @@
 
 	.empty.subtle {
 		color: #64748b;
+	}
+
+	.add {
+		display: flex;
+		gap: 8px;
+	}
+
+	.add input {
+		border-radius: 10px;
+		border: 1px solid #1f2937;
+		background: #0f172a;
+		padding: 10px 12px;
+		color: #e2e8f0;
+		min-width: 220px;
 	}
 </style>

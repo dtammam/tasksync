@@ -39,4 +39,5 @@ export interface Task {
 	updated_ts: number;
 	my_day?: boolean;
 	dirty?: boolean;
+	local?: boolean;
 }
