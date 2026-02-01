@@ -46,15 +46,11 @@ test.describe('List view', () => {
 	test('can add a task to list', async ({ page }) => {
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('task-row').first()).toBeVisible();
-		const rows = page.getByTestId('task-row');
-		const before = await rows.count();
 		await page.getByTestId('new-task-input').fill('Goal list task');
 		await page.getByTestId('new-task-submit').click();
 		await page.waitForFunction(() => typeof (window as TaskHelpers).__addTaskList === 'function');
 		await page.evaluate(() => (window as TaskHelpers).__addTaskList?.());
 		await expect(page.getByTestId('new-task-input')).toHaveValue('');
-		await expect
-			.poll(async () => await rows.count(), { timeout: 15000 })
-			.toBeGreaterThan(before);
+		await expect(page.getByTestId('task-row').filter({ hasText: 'Goal list task' })).toHaveCount(1);
 	});
 });

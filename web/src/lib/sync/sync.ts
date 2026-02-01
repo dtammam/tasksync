@@ -1,6 +1,7 @@
 import { api } from '$lib/api/client';
 import { lists } from '$lib/stores/lists';
 import { tasks } from '$lib/stores/tasks';
+import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
 import type { List } from '$shared/types/list';
 
@@ -22,6 +23,7 @@ const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task =
 });
 
 export const syncFromServer = async () => {
+	syncStatus.setPull('running');
 	try {
 		const [remoteLists, remoteTasks] = await Promise.all([api.getLists(), api.getTasks()]);
 		const toTasks: Task[] = remoteTasks.map(mapApiTask);
@@ -43,16 +45,22 @@ export const syncFromServer = async () => {
 			...unsynced.filter((t) => !toTasks.some((remote) => remote.id === t.id))
 		];
 		tasks.setAll(merged);
+		syncStatus.setPull('idle');
 		return { lists: toLists.length, tasks: toTasks.length };
 	} catch (err) {
 		console.warn('sync failed', err);
+		syncStatus.setPull('error', err instanceof Error ? err.message : String(err));
 		return { lists: 0, tasks: 0, error: true };
 	}
 };
 
 export const pushPendingToServer = async () => {
+	syncStatus.setPush('running');
 	const dirty = tasks.getAll().filter((t) => t.dirty);
-	if (!dirty.length) return { pushed: 0 };
+	if (!dirty.length) {
+		syncStatus.setPush('idle');
+		return { pushed: 0 };
+	}
 	let pushed = 0;
 	let created = 0;
 	for (const t of dirty) {
@@ -74,7 +82,10 @@ export const pushPendingToServer = async () => {
 			}
 		} catch (err) {
 			console.warn('push failed', t.id, err);
+			syncStatus.setPush('error', err instanceof Error ? err.message : String(err));
+			return { pushed, created, error: true };
 		}
 	}
+	syncStatus.setPush('idle');
 	return { pushed, created };
 };

@@ -5,6 +5,7 @@ import { onMount } from 'svelte';
 import { lists } from '$lib/stores/lists';
 import { tasks } from '$lib/stores/tasks';
 import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
+import { syncStatus } from '$lib/sync/status';
 
 	let { children } = $props();
 
@@ -22,7 +23,37 @@ onMount(async () => {
 
 <div class="app-shell">
 	<Sidebar />
-	<main>{@render children()}</main>
+	<main>
+		<header class="app-header">
+			<div class="brand">
+				<img src={favicon} alt="logo" />
+				<span>tasksync</span>
+			</div>
+			<div class="sync">
+				<span
+					class={`badge ${
+						$syncStatus.pull === 'error' || $syncStatus.push === 'error'
+							? 'error'
+							: $syncStatus.pull === 'running' || $syncStatus.push === 'running'
+								? 'busy'
+								: ''
+					}`}
+				>
+					{#if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
+						Syncing…
+					{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
+						Sync error
+					{:else}
+						Sync idle
+					{/if}
+				</span>
+				{#if $syncStatus.lastError}
+					<span class="err-msg">{$syncStatus.lastError}</span>
+				{/if}
+			</div>
+		</header>
+		{@render children()}
+	</main>
 </div>
 
 <style>
@@ -41,5 +72,57 @@ onMount(async () => {
 
 	main {
 		padding: 28px 32px;
+	}
+
+	.app-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 16px;
+	}
+
+	.brand {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+	}
+
+	.brand img {
+		width: 28px;
+		height: 28px;
+	}
+
+	.sync {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+	}
+
+	.badge {
+		padding: 6px 10px;
+		border-radius: 999px;
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #cbd5e1;
+		font-size: 12px;
+	}
+
+	.badge.busy {
+		background: #1d4ed8;
+		border-color: #1d4ed8;
+		color: white;
+	}
+
+	.badge.error {
+		background: #7f1d1d;
+		border-color: #ef4444;
+		color: #fecdd3;
+	}
+
+	.err-msg {
+		color: #ef4444;
+		font-size: 12px;
 	}
 </style>

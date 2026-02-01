@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { syncFromServer, pushPendingToServer } from './sync';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
+import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
 
 vi.mock('$lib/api/client', () => {
@@ -22,6 +23,7 @@ beforeEach(() => {
 	tasks.setAll([]);
 	lists.setAll([]);
 	vi.clearAllMocks();
+	syncStatus.resetError();
 });
 
 describe('syncFromServer', () => {
