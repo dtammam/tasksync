@@ -1,16 +1,17 @@
 <script lang="ts">
-	import favicon from '$lib/assets/favicon.svg';
-	import Sidebar from '$lib/components/Sidebar.svelte';
-	import { onMount } from 'svelte';
-	import { lists } from '$lib/stores/lists';
-	import { tasks } from '$lib/stores/tasks';
-	import { syncFromServer } from '$lib/sync/sync';
+import favicon from '$lib/assets/favicon.svg';
+import Sidebar from '$lib/components/Sidebar.svelte';
+import { onMount } from 'svelte';
+import { lists } from '$lib/stores/lists';
+import { tasks } from '$lib/stores/tasks';
+import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
 
 	let { children } = $props();
 
 onMount(async () => {
 	await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb()]);
 	void syncFromServer();
+	void pushPendingToServer();
 });
 </script>
 

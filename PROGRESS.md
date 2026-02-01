@@ -12,3 +12,4 @@
 - 2026-31-01 23:50 - Added run-command guidance to AGENTS (one-liner env for server/web/Playwright/tests)
 - 2026-31-01 23:55 - Server foundation pushed (SQLite migrations, list/task routes, path fixes); local server + web tests confirmed
 - 2026-02-01 00:32 - Client API sync bootstrap (env-driven headers, fetch lists/tasks from server into stores/IDB)
+- 2026-01-02 00:49 - Added client push of dirty task toggles (store dirty flag, sync helpers, layout triggers), seeded default space/users/lists via server/src/bin/seed.rs

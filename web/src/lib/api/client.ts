@@ -45,5 +45,10 @@ export const api = {
 		fetchJson<ApiTask>('/tasks', {
 			method: 'POST',
 			body: JSON.stringify(body)
+		}),
+	updateTaskStatus: (id: string, status: string) =>
+		fetchJson<ApiTask>(`/tasks/${id}/status`, {
+			method: 'POST',
+			body: JSON.stringify({ status })
 		})
 };
