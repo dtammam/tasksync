@@ -4,15 +4,19 @@ import { repo } from '$lib/data/repo';
 
 const tasksStore = writable<Task[]>([]);
 
-const makeLocalTask = (title: string, list_id: string, opts?: { my_day?: boolean }) => {
+const makeLocalTask = (
+	title: string,
+	list_id: string,
+	opts?: { my_day?: boolean; status?: Task['status']; priority?: Task['priority'] }
+) => {
 	const nowTs = Date.now();
 	const id = `local-${crypto.randomUUID ? crypto.randomUUID() : nowTs.toString(36)}`;
 	const order = `local-${nowTs}`;
 	const task: Task = {
 		id,
 		title,
-		priority: 0,
-		status: 'pending',
+		priority: opts?.priority ?? 0,
+		status: opts?.status ?? 'pending',
 		list_id,
 		my_day: opts?.my_day ?? false,
 		tags: [],
@@ -34,6 +38,13 @@ export const tasks = {
 		void repo.saveTasks(get(tasksStore));
 	},
 	createLocal(title: string, list_id: string, opts?: { my_day?: boolean }) {
+		return tasks.createLocalWithOptions(title, list_id, opts);
+	},
+	createLocalWithOptions(
+		title: string,
+		list_id: string,
+		opts?: { my_day?: boolean; status?: Task['status']; priority?: Task['priority'] }
+	) {
 		const trimmed = title.trim();
 		if (!trimmed) return;
 		const task = makeLocalTask(trimmed, list_id, opts);
@@ -71,6 +82,34 @@ export const tasks = {
 	},
 	remove(id: string) {
 		tasksStore.update((list) => list.filter((t) => t.id !== id));
+		void repo.saveTasks(get(tasksStore));
+	},
+	moveToList(id: string, list_id: string) {
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							list_id,
+							dirty: true
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	setMyDay(id: string, my_day: boolean) {
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							my_day,
+							dirty: true
+						}
+					: t
+			)
+		);
 		void repo.saveTasks(get(tasksStore));
 	},
 	replaceWithRemote(localId: string, remote: Task) {

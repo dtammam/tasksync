@@ -2,9 +2,11 @@
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
+	import { parseMarkdownTasks } from '$lib/markdown/import';
 
 	const listsStore = lists;
 	let newTitle = '';
+	let markdown = '';
 
 	$: defaultListId =
 		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
@@ -13,6 +15,17 @@
 		if (!newTitle.trim()) return;
 		tasks.createLocal(newTitle, defaultListId, { my_day: true });
 		newTitle = '';
+	};
+
+	const importMarkdown = () => {
+		const parsed = parseMarkdownTasks(markdown, defaultListId);
+		for (const p of parsed) {
+			tasks.createLocalWithOptions(p.title, p.list_id ?? defaultListId, {
+				status: p.status,
+				my_day: p.my_day ?? false
+			});
+		}
+		markdown = '';
 	};
 
 	if (typeof window !== 'undefined') {
@@ -38,6 +51,12 @@
 			/>
 			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
 		</div>
+		<details class="importer">
+			<summary>Import from markdown</summary>
+			<p class="hint">Format: <code>- [ ] Task title #list-id @myday</code> (use [x] for done)</p>
+			<textarea bind:value={markdown} rows="4" placeholder="- [ ] Write proposal #tasks @myday"></textarea>
+			<button type="button" on:click={importMarkdown} disabled={!markdown.trim()}>Import</button>
+		</details>
 	</div>
 </header>
 
@@ -144,5 +163,35 @@
 		padding: 10px 12px;
 		color: #e2e8f0;
 		min-width: 220px;
+	}
+
+	.importer {
+		margin-top: 12px;
+		border: 1px solid #1f2937;
+		border-radius: 10px;
+		padding: 10px 12px;
+		background: #0b1221;
+		color: #cbd5e1;
+	}
+
+	.importer summary {
+		cursor: pointer;
+		font-weight: 600;
+	}
+
+	.importer textarea {
+		width: 100%;
+		margin-top: 8px;
+		background: #0f172a;
+		color: #e2e8f0;
+		border: 1px solid #1f2937;
+		border-radius: 8px;
+		padding: 10px;
+		font-family: monospace;
+	}
+
+	.importer .hint {
+		color: #94a3b8;
+		font-size: 12px;
 	}
 </style>

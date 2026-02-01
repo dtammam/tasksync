@@ -2,17 +2,30 @@
 	import { findListName } from '$lib/stores/lists';
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import { tasks, tasksByList } from '$lib/stores/tasks';
+	import { parseMarkdownTasks } from '$lib/markdown/import';
 
 	export let data;
 
 	const listStore = tasksByList(data.listId);
 
 	let newTitle = '';
+	let markdown = '';
 
 	const addTask = () => {
 		if (!newTitle.trim()) return;
 		tasks.createLocal(newTitle, data.listId, { my_day: false });
 		newTitle = '';
+	};
+
+	const importMarkdown = () => {
+		const parsed = parseMarkdownTasks(markdown, data.listId);
+		for (const p of parsed) {
+			tasks.createLocalWithOptions(p.title, p.list_id ?? data.listId, {
+				status: p.status,
+				my_day: p.my_day ?? false
+			});
+		}
+		markdown = '';
 	};
 
 	if (typeof window !== 'undefined') {
@@ -43,6 +56,13 @@
 		</div>
 	</div>
 </header>
+
+<details class="importer">
+	<summary>Import tasks (markdown)</summary>
+	<p class="hint">Format: <code>- [ ] Task title #list-id @myday</code> (use [x] for done)</p>
+	<textarea bind:value={markdown} rows="4" placeholder="- [ ] Write proposal #tasks @myday"></textarea>
+	<button type="button" on:click={importMarkdown} disabled={!markdown.trim()}>Import</button>
+</details>
 
 <section class="block">
 	<div class="section-title">Pending</div>
@@ -147,5 +167,35 @@
 		padding: 10px 12px;
 		color: #e2e8f0;
 		min-width: 220px;
+	}
+
+	.importer {
+		margin: 12px 0;
+		border: 1px solid #1f2937;
+		border-radius: 10px;
+		padding: 10px 12px;
+		background: #0b1221;
+		color: #cbd5e1;
+	}
+
+	.importer summary {
+		cursor: pointer;
+		font-weight: 600;
+	}
+
+	.importer textarea {
+		width: 100%;
+		margin-top: 8px;
+		background: #0f172a;
+		color: #e2e8f0;
+		border: 1px solid #1f2937;
+		border-radius: 8px;
+		padding: 10px;
+		font-family: monospace;
+	}
+
+	.importer .hint {
+		color: #94a3b8;
+		font-size: 12px;
 	}
 </style>

@@ -71,4 +71,13 @@ describe('task creation', () => {
 		expect(tasks.getAll().some((t) => t.id === 't1')).toBe(false);
 		loadSpy.mockRestore();
 	});
+
+	it('creates local task with custom status and priority', () => {
+		const created = tasks.createLocalWithOptions('done task', 'goal-management', {
+			status: 'done',
+			priority: 2
+		});
+		expect(created?.status).toBe('done');
+		expect(created?.priority).toBe(2);
+	});
 });
