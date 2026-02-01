@@ -1,19 +1,39 @@
-<script lang="ts">
-import favicon from '$lib/assets/favicon.svg';
-import Sidebar from '$lib/components/Sidebar.svelte';
-import { onMount } from 'svelte';
-import { lists } from '$lib/stores/lists';
-import { tasks } from '$lib/stores/tasks';
-import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
-import { syncStatus } from '$lib/sync/status';
+<script>
+	// @ts-nocheck
+	import favicon from '$lib/assets/favicon.svg';
+	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { onMount, onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
+	import { lists } from '$lib/stores/lists';
+	import { tasks } from '$lib/stores/tasks';
+	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
+	import { syncStatus } from '$lib/sync/status';
 
-	let { children } = $props();
+	const runSync = async () => {
+		try {
+			syncStatus.resetError();
+			await Promise.all([syncFromServer(), pushPendingToServer()]);
+		} catch (err) {
+			console.warn('sync retry failed', err);
+		}
+	};
 
-onMount(async () => {
-	await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb()]);
-	void syncFromServer();
-	void pushPendingToServer();
-});
+	let retryTimer = null;
+
+	onMount(async () => {
+		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb()]);
+		void runSync();
+		retryTimer = setInterval(() => {
+			const s = get(syncStatus);
+			if (s.pull === 'error' || s.push === 'error' || tasks.getAll().some((t) => t.dirty)) {
+				void runSync();
+			}
+		}, 15000);
+	});
+
+	onDestroy(() => {
+		if (retryTimer) clearInterval(retryTimer);
+	});
 </script>
 
 <svelte:head>
@@ -39,20 +59,22 @@ onMount(async () => {
 								: ''
 					}`}
 				>
-					{#if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
-						Syncing…
-					{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
-						Sync error
-					{:else}
-						Sync idle
-					{/if}
+					<button class="link" on:click={runSync}>
+						{#if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
+							Syncing…
+						{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
+							Sync error (retry)
+						{:else}
+							Sync idle
+						{/if}
+					</button>
 				</span>
 				{#if $syncStatus.lastError}
 					<span class="err-msg">{$syncStatus.lastError}</span>
 				{/if}
 			</div>
 		</header>
-		{@render children()}
+		<slot />
 	</main>
 </div>
 
@@ -124,5 +146,10 @@ onMount(async () => {
 	.err-msg {
 		color: #ef4444;
 		font-size: 12px;
+	}
+
+	.link {
+		all: unset;
+		cursor: pointer;
 	}
 </style>
