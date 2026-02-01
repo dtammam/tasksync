@@ -37,4 +37,5 @@ export interface Task {
 	attachments: FileRef[];
 	created_ts: number;
 	updated_ts: number;
+	my_day?: boolean;
 }
