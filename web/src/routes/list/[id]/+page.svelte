@@ -3,6 +3,7 @@
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import { tasks, tasksByList } from '$lib/stores/tasks';
 	import { parseMarkdownTasks } from '$lib/markdown/import';
+	import type { Task } from '$shared/types/task';
 
 	export let data;
 
@@ -10,6 +11,7 @@
 
 	let newTitle = '';
 	let markdown = '';
+	let sortMode = 'created';
 
 	const addTask = () => {
 		if (!newTitle.trim()) return;
@@ -26,6 +28,13 @@
 			});
 		}
 		markdown = '';
+	};
+
+	const sortTasks = (arr: Task[]) => {
+		const copy = [...arr];
+		if (sortMode === 'alpha') copy.sort((a, b) => a.title.localeCompare(b.title));
+		else copy.sort((a, b) => a.created_ts - b.created_ts);
+		return copy;
 	};
 
 	if (typeof window !== 'undefined') {
@@ -54,6 +63,13 @@
 			/>
 			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
 		</div>
+		<div class="sorter">
+			<span>Sort</span>
+			<select bind:value={sortMode} aria-label="Sort tasks">
+				<option value="created">Creation</option>
+				<option value="alpha">Alphabetical</option>
+			</select>
+		</div>
 	</div>
 </header>
 
@@ -68,7 +84,7 @@
 	<div class="section-title">Pending</div>
 	<div class="stack">
 		{#if pending.length}
-			{#each pending as task (task.id)}
+			{#each sortTasks(pending) as task (task.id)}
 				<TaskRow {task} />
 			{/each}
 		{:else}
@@ -197,5 +213,20 @@
 	.importer .hint {
 		color: #94a3b8;
 		font-size: 12px;
+	}
+
+	.sorter {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		color: #cbd5e1;
+	}
+
+	.sorter select {
+		background: #0f172a;
+		color: #e2e8f0;
+		border: 1px solid #1f2937;
+		border-radius: 8px;
+		padding: 6px 8px;
 	}
 </style>

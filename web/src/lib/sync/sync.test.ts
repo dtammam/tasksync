@@ -11,7 +11,8 @@ vi.mock('$lib/api/client', () => {
 			getLists: vi.fn(),
 			getTasks: vi.fn(),
 			createTask: vi.fn(),
-			updateTaskStatus: vi.fn()
+			updateTaskStatus: vi.fn(),
+			updateTaskMeta: vi.fn()
 		}
 	};
 });
@@ -163,7 +164,7 @@ describe('pushPendingToServer', () => {
 			tasks.setAll([orphan, local]);
 		}
 
-		mockedApi.updateTaskStatus.mockRejectedValueOnce(new Error('API 404 Not Found'));
+		mockedApi.updateTaskMeta.mockRejectedValueOnce(new Error('API 404 Not Found'));
 		mockedApi.createTask.mockResolvedValue({
 			id: 'srv-keep',
 			space_id: 's1',

@@ -3,13 +3,25 @@
 	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
 	import { parseMarkdownTasks } from '$lib/markdown/import';
+	import type { Task } from '$shared/types/task';
 
 	const listsStore = lists;
 	let newTitle = '';
 	let markdown = '';
+	let sortMode = 'created';
 
 	$: defaultListId =
 		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
+
+	const sortTasks = (arr: Task[]) => {
+		const copy = [...arr];
+		if (sortMode === 'alpha') {
+			copy.sort((a, b) => a.title.localeCompare(b.title));
+		} else if (sortMode === 'created') {
+			copy.sort((a, b) => a.created_ts - b.created_ts);
+		}
+		return copy;
+	};
 
 	const addTask = () => {
 		if (!newTitle.trim()) return;
@@ -51,6 +63,13 @@
 			/>
 			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
 		</div>
+		<div class="sorter">
+			<span>Sort</span>
+			<select bind:value={sortMode} aria-label="Sort tasks">
+				<option value="created">Creation</option>
+				<option value="alpha">Alphabetical</option>
+			</select>
+		</div>
 		<details class="importer">
 			<summary>Import from markdown</summary>
 			<p class="hint">Format: <code>- [ ] Task title #list-id @myday</code> (use [x] for done)</p>
@@ -63,8 +82,8 @@
 <section class="block">
 	<div class="section-title">Planned</div>
 	<div class="stack">
-		{#if $myDayPending?.length}
-			{#each $myDayPending as task (task.id)}
+		{#if sortTasks($myDayPending)?.length}
+			{#each sortTasks($myDayPending) as task (task.id)}
 				<TaskRow {task} />
 			{/each}
 		{:else}
@@ -76,8 +95,8 @@
 <section class="block">
 	<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
 	<div class="stack" data-testid="completed-section">
-		{#if $myDayCompleted?.length}
-			{#each $myDayCompleted as task (task.id)}
+		{#if sortTasks($myDayCompleted)?.length}
+			{#each sortTasks($myDayCompleted) as task (task.id)}
 				<TaskRow {task} />
 			{/each}
 		{:else}
@@ -193,5 +212,20 @@
 	.importer .hint {
 		color: #94a3b8;
 		font-size: 12px;
+	}
+
+	.sorter {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		color: #cbd5e1;
+	}
+
+	.sorter select {
+		background: #0f172a;
+		color: #e2e8f0;
+		border: 1px solid #1f2937;
+		border-radius: 8px;
+		padding: 6px 8px;
 	}
 </style>

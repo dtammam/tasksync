@@ -19,11 +19,11 @@ export interface FileRef {
 export interface Task {
 	id: string;
 	title: string;
-	notes?: string;
 	url?: string;
 	due?: string;
 	start?: string;
 	scheduled?: string;
+	due_date?: string;
 	priority: 0 | 1 | 2 | 3;
 	status: TaskStatus;
 	list_id: string;
@@ -35,6 +35,8 @@ export interface Task {
 	recurrence_id?: string;
 	recur_state?: string;
 	attachments: FileRef[];
+	notes?: string;
+	occurrences_completed?: number;
 	created_ts: number;
 	updated_ts: number;
 	my_day?: boolean;

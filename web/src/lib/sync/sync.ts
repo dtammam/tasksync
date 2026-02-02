@@ -21,7 +21,12 @@ const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task =
 	tags: [],
 	checklist: [],
 	order: t.order,
-	attachments: [],
+	attachments: t.attachments ? JSON.parse(t.attachments) : [],
+	url: t.url ?? undefined,
+	recurrence_id: t.recur_rule ?? undefined,
+	due_date: t.due_date ?? undefined,
+	occurrences_completed: t.occurrences_completed ?? 0,
+	notes: t.notes ?? undefined,
 	created_ts: t.created_ts,
 	updated_ts: t.updated_ts
 });
@@ -88,13 +93,28 @@ export const pushPendingToServer = async () => {
 					title: t.title,
 					list_id: t.list_id,
 					order: t.order,
-					my_day: t.my_day ?? false
+					my_day: t.my_day ?? false,
+					url: t.url,
+					recur_rule: t.recurrence_id,
+					attachments: t.attachments ? JSON.stringify(t.attachments) : undefined,
+					due_date: t.due_date,
+					notes: t.notes
 				});
 				tasks.replaceWithRemote(t.id, mapApiTask(createdTask));
 				created += 1;
 				pushed += 1;
 			} else {
-				await api.updateTaskStatus(t.id, t.status);
+				await api.updateTaskMeta(t.id, {
+					status: t.status,
+					list_id: t.list_id,
+					my_day: t.my_day ?? false,
+					url: t.url,
+					recur_rule: t.recurrence_id,
+					attachments: t.attachments ? JSON.stringify(t.attachments) : undefined,
+					due_date: t.due_date,
+					notes: t.notes,
+					occurrences_completed: t.occurrences_completed
+				});
 				tasks.clearDirty(t.id);
 				pushed += 1;
 			}

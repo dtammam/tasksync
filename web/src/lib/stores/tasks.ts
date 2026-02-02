@@ -4,10 +4,43 @@ import { repo } from '$lib/data/repo';
 
 const tasksStore = writable<Task[]>([]);
 
+const addDays = (dateStr: string, days: number) => {
+	const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+	d.setDate(d.getDate() + days);
+	return d.toISOString().slice(0, 10);
+};
+
+const nextDue = (current: string | undefined, recur?: string) => {
+	if (!recur) return undefined;
+	switch (recur) {
+		case 'daily':
+			return addDays(current ?? new Date().toISOString().slice(0, 10), 1);
+		case 'weekly':
+			return addDays(current ?? new Date().toISOString().slice(0, 10), 7);
+		case 'biweekly':
+			return addDays(current ?? new Date().toISOString().slice(0, 10), 14);
+		case 'monthly': {
+			const d = current ? new Date(current + 'T00:00:00') : new Date();
+			d.setMonth(d.getMonth() + 1);
+			return d.toISOString().slice(0, 10);
+		}
+		default:
+			return undefined;
+	}
+};
+
 const makeLocalTask = (
 	title: string,
 	list_id: string,
-	opts?: { my_day?: boolean; status?: Task['status']; priority?: Task['priority'] }
+	opts?: {
+		my_day?: boolean;
+		status?: Task['status'];
+		priority?: Task['priority'];
+		due_date?: string;
+		recurrence_id?: string;
+		url?: string;
+		notes?: string;
+	}
 ) => {
 	const nowTs = Date.now();
 	const id = `local-${crypto.randomUUID ? crypto.randomUUID() : nowTs.toString(36)}`;
@@ -23,6 +56,11 @@ const makeLocalTask = (
 		checklist: [],
 		order,
 		attachments: [],
+		due_date: opts?.due_date,
+		recurrence_id: opts?.recurrence_id,
+		url: opts?.url,
+		notes: opts?.notes,
+		occurrences_completed: 0,
 		created_ts: nowTs,
 		updated_ts: nowTs,
 		dirty: true,
@@ -60,12 +98,26 @@ export const tasks = {
 		tasksStore.update((list) =>
 			list.map((task) =>
 				task.id === id
-					? {
-							...task,
-							status: task.status === 'done' ? 'pending' : 'done',
-							updated_ts: Date.now(),
-							dirty: true
-						}
+					? (() => {
+							const now = Date.now();
+							if (task.recurrence_id && task.status !== 'done') {
+								const next = nextDue(task.due_date, task.recurrence_id);
+								return {
+									...task,
+									status: 'pending',
+									due_date: next,
+									occurrences_completed: (task.occurrences_completed ?? 0) + 1,
+									updated_ts: now,
+									dirty: true
+								};
+							}
+							return {
+								...task,
+								status: task.status === 'done' ? 'pending' : 'done',
+								updated_ts: now,
+								dirty: true
+							};
+						})()
 					: task
 			)
 		);
@@ -112,6 +164,51 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
+	skip(id: string) {
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							due_date: nextDue(t.due_date, t.recurrence_id),
+							updated_ts: Date.now(),
+							dirty: true
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	updateDetails(
+		id: string,
+		details: {
+			url?: string;
+			recurrence_id?: string;
+			attachments?: Task['attachments'];
+			due_date?: string;
+			notes?: string;
+			occurrences_completed?: number;
+		}
+	) {
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							url: details.url ?? t.url,
+							recurrence_id: details.recurrence_id ?? t.recurrence_id,
+							attachments: details.attachments ?? t.attachments,
+							due_date: details.due_date ?? t.due_date,
+							notes: details.notes ?? t.notes,
+							occurrences_completed:
+								details.occurrences_completed ?? t.occurrences_completed ?? 0,
+							dirty: true
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	replaceWithRemote(localId: string, remote: Task) {
 		tasksStore.update((list) =>
 			list.map((task) =>
@@ -136,12 +233,20 @@ export const pendingCount = derived(tasksStore, ($tasks) =>
 	$tasks.filter((task) => task.status === 'pending').length
 );
 
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const isToday = (date?: string) => date && date === todayIso();
+
+const inMyDay = (task: Task) => {
+	if (task.my_day) return true;
+	return isToday(task.due_date);
+};
+
 export const myDayPending = derived(tasksStore, ($tasks) =>
-	$tasks.filter((task) => task.my_day && task.status === 'pending')
+	$tasks.filter((task) => inMyDay(task) && task.status === 'pending')
 );
 
 export const myDayCompleted = derived(tasksStore, ($tasks) =>
-	$tasks.filter((task) => task.my_day && task.status === 'done')
+	$tasks.filter((task) => inMyDay(task) && task.status === 'done')
 );
 
 export const tasksByList = (listId: string) =>
