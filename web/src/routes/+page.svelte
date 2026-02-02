@@ -165,11 +165,11 @@
 
 	.actions {
 		display: flex;
-		gap: 10px;
+		gap: 6px;
 		align-items: center;
 		justify-content: flex-end;
 		margin-left: auto;
-		margin-top: 4px;
+		margin-top: 2px;
 	}
 
 	.actions .sorter {
@@ -253,8 +253,15 @@
 		color: #e2e8f0;
 		border: 1px solid #1f2937;
 		border-radius: 999px;
-		padding: 6px 12px;
-		box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+		padding: 6px 10px;
+		min-height: 32px;
+		font-size: 13px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+	}
+
+	.sorter span {
+		font-size: 11px;
+		color: #94a3b8;
 	}
 
 	.mobile-add {
@@ -303,6 +310,11 @@
 			flex-direction: column;
 			align-items: flex-start;
 			gap: 10px;
+		}
+
+		.actions {
+			width: 100%;
+			justify-content: flex-start;
 		}
 
 		.stack {
