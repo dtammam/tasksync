@@ -156,6 +156,7 @@ const deleteList = async (id) => {
 		height: 100vh;
 		position: sticky;
 		top: 0;
+		overflow-y: auto;
 	}
 
 	.app-title {

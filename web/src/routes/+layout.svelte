@@ -106,12 +106,25 @@ const runSync = async () => {
 		background: radial-gradient(circle at 10% 20%, #0f172a, #0b1221 40%, #050a1a);
 		color: #e2e8f0;
 		font-family: 'Inter', system-ui, -apple-system, sans-serif;
+		overflow: hidden;
+	}
+
+	:global(html),
+	:global(body) {
+		height: 100%;
+	}
+
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		font-size: 16px;
 	}
 
 	.app-shell {
 		display: grid;
 		grid-template-columns: 240px 1fr;
 		min-height: 100vh;
+		height: 100vh;
 	}
 
 	.sidebar-drawer {
@@ -123,6 +136,8 @@ const runSync = async () => {
 
 	main {
 		padding: 28px 32px;
+		height: 100vh;
+		overflow-y: auto;
 	}
 
 	.app-header {

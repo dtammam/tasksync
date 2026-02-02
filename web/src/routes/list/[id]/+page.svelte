@@ -7,6 +7,7 @@ import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
 import { findListName } from '$lib/stores/lists';
 
 let newTitle = '';
+let quickTitle = '';
 let detailId = null;
 $: listId = $page.params.id;
 let listTasks = tasksByList(listId);
@@ -24,6 +25,12 @@ $: listName = findListName(listId);
 	$: detailTask = detailId ? getTask(detailId) : null;
 
 	const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
+
+	const quickAdd = () => {
+		if (!quickTitle.trim()) return;
+		tasks.createLocal(quickTitle, listId);
+		quickTitle = '';
+	};
 </script>
 
 <header class="page-header">
@@ -74,6 +81,19 @@ $: listName = findListName(listId);
 </section>
 
 <TaskDetailDrawer task={detailTask} open={!!detailTask} on:close={closeDetail} />
+
+<div class="mobile-add" aria-label="Quick add">
+	<div class="bar">
+		<input
+			type="text"
+			placeholder={`Add a task to ${listName}`}
+			bind:value={quickTitle}
+			autocomplete="off"
+			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
+		/>
+		<button type="button" on:click={quickAdd}>Add</button>
+	</div>
+</div>
 
 <style>
 	.page-header {
@@ -154,6 +174,10 @@ $: listName = findListName(listId);
 		min-width: 220px;
 	}
 
+	.mobile-add {
+		display: none;
+	}
+
 	@media (max-width: 900px) {
 		.page-header {
 			flex-direction: column;
@@ -172,6 +196,49 @@ $: listName = findListName(listId);
 		.add input,
 		.actions button {
 			width: 100%;
+		}
+
+		.mobile-add {
+			display: block;
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+			padding: 0 14px;
+			z-index: 15;
+		}
+
+		.mobile-add .bar {
+			background: rgba(15, 23, 42, 0.96);
+			border: 1px solid #1f2937;
+			border-radius: 14px;
+			padding: 8px 10px;
+			display: grid;
+			grid-template-columns: 1fr auto;
+			gap: 8px;
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		}
+
+		.mobile-add input {
+			width: 100%;
+			background: #0b1221;
+			border: 1px solid #1f2937;
+			color: #e2e8f0;
+			border-radius: 10px;
+			padding: 10px 12px;
+		}
+
+		.mobile-add button {
+			background: #1d4ed8;
+			color: white;
+			border: none;
+			border-radius: 10px;
+			padding: 10px 12px;
+			cursor: pointer;
+		}
+
+		.stack {
+			padding-bottom: 86px;
 		}
 	}
 </style>
