@@ -143,6 +143,25 @@ export const tasks = {
 					? {
 							...t,
 							list_id,
+							dirty: true,
+							updated_ts: Date.now()
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	rename(id: string, title: string) {
+		const trimmed = title.trim();
+		if (!trimmed) return;
+		const now = Date.now();
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							title: trimmed,
+							updated_ts: now,
 							dirty: true
 						}
 					: t
@@ -157,7 +176,8 @@ export const tasks = {
 					? {
 							...t,
 							my_day,
-							dirty: true
+							dirty: true,
+							updated_ts: Date.now()
 						}
 					: t
 			)
@@ -202,6 +222,7 @@ export const tasks = {
 							notes: details.notes ?? t.notes,
 							occurrences_completed:
 								details.occurrences_completed ?? t.occurrences_completed ?? 0,
+							updated_ts: Date.now(),
 							dirty: true
 						}
 					: t

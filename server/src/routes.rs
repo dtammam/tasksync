@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{delete, get, patch, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -240,7 +240,7 @@ async fn get_tasks(
     headers: HeaderMap,
 ) -> Result<Json<Vec<TaskRow>>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state.pool).await?;
-	let rows = sqlx::query_as::<_, TaskRow>(
+    let rows = sqlx::query_as::<_, TaskRow>(
 		"select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes from task where space_id = ?1 order by task_order asc",
 	)
 	.bind(&ctx.space_id)
@@ -317,6 +317,7 @@ struct UpdateTaskStatus {
 
 #[derive(Deserialize)]
 struct UpdateTaskMeta {
+    title: Option<String>,
     status: Option<String>,
     list_id: Option<String>,
     my_day: Option<bool>,
@@ -382,8 +383,9 @@ async fn update_task_meta(
     let now = chrono::Utc::now().timestamp_millis();
     let my_day = body.my_day.unwrap_or(false);
     let rec = sqlx::query_as::<_, TaskRow>(
-		"update task set status = coalesce(?1, status), list_id = coalesce(?2, list_id), my_day = case when ?3 then 1 else my_day end, url = coalesce(?4, url), recur_rule = coalesce(?5, recur_rule), attachments = coalesce(?6, attachments), due_date = coalesce(?7, due_date), occurrences_completed = coalesce(?8, occurrences_completed), notes = coalesce(?9, notes), updated_ts = ?10 where id = ?11 and space_id = ?12 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes",
+		"update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = case when ?4 then 1 else my_day end, url = coalesce(?5, url), recur_rule = coalesce(?6, recur_rule), attachments = coalesce(?7, attachments), due_date = coalesce(?8, due_date), occurrences_completed = coalesce(?9, occurrences_completed), notes = coalesce(?10, notes), updated_ts = ?11 where id = ?12 and space_id = ?13 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes",
 	)
+	.bind(&body.title)
 	.bind(&body.status)
 	.bind(&body.list_id)
 	.bind(my_day)
@@ -391,7 +393,7 @@ async fn update_task_meta(
 	.bind(&body.recur_rule)
 	.bind(&body.attachments)
 	.bind(&body.due_date)
-	.bind(&body.occurrences_completed)
+	.bind(body.occurrences_completed)
 	.bind(&body.notes)
 	.bind(now)
 	.bind(&id)

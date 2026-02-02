@@ -70,7 +70,21 @@ export const api = {
 			method: 'POST',
 			body: JSON.stringify(body)
 		}),
-	updateTaskMeta: (id: string, body: { status?: string; list_id?: string; my_day?: boolean; url?: string; recur_rule?: string; attachments?: string; due_date?: string; notes?: string; occurrences_completed?: number }) =>
+	updateTaskMeta: (
+		id: string,
+		body: {
+			title?: string;
+			status?: string;
+			list_id?: string;
+			my_day?: boolean;
+			url?: string;
+			recur_rule?: string;
+			attachments?: string;
+			due_date?: string;
+			notes?: string;
+			occurrences_completed?: number;
+		}
+	) =>
 		fetchJson<ApiTask>(`/tasks/${id}`, {
 			method: 'PATCH',
 			body: JSON.stringify(body)

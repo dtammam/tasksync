@@ -38,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!().run(&pool).await?;
 
     let app = Router::new()
+        .route("/", get(|| async { "tasksync server ready" }))
         .route("/health", get(|| async { "ok" }))
         .nest("/lists", list_routes(&pool))
         .nest("/tasks", task_routes(&pool))
@@ -48,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
                     axum::http::Method::GET,
                     axum::http::Method::POST,
                     axum::http::Method::PATCH,
+                    axum::http::Method::DELETE,
                     axum::http::Method::OPTIONS,
                 ])
                 .allow_headers(Any),

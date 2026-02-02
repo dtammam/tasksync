@@ -4,10 +4,19 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
+	import { afterNavigate } from '$app/navigation';
 	import { lists } from '$lib/stores/lists';
 	import { tasks } from '$lib/stores/tasks';
 	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
+
+	let navOpen = false;
+	const toggleNav = () => (navOpen = !navOpen);
+	const closeNav = () => (navOpen = false);
+
+	afterNavigate(() => {
+		navOpen = false;
+	});
 
 const runSync = async () => {
 		try {
@@ -47,10 +56,18 @@ const runSync = async () => {
 </svelte:head>
 
 <div class="app-shell">
-	<Sidebar />
+	<div class={`sidebar-drawer ${navOpen ? 'open' : ''}`}>
+		<Sidebar />
+	</div>
+	{#if navOpen}
+		<button class="drawer-backdrop" type="button" aria-label="Close navigation" on:click={closeNav}></button>
+	{/if}
 	<main>
 		<header class="app-header">
 			<div class="brand">
+				<button class="nav-toggle" aria-label="Toggle navigation" on:click={toggleNav}>
+					☰
+				</button>
 				<img src={favicon} alt="logo" />
 				<span>tasksync</span>
 			</div>
@@ -64,13 +81,13 @@ const runSync = async () => {
 								: ''
 					}`}
 				>
-					<button class="link" on:click={runSync}>
+					<button class="link" on:click={runSync} title="Auto-sync runs every 15s; click to retry now">
 						{#if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
-							Syncing…
+							Auto-syncing…
 						{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
-							Sync error (retry)
+							Sync error (auto-retrying)
 						{:else}
-							Sync idle
+							Auto-sync ready
 						{/if}
 					</button>
 				</span>
@@ -97,6 +114,13 @@ const runSync = async () => {
 		min-height: 100vh;
 	}
 
+	.sidebar-drawer {
+		position: sticky;
+		top: 0;
+		height: 100vh;
+		z-index: 10;
+	}
+
 	main {
 		padding: 28px 32px;
 	}
@@ -119,6 +143,17 @@ const runSync = async () => {
 	.brand img {
 		width: 28px;
 		height: 28px;
+	}
+
+	.nav-toggle {
+		display: none;
+		margin-right: 8px;
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 8px;
+		padding: 6px 8px;
+		cursor: pointer;
 	}
 
 	.sync {
@@ -156,5 +191,72 @@ const runSync = async () => {
 	.link {
 		all: unset;
 		cursor: pointer;
+	}
+
+	.drawer-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.45);
+		backdrop-filter: blur(2px);
+		border: none;
+		z-index: 9;
+	}
+
+	@media (max-width: 900px) {
+		:global(body) {
+			background: #0b1221;
+		}
+
+		.app-shell {
+			grid-template-columns: 1fr;
+		}
+
+		.sidebar-drawer {
+			position: fixed;
+			inset: 0 auto 0 0;
+			width: min(280px, 82vw);
+			transform: translateX(-110%);
+			transition: transform 160ms ease-out;
+			box-shadow: 12px 0 30px rgba(0, 0, 0, 0.4);
+			background: #0a0f1c;
+			z-index: 12;
+			pointer-events: none;
+		}
+
+		.sidebar-drawer.open {
+			transform: translateX(0);
+			pointer-events: auto;
+		}
+
+		main {
+			padding: 18px 16px 28px;
+		}
+
+		.app-header {
+			margin-bottom: 12px;
+		}
+
+		.brand {
+			gap: 6px;
+		}
+
+		.nav-toggle {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.sync {
+			gap: 4px;
+		}
+
+		.badge {
+			font-size: 11px;
+			padding: 6px 8px;
+		}
+
+		.err-msg {
+			display: none;
+		}
 	}
 </style>

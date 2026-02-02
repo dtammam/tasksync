@@ -105,6 +105,7 @@ export const pushPendingToServer = async () => {
 				pushed += 1;
 			} else {
 				await api.updateTaskMeta(t.id, {
+					title: t.title,
 					status: t.status,
 					list_id: t.list_id,
 					my_day: t.my_day ?? false,

@@ -1,19 +1,29 @@
 <script lang="ts">
+	// @ts-nocheck
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
+	import { getTask } from '$lib/stores/tasks';
+	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { parseMarkdownTasks } from '$lib/markdown/import';
-	import type { Task } from '$shared/types/task';
 
 	const listsStore = lists;
 	let newTitle = '';
 	let markdown = '';
 	let sortMode = 'created';
+	let detailId = null;
+	$: detailTask = detailId ? getTask(detailId) : null;
+	const today = new Date();
+	const dateLabel = today.toLocaleDateString(undefined, {
+		weekday: 'long',
+		month: 'long',
+		day: 'numeric'
+	});
 
 	$: defaultListId =
 		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
 
-	const sortTasks = (arr: Task[]) => {
+	const sortTasks = (arr) => {
 		const copy = [...arr];
 		if (sortMode === 'alpha') {
 			copy.sort((a, b) => a.title.localeCompare(b.title));
@@ -43,11 +53,19 @@
 	if (typeof window !== 'undefined') {
 		Reflect.set(window, '__addTaskMyDay', () => addTask());
 	}
+
+	const openDetail = (event) => {
+		detailId = event.detail.id;
+	};
+
+	const closeDetail = () => {
+		detailId = null;
+	};
 </script>
 
 <header class="page-header">
 	<div>
-		<p class="eyebrow">Saturday, February 1</p>
+		<p class="eyebrow">{dateLabel}</p>
 		<h1>My Day</h1>
 		<p class="sub">Tasks you’ve chosen for today.</p>
 	</div>
@@ -82,9 +100,9 @@
 <section class="block">
 	<div class="section-title">Planned</div>
 	<div class="stack">
-		{#if sortTasks($myDayPending)?.length}
+			{#if sortTasks($myDayPending)?.length}
 			{#each sortTasks($myDayPending) as task (task.id)}
-				<TaskRow {task} />
+				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
 			<p class="empty">Nothing scheduled. Add a task to My Day.</p>
@@ -95,15 +113,17 @@
 <section class="block">
 	<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
 	<div class="stack" data-testid="completed-section">
-		{#if sortTasks($myDayCompleted)?.length}
+			{#if sortTasks($myDayCompleted)?.length}
 			{#each sortTasks($myDayCompleted) as task (task.id)}
-				<TaskRow {task} />
+				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
 			<p class="empty subtle">No completed tasks yet.</p>
 		{/if}
 	</div>
 </section>
+
+<TaskDetailDrawer task={detailTask} open={!!detailTask} on:close={closeDetail} />
 
 <style>
 	.page-header {
@@ -227,5 +247,33 @@
 		border: 1px solid #1f2937;
 		border-radius: 8px;
 		padding: 6px 8px;
+	}
+
+	@media (max-width: 900px) {
+		.page-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 10px;
+		}
+
+		.actions {
+			width: 100%;
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 10px;
+		}
+
+		.add {
+			width: 100%;
+		}
+
+		.add input,
+		.actions button {
+			width: 100%;
+		}
+
+		.importer {
+			width: 100%;
+		}
 	}
 </style>

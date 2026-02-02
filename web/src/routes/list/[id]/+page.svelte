@@ -1,55 +1,36 @@
 <script lang="ts">
-	import { findListName } from '$lib/stores/lists';
-	import TaskRow from '$lib/components/TaskRow.svelte';
-	import { tasks, tasksByList } from '$lib/stores/tasks';
-	import { parseMarkdownTasks } from '$lib/markdown/import';
-	import type { Task } from '$shared/types/task';
+	// @ts-nocheck
+	import { page } from '$app/stores';
+import TaskRow from '$lib/components/TaskRow.svelte';
+import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
+import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
+import { findListName } from '$lib/stores/lists';
 
-	export let data;
-
-	const listStore = tasksByList(data.listId);
-
-	let newTitle = '';
-	let markdown = '';
-	let sortMode = 'created';
+let newTitle = '';
+let detailId = null;
+$: listId = $page.params.id;
+let listTasks = tasksByList(listId);
+$: listTasks = tasksByList(listId);
+$: listName = findListName(listId);
 
 	const addTask = () => {
 		if (!newTitle.trim()) return;
-		tasks.createLocal(newTitle, data.listId, { my_day: false });
+		tasks.createLocal(newTitle, listId);
 		newTitle = '';
 	};
 
-	const importMarkdown = () => {
-		const parsed = parseMarkdownTasks(markdown, data.listId);
-		for (const p of parsed) {
-			tasks.createLocalWithOptions(p.title, p.list_id ?? data.listId, {
-				status: p.status,
-				my_day: p.my_day ?? false
-			});
-		}
-		markdown = '';
-	};
+	const openDetail = (event) => (detailId = event.detail.id);
+	const closeDetail = () => (detailId = null);
+	$: detailTask = detailId ? getTask(detailId) : null;
 
-	const sortTasks = (arr: Task[]) => {
-		const copy = [...arr];
-		if (sortMode === 'alpha') copy.sort((a, b) => a.title.localeCompare(b.title));
-		else copy.sort((a, b) => a.created_ts - b.created_ts);
-		return copy;
-	};
-
-	if (typeof window !== 'undefined') {
-		Reflect.set(window, '__addTaskList', () => addTask());
-	}
-
-	$: pending = ($listStore ?? []).filter((t) => t.status === 'pending');
-	$: completed = ($listStore ?? []).filter((t) => t.status === 'done');
+	const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 </script>
 
 <header class="page-header">
 	<div>
 		<p class="eyebrow">List</p>
-		<h1>{findListName(data.listId)}</h1>
-		<p class="sub">{pending.length} pending • {completed.length} completed</p>
+		<h1>{listName}</h1>
+		<p class="sub">Tasks in this list.</p>
 	</div>
 	<div class="actions">
 		<div class="add">
@@ -63,48 +44,36 @@
 			/>
 			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
 		</div>
-		<div class="sorter">
-			<span>Sort</span>
-			<select bind:value={sortMode} aria-label="Sort tasks">
-				<option value="created">Creation</option>
-				<option value="alpha">Alphabetical</option>
-			</select>
-		</div>
 	</div>
 </header>
-
-<details class="importer">
-	<summary>Import tasks (markdown)</summary>
-	<p class="hint">Format: <code>- [ ] Task title #list-id @myday</code> (use [x] for done)</p>
-	<textarea bind:value={markdown} rows="4" placeholder="- [ ] Write proposal #tasks @myday"></textarea>
-	<button type="button" on:click={importMarkdown} disabled={!markdown.trim()}>Import</button>
-</details>
 
 <section class="block">
 	<div class="section-title">Pending</div>
 	<div class="stack">
-		{#if pending.length}
-			{#each sortTasks(pending) as task (task.id)}
-				<TaskRow {task} />
+		{#if sortTasks($listTasks?.filter((t) => t.status === 'pending') ?? []).length}
+			{#each sortTasks($listTasks.filter((t) => t.status === 'pending')) as task (task.id)}
+				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
-			<p class="empty">All caught up in this list.</p>
+			<p class="empty">No pending tasks.</p>
 		{/if}
 	</div>
 </section>
 
 <section class="block">
-	<div class="section-title">Completed ({completed.length})</div>
+	<div class="section-title">Completed</div>
 	<div class="stack" data-testid="completed-section">
-		{#if completed.length}
-			{#each completed as task (task.id)}
-				<TaskRow {task} />
+		{#if sortTasks($listTasks?.filter((t) => t.status === 'done') ?? []).length}
+			{#each sortTasks($listTasks.filter((t) => t.status === 'done')) as task (task.id)}
+				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
 			<p class="empty subtle">No completed tasks yet.</p>
 		{/if}
 	</div>
 </section>
+
+<TaskDetailDrawer task={detailTask} open={!!detailTask} on:close={closeDetail} />
 
 <style>
 	.page-header {
@@ -185,48 +154,24 @@
 		min-width: 220px;
 	}
 
-	.importer {
-		margin: 12px 0;
-		border: 1px solid #1f2937;
-		border-radius: 10px;
-		padding: 10px 12px;
-		background: #0b1221;
-		color: #cbd5e1;
-	}
+	@media (max-width: 900px) {
+		.page-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 10px;
+		}
 
-	.importer summary {
-		cursor: pointer;
-		font-weight: 600;
-	}
+		.actions {
+			width: 100%;
+		}
 
-	.importer textarea {
-		width: 100%;
-		margin-top: 8px;
-		background: #0f172a;
-		color: #e2e8f0;
-		border: 1px solid #1f2937;
-		border-radius: 8px;
-		padding: 10px;
-		font-family: monospace;
-	}
+		.add {
+			width: 100%;
+		}
 
-	.importer .hint {
-		color: #94a3b8;
-		font-size: 12px;
-	}
-
-	.sorter {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		color: #cbd5e1;
-	}
-
-	.sorter select {
-		background: #0f172a;
-		color: #e2e8f0;
-		border: 1px solid #1f2937;
-		border-radius: 8px;
-		padding: 6px 8px;
+		.add input,
+		.actions button {
+			width: 100%;
+		}
 	}
 </style>
