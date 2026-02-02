@@ -9,7 +9,6 @@
 	import { parseMarkdownTasks } from '$lib/markdown/import';
 
 	const listsStore = lists;
-	let newTitle = '';
 	let quickTitle = '';
 	let markdown = '';
 	let sortMode = 'created';
@@ -35,12 +34,6 @@
 		return copy;
 	};
 
-	const addTask = () => {
-		if (!newTitle.trim()) return;
-		tasks.createLocal(newTitle, defaultListId, { my_day: true });
-		newTitle = '';
-	};
-
 	const importMarkdown = () => {
 		const parsed = parseMarkdownTasks(markdown, defaultListId);
 		for (const p of parsed) {
@@ -53,7 +46,7 @@
 	};
 
 	if (typeof window !== 'undefined') {
-		Reflect.set(window, '__addTaskMyDay', () => addTask());
+		Reflect.set(window, '__addTaskMyDay', () => quickAdd());
 	}
 
 	const openDetail = (event) => {
@@ -78,17 +71,6 @@
 		<p class="sub">Tasks you’ve chosen for today.</p>
 	</div>
 	<div class="actions">
-		<div class="add">
-			<input
-				type="text"
-				placeholder="Add a task"
-				bind:value={newTitle}
-				data-testid="new-task-input"
-				autocomplete="off"
-				on:keydown={(e) => e.key === 'Enter' && addTask()}
-			/>
-			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
-		</div>
 		<div class="sorter">
 			<span>Sort</span>
 			<select bind:value={sortMode} aria-label="Sort tasks">
@@ -163,9 +145,10 @@
 			placeholder="Add a task to My Day"
 			bind:value={quickTitle}
 			autocomplete="off"
+			data-testid="new-task-input"
 			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
 		/>
-		<button type="button" on:click={quickAdd}>Add</button>
+		<button type="button" data-testid="new-task-submit" on:click={quickAdd}>Add</button>
 	</div>
 </div>
 
@@ -269,20 +252,6 @@
 		color: #64748b;
 	}
 
-	.add {
-		display: flex;
-		gap: 8px;
-	}
-
-	.add input {
-		border-radius: 10px;
-		border: 1px solid #1f2937;
-		background: #0f172a;
-		padding: 10px 12px;
-		color: #e2e8f0;
-		min-width: 220px;
-	}
-
 	.importer {
 		margin-top: 12px;
 		border: 1px solid #1f2937;
@@ -329,7 +298,44 @@
 	}
 
 	.mobile-add {
-		display: none;
+		display: block;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+		padding: 0 14px;
+		z-index: 15;
+	}
+
+	.mobile-add .bar {
+		background: rgba(15, 23, 42, 0.96);
+		border: 1px solid #1f2937;
+		border-radius: 14px;
+		padding: 8px 10px;
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 8px;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		max-width: 720px;
+		margin: 0 auto;
+	}
+
+	.mobile-add input {
+		width: 100%;
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 10px;
+		padding: 10px 12px;
+	}
+
+	.mobile-add button {
+		background: #1d4ed8;
+		color: white;
+		border: none;
+		border-radius: 10px;
+		padding: 10px 12px;
+		cursor: pointer;
 	}
 
 	@media (max-width: 900px) {
@@ -339,63 +345,8 @@
 			gap: 10px;
 		}
 
-		.actions {
-			width: 100%;
-			display: grid;
-			grid-template-columns: 1fr;
-			gap: 10px;
-		}
-
-		.add {
-			width: 100%;
-		}
-
-		.add input,
-		.actions button {
-			width: 100%;
-		}
-
 		.importer {
 			width: 100%;
-		}
-
-		.mobile-add {
-			display: block;
-			position: fixed;
-			left: 0;
-			right: 0;
-			bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-			padding: 0 14px;
-			z-index: 15;
-		}
-
-		.mobile-add .bar {
-			background: rgba(15, 23, 42, 0.96);
-			border: 1px solid #1f2937;
-			border-radius: 14px;
-			padding: 8px 10px;
-			display: grid;
-			grid-template-columns: 1fr auto;
-			gap: 8px;
-			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-		}
-
-		.mobile-add input {
-			width: 100%;
-			background: #0b1221;
-			border: 1px solid #1f2937;
-			color: #e2e8f0;
-			border-radius: 10px;
-			padding: 10px 12px;
-		}
-
-		.mobile-add button {
-			background: #1d4ed8;
-			color: white;
-			border: none;
-			border-radius: 10px;
-			padding: 10px 12px;
-			cursor: pointer;
 		}
 
 		.stack {

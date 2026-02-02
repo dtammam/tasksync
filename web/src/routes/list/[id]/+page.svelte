@@ -6,7 +6,6 @@ import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
 import { findListName } from '$lib/stores/lists';
 
-let newTitle = '';
 let quickTitle = '';
 let detailId = null;
 $: listId = $page.params.id;
@@ -14,27 +13,21 @@ let listTasks = tasksByList(listId);
 $: listTasks = tasksByList(listId);
 $: listName = findListName(listId);
 
-	const addTask = () => {
-		if (!newTitle.trim()) return;
-		tasks.createLocal(newTitle, listId);
-		newTitle = '';
-	};
+const quickAdd = () => {
+	if (!quickTitle.trim()) return;
+	tasks.createLocal(quickTitle, listId);
+	quickTitle = '';
+};
 
-	if (typeof window !== 'undefined') {
-		Reflect.set(window, '__addTaskList', () => addTask());
-	}
+if (typeof window !== 'undefined') {
+	Reflect.set(window, '__addTaskList', () => quickAdd());
+}
 
-	const openDetail = (event) => (detailId = event.detail.id);
-	const closeDetail = () => (detailId = null);
-	$: detailTask = detailId ? getTask(detailId) : null;
+const openDetail = (event) => (detailId = event.detail.id);
+const closeDetail = () => (detailId = null);
+$: detailTask = detailId ? getTask(detailId) : null;
 
-	const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
-
-	const quickAdd = () => {
-		if (!quickTitle.trim()) return;
-		tasks.createLocal(quickTitle, listId);
-		quickTitle = '';
-	};
+const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 </script>
 
 <header class="page-header">
@@ -42,19 +35,6 @@ $: listName = findListName(listId);
 		<p class="eyebrow">List</p>
 		<h1>{listName}</h1>
 		<p class="sub">Tasks in this list.</p>
-	</div>
-	<div class="actions">
-		<div class="add">
-			<input
-				type="text"
-				placeholder="Add a task"
-				bind:value={newTitle}
-				data-testid="new-task-input"
-				autocomplete="off"
-				on:keydown={(e) => e.key === 'Enter' && addTask()}
-			/>
-			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
-		</div>
 	</div>
 </header>
 
@@ -93,9 +73,10 @@ $: listName = findListName(listId);
 			placeholder={`Add a task to ${listName}`}
 			bind:value={quickTitle}
 			autocomplete="off"
+			data-testid="new-task-input"
 			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
 		/>
-		<button type="button" on:click={quickAdd}>Add</button>
+		<button type="button" data-testid="new-task-submit" on:click={quickAdd}>Add</button>
 	</div>
 </div>
 
@@ -126,16 +107,6 @@ $: listName = findListName(listId);
 		color: #94a3b8;
 	}
 
-	.actions button {
-		background: #1d4ed8;
-		border: none;
-		color: white;
-		padding: 10px 14px;
-		border-radius: 10px;
-		cursor: pointer;
-		opacity: 1;
-	}
-
 	.block {
 		margin-top: 12px;
 	}
@@ -164,22 +135,45 @@ $: listName = findListName(listId);
 		color: #64748b;
 	}
 
-	.add {
-		display: flex;
-		gap: 8px;
-	}
-
-	.add input {
-		border-radius: 10px;
-		border: 1px solid #1f2937;
-		background: #0f172a;
-		padding: 10px 12px;
-		color: #e2e8f0;
-		min-width: 220px;
-	}
-
 	.mobile-add {
-		display: none;
+		display: block;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+		padding: 0 14px;
+		z-index: 15;
+	}
+
+	.mobile-add .bar {
+		background: rgba(15, 23, 42, 0.96);
+		border: 1px solid #1f2937;
+		border-radius: 14px;
+		padding: 8px 10px;
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 8px;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		max-width: 720px;
+		margin: 0 auto;
+	}
+
+	.mobile-add input {
+		width: 100%;
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 10px;
+		padding: 10px 12px;
+	}
+
+	.mobile-add button {
+		background: #1d4ed8;
+		color: white;
+		border: none;
+		border-radius: 10px;
+		padding: 10px 12px;
+		cursor: pointer;
 	}
 
 	@media (max-width: 900px) {
@@ -187,58 +181,6 @@ $: listName = findListName(listId);
 			flex-direction: column;
 			align-items: flex-start;
 			gap: 10px;
-		}
-
-		.actions {
-			width: 100%;
-		}
-
-		.add {
-			width: 100%;
-		}
-
-		.add input,
-		.actions button {
-			width: 100%;
-		}
-
-		.mobile-add {
-			display: block;
-			position: fixed;
-			left: 0;
-			right: 0;
-			bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-			padding: 0 14px;
-			z-index: 15;
-		}
-
-		.mobile-add .bar {
-			background: rgba(15, 23, 42, 0.96);
-			border: 1px solid #1f2937;
-			border-radius: 14px;
-			padding: 8px 10px;
-			display: grid;
-			grid-template-columns: 1fr auto;
-			gap: 8px;
-			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-		}
-
-		.mobile-add input {
-			width: 100%;
-			background: #0b1221;
-			border: 1px solid #1f2937;
-			color: #e2e8f0;
-			border-radius: 10px;
-			padding: 10px 12px;
-		}
-
-		.mobile-add button {
-			background: #1d4ed8;
-			color: white;
-			border: none;
-			border-radius: 10px;
-			padding: 10px 12px;
-			cursor: pointer;
 		}
 
 		.stack {
