@@ -4,6 +4,7 @@
 	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
 	import { getTask } from '$lib/stores/tasks';
+	import { myDaySuggestions } from '$lib/stores/tasks';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { parseMarkdownTasks } from '$lib/markdown/import';
 
@@ -117,6 +118,29 @@
 	</div>
 </section>
 
+{#if $myDaySuggestions?.length}
+	<section class="block">
+		<div class="section-title">Suggestions</div>
+		<div class="suggestions">
+			{#each $myDaySuggestions as suggestion (suggestion.id)}
+				<div class="suggestion">
+					<div>
+						<p class="title">{suggestion.title}</p>
+						<p class="meta">
+							{#if suggestion.due_date}
+								Due {suggestion.due_date}
+							{:else}
+								No due date
+							{/if}
+						</p>
+					</div>
+					<button type="button" on:click={() => tasks.setMyDay(suggestion.id, true)}>Add to My Day</button>
+				</div>
+			{/each}
+		</div>
+	</section>
+{/if}
+
 <section class="block">
 	<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
 	<div class="stack" data-testid="completed-section">
@@ -195,6 +219,41 @@
 	.stack {
 		display: grid;
 		gap: 8px;
+	}
+
+	.suggestions {
+		display: grid;
+		gap: 10px;
+	}
+
+	.suggestion {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		align-items: center;
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		border-radius: 12px;
+		padding: 10px 12px;
+	}
+
+	.suggestion .title {
+		margin: 0;
+		font-weight: 600;
+	}
+
+	.suggestion .meta {
+		margin: 2px 0 0;
+		color: #94a3b8;
+		font-size: 13px;
+	}
+
+	.suggestion button {
+		background: #16a34a;
+		color: white;
+		border: none;
+		padding: 10px 12px;
+		border-radius: 10px;
+		cursor: pointer;
 	}
 
 	.empty {
@@ -341,6 +400,11 @@
 
 		.stack {
 			padding-bottom: 86px;
+		}
+
+		.suggestion {
+			grid-template-columns: 1fr;
+			gap: 8px;
 		}
 	}
 </style>

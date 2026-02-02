@@ -123,6 +123,8 @@ const openDetail = () => dispatch('openDetail', { id: task.id });
 		background: #0b1221;
 		color: #e2e8f0;
 		cursor: pointer;
+		min-width: 44px;
+		min-height: 44px;
 	}
 
 	.meta .title {
@@ -227,6 +229,8 @@ const openDetail = () => dispatch('openDetail', { id: task.id });
 		cursor: pointer;
 		padding: 4px;
 		border-radius: 6px;
+		min-width: 32px;
+		min-height: 32px;
 	}
 
 	.icon-btn:hover {

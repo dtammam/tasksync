@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { myDayPending, tasks } from './tasks';
+import { myDayPending, myDaySuggestions, tasks } from './tasks';
 import type { Task } from '$shared/types/task';
 
 const baseTask = (overrides: Partial<Task> = {}): Task => ({
@@ -71,5 +71,18 @@ describe('tasks store helpers', () => {
 		const updated = tasks.getAll().find((x) => x.id === 'r1');
 		expect(updated?.title).toBe('new title');
 		expect(updated?.dirty).toBe(true);
+	});
+
+	it('suggests tasks due today or tomorrow that are not already in My Day', () => {
+		tasks.setAll([
+			baseTask({ id: 'due-today', due_date: '2026-02-02', status: 'pending' }),
+			baseTask({ id: 'due-tomorrow', due_date: '2026-02-03', status: 'pending' }),
+			baseTask({ id: 'already-myday', my_day: true, due_date: '2026-02-02' }),
+			baseTask({ id: 'done-task', due_date: '2026-02-02', status: 'done' }),
+			baseTask({ id: 'no-due', priority: 1 })
+		]);
+
+		const suggestions = get(myDaySuggestions);
+		expect(suggestions.map((t) => t.id)).toEqual(['due-tomorrow', 'no-due']);
 	});
 });

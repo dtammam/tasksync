@@ -125,6 +125,14 @@ const runSync = async () => {
 		font-size: 16px;
 	}
 
+	:global(button:focus-visible),
+	:global(input:focus-visible),
+	:global(select:focus-visible),
+	:global(textarea:focus-visible) {
+		outline: 2px solid #60a5fa;
+		outline-offset: 2px;
+	}
+
 	.app-shell {
 		display: grid;
 		grid-template-columns: 240px 1fr;

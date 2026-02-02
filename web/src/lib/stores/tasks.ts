@@ -270,6 +270,31 @@ export const myDayCompleted = derived(tasksStore, ($tasks) =>
 	$tasks.filter((task) => inMyDay(task) && task.status === 'done')
 );
 
+export const myDaySuggestions = derived(tasksStore, ($tasks) => {
+	const today = todayIso();
+	const tomorrow = (() => {
+		const d = new Date();
+		d.setDate(d.getDate() + 1);
+		return d.toISOString().slice(0, 10);
+	})();
+	return $tasks
+		.filter(
+			(t) =>
+				t.status === 'pending' &&
+				!inMyDay(t) &&
+				(t.due_date === today || t.due_date === tomorrow || (!t.due_date && t.priority > 0))
+		)
+		.sort((a, b) => {
+			// Prioritize due today, then tomorrow, then priority
+			const aScore = a.due_date === today ? 2 : a.due_date === tomorrow ? 1 : 0;
+			const bScore = b.due_date === today ? 2 : b.due_date === tomorrow ? 1 : 0;
+			if (aScore !== bScore) return bScore - aScore;
+			if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+			return a.created_ts - b.created_ts;
+		})
+		.slice(0, 6);
+});
+
 export const tasksByList = (listId: string) =>
 	derived(tasksStore, ($tasks) => $tasks.filter((task) => task.list_id === listId));
 
