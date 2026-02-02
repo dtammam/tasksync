@@ -20,6 +20,10 @@ $: listName = findListName(listId);
 		newTitle = '';
 	};
 
+	if (typeof window !== 'undefined') {
+		Reflect.set(window, '__addTaskList', () => addTask());
+	}
+
 	const openDetail = (event) => (detailId = event.detail.id);
 	const closeDetail = () => (detailId = null);
 	$: detailTask = detailId ? getTask(detailId) : null;
