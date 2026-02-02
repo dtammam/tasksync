@@ -6,11 +6,9 @@
 	import { getTask } from '$lib/stores/tasks';
 	import { myDaySuggestions } from '$lib/stores/tasks';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
-	import { parseMarkdownTasks } from '$lib/markdown/import';
 
 	const listsStore = lists;
 	let quickTitle = '';
-	let markdown = '';
 	let sortMode = 'created';
 	let detailId = null;
 	$: detailTask = detailId ? getTask(detailId) : null;
@@ -32,17 +30,6 @@
 			copy.sort((a, b) => a.created_ts - b.created_ts);
 		}
 		return copy;
-	};
-
-	const importMarkdown = () => {
-		const parsed = parseMarkdownTasks(markdown, defaultListId);
-		for (const p of parsed) {
-			tasks.createLocalWithOptions(p.title, p.list_id ?? defaultListId, {
-				status: p.status,
-				my_day: p.my_day ?? false
-			});
-		}
-		markdown = '';
 	};
 
 	if (typeof window !== 'undefined') {
@@ -72,18 +59,14 @@
 	</div>
 	<div class="actions">
 		<div class="sorter">
-			<span>Sort</span>
-			<select bind:value={sortMode} aria-label="Sort tasks">
-				<option value="created">Creation</option>
-				<option value="alpha">Alphabetical</option>
-			</select>
+			<label>
+				<span>Sort</span>
+				<select bind:value={sortMode} aria-label="Sort tasks">
+					<option value="created">Creation</option>
+					<option value="alpha">Alphabetical</option>
+				</select>
+			</label>
 		</div>
-		<details class="importer">
-			<summary>Import from markdown</summary>
-			<p class="hint">Format: <code>- [ ] Task title #list-id @myday</code> (use [x] for done)</p>
-			<textarea bind:value={markdown} rows="4" placeholder="- [ ] Write proposal #tasks @myday"></textarea>
-			<button type="button" on:click={importMarkdown} disabled={!markdown.trim()}>Import</button>
-		</details>
 	</div>
 </header>
 
@@ -156,8 +139,9 @@
 	.page-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 18px;
+		align-items: flex-start;
+		margin-bottom: 12px;
+		gap: 12px;
 	}
 
 	.eyebrow {
@@ -179,14 +163,19 @@
 		color: #94a3b8;
 	}
 
-	.actions button {
-		background: #1d4ed8;
-		border: none;
-		color: white;
-		padding: 10px 14px;
-		border-radius: 10px;
-		cursor: pointer;
-		opacity: 1;
+	.actions {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		justify-content: flex-end;
+		margin-left: auto;
+		margin-top: 4px;
+	}
+
+	.actions .sorter {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
 	}
 
 	.block {
@@ -252,36 +241,6 @@
 		color: #64748b;
 	}
 
-	.importer {
-		margin-top: 12px;
-		border: 1px solid #1f2937;
-		border-radius: 10px;
-		padding: 10px 12px;
-		background: #0b1221;
-		color: #cbd5e1;
-	}
-
-	.importer summary {
-		cursor: pointer;
-		font-weight: 600;
-	}
-
-	.importer textarea {
-		width: 100%;
-		margin-top: 8px;
-		background: #0f172a;
-		color: #e2e8f0;
-		border: 1px solid #1f2937;
-		border-radius: 8px;
-		padding: 10px;
-		font-family: monospace;
-	}
-
-	.importer .hint {
-		color: #94a3b8;
-		font-size: 12px;
-	}
-
 	.sorter {
 		display: flex;
 		flex-direction: column;
@@ -293,8 +252,9 @@
 		background: #0f172a;
 		color: #e2e8f0;
 		border: 1px solid #1f2937;
-		border-radius: 8px;
-		padding: 6px 8px;
+		border-radius: 999px;
+		padding: 6px 12px;
+		box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
 	}
 
 	.mobile-add {
@@ -343,10 +303,6 @@
 			flex-direction: column;
 			align-items: flex-start;
 			gap: 10px;
-		}
-
-		.importer {
-			width: 100%;
 		}
 
 		.stack {
