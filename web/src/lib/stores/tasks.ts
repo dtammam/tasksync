@@ -184,6 +184,38 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
+	setDueDate(id: string, due_date?: string) {
+		const now = Date.now();
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							due_date,
+							dirty: true,
+							updated_ts: now
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	setPriority(id: string, priority: Task['priority']) {
+		const now = Date.now();
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							priority,
+							dirty: true,
+							updated_ts: now
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	skip(id: string) {
 		tasksStore.update((list) =>
 			list.map((t) =>

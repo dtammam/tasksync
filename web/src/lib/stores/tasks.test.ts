@@ -85,4 +85,14 @@ describe('tasks store helpers', () => {
 		const suggestions = get(myDaySuggestions);
 		expect(suggestions.map((t) => t.id)).toEqual(['due-tomorrow', 'no-due']);
 	});
+
+	it('sets due date and priority via helpers', () => {
+		tasks.setAll([baseTask({ id: 'p1', priority: 0, due_date: undefined })]);
+		tasks.setPriority('p1', 2);
+		tasks.setDueDate('p1', '2026-02-10');
+		const updated = tasks.getAll().find((t) => t.id === 'p1');
+		expect(updated?.priority).toBe(2);
+		expect(updated?.due_date).toBe('2026-02-10');
+		expect(updated?.dirty).toBe(true);
+	});
 });

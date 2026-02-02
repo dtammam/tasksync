@@ -1,14 +1,16 @@
 <script lang="ts">
 	// @ts-nocheck
-	import { createEventDispatcher } from 'svelte';
-	import { tasks } from '$lib/stores/tasks';
-	import { lists } from '$lib/stores/lists';
+import { createEventDispatcher } from 'svelte';
+import { tasks } from '$lib/stores/tasks';
+import { lists } from '$lib/stores/lists';
 
-	export let task;
+export let task;
 
-	const dispatch = createEventDispatcher();
-	let editing = false;
-	let titleDraft = task.title;
+const dispatch = createEventDispatcher();
+let editing = false;
+let titleDraft = task.title;
+let showActions = false;
+let pressTimer = null;
 
 /** @param {Event & { target: HTMLSelectElement }} event */
 const updateList = (event) => {
@@ -35,12 +37,44 @@ const saveTitle = () => {
 };
 
 const openDetail = () => dispatch('openDetail', { id: task.id });
+
+const tomorrowIso = () => {
+	const d = new Date();
+	d.setDate(d.getDate() + 1);
+	return d.toISOString().slice(0, 10);
+};
+
+const nextWeekIso = () => {
+	const d = new Date();
+	d.setDate(d.getDate() + 7);
+	return d.toISOString().slice(0, 10);
+};
+
+const addTomorrow = () => tasks.setDueDate(task.id, tomorrowIso());
+const addNextWeek = () => tasks.setDueDate(task.id, nextWeekIso());
+const toggleStar = () => tasks.setPriority(task.id, task.priority > 0 ? 0 : 1);
+
+const startPress = () => {
+	pressTimer = setTimeout(() => {
+		showActions = true;
+	}, 400);
+};
+
+const endPress = () => {
+	if (pressTimer) clearTimeout(pressTimer);
+};
+
+const closeActions = () => (showActions = false);
 </script>
 
 <div
 	class="task"
 	data-testid="task-row"
 	title={`Created ${new Date(task.created_ts).toLocaleString()}\nUpdated ${new Date(task.updated_ts).toLocaleString()}`}
+	role="group"
+	on:pointerdown={startPress}
+	on:pointerup={endPress}
+	on:pointerleave={endPress}
 >
 	<div class="left">
 		<button
@@ -99,8 +133,17 @@ const openDetail = () => dispatch('openDetail', { id: task.id });
 				{task.dirty ? 'Pending sync' : justSaved ? 'Saved' : 'Synced'}
 			</span>
 			<button class="chip ghost" type="button" on:click={openDetail}>Details</button>
+			<button class="chip ghost" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
 		</div>
 	</div>
+	{#if showActions}
+		<div class="quick">
+			<button type="button" on:click={addTomorrow}>Tomorrow</button>
+			<button type="button" on:click={addNextWeek}>Next week</button>
+			<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
+			<button class="ghost" type="button" on:click={closeActions}>Close</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -213,6 +256,31 @@ const openDetail = () => dispatch('openDetail', { id: task.id });
 		border-radius: 12px;
 		padding: 10px 12px;
 		align-items: start;
+	}
+
+	.quick {
+		grid-column: 1 / -1;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		gap: 8px;
+		margin-top: 4px;
+	}
+
+	.quick button {
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 10px;
+		padding: 8px 10px;
+		cursor: pointer;
+	}
+
+	.quick button:hover {
+		background: #11192b;
+	}
+
+	.quick button.ghost {
+		border-color: #334155;
 	}
 
 	@media (max-width: 960px) {

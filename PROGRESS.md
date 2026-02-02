@@ -35,3 +35,4 @@
 - 2026-02-02 00:08 - Locked body scroll to viewport, added bottom quick-add bar on mobile, set inputs to 16px to prevent iOS zoom, and made sidebar scrollable; web lint/check/tests passing.
 - 2026-02-02 00:14 - Blocked horizontal scroll/zoom on mobile (viewport meta, overflow-x hidden on html/body/main); web lint/check/tests passing.
 - 2026-02-02 00:23 - Added My Day suggestions list with add-to-My-Day actions, larger touch targets/focus rings, and new sync+check favicon; web lint/check/tests passing.
+- 2026-02-02 00:27 - Added long-press/ellipsis quick actions (Tomorrow, Next week, Star) on tasks; new store helpers for due date/priority with tests; web lint/check/tests passing.
