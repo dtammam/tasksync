@@ -52,6 +52,7 @@ const runSync = async () => {
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 	<title>tasksync</title>
 </svelte:head>
 
@@ -107,11 +108,15 @@ const runSync = async () => {
 		color: #e2e8f0;
 		font-family: 'Inter', system-ui, -apple-system, sans-serif;
 		overflow: hidden;
+		overflow-x: hidden;
+		width: 100%;
 	}
 
 	:global(html),
 	:global(body) {
 		height: 100%;
+		max-width: 100vw;
+		overflow-x: hidden;
 	}
 
 	:global(input),
@@ -125,6 +130,9 @@ const runSync = async () => {
 		grid-template-columns: 240px 1fr;
 		min-height: 100vh;
 		height: 100vh;
+		width: 100%;
+		max-width: 100vw;
+		overflow: hidden;
 	}
 
 	.sidebar-drawer {
@@ -138,6 +146,8 @@ const runSync = async () => {
 		padding: 28px 32px;
 		height: 100vh;
 		overflow-y: auto;
+		overflow-x: hidden;
+		max-width: 100vw;
 	}
 
 	.app-header {

@@ -33,3 +33,4 @@
 - 2026-02-02 23:40 - Fixed API 401 by reseeding dev DB (`scripts/1-seed.ps1`), validated /health and /lists return 200 with admin headers; ready for server+web dev to resume.
 - 2026-02-02 23:58 - Fixed list view showing newly added tasks, added mobile nav drawer + responsive headers/task rows to mirror To Do on phones, ran web lint/check/tests (all passing).
 - 2026-02-02 00:08 - Locked body scroll to viewport, added bottom quick-add bar on mobile, set inputs to 16px to prevent iOS zoom, and made sidebar scrollable; web lint/check/tests passing.
+- 2026-02-02 00:14 - Blocked horizontal scroll/zoom on mobile (viewport meta, overflow-x hidden on html/body/main); web lint/check/tests passing.
