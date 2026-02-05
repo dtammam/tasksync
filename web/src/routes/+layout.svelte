@@ -7,15 +7,40 @@
 	import { afterNavigate } from '$app/navigation';
 	import { lists } from '$lib/stores/lists';
 	import { tasks } from '$lib/stores/tasks';
+	import { soundSettings } from '$lib/stores/settings';
 	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
 
+	const NAV_PIN_KEY = 'tasksync:nav-pinned';
 	let navOpen = false;
-	const toggleNav = () => (navOpen = !navOpen);
-	const closeNav = () => (navOpen = false);
+	let navPinned = false;
+	let appReady = false;
+	const toggleNav = () => {
+		if (navPinned && navOpen) {
+			savePinned(false);
+			navOpen = false;
+			return;
+		}
+		navOpen = !navOpen;
+	};
+	const closeNav = () => {
+		if (!navPinned) navOpen = false;
+	};
+
+	const savePinned = (pinned) => {
+		navPinned = pinned;
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(NAV_PIN_KEY, pinned ? '1' : '0');
+		}
+		if (pinned) {
+			navOpen = true;
+		}
+	};
 
 	afterNavigate(() => {
-		navOpen = false;
+		if (!navPinned) {
+			navOpen = false;
+		}
 	});
 
 const runSync = async () => {
@@ -35,7 +60,12 @@ const runSync = async () => {
 	let retryTimer = null;
 
 	onMount(async () => {
-		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb()]);
+		if (typeof localStorage !== 'undefined') {
+			navPinned = localStorage.getItem(NAV_PIN_KEY) === '1';
+			navOpen = navPinned;
+		}
+		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb(), soundSettings.hydrateFromDb()]);
+		appReady = true;
 		void runSync();
 		retryTimer = setInterval(() => {
 			const s = get(syncStatus);
@@ -56,11 +86,15 @@ const runSync = async () => {
 	<title>tasksync</title>
 </svelte:head>
 
-<div class="app-shell">
-	<div class={`sidebar-drawer ${navOpen ? 'open' : ''}`}>
-		<Sidebar />
+<div
+	class={`app-shell ${navPinned && navOpen ? 'nav-split' : ''}`}
+	data-testid="app-shell"
+	data-ready={appReady ? 'true' : 'false'}
+>
+	<div class={`sidebar-drawer ${navOpen ? 'open' : ''}`} data-testid="sidebar-drawer">
+		<Sidebar navPinned={navPinned} on:togglePin={(e) => savePinned(e.detail.pinned)} />
 	</div>
-	{#if navOpen}
+	{#if navOpen && !navPinned}
 		<button class="drawer-backdrop" type="button" aria-label="Close navigation" on:click={closeNav}></button>
 	{/if}
 	<main>
@@ -106,7 +140,7 @@ const runSync = async () => {
 		margin: 0;
 		background: radial-gradient(circle at 10% 20%, #0f172a, #0b1221 40%, #050a1a);
 		color: #e2e8f0;
-		font-family: 'Inter', system-ui, -apple-system, sans-serif;
+		font-family: 'Segoe UI Variable Text', 'Segoe UI', 'SF Pro Text', system-ui, sans-serif;
 		overflow: hidden;
 		overflow-x: hidden;
 		width: 100%;
@@ -148,6 +182,7 @@ const runSync = async () => {
 		top: 0;
 		height: 100vh;
 		z-index: 10;
+		min-width: 0;
 	}
 
 	main {
@@ -156,6 +191,7 @@ const runSync = async () => {
 		overflow-y: auto;
 		overflow-x: hidden;
 		max-width: 100vw;
+		min-width: 0;
 	}
 
 	.app-header {
@@ -247,7 +283,7 @@ const runSync = async () => {
 		.sidebar-drawer {
 			position: fixed;
 			inset: 0 auto 0 0;
-			width: min(280px, 82vw);
+			width: min(260px, 78vw);
 			transform: translateX(-110%);
 			transition: transform 160ms ease-out;
 			box-shadow: 12px 0 30px rgba(0, 0, 0, 0.4);
@@ -259,6 +295,24 @@ const runSync = async () => {
 		.sidebar-drawer.open {
 			transform: translateX(0);
 			pointer-events: auto;
+		}
+
+		.app-shell.nav-split {
+			grid-template-columns: min(208px, 58vw) 1fr;
+		}
+
+		.app-shell.nav-split .sidebar-drawer {
+			position: sticky;
+			inset: auto;
+			width: 100%;
+			transform: none;
+			transition: none;
+			box-shadow: none;
+			pointer-events: auto;
+		}
+
+		.app-shell.nav-split main {
+			padding: 16px 12px 24px;
 		}
 
 		main {

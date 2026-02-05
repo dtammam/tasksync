@@ -1,6 +1,8 @@
 import { derived, get, writable } from 'svelte/store';
 import type { Task } from '$shared/types/task';
 import { repo } from '$lib/data/repo';
+import { playCompletion } from '$lib/sound/sound';
+import { soundSettings } from '$lib/stores/settings';
 
 const tasksStore = writable<Task[]>([]);
 
@@ -94,13 +96,31 @@ export const tasks = {
 		tasksStore.set(next);
 		void repo.saveTasks(next);
 	},
+	mergeRemote(remote: Task[]) {
+		tasksStore.update((current) => {
+			const merged = new Map<string, Task>();
+			for (const task of remote) {
+				merged.set(task.id, task);
+			}
+			for (const task of current) {
+				if (task.dirty) {
+					// Keep local unsynced mutations as source-of-truth until push succeeds.
+					merged.set(task.id, task);
+				}
+			}
+			return Array.from(merged.values());
+		});
+		void repo.saveTasks(get(tasksStore));
+	},
 	toggle(id: string) {
+		let shouldPlayCompletion = false;
 		tasksStore.update((list) =>
 			list.map((task) =>
 				task.id === id
 					? (() => {
 							const now = Date.now();
 							if (task.recurrence_id && task.status !== 'done') {
+								shouldPlayCompletion = true;
 								const next = nextDue(task.due_date, task.recurrence_id);
 								return {
 									...task,
@@ -111,9 +131,13 @@ export const tasks = {
 									dirty: true
 								};
 							}
+							const nextStatus = task.status === 'done' ? 'pending' : 'done';
+							if (nextStatus === 'done') {
+								shouldPlayCompletion = true;
+							}
 							return {
 								...task,
-								status: task.status === 'done' ? 'pending' : 'done',
+								status: nextStatus,
 								updated_ts: now,
 								dirty: true
 							};
@@ -122,6 +146,9 @@ export const tasks = {
 			)
 		);
 		void repo.saveTasks(get(tasksStore));
+		if (shouldPlayCompletion) {
+			void playCompletion(soundSettings.get());
+		}
 	},
 	getAll() {
 		return get(tasksStore);

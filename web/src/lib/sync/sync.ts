@@ -36,7 +36,6 @@ export const syncFromServer = async () => {
 	try {
 		const [remoteLists, remoteTasks] = await Promise.all([api.getLists(), api.getTasks()]);
 		const toTasks: Task[] = remoteTasks.map(mapApiTask);
-		const remoteIds = new Set(toTasks.map((t) => t.id));
 
 		const toLists: List[] = remoteLists.map((l) => ({
 			id: l.id,
@@ -46,23 +45,9 @@ export const syncFromServer = async () => {
 			order: l.order
 		}));
 
-		const current = tasks.getAll();
-		const unsynced = current.filter((t) => t.dirty);
-
 		lists.setAll(toLists);
-		const mergedMap = new Map<string, Task>();
-		for (const t of toTasks) mergedMap.set(t.id, t);
-		for (const t of unsynced) {
-			if (remoteIds.has(t.id)) {
-				// keep local dirty version to avoid status regressions until push succeeds
-				mergedMap.set(t.id, t);
-			} else {
-				mergedMap.set(t.id, t);
-			}
-		}
-		const merged = Array.from(mergedMap.values());
-		tasks.setAll(merged);
-		await repo.saveTasks(merged);
+		tasks.mergeRemote(toTasks);
+		await repo.saveTasks(tasks.getAll());
 		syncStatus.setPull('idle');
 		return { lists: toLists.length, tasks: toTasks.length };
 	} catch (err) {

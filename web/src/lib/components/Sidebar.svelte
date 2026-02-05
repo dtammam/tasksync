@@ -1,8 +1,14 @@
 <script lang="ts">
 // @ts-nocheck
 import { page } from '$app/stores';
+import { createEventDispatcher } from 'svelte';
 import { lists } from '$lib/stores/lists';
 import { listCounts, myDayPending } from '$lib/stores/tasks';
+import { soundSettings, soundThemes } from '$lib/stores/settings';
+
+export let navPinned = false;
+
+const dispatch = createEventDispatcher();
 
 let showManager = false;
 let newListName = '';
@@ -10,6 +16,10 @@ let newListIcon = '';
 let renameDraft = {};
 let listError = '';
 let busy = false;
+
+const togglePin = () => {
+	dispatch('togglePin', { pinned: !navPinned });
+};
 
 const resetDrafts = () => {
 	renameDraft = {};
@@ -68,7 +78,19 @@ const deleteList = async (id) => {
 </script>
 
 <nav class="sidebar">
-	<div class="app-title">tasksync</div>
+	<div class="title-row">
+		<div class="app-title">tasksync</div>
+		<button
+			class={`pin ${navPinned ? 'active' : ''}`}
+			type="button"
+			data-testid="nav-pin"
+			aria-pressed={navPinned}
+			on:click={togglePin}
+			title={navPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+		>
+			{navPinned ? 'Unpin' : 'Pin'}
+		</button>
+	</div>
 	<div class="section-label">Today</div>
 	{#if $lists}
 		{#each [...$lists].sort((a, b) => (a.id === 'my-day' ? -1 : b.id === 'my-day' ? 1 : (a.order ?? '').localeCompare(b.order ?? ''))) as list}
@@ -141,11 +163,52 @@ const deleteList = async (id) => {
 			</div>
 		</div>
 	{/if}
+	<div class="section-label muted">Sound</div>
+	<div class="sound">
+		<label class="toggle" for="sound-enabled">
+			<input
+				id="sound-enabled"
+				data-testid="sound-enabled"
+				type="checkbox"
+				checked={$soundSettings.enabled}
+				on:change={(e) => soundSettings.setEnabled(e.target.checked)}
+			/>
+			Completion sound
+		</label>
+		<label>
+			Theme
+			<select
+				data-testid="sound-theme"
+				value={$soundSettings.theme}
+				on:change={(e) => soundSettings.setTheme(e.target.value)}
+			>
+				{#each soundThemes as theme}
+					<option value={theme}>{theme.replace('_', ' ')}</option>
+				{/each}
+			</select>
+		</label>
+		<label>
+			Volume
+			<div class="volume">
+				<input
+					data-testid="sound-volume"
+					type="range"
+					min="0"
+					max="100"
+					step="1"
+					value={$soundSettings.volume}
+					on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+				/>
+				<span>{$soundSettings.volume}%</span>
+			</div>
+		</label>
+	</div>
 </nav>
 
 <style>
 	.sidebar {
-		width: 240px;
+		width: 100%;
+		max-width: 240px;
 		background: #0a0f1c;
 		border-right: 1px solid #131a2d;
 		color: #cbd5e1;
@@ -157,6 +220,7 @@ const deleteList = async (id) => {
 		position: sticky;
 		top: 0;
 		overflow-y: auto;
+		box-sizing: border-box;
 	}
 
 	.app-title {
@@ -164,6 +228,34 @@ const deleteList = async (id) => {
 		letter-spacing: -0.03em;
 		color: #e2e8f0;
 		margin-bottom: 8px;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		margin-bottom: 8px;
+	}
+
+	.title-row .app-title {
+		margin-bottom: 0;
+	}
+
+	.pin {
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #cbd5e1;
+		border-radius: 999px;
+		padding: 4px 10px;
+		font-size: 11px;
+		cursor: pointer;
+	}
+
+	.pin.active {
+		border-color: #16a34a;
+		background: #0b3a2a;
+		color: #d1fae5;
 	}
 
 	.section-label {
@@ -276,8 +368,78 @@ const deleteList = async (id) => {
 		margin-top: 6px;
 	}
 
+	.sound {
+		margin-top: 6px;
+		border: 1px solid #1f2937;
+		border-radius: 10px;
+		padding: 10px;
+		background: #0c1322;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.sound label {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 12px;
+		color: #cbd5e1;
+	}
+
+	.sound .toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.sound select,
+	.sound input[type='range'] {
+		width: 100%;
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 8px;
+		padding: 6px 8px;
+	}
+
+	.sound input[type='checkbox'] {
+		accent-color: #1d4ed8;
+	}
+
+	.sound .volume {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 8px;
+		align-items: center;
+	}
+
+	.sound .volume span {
+		color: #94a3b8;
+		font-size: 12px;
+		min-width: 38px;
+		text-align: right;
+	}
+
 	.error {
 		color: #ef4444;
 		font-size: 12px;
+	}
+
+	@media (max-width: 900px) {
+		.sidebar {
+			max-width: none;
+			padding: 14px 10px;
+		}
+
+		a {
+			padding: 7px 8px;
+			gap: 6px;
+			font-size: 13px;
+		}
+
+		.count {
+			font-size: 11px;
+		}
 	}
 </style>

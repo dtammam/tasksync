@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+
+vi.mock('$lib/sound/sound', () => ({
+	playCompletion: vi.fn()
+}));
+
 import { myDayPending, myDaySuggestions, tasks } from './tasks';
+import { playCompletion } from '$lib/sound/sound';
 import type { Task } from '$shared/types/task';
+
+const mockedPlayCompletion = vi.mocked(playCompletion);
 
 const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	id: overrides.id ?? 't1',
@@ -29,6 +37,7 @@ describe('tasks store helpers', () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-02-02T12:00:00Z'));
 		tasks.setAll([]);
+		mockedPlayCompletion.mockClear();
 	});
 
 	afterEach(() => {
@@ -94,5 +103,14 @@ describe('tasks store helpers', () => {
 		expect(updated?.priority).toBe(2);
 		expect(updated?.due_date).toBe('2026-02-10');
 		expect(updated?.dirty).toBe(true);
+	});
+
+	it('plays completion sound only when task moves to done', () => {
+		tasks.setAll([baseTask({ id: 'sound-1', status: 'pending' })]);
+
+		tasks.toggle('sound-1');
+		tasks.toggle('sound-1');
+
+		expect(mockedPlayCompletion).toHaveBeenCalledTimes(1);
 	});
 });

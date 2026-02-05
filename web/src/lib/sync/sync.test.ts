@@ -65,6 +65,26 @@ describe('syncFromServer', () => {
 		expect(saved?.status).toBe('done');
 		expect(saved?.dirty).toBe(true);
 	});
+
+	it('keeps local tasks created while pull is in flight', async () => {
+		mockedApi.getLists.mockResolvedValue([]);
+		let resolveTasks: (value: ReturnType<typeof mockedApi.getTasks> extends Promise<infer T> ? T : never) =>
+			void;
+		const remoteTasks = new Promise<
+			ReturnType<typeof mockedApi.getTasks> extends Promise<infer T> ? T : never
+		>((resolve) => {
+			resolveTasks = resolve;
+		});
+		mockedApi.getTasks.mockReturnValue(remoteTasks as ReturnType<typeof mockedApi.getTasks>);
+
+		const pulling = syncFromServer();
+		const created = tasks.createLocal('created during pull', 'goal-management');
+		resolveTasks!([]);
+		await pulling;
+
+		const all = tasks.getAll();
+		expect(all.find((t) => t.id === created?.id)).toBeTruthy();
+	});
 });
 
 describe('pushPendingToServer', () => {

@@ -140,7 +140,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
-		margin-bottom: 12px;
+		margin-bottom: 10px;
 		gap: 12px;
 	}
 
@@ -178,8 +178,14 @@
 		gap: 4px;
 	}
 
+	.sorter label {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+
 	.block {
-		margin-top: 12px;
+		margin-top: 14px;
 	}
 
 	.section-title {
@@ -190,7 +196,7 @@
 
 	.stack {
 		display: grid;
-		gap: 8px;
+		gap: 10px;
 	}
 
 	.suggestions {
@@ -277,8 +283,8 @@
 	.mobile-add .bar {
 		background: rgba(15, 23, 42, 0.96);
 		border: 1px solid #1f2937;
-		border-radius: 14px;
-		padding: 8px 10px;
+		border-radius: 16px;
+		padding: 7px;
 		display: grid;
 		grid-template-columns: 1fr auto;
 		gap: 8px;
@@ -297,33 +303,36 @@
 	}
 
 	.mobile-add button {
-		background: #1d4ed8;
+		background: #2563eb;
 		color: white;
 		border: none;
-		border-radius: 10px;
-		padding: 10px 12px;
+		border-radius: 11px;
+		padding: 10px 14px;
 		cursor: pointer;
 	}
 
 	@media (max-width: 900px) {
 		.page-header {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 10px;
+			flex-direction: row;
+			align-items: center;
+			gap: 8px;
 		}
 
 		.actions {
-			width: 100%;
-			justify-content: flex-start;
+			margin-left: 0;
 		}
 
 		.stack {
-			padding-bottom: 86px;
+			padding-bottom: 88px;
 		}
 
 		.suggestion {
 			grid-template-columns: 1fr;
 			gap: 8px;
+		}
+
+		h1 {
+			font-size: 24px;
 		}
 	}
 </style>

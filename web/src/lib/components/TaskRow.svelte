@@ -110,18 +110,18 @@ const closeActions = () => (showActions = false);
 			{/if}
 		</div>
 		<div class="sub">
-			<span>{badge}</span>
+			<span class="badge-dot">{badge}</span>
 			{#if task.due_date}
-				<span class="chip subtle">Due {task.due_date}</span>
+				<span class="chip subtle due-chip">Due {task.due_date}</span>
 			{/if}
 			{#if task.recurrence_id}
-				<span class="chip subtle">{task.recurrence_id}</span>
+				<span class="chip subtle recur-chip">{task.recurrence_id}</span>
 			{/if}
-			<label class="chip toggle">
+			<label class="chip toggle day-chip">
 				<input type="checkbox" checked={task.my_day} on:change={toggleMyDay} />
 				My Day
 			</label>
-			<span class="chip subtle">
+			<span class="chip subtle list-chip">
 				List:
 				<select on:change={updateList} title="Move task to list">
 					{#each $lists as list}
@@ -129,11 +129,11 @@ const closeActions = () => (showActions = false);
 					{/each}
 				</select>
 			</span>
-			<span class={`chip ${task.dirty ? 'pending' : 'synced'}`} aria-live="polite">
+			<span class={`chip sync-chip ${task.dirty ? 'pending' : 'synced'}`} aria-live="polite">
 				{task.dirty ? 'Pending sync' : justSaved ? 'Saved' : 'Synced'}
 			</span>
-			<button class="chip ghost" type="button" on:click={openDetail}>Details</button>
-			<button class="chip ghost" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
+			<button class="chip ghost details-chip" type="button" on:click={openDetail}>Details</button>
+			<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
 		</div>
 	</div>
 	{#if showActions}
@@ -150,24 +150,36 @@ const closeActions = () => (showActions = false);
 	.task {
 		display: grid;
 		grid-template-columns: auto 1fr;
-		gap: 10px;
-		background: #0f172a;
+		gap: 12px;
+		background: linear-gradient(180deg, #0f172a, #0c1425);
 		border: 1px solid #1f2937;
-		border-radius: 12px;
-		padding: 10px 12px;
-		align-items: center;
+		border-radius: 14px;
+		padding: 11px 12px;
+		align-items: start;
+	}
+
+	.left {
+		display: flex;
+		align-items: flex-start;
+		padding-top: 1px;
 	}
 
 	.status {
-		width: 28px;
-		height: 28px;
+		width: 40px;
+		height: 40px;
+		min-width: 40px;
+		min-height: 40px;
 		border-radius: 50%;
 		border: 1px solid #334155;
 		background: #0b1221;
 		color: #e2e8f0;
 		cursor: pointer;
-		min-width: 44px;
-		min-height: 44px;
+		font-size: 16px;
+		line-height: 1;
+	}
+
+	.meta {
+		min-width: 0;
 	}
 
 	.meta .title {
@@ -176,58 +188,82 @@ const closeActions = () => (showActions = false);
 		display: flex;
 		gap: 8px;
 		align-items: center;
+		min-width: 0;
+	}
+
+	.title-text {
+		display: block;
+		min-width: 0;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.sub {
 		display: flex;
-		gap: 8px;
+		flex-wrap: wrap;
+		gap: 7px;
 		color: #94a3b8;
 		font-size: 12px;
-		margin-top: 4px;
+		margin-top: 6px;
 		align-items: center;
 	}
 
+	.badge-dot {
+		color: #64748b;
+		font-size: 14px;
+		line-height: 1;
+	}
+
 	.chip {
-		padding: 2px 6px;
-		border-radius: 8px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 9px;
+		border-radius: 999px;
 		background: #1f2937;
 		color: #cbd5e1;
+		border: 1px solid transparent;
+		white-space: nowrap;
 	}
 
 	.chip.subtle {
 		background: #0b1221;
-		border: 1px solid #1e293b;
-		color: #94a3b8;
+		border-color: #1e293b;
+		color: #a5b4c5;
 	}
 
 	.chip.toggle {
-		display: inline-flex;
-		gap: 6px;
-		align-items: center;
+		cursor: pointer;
 	}
 
 	.chip.pending {
 		background: #92400e;
-		border: 1px solid #f59e0b;
+		border-color: #f59e0b;
 		color: #ffedd5;
 	}
 
 	.chip.synced {
 		background: #0b3a2a;
-		border: 1px solid #10b981;
+		border-color: #10b981;
 		color: #d1fae5;
 	}
 
-	select {
-		background: #0b1221;
-		border: 1px solid #1e293b;
-		color: #e2e8f0;
-		border-radius: 6px;
-		padding: 2px 6px;
+	.list-chip select {
+		background: transparent;
+		border: none;
+		color: inherit;
+		padding: 0 2px;
+		max-width: 124px;
+	}
+
+	.list-chip select:focus-visible {
+		outline: none;
 	}
 
 	input[type='checkbox'] {
-		accent-color: #1d4ed8;
+		accent-color: #38bdf8;
 		cursor: pointer;
 	}
 
@@ -236,34 +272,12 @@ const closeActions = () => (showActions = false);
 		font-size: 13px;
 	}
 
-	.hint {
-		color: #94a3b8;
-		font-size: 12px;
-		margin: 4px 0 0;
-	}
-
-	.left {
-		display: flex;
-		align-items: flex-start;
-	}
-
-	.task {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		gap: 12px;
-		background: #0f172a;
-		border: 1px solid #1f2937;
-		border-radius: 12px;
-		padding: 10px 12px;
-		align-items: start;
-	}
-
 	.quick {
 		grid-column: 1 / -1;
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 		gap: 8px;
-		margin-top: 4px;
+		margin-top: 6px;
 	}
 
 	.quick button {
@@ -283,13 +297,6 @@ const closeActions = () => (showActions = false);
 		border-color: #334155;
 	}
 
-	@media (max-width: 960px) {
-		.task {
-			grid-template-columns: auto 1fr;
-			gap: 10px;
-		}
-	}
-
 	.icon-btn {
 		background: none;
 		border: none;
@@ -297,8 +304,8 @@ const closeActions = () => (showActions = false);
 		cursor: pointer;
 		padding: 4px;
 		border-radius: 6px;
-		min-width: 32px;
-		min-height: 32px;
+		min-width: 28px;
+		min-height: 28px;
 	}
 
 	.icon-btn:hover {
@@ -312,11 +319,55 @@ const closeActions = () => (showActions = false);
 		color: #e2e8f0;
 		border-radius: 8px;
 		padding: 6px 8px;
-		min-width: 200px;
+		min-width: 180px;
 	}
 
 	.title-text.link {
 		color: #60a5fa;
 		text-decoration: underline;
+	}
+
+	@media (max-width: 900px) {
+		.task {
+			padding: 10px;
+			gap: 10px;
+			border-radius: 12px;
+		}
+
+		.status {
+			width: 36px;
+			height: 36px;
+			min-width: 36px;
+			min-height: 36px;
+			font-size: 15px;
+		}
+
+		.sub {
+			gap: 6px;
+			margin-top: 5px;
+		}
+
+		.chip {
+			font-size: 11px;
+			padding: 3px 8px;
+		}
+
+		.list-chip,
+		.sync-chip {
+			display: none;
+		}
+
+		.icon-btn {
+			display: none;
+		}
+
+		.quick {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.quick button {
+			font-size: 12px;
+			padding: 8px 9px;
+		}
 	}
 </style>
