@@ -1,9 +1,9 @@
 FROM rust:1.82-bookworm AS build
 WORKDIR /app
 
-COPY Cargo.toml Cargo.toml
-COPY src src
-COPY migrations migrations
+COPY server/Cargo.toml Cargo.toml
+COPY server/src src
+COPY server/migrations migrations
 
 RUN cargo build --release --bin tasksync-server --bin seed
 
@@ -24,4 +24,3 @@ VOLUME ["/data"]
 EXPOSE 3000
 
 CMD ["tasksync-server"]
-
