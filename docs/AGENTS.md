@@ -64,6 +64,7 @@
 7. If a one-liner is still needed, provide a strict copy/paste-safe command with no leading spaces and no extra separator spacing (for example `...;$env:FOO='x';& ...`, not `...; $env:FOO='x'; & ...`).
 8. When outputting runnable commands, never prefix with bullets/dashes/numbers and never wrap a single command onto multiple lines; place each command on its own plain line or in a fenced code block.
 9. After each interaction with the user, briefly state overall percent completion for the project/feature.
+10. In substantial status/update responses, include `Suggested commit message:` immediately before the `Overall completion estimate:` line. Keep the suggested message concise and conventional (for example `feat: ...`, `fix: ...`, `chore: ...`).
 
 **Prompt**
 ```
