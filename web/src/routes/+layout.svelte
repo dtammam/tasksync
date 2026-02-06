@@ -11,7 +11,7 @@
 	import { soundSettings } from '$lib/stores/settings';
 	import { setDbScope } from '$lib/data/idb';
 	import { auth } from '$lib/stores/auth';
-	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
+	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
 	import { createSyncCoordinator } from '$lib/sync/coordinator';
 
@@ -155,6 +155,7 @@
 	$: if (appReady && scopeKey !== lastScopeKey) {
 		lastScopeKey = scopeKey;
 		void (async () => {
+			resetSyncCursor();
 			await hydrateScopedStores();
 			await members.hydrateFromServer();
 			if (auth.isAuthenticated()) {
@@ -167,6 +168,7 @@
 	}
 	$: if (!auth.isAuthenticated()) {
 		members.clear();
+		resetSyncCursor();
 		syncStatus.setSnapshot({ pull: 'idle', push: 'idle' });
 	}
 </script>

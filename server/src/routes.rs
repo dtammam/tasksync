@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, HeaderValue, StatusCode},
     routing::{get, patch, post},
     Json, Router,
 };
@@ -147,6 +147,11 @@ pub fn task_routes(pool: &SqlitePool) -> Router {
         .route("/:id", patch(update_task_meta))
         .route("/:id/status", post(update_task_status))
         .with_state(state)
+}
+
+pub fn sync_routes(pool: &SqlitePool) -> Router {
+    let state = app_state(pool);
+    Router::new().route("/pull", post(sync_pull)).route("/push", post(sync_push)).with_state(state)
 }
 
 pub fn auth_routes(pool: &SqlitePool) -> Router {
@@ -934,6 +939,166 @@ struct UpdateTaskMeta {
     assignee_user_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct SyncPullBody {
+    since_ts: Option<i64>,
+}
+
+#[derive(Serialize)]
+struct SyncPullResponse {
+    protocol: &'static str,
+    cursor_ts: i64,
+    lists: Vec<ListRow>,
+    tasks: Vec<TaskRow>,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum SyncPushChange {
+    CreateTask { op_id: String, body: CreateTask },
+    UpdateTask { op_id: String, task_id: String, body: UpdateTaskMeta },
+    UpdateTaskStatus { op_id: String, task_id: String, status: String },
+}
+
+#[derive(Deserialize)]
+struct SyncPushBody {
+    changes: Vec<SyncPushChange>,
+}
+
+#[derive(Serialize)]
+struct SyncPushRejected {
+    op_id: String,
+    status: u16,
+    error: String,
+}
+
+#[derive(Serialize)]
+struct SyncPushResponse {
+    protocol: &'static str,
+    cursor_ts: i64,
+    applied: Vec<TaskRow>,
+    rejected: Vec<SyncPushRejected>,
+}
+
+fn headers_for_ctx(ctx: &RequestCtx) -> Result<HeaderMap, StatusCode> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "x-space-id",
+        HeaderValue::from_str(&ctx.space_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    headers.insert(
+        "x-user-id",
+        HeaderValue::from_str(&ctx.user_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    Ok(headers)
+}
+
+async fn sync_cursor_for_ctx(state: &AppState, ctx: &RequestCtx) -> Result<i64, StatusCode> {
+    if ctx.role == Role::Admin {
+        return sqlx::query_scalar(
+            "select coalesce(max(updated_ts), 0) from task where space_id = ?1",
+        )
+        .bind(&ctx.space_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    sqlx::query_scalar(
+        "select coalesce(max(t.updated_ts), 0) from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2",
+    )
+    .bind(&ctx.space_id)
+    .bind(&ctx.user_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn sync_pull(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<SyncPullBody>,
+) -> Result<Json<SyncPullResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let scoped_headers = headers_for_ctx(&ctx)?;
+
+    let lists = get_lists(State(state.clone()), scoped_headers.clone()).await?.0;
+    let mut tasks = get_tasks(State(state.clone()), scoped_headers).await?.0;
+    if let Some(since_ts) = body.since_ts {
+        tasks.retain(|task| task.updated_ts >= since_ts);
+    }
+
+    let cursor_ts = sync_cursor_for_ctx(&state, &ctx).await?;
+    Ok(Json(SyncPullResponse { protocol: "delta-v1", cursor_ts, lists, tasks }))
+}
+
+async fn sync_push(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<SyncPushBody>,
+) -> Result<Json<SyncPushResponse>, StatusCode> {
+    if body.changes.len() > 500 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let scoped_headers = headers_for_ctx(&ctx)?;
+    let mut applied = Vec::new();
+    let mut rejected = Vec::new();
+
+    for change in body.changes {
+        match change {
+            SyncPushChange::CreateTask { op_id, body } => {
+                match create_task(State(state.clone()), scoped_headers.clone(), Json(body)).await {
+                    Ok((_status, Json(task))) => applied.push(task),
+                    Err(status) => rejected.push(SyncPushRejected {
+                        op_id,
+                        status: status.as_u16(),
+                        error: status.canonical_reason().unwrap_or("request failed").to_string(),
+                    }),
+                }
+            }
+            SyncPushChange::UpdateTask { op_id, task_id, body } => {
+                match update_task_meta(
+                    State(state.clone()),
+                    scoped_headers.clone(),
+                    Path(task_id),
+                    Json(body),
+                )
+                .await
+                {
+                    Ok(Json(task)) => applied.push(task),
+                    Err(status) => rejected.push(SyncPushRejected {
+                        op_id,
+                        status: status.as_u16(),
+                        error: status.canonical_reason().unwrap_or("request failed").to_string(),
+                    }),
+                }
+            }
+            SyncPushChange::UpdateTaskStatus { op_id, task_id, status: next_status } => {
+                match update_task_status(
+                    State(state.clone()),
+                    scoped_headers.clone(),
+                    Path(task_id),
+                    Json(UpdateTaskStatus { status: next_status }),
+                )
+                .await
+                {
+                    Ok(Json(task)) => applied.push(task),
+                    Err(status) => rejected.push(SyncPushRejected {
+                        op_id,
+                        status: status.as_u16(),
+                        error: status.canonical_reason().unwrap_or("request failed").to_string(),
+                    }),
+                }
+            }
+        }
+    }
+
+    let cursor_ts = sync_cursor_for_ctx(&state, &ctx).await?;
+    Ok(Json(SyncPushResponse { protocol: "delta-v1", cursor_ts, applied, rejected }))
+}
+
 async fn update_task_status(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1618,5 +1783,142 @@ mod tests {
         assert_eq!(visible_tasks.len(), 1);
         assert_eq!(visible_tasks[0].id, "t-visible");
         assert_eq!(visible_tasks[0].created_by_user_id.as_deref(), Some("u-admin"));
+    }
+
+    #[tokio::test]
+    async fn sync_pull_filters_by_since_and_role_scope() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into list (id, space_id, name, list_order) values ('admin-private', 's1', 'Admin Private', 'z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert private list");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-old', 's1', 'Old visible task', 'pending', 'goal-management', 0, 'a', 100, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert old visible task");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-new', 's1', 'New visible task', 'pending', 'goal-management', 0, 'b', 200, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert new visible task");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-hidden', 's1', 'Hidden task', 'pending', 'admin-private', 0, 'c', 300, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert hidden task");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+
+        let response = sync_pull(State(state), headers, Json(SyncPullBody { since_ts: Some(150) }))
+            .await
+            .expect("sync pull should work")
+            .0;
+
+        assert_eq!(response.protocol, "delta-v1");
+        assert_eq!(response.cursor_ts, 200);
+        assert_eq!(response.lists.len(), 1);
+        assert_eq!(response.lists[0].id, "goal-management");
+        assert_eq!(response.tasks.len(), 1);
+        assert_eq!(response.tasks[0].id, "t-new");
+    }
+
+    #[tokio::test]
+    async fn sync_push_applies_create_then_status_update_for_admin() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let response = sync_push(
+            State(state),
+            headers,
+            Json(SyncPushBody {
+                changes: vec![
+                    SyncPushChange::CreateTask {
+                        op_id: "op-create".to_string(),
+                        body: CreateTask {
+                            id: Some("123e4567-e89b-12d3-a456-426614174900".to_string()),
+                            title: "Created by sync push".to_string(),
+                            list_id: "goal-management".to_string(),
+                            order: Some("z".to_string()),
+                            my_day: Some(false),
+                            url: None,
+                            recur_rule: None,
+                            attachments: None,
+                            due_date: None,
+                            notes: None,
+                            assignee_user_id: Some("u-admin".to_string()),
+                        },
+                    },
+                    SyncPushChange::UpdateTaskStatus {
+                        op_id: "op-status".to_string(),
+                        task_id: "123e4567-e89b-12d3-a456-426614174900".to_string(),
+                        status: "done".to_string(),
+                    },
+                ],
+            }),
+        )
+        .await
+        .expect("sync push should work")
+        .0;
+
+        assert_eq!(response.protocol, "delta-v1");
+        assert!(response.rejected.is_empty());
+        assert_eq!(response.applied.len(), 2);
+        assert_eq!(response.applied[1].status, "done");
+
+        let saved_status: String = sqlx::query_scalar(
+            "select status from task where id = '123e4567-e89b-12d3-a456-426614174900'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load task status");
+        assert_eq!(saved_status, "done");
+    }
+
+    #[tokio::test]
+    async fn sync_push_rejects_contributor_status_update() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-locked', 's1', 'Locked task', 'pending', 'goal-management', 0, 'a', 1, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert locked task");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+
+        let response = sync_push(
+            State(state),
+            headers,
+            Json(SyncPushBody {
+                changes: vec![SyncPushChange::UpdateTaskStatus {
+                    op_id: "op-forbidden".to_string(),
+                    task_id: "t-locked".to_string(),
+                    status: "done".to_string(),
+                }],
+            }),
+        )
+        .await
+        .expect("sync push should return payload")
+        .0;
+
+        assert!(response.applied.is_empty());
+        assert_eq!(response.rejected.len(), 1);
+        assert_eq!(response.rejected[0].op_id, "op-forbidden");
+        assert_eq!(response.rejected[0].status, StatusCode::FORBIDDEN.as_u16());
     }
 }

@@ -5,6 +5,7 @@ import { repo } from '$lib/data/repo';
 import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
 import type { List } from '$shared/types/list';
+import type { ApiTask } from '$lib/api/client';
 
 const isServerId = (id: string) =>
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -19,7 +20,13 @@ const requestIdForLocalTask = (id: string): string | undefined => {
 	return undefined;
 };
 
-const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task => ({
+let lastPullCursorTs: number | undefined;
+
+export const resetSyncCursor = () => {
+	lastPullCursorTs = undefined;
+};
+
+const mapApiTask = (t: ApiTask): Task => ({
 	id: t.id,
 	title: t.title,
 	status: t.status as Task['status'],
@@ -46,7 +53,24 @@ const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task =
 export const syncFromServer = async () => {
 	syncStatus.setPull('running');
 	try {
-		const [remoteLists, remoteTasks] = await Promise.all([api.getLists(), api.getTasks()]);
+		let remoteLists: Awaited<ReturnType<typeof api.getLists>>;
+		let remoteTasks: Awaited<ReturnType<typeof api.getTasks>>;
+		let cursorTs = lastPullCursorTs ?? 0;
+		try {
+			const pull = await api.syncPull({
+				since_ts: typeof lastPullCursorTs === 'number' ? lastPullCursorTs : undefined
+			});
+			remoteLists = pull.lists;
+			remoteTasks = pull.tasks;
+			cursorTs = pull.cursor_ts;
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			if (!msg.includes('404')) {
+				throw err;
+			}
+			[remoteLists, remoteTasks] = await Promise.all([api.getLists(), api.getTasks()]);
+			cursorTs = remoteTasks.reduce((maxTs, task) => Math.max(maxTs, task.updated_ts), 0);
+		}
 		const toTasks: Task[] = remoteTasks.map(mapApiTask);
 
 		const toLists: List[] = remoteLists.map((l) => ({
@@ -59,6 +83,7 @@ export const syncFromServer = async () => {
 
 		lists.setAll(toLists);
 		tasks.mergeRemote(toTasks);
+		lastPullCursorTs = Math.max(lastPullCursorTs ?? 0, cursorTs);
 		await repo.saveTasks(tasks.getAll());
 		syncStatus.setQueueDepth(tasks.getAll().filter((t) => t.dirty).length);
 		syncStatus.setPull('idle');

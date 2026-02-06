@@ -1,7 +1,7 @@
 mod routes;
 
 use axum::{routing::get, Router};
-use routes::{auth_routes, list_routes, task_routes};
+use routes::{auth_routes, list_routes, sync_routes, task_routes};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
 use tower_http::cors::{Any, CorsLayer};
@@ -43,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/auth", auth_routes(&pool))
         .nest("/lists", list_routes(&pool))
         .nest("/tasks", task_routes(&pool))
+        .nest("/sync", sync_routes(&pool))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { syncFromServer, pushPendingToServer } from './sync';
+import { resetSyncCursor, syncFromServer, pushPendingToServer } from './sync';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { syncStatus } from './status';
@@ -10,6 +10,8 @@ import type { Writable } from 'svelte/store';
 vi.mock('$lib/api/client', () => {
 	return {
 		api: {
+			syncPull: vi.fn(),
+			syncPush: vi.fn(),
 			getLists: vi.fn(),
 			getTasks: vi.fn(),
 			createTask: vi.fn(),
@@ -35,13 +37,18 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	syncStatus.setSnapshot({ pull: 'idle', push: 'idle', queueDepth: 0 });
 	syncStatus.resetError();
+	resetSyncCursor();
+	mockedApi.syncPull.mockResolvedValue({
+		protocol: 'delta-v1',
+		cursor_ts: 0,
+		lists: [],
+		tasks: []
+	});
 });
 
 describe('syncFromServer', () => {
 	it('retains unsynced local tasks when server returns none', async () => {
 		tasks.createLocal('offline', 'goal-management');
-		mockedApi.getLists.mockResolvedValue([]);
-		mockedApi.getTasks.mockResolvedValue([]);
 
 		await syncFromServer();
 
@@ -54,8 +61,11 @@ describe('syncFromServer', () => {
 		if (local) {
 			tasks.toggle(local.id); // mark done + dirty
 		}
-		mockedApi.getLists.mockResolvedValue([]);
-		mockedApi.getTasks.mockResolvedValue([
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 1,
+			lists: [],
+			tasks: [
 			{
 				id: local?.id ?? 'missing',
 				space_id: 's1',
@@ -67,7 +77,8 @@ describe('syncFromServer', () => {
 				created_ts: 1,
 				updated_ts: 1
 			}
-		]);
+		]
+		});
 
 		await syncFromServer();
 
@@ -77,23 +88,79 @@ describe('syncFromServer', () => {
 	});
 
 	it('keeps local tasks created while pull is in flight', async () => {
-		mockedApi.getLists.mockResolvedValue([]);
-		let resolveTasks: (value: ReturnType<typeof mockedApi.getTasks> extends Promise<infer T> ? T : never) =>
+		let resolvePull: (
+			value: ReturnType<typeof mockedApi.syncPull> extends Promise<infer T> ? T : never
+		) =>
 			void;
-		const remoteTasks = new Promise<
-			ReturnType<typeof mockedApi.getTasks> extends Promise<infer T> ? T : never
+		const remotePull = new Promise<
+			ReturnType<typeof mockedApi.syncPull> extends Promise<infer T> ? T : never
 		>((resolve) => {
-			resolveTasks = resolve;
+			resolvePull = resolve;
 		});
-		mockedApi.getTasks.mockReturnValue(remoteTasks as ReturnType<typeof mockedApi.getTasks>);
+		mockedApi.syncPull.mockReturnValue(remotePull as ReturnType<typeof mockedApi.syncPull>);
 
 		const pulling = syncFromServer();
 		const created = tasks.createLocal('created during pull', 'goal-management');
-		resolveTasks!([]);
+		resolvePull!({ protocol: 'delta-v1', cursor_ts: 0, lists: [], tasks: [] });
 		await pulling;
 
 		const all = tasks.getAll();
 		expect(all.find((t) => t.id === created?.id)).toBeTruthy();
+	});
+
+	it('uses incremental cursor across pulls and resets when requested', async () => {
+		mockedApi.syncPull
+			.mockResolvedValueOnce({
+				protocol: 'delta-v1',
+				cursor_ts: 11,
+				lists: [],
+				tasks: []
+			})
+			.mockResolvedValueOnce({
+				protocol: 'delta-v1',
+				cursor_ts: 22,
+				lists: [],
+				tasks: []
+			})
+			.mockResolvedValueOnce({
+				protocol: 'delta-v1',
+				cursor_ts: 33,
+				lists: [],
+				tasks: []
+			});
+
+		await syncFromServer();
+		await syncFromServer();
+		expect(mockedApi.syncPull).toHaveBeenNthCalledWith(1, { since_ts: undefined });
+		expect(mockedApi.syncPull).toHaveBeenNthCalledWith(2, { since_ts: 11 });
+
+		resetSyncCursor();
+		await syncFromServer();
+		expect(mockedApi.syncPull).toHaveBeenNthCalledWith(3, { since_ts: undefined });
+	});
+
+	it('falls back to full pull when sync endpoint is unavailable', async () => {
+		mockedApi.syncPull.mockRejectedValue(new Error('API 404 Not Found'));
+		mockedApi.getLists.mockResolvedValue([]);
+		mockedApi.getTasks.mockResolvedValue([
+			{
+				id: 'fallback-1',
+				space_id: 's1',
+				title: 'fallback task',
+				status: 'pending',
+				list_id: 'goal-management',
+				my_day: 0,
+				order: 'z',
+				created_ts: 1,
+				updated_ts: 2
+			}
+		]);
+
+		await syncFromServer();
+
+		expect(mockedApi.getLists).toHaveBeenCalledOnce();
+		expect(mockedApi.getTasks).toHaveBeenCalledOnce();
+		expect(tasks.getAll().some((task) => task.id === 'fallback-1')).toBe(true);
 	});
 });
 

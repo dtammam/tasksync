@@ -11,6 +11,12 @@ import type {
 	SetListGrantRequest,
 	SpaceMember
 } from '$shared/types/auth';
+import type {
+	SyncPullRequest,
+	SyncPullResponse,
+	SyncPushRequest,
+	SyncPushResponse
+} from '$shared/types/sync';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -94,6 +100,16 @@ export const api = {
 			method: 'DELETE'
 		}),
 	getTasks: () => fetchJson<ApiTask[]>('/tasks'),
+	syncPull: (body: SyncPullRequest = {}) =>
+		fetchJson<SyncPullResponse>('/sync/pull', {
+			method: 'POST',
+			body: JSON.stringify(body)
+		}),
+	syncPush: (body: SyncPushRequest) =>
+		fetchJson<SyncPushResponse>('/sync/push', {
+			method: 'POST',
+			body: JSON.stringify(body)
+		}),
 	createTask: (body: {
 		id?: string;
 		title: string;
