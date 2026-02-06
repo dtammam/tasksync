@@ -13,12 +13,16 @@
 	import { auth } from '$lib/stores/auth';
 	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
+	import { createSyncCoordinator } from '$lib/sync/coordinator';
 
 	const NAV_PIN_KEY = 'tasksync:nav-pinned';
 	let navOpen = false;
 	let navPinned = false;
 	let appReady = false;
 	let syncInFlight = null;
+	let syncCoordinator = null;
+	let syncLeader = true;
+	let syncStatusUnsub = null;
 	const toggleNav = () => {
 		if (navPinned && navOpen) {
 			savePinned(false);
@@ -47,25 +51,39 @@
 		}
 	});
 
-const runSync = async () => {
+	const runSync = async () => {
 		if (!auth.isAuthenticated()) return;
 		if (syncInFlight) return syncInFlight;
 		syncInFlight = (async () => {
-		try {
-			syncStatus.resetError();
-			await syncFromServer();
-			const pushResult = await pushPendingToServer();
-			// Re-pull after successful push to persist server IDs and avoid repeat creations on refresh.
-			if (pushResult.pushed || pushResult.created) {
+			try {
+				syncStatus.resetError();
 				await syncFromServer();
+				const pushResult = await pushPendingToServer();
+				// Re-pull after successful push to persist server IDs and avoid repeat creations on refresh.
+				if (pushResult.pushed || pushResult.created) {
+					await syncFromServer();
+				}
+			} catch (err) {
+				console.warn('sync retry failed', err);
+			} finally {
+				syncInFlight = null;
 			}
-		} catch (err) {
-			console.warn('sync retry failed', err);
-		} finally {
-			syncInFlight = null;
-		}
-	})();
+		})();
 		return syncInFlight;
+	};
+
+	const requestSync = (reason = 'manual') => {
+		if (!auth.isAuthenticated()) return;
+		if (syncCoordinator) {
+			syncCoordinator.requestSync(reason);
+			return;
+		}
+		void runSync();
+	};
+
+	const publishSyncStatus = () => {
+		if (!syncCoordinator || !syncLeader || !auth.isAuthenticated()) return;
+		syncCoordinator.publishStatus(get(syncStatus));
 	};
 
 	let retryTimer = null;
@@ -85,29 +103,52 @@ const runSync = async () => {
 	};
 
 	onMount(async () => {
+		syncCoordinator = createSyncCoordinator({
+			onLeaderChange: (isLeader) => {
+				syncLeader = isLeader;
+				if (isLeader && auth.isAuthenticated()) {
+					publishSyncStatus();
+					void runSync();
+				}
+			},
+			onRunSync: () => {
+				if (auth.isAuthenticated()) {
+					void runSync();
+				}
+			},
+			onStatus: (status) => {
+				if (!syncLeader && auth.isAuthenticated()) {
+					syncStatus.setSnapshot(status);
+				}
+			}
+		});
+		syncStatusUnsub = syncStatus.subscribe(() => publishSyncStatus());
 		if (typeof localStorage !== 'undefined') {
 			navPinned = localStorage.getItem(NAV_PIN_KEY) === '1';
 			navOpen = navPinned;
 		}
 		await auth.hydrate();
+		syncCoordinator.setAuthenticated(auth.isAuthenticated());
 		await hydrateScopedStores();
 		await members.hydrateFromServer();
 		lastScopeKey = storageScopeFromAuth(auth.get());
 		appReady = true;
 		if (auth.isAuthenticated()) {
-			void runSync();
+			requestSync('startup');
 		}
 		retryTimer = setInterval(() => {
 			const s = get(syncStatus);
-			if (!auth.isAuthenticated()) return;
+			if (!syncLeader || !auth.isAuthenticated()) return;
 			if (s.pull === 'error' || s.push === 'error' || tasks.getAll().some((t) => t.dirty)) {
-				void runSync();
+				requestSync('retry');
 			}
 		}, 15000);
 	});
 
 	onDestroy(() => {
 		if (retryTimer) clearInterval(retryTimer);
+		if (syncStatusUnsub) syncStatusUnsub();
+		if (syncCoordinator) syncCoordinator.destroy();
 	});
 
 	$: scopeKey = storageScopeFromAuth($auth);
@@ -117,12 +158,16 @@ const runSync = async () => {
 			await hydrateScopedStores();
 			await members.hydrateFromServer();
 			if (auth.isAuthenticated()) {
-				await runSync();
+				requestSync('scope-change');
 			}
 		})();
 	}
+	$: if (syncCoordinator) {
+		syncCoordinator.setAuthenticated(auth.isAuthenticated());
+	}
 	$: if (!auth.isAuthenticated()) {
 		members.clear();
+		syncStatus.setSnapshot({ pull: 'idle', push: 'idle' });
 	}
 </script>
 
@@ -162,11 +207,21 @@ const runSync = async () => {
 								: ''
 					}`}
 				>
-					<button class="link" on:click={runSync} title="Auto-sync runs every 15s; click to retry now">
+					<button
+						class="link"
+						on:click={() => requestSync('manual')}
+						title={
+							syncLeader
+								? 'Auto-sync runs every 15s; click to retry now'
+								: 'Auto-sync is managed by another open tab; click to request sync now'
+						}
+					>
 						{#if $auth.status === 'loading'}
 							Checking auth...
 						{:else if $auth.status !== 'authenticated'}
 							Sign in to sync
+						{:else if !syncLeader}
+							Auto-sync linked
 						{:else if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
 							Auto-syncing…
 						{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}

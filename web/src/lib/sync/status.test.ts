@@ -25,4 +25,12 @@ describe('sync status store', () => {
 		val = getVal();
 		expect(val.lastError).toBeUndefined();
 	});
+
+	it('can replace status snapshot', () => {
+		syncStatus.setSnapshot({ pull: 'running', push: 'error', lastError: 'sync failed' });
+		const val = getVal();
+		expect(val.pull).toBe('running');
+		expect(val.push).toBe('error');
+		expect(val.lastError).toBe('sync failed');
+	});
 });

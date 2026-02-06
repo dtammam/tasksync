@@ -95,6 +95,7 @@ export const api = {
 		}),
 	getTasks: () => fetchJson<ApiTask[]>('/tasks'),
 	createTask: (body: {
+		id?: string;
 		title: string;
 		list_id: string;
 		my_day?: boolean;

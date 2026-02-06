@@ -778,6 +778,7 @@ struct TaskRow {
 
 #[derive(Deserialize)]
 struct CreateTask {
+    id: Option<String>,
     title: String,
     list_id: String,
     order: Option<String>,
@@ -862,11 +863,17 @@ async fn create_task(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let id = Uuid::new_v4().to_string();
+    let id = body
+        .id
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let order = body.order.unwrap_or_else(|| "z".into());
     let now = chrono::Utc::now().timestamp_millis();
     let my_day = if body.my_day.unwrap_or(false) { 1 } else { 0 };
-    let rec = sqlx::query_as::<_, TaskRow>(
+    let insert_result = sqlx::query_as::<_, TaskRow>(
 		"insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13, ?14) returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&id)
@@ -884,10 +891,27 @@ async fn create_task(
     .bind(&assignee_user_id)
     .bind(&ctx.user_id)
 	.fetch_one(&state.pool)
-	.await
-	.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+	.await;
+    let (status, rec) = match insert_result {
+        Ok(inserted) => (StatusCode::CREATED, inserted),
+        Err(err) => {
+            if !is_unique_violation(&err) {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            let existing = sqlx::query_as::<_, TaskRow>(
+				"select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
+			)
+			.bind(&id)
+			.bind(&ctx.space_id)
+			.fetch_optional(&state.pool)
+			.await
+			.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::CONFLICT)?;
+            (StatusCode::OK, existing)
+        }
+    };
 
-    Ok((StatusCode::CREATED, Json(rec)))
+    Ok((status, Json(rec)))
 }
 
 #[derive(Deserialize)]
@@ -1437,6 +1461,7 @@ mod tests {
             State(state),
             headers,
             Json(CreateTask {
+                id: None,
                 title: "Assigned by contributor".to_string(),
                 list_id: "goal-management".to_string(),
                 order: Some("z".to_string()),
@@ -1456,6 +1481,68 @@ mod tests {
 
         assert_eq!(created.assignee_user_id.as_deref(), Some("u-admin"));
         assert_eq!(created.created_by_user_id.as_deref(), Some("u-contrib"));
+    }
+
+    #[tokio::test]
+    async fn create_task_is_idempotent_when_client_retries_same_id() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let retried_id = Uuid::new_v4().to_string();
+
+        let first = create_task(
+            State(state.clone()),
+            headers.clone(),
+            Json(CreateTask {
+                id: Some(retried_id.clone()),
+                title: "Idempotent create".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                url: None,
+                recur_rule: None,
+                attachments: None,
+                due_date: None,
+                notes: None,
+                assignee_user_id: Some("u-admin".to_string()),
+            }),
+        )
+        .await
+        .expect("first create should succeed");
+        assert_eq!(first.0, StatusCode::CREATED);
+        let first_task = first.1 .0;
+        assert_eq!(first_task.id, retried_id);
+
+        let second = create_task(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: Some(retried_id.clone()),
+                title: "Idempotent create".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                url: None,
+                recur_rule: None,
+                attachments: None,
+                due_date: None,
+                notes: None,
+                assignee_user_id: Some("u-admin".to_string()),
+            }),
+        )
+        .await
+        .expect("retry create should succeed");
+        assert_eq!(second.0, StatusCode::OK);
+        assert_eq!(second.1 .0.id, retried_id);
+
+        let count: i64 = sqlx::query_scalar("select count(1) from task where id = ?1")
+            .bind(retried_id)
+            .fetch_one(&pool)
+            .await
+            .expect("count task rows");
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
