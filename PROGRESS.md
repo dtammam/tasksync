@@ -60,3 +60,4 @@
 - 2026-02-06 11:04 - Added queue/replay telemetry across sync status paths so tabs report richer sync health, not just binary states.
 - 2026-02-06 11:07 - Updated progress logging standards to be outcome-first and goal-aligned, keeping project tracking useful beyond git history.
 - 2026-02-06 11:37 - Hardened pre-push reliability by running browser smoke checks with lower contention and retry tolerance, reducing false push blocks from intermittent Firefox startup flake.
+- 2026-02-06 11:57 - Hardened My Day e2e stability by isolating that suite from mutable live-server data and browser worker side-effects, so smoke checks now validate intended UI behavior consistently instead of failing from environment drift.

@@ -2,8 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 
-test.describe.configure({ mode: 'serial' });
-
 const waitForTaskInIdb = async (page: Page, title: string) => {
 	await expect
 		.poll(async () =>
@@ -60,43 +58,14 @@ const waitForTaskInIdb = async (page: Page, title: string) => {
 };
 
 const resetClientState = async (page: Page) => {
-	await page.goto('/');
-	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-	await page.evaluate(async () => {
-		const deleteDb = async (name: string) => {
-			await new Promise<void>((resolve) => {
-				const req = indexedDB.deleteDatabase(name);
-				req.onsuccess = () => resolve();
-				req.onerror = () => resolve();
-				req.onblocked = () => resolve();
-			});
-		};
-		const indexedDbWithList = indexedDB as IDBFactory & {
-			databases?: () => Promise<{ name?: string }[]>;
-		};
-		if (typeof indexedDbWithList.databases === 'function') {
-			const all = await indexedDbWithList.databases();
-			for (const db of all) {
-				if (db.name?.startsWith('tasksync')) {
-					await deleteDb(db.name);
-				}
-			}
-		} else {
-			// Fallback set for browsers without indexedDB.databases().
-			for (const name of [
-				'tasksync',
-				'tasksync_legacy-default',
-				'tasksync_token-anonymous',
-				'tasksync_space_s1_user_admin',
-				'tasksync_space_s1_user_contrib'
-			]) {
-				await deleteDb(name);
-			}
-		}
-		localStorage.clear();
-		sessionStorage.clear();
+	await page.addInitScript(() => {
+		// Keep e2e deterministic: signed-out token mode disables live server sync for this suite.
+		localStorage.setItem('tasksync:auth-mode', 'token');
+		localStorage.removeItem('tasksync:auth-token');
+		localStorage.removeItem('tasksync:auth-user');
 	});
-	await page.reload();
+
+	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 };
 
