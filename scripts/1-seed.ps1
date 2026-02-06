@@ -1,3 +1,8 @@
+param(
+	[string]$AdminPassword = "tasksync",
+	[string]$ContribPassword = "tasksync"
+)
+
 $repo      = Split-Path -Parent $PSScriptRoot
 $serverDir = Join-Path $repo "server"
 $dataDir   = Join-Path $repo "data"
@@ -12,6 +17,8 @@ $dbFileForward    = ($dbFile -replace '\\','/')
 # Use sqlite://C:/... with mode=rwc to ensure file creation works on Windows
 $env:DATABASE_URL = "sqlite://" + $dbFileForward + "?mode=rwc"
 $env:RUST_LOG     = "info"
+$env:SEED_ADMIN_PASSWORD = $AdminPassword
+$env:SEED_CONTRIB_PASSWORD = $ContribPassword
 
 Set-Location $serverDir
 Write-Host "DATABASE_URL=$env:DATABASE_URL"

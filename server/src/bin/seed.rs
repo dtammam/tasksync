@@ -1,3 +1,4 @@
+use bcrypt::{hash, DEFAULT_COST};
 use sqlx::SqlitePool;
 use std::env;
 
@@ -11,6 +12,11 @@ async fn main() -> anyhow::Result<()> {
     let space_id = "s1";
     let admin = "admin";
     let contrib = "contrib";
+    let admin_password = env::var("SEED_ADMIN_PASSWORD").unwrap_or_else(|_| "tasksync".to_string());
+    let contrib_password =
+        env::var("SEED_CONTRIB_PASSWORD").unwrap_or_else(|_| "tasksync".to_string());
+    let admin_password_hash = hash(admin_password.trim(), DEFAULT_COST)?;
+    let contrib_password_hash = hash(contrib_password.trim(), DEFAULT_COST)?;
 
     sqlx::query("insert or ignore into space (id, name) values (?1, 'Default')")
         .bind(space_id)
@@ -18,15 +24,17 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     sqlx::query(
-        "insert or ignore into user (id, email, display, avatar_icon) values (?1,'admin@example.com','Admin','🛠')",
+        "insert or ignore into user (id, email, display, avatar_icon, password_hash) values (?1,'admin@example.com','Admin','🛠',?2)",
     )
     .bind(admin)
+    .bind(&admin_password_hash)
     .execute(&pool)
     .await?;
     sqlx::query(
-        "insert or ignore into user (id, email, display, avatar_icon) values (?1,'contrib@example.com','Contributor','✨')",
+        "insert or ignore into user (id, email, display, avatar_icon, password_hash) values (?1,'contrib@example.com','Contributor','✨',?2)",
     )
     .bind(contrib)
+    .bind(&contrib_password_hash)
     .execute(&pool)
     .await?;
 

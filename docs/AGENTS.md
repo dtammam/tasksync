@@ -101,13 +101,13 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 
 ## Run Commands (script-first + copy/paste-safe one-liner fallback)
 - **Server start (preferred script):** `scripts/2-serve.ps1`
-  - Values to update if needed: `DATABASE_URL`, `RUST_LOG`, `JWT_SECRET`, `DEV_LOGIN_PASSWORD`, server port/env in your terminal.
+  - Values to update if needed: `DATABASE_URL`, `RUST_LOG`, `JWT_SECRET`, optional legacy `DEV_LOGIN_PASSWORD`, server port/env in your terminal.
   - One-liner fallback: `cd C:\Repositories\tasksync\server;$env:DATABASE_URL='sqlite://../data/tasksync.db';$env:RUST_LOG='info';& "$env:USERPROFILE\.cargo\bin\cargo.exe" run --bin tasksync-server`
 - **Web dev (preferred script):** `scripts/3-web.ps1`
   - Values to update if needed: `VITE_API_URL`, `VITE_SPACE_ID`, `VITE_USER_ID`, `VITE_ROLE`, port.
   - One-liner fallback: `cd C:\Repositories\tasksync\web;npm run dev -- --host`
 - **Seed data (preferred script):** `scripts/1-seed.ps1`
-  - Values to update if needed: `DATABASE_URL`.
+  - Values to update if needed: `DATABASE_URL`, `SEED_ADMIN_PASSWORD`, `SEED_CONTRIB_PASSWORD`.
   - One-liner fallback: `cd C:\Repositories\tasksync\server;$env:DATABASE_URL='sqlite://../data/tasksync.db';& "$env:USERPROFILE\.cargo\bin\cargo.exe" run --bin seed`
 - **Pre-push verification (preferred script):** `scripts/4-prepush.ps1`
   - Values to update if needed: optional `-SkipPlaywright`.
@@ -116,10 +116,10 @@ Return JSON with explicit errors per change on sync push. Update shared types.
   - Values to update if needed: `-ApiUrl`, `-Email`, `-Password`, `-SpaceId`.
   - One-liner fallback: `Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/auth/login' -ContentType 'application/json' -Body '{"email":"admin@example.com","password":"tasksync","space_id":"s1"}'`
 - **Ownership/contributor API test (preferred script):** `scripts/6-ownership-check.ps1`
-  - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-ListId`, `-AssigneeEmail`, `-CreatorEmail`.
+  - Values to update if needed: `-ApiUrl`, `-Password` (shared fallback), optional `-AssigneePassword`, optional `-CreatorPassword`, `-SpaceId`, `-ListId`, `-AssigneeEmail`, `-CreatorEmail`.
   - One-liner fallback: `cd C:\Repositories\tasksync;scripts\6-ownership-check.ps1`
-- **Admin/profile + grants API test (preferred script):** `scripts/7-admin-check.ps1`
-  - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-AdminEmail`, `-ListId`, optional `-NewMemberEmail`, optional `-NewMemberDisplay`.
+- **Admin/profile + grants + password reset API test (preferred script):** `scripts/7-admin-check.ps1`
+  - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-AdminEmail`, `-ListId`, optional `-NewMemberEmail`, optional `-NewMemberDisplay`, optional `-NewMemberPassword`.
   - One-liner fallback: `cd C:\Repositories\tasksync;scripts\7-admin-check.ps1`
 - **Web lint/check/unit fallback:** `cd C:\Repositories\tasksync\web;npm run lint;npm run check;npm run test`
 

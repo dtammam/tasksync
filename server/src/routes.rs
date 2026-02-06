@@ -4,6 +4,7 @@ use axum::{
     routing::{get, patch, post},
     Json, Router,
 };
+use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
@@ -60,6 +61,18 @@ fn issue_token(user_id: &str, space_id: &str, secret: &str) -> Result<String, St
     };
     encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn hash_password(password: &str) -> Result<String, StatusCode> {
+    hash(password, DEFAULT_COST).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn verify_password(password: &str, password_hash: &str) -> Result<bool, StatusCode> {
+    verify(password, password_hash).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn password_meets_policy(password: &str) -> bool {
+    password.trim().chars().count() >= 8
 }
 
 async fn role_from_membership(
@@ -141,7 +154,9 @@ pub fn auth_routes(pool: &SqlitePool) -> Router {
     Router::new()
         .route("/login", post(login))
         .route("/me", get(auth_me).patch(auth_update_me))
+        .route("/password", patch(auth_change_password))
         .route("/members", get(auth_members).post(auth_create_member))
+        .route("/members/:user_id/password", patch(auth_set_member_password))
         .route("/grants", get(auth_grants).put(auth_set_grant))
         .with_state(state)
 }
@@ -176,6 +191,7 @@ struct LoginUserRow {
     email: String,
     display: String,
     avatar_icon: Option<String>,
+    password_hash: Option<String>,
     role: String,
 }
 
@@ -217,11 +233,23 @@ struct UpdateProfileBody {
 }
 
 #[derive(Deserialize)]
+struct ChangePasswordBody {
+    current_password: String,
+    new_password: String,
+}
+
+#[derive(Deserialize)]
 struct CreateMemberBody {
     email: String,
     display: String,
     role: String,
+    password: String,
     avatar_icon: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SetMemberPasswordBody {
+    password: String,
 }
 
 #[derive(Serialize, FromRow)]
@@ -237,12 +265,34 @@ struct SetListGrantBody {
     granted: bool,
 }
 
+async fn password_matches_for_user(
+    state: &AppState,
+    user_id: &str,
+    candidate_password: &str,
+) -> Result<bool, StatusCode> {
+    let stored_hash: Option<String> =
+        sqlx::query_scalar("select password_hash from user where id = ?1")
+            .bind(user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .flatten();
+
+    if let Some(hash_value) = stored_hash.as_ref() {
+        if !hash_value.trim().is_empty() {
+            return verify_password(candidate_password, hash_value);
+        }
+    }
+    Ok(candidate_password == state.login_password.trim())
+}
+
 async fn login(
     State(state): State<AppState>,
     Json(body): Json<LoginBody>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    if body.password != state.login_password {
-        return Err(StatusCode::UNAUTHORIZED);
+    let password = body.password.trim();
+    if password.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
     }
     let email = body.email.trim();
     if email.is_empty() {
@@ -250,7 +300,7 @@ async fn login(
     }
     let space_id = body.space_id.unwrap_or_else(|| "s1".to_string());
     let user = sqlx::query_as::<_, LoginUserRow>(
-        "select u.id as user_id, u.email, u.display, u.avatar_icon, m.role from user u join membership m on m.user_id = u.id where lower(u.email) = lower(?1) and m.space_id = ?2 limit 1",
+        "select u.id as user_id, u.email, u.display, u.avatar_icon, u.password_hash, m.role from user u join membership m on m.user_id = u.id where lower(u.email) = lower(?1) and m.space_id = ?2 limit 1",
     )
     .bind(email)
     .bind(&space_id)
@@ -258,6 +308,26 @@ async fn login(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let has_password_hash =
+        user.password_hash.as_ref().map(|value| !value.trim().is_empty()).unwrap_or(false);
+    // Keep a legacy fallback so existing rows without hashes can still sign in once and auto-upgrade.
+    let password_ok = password_matches_for_user(&state, &user.user_id, password).await?;
+    if !password_ok {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    if !has_password_hash {
+        let upgraded_hash = hash_password(password)?;
+        sqlx::query(
+            "update user set password_hash = ?1 where id = ?2 and (password_hash is null or trim(password_hash) = '')",
+        )
+        .bind(upgraded_hash)
+        .bind(&user.user_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
 
     let token = issue_token(&user.user_id, &space_id, &state.jwt_secret)?;
     Ok(Json(LoginResponse {
@@ -315,6 +385,33 @@ async fn auth_update_me(
     auth_me(State(state), headers).await
 }
 
+async fn auth_change_password(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ChangePasswordBody>,
+) -> Result<StatusCode, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let current_password = body.current_password.trim();
+    let new_password = body.new_password.trim();
+    if current_password.is_empty() || !password_meets_policy(new_password) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let current_password_ok =
+        password_matches_for_user(&state, &ctx.user_id, current_password).await?;
+    if !current_password_ok {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let new_password_hash = hash_password(new_password)?;
+    sqlx::query("update user set password_hash = ?1 where id = ?2")
+        .bind(new_password_hash)
+        .bind(&ctx.user_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn auth_members(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -342,12 +439,14 @@ async fn auth_create_member(
 
     let email = body.email.trim().to_lowercase();
     let display = body.display.trim();
-    if email.is_empty() || display.is_empty() {
+    let password = body.password.trim();
+    if email.is_empty() || display.is_empty() || !password_meets_policy(password) {
         return Err(StatusCode::BAD_REQUEST);
     }
     if body.role != "admin" && body.role != "contributor" {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let password_hash = hash_password(password)?;
 
     let existing_user_id: Option<String> =
         sqlx::query_scalar("select id from user where lower(email) = lower(?1) limit 1")
@@ -357,14 +456,25 @@ async fn auth_create_member(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let user_id = if let Some(found) = existing_user_id {
+        sqlx::query(
+            "update user set password_hash = case when password_hash is null or trim(password_hash) = '' then ?1 else password_hash end where id = ?2",
+        )
+        .bind(&password_hash)
+        .bind(&found)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         found
     } else {
         let new_user_id = format!("u-{}", Uuid::new_v4());
-        sqlx::query("insert into user (id, email, display, avatar_icon) values (?1, ?2, ?3, ?4)")
+        sqlx::query(
+            "insert into user (id, email, display, avatar_icon, password_hash) values (?1, ?2, ?3, ?4, ?5)",
+        )
             .bind(&new_user_id)
             .bind(&email)
             .bind(display)
             .bind(normalize_avatar_icon(body.avatar_icon))
+            .bind(&password_hash)
             .execute(&state.pool)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -398,6 +508,41 @@ async fn auth_create_member(
     .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(member)))
+}
+
+async fn auth_set_member_password(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(user_id): Path<String>,
+    Json(body): Json<SetMemberPasswordBody>,
+) -> Result<StatusCode, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    if ctx.role != Role::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let password = body.password.trim();
+    if !password_meets_policy(password) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let member_exists: Option<i64> =
+        sqlx::query_scalar("select 1 from membership where space_id = ?1 and user_id = ?2")
+            .bind(&ctx.space_id)
+            .bind(&user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if member_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let password_hash = hash_password(password)?;
+    sqlx::query("update user set password_hash = ?1 where id = ?2")
+        .bind(password_hash)
+        .bind(&user_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn auth_grants(
@@ -633,6 +778,7 @@ struct TaskRow {
 
 #[derive(Deserialize)]
 struct CreateTask {
+    id: Option<String>,
     title: String,
     list_id: String,
     order: Option<String>,
@@ -717,11 +863,17 @@ async fn create_task(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let id = Uuid::new_v4().to_string();
+    let id = body
+        .id
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let order = body.order.unwrap_or_else(|| "z".into());
     let now = chrono::Utc::now().timestamp_millis();
     let my_day = if body.my_day.unwrap_or(false) { 1 } else { 0 };
-    let rec = sqlx::query_as::<_, TaskRow>(
+    let insert_result = sqlx::query_as::<_, TaskRow>(
 		"insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13, ?14) returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&id)
@@ -739,10 +891,27 @@ async fn create_task(
     .bind(&assignee_user_id)
     .bind(&ctx.user_id)
 	.fetch_one(&state.pool)
-	.await
-	.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+	.await;
+    let (status, rec) = match insert_result {
+        Ok(inserted) => (StatusCode::CREATED, inserted),
+        Err(err) => {
+            if !is_unique_violation(&err) {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            let existing = sqlx::query_as::<_, TaskRow>(
+				"select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
+			)
+			.bind(&id)
+			.bind(&ctx.space_id)
+			.fetch_optional(&state.pool)
+			.await
+			.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::CONFLICT)?;
+            (StatusCode::OK, existing)
+        }
+    };
 
-    Ok((StatusCode::CREATED, Json(rec)))
+    Ok((status, Json(rec)))
 }
 
 #[derive(Deserialize)]
@@ -864,14 +1033,16 @@ mod tests {
     async fn setup_pool() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
         sqlx::migrate!("./migrations").run(&pool).await.expect("migrations");
+        let test_password_hash = hash_password("test-pass").expect("hash test password");
 
         sqlx::query("insert into space (id, name) values ('s1', 'Default')")
             .execute(&pool)
             .await
             .expect("insert space");
         sqlx::query(
-            "insert into user (id, email, display) values ('u-admin', 'admin@example.com', 'Admin')",
+            "insert into user (id, email, display, password_hash) values ('u-admin', 'admin@example.com', 'Admin', ?1)",
         )
+        .bind(&test_password_hash)
         .execute(&pool)
         .await
         .expect("insert user");
@@ -882,8 +1053,9 @@ mod tests {
         .await
         .expect("insert membership");
         sqlx::query(
-            "insert into user (id, email, display) values ('u-contrib', 'contrib@example.com', 'Contributor')",
+            "insert into user (id, email, display, password_hash) values ('u-contrib', 'contrib@example.com', 'Contributor', ?1)",
         )
+        .bind(&test_password_hash)
         .execute(&pool)
         .await
         .expect("insert contributor");
@@ -964,6 +1136,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn login_supports_legacy_password_and_upgrades_hash() {
+        let pool = setup_pool().await;
+        sqlx::query("update user set password_hash = null where id = 'u-admin'")
+            .execute(&pool)
+            .await
+            .expect("clear password hash");
+        let state = test_state(&pool);
+
+        let response = login(
+            State(state),
+            Json(LoginBody {
+                email: "admin@example.com".to_string(),
+                password: "test-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await
+        .expect("login should succeed")
+        .0;
+        assert!(!response.token.is_empty());
+
+        let upgraded_hash: Option<String> =
+            sqlx::query_scalar("select password_hash from user where id = 'u-admin'")
+                .fetch_optional(&pool)
+                .await
+                .expect("load upgraded hash");
+        assert!(upgraded_hash.as_deref().map(|value| value.starts_with("$2")).unwrap_or(false));
+    }
+
+    #[tokio::test]
     async fn update_profile_sets_avatar_icon() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
@@ -988,6 +1190,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn user_can_change_password_and_login_with_new_password() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let status = auth_change_password(
+            State(state.clone()),
+            headers,
+            Json(ChangePasswordBody {
+                current_password: "test-pass".to_string(),
+                new_password: "new-test-pass".to_string(),
+            }),
+        )
+        .await
+        .expect("change password should work");
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let old_login = login(
+            State(state.clone()),
+            Json(LoginBody {
+                email: "admin@example.com".to_string(),
+                password: "test-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(old_login.err(), Some(StatusCode::UNAUTHORIZED));
+
+        let new_login = login(
+            State(state),
+            Json(LoginBody {
+                email: "admin@example.com".to_string(),
+                password: "new-test-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await
+        .expect("new password login should work")
+        .0;
+        assert_eq!(new_login.user_id, "u-admin");
+    }
+
+    #[tokio::test]
+    async fn change_password_rejects_wrong_current_password() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let result = auth_change_password(
+            State(state),
+            headers,
+            Json(ChangePasswordBody {
+                current_password: "wrong-pass".to_string(),
+                new_password: "new-test-pass".to_string(),
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
     async fn admin_can_create_member_and_manage_grants() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
@@ -1002,6 +1269,7 @@ mod tests {
                 email: "wife@example.com".to_string(),
                 display: "Wife".to_string(),
                 role: "contributor".to_string(),
+                password: "password123".to_string(),
                 avatar_icon: Some("🦊".to_string()),
             }),
         )
@@ -1034,6 +1302,110 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn created_member_can_login_with_member_password() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let created = auth_create_member(
+            State(state.clone()),
+            headers,
+            Json(CreateMemberBody {
+                email: "newmember@example.com".to_string(),
+                display: "New Member".to_string(),
+                role: "contributor".to_string(),
+                password: "memberpass123".to_string(),
+                avatar_icon: None,
+            }),
+        )
+        .await
+        .expect("create member should work")
+        .1
+         .0;
+
+        let login_response = login(
+            State(state),
+            Json(LoginBody {
+                email: created.email,
+                password: "memberpass123".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await
+        .expect("member login should work")
+        .0;
+        assert_eq!(login_response.user_id, created.user_id);
+    }
+
+    #[tokio::test]
+    async fn admin_create_member_rejects_short_password() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let result = auth_create_member(
+            State(state),
+            headers,
+            Json(CreateMemberBody {
+                email: "weakpass@example.com".to_string(),
+                display: "Weak Pass".to_string(),
+                role: "contributor".to_string(),
+                password: "short".to_string(),
+                avatar_icon: None,
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(StatusCode::BAD_REQUEST));
+    }
+
+    #[tokio::test]
+    async fn admin_can_reset_member_password() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut admin_headers = HeaderMap::new();
+        admin_headers.insert("x-space-id", "s1".parse().expect("space"));
+        admin_headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let status = auth_set_member_password(
+            State(state.clone()),
+            admin_headers,
+            Path("u-contrib".to_string()),
+            Json(SetMemberPasswordBody { password: "contrib-reset-pass".to_string() }),
+        )
+        .await
+        .expect("admin reset should work");
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let old_login = login(
+            State(state.clone()),
+            Json(LoginBody {
+                email: "contrib@example.com".to_string(),
+                password: "test-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(old_login.err(), Some(StatusCode::UNAUTHORIZED));
+
+        let new_login = login(
+            State(state),
+            Json(LoginBody {
+                email: "contrib@example.com".to_string(),
+                password: "contrib-reset-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await
+        .expect("contrib login with reset password should work")
+        .0;
+        assert_eq!(new_login.user_id, "u-contrib");
+    }
+
+    #[tokio::test]
     async fn contributor_cannot_manage_members_or_grants() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
@@ -1048,11 +1420,21 @@ mod tests {
                 email: "blocked@example.com".to_string(),
                 display: "Blocked".to_string(),
                 role: "contributor".to_string(),
+                password: "password123".to_string(),
                 avatar_icon: Some("🚫".to_string()),
             }),
         )
         .await;
         assert_eq!(create_result.err(), Some(StatusCode::FORBIDDEN));
+
+        let reset_result = auth_set_member_password(
+            State(state.clone()),
+            headers.clone(),
+            Path("u-admin".to_string()),
+            Json(SetMemberPasswordBody { password: "blocked123".to_string() }),
+        )
+        .await;
+        assert_eq!(reset_result.err(), Some(StatusCode::FORBIDDEN));
 
         let grant_result = auth_set_grant(
             State(state),
@@ -1079,6 +1461,7 @@ mod tests {
             State(state),
             headers,
             Json(CreateTask {
+                id: None,
                 title: "Assigned by contributor".to_string(),
                 list_id: "goal-management".to_string(),
                 order: Some("z".to_string()),
@@ -1098,6 +1481,68 @@ mod tests {
 
         assert_eq!(created.assignee_user_id.as_deref(), Some("u-admin"));
         assert_eq!(created.created_by_user_id.as_deref(), Some("u-contrib"));
+    }
+
+    #[tokio::test]
+    async fn create_task_is_idempotent_when_client_retries_same_id() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let retried_id = Uuid::new_v4().to_string();
+
+        let first = create_task(
+            State(state.clone()),
+            headers.clone(),
+            Json(CreateTask {
+                id: Some(retried_id.clone()),
+                title: "Idempotent create".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                url: None,
+                recur_rule: None,
+                attachments: None,
+                due_date: None,
+                notes: None,
+                assignee_user_id: Some("u-admin".to_string()),
+            }),
+        )
+        .await
+        .expect("first create should succeed");
+        assert_eq!(first.0, StatusCode::CREATED);
+        let first_task = first.1 .0;
+        assert_eq!(first_task.id, retried_id);
+
+        let second = create_task(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: Some(retried_id.clone()),
+                title: "Idempotent create".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                url: None,
+                recur_rule: None,
+                attachments: None,
+                due_date: None,
+                notes: None,
+                assignee_user_id: Some("u-admin".to_string()),
+            }),
+        )
+        .await
+        .expect("retry create should succeed");
+        assert_eq!(second.0, StatusCode::OK);
+        assert_eq!(second.1 .0.id, retried_id);
+
+        let count: i64 = sqlx::query_scalar("select count(1) from task where id = ?1")
+            .bind(retried_id)
+            .fetch_one(&pool)
+            .await
+            .expect("count task rows");
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]

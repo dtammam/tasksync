@@ -7,6 +7,13 @@ const store = writable<SyncStatus>(initial);
 
 export const syncStatus = {
 	subscribe: store.subscribe,
+	setSnapshot(next: SyncStatus) {
+		store.set({
+			pull: next.pull,
+			push: next.push,
+			lastError: next.lastError
+		});
+	},
 	setPull(state: Phase, err?: string) {
 		store.update((s) => ({
 			...s,

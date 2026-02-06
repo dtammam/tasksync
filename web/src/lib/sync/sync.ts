@@ -9,6 +9,16 @@ import type { List } from '$shared/types/list';
 const isServerId = (id: string) =>
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+const requestIdForLocalTask = (id: string): string | undefined => {
+	if (isServerId(id)) return id;
+	const localPrefix = 'local-';
+	if (id.startsWith(localPrefix)) {
+		const maybeUuid = id.slice(localPrefix.length);
+		if (isServerId(maybeUuid)) return maybeUuid;
+	}
+	return undefined;
+};
+
 const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task => ({
 	id: t.id,
 	title: t.title,
@@ -72,11 +82,13 @@ export const pushPendingToServer = async () => {
 		if (!t.local && !isServerId(t.id)) {
 			// Drop legacy seed IDs that were never created on the server.
 			tasks.remove(t.id);
+			await repo.saveTasks(tasks.getAll());
 			continue;
 		}
 		try {
 			if (t.local) {
 				const createdTask = await api.createTask({
+					id: requestIdForLocalTask(t.id),
 					title: t.title,
 					list_id: t.list_id,
 					order: t.order,
@@ -109,11 +121,14 @@ export const pushPendingToServer = async () => {
 				tasks.clearDirty(t.id);
 				pushed += 1;
 			}
+			// Persist each mutation to minimize duplicate creates if the page reloads mid-push.
+			await repo.saveTasks(tasks.getAll());
 		} catch (err) {
 			console.warn('push failed', t.id, err);
 			const msg = err instanceof Error ? err.message : String(err);
 			if (msg.includes('404')) {
 				tasks.remove(t.id);
+				await repo.saveTasks(tasks.getAll());
 				continue;
 			}
 			syncStatus.setPush('error', msg);
@@ -121,7 +136,7 @@ export const pushPendingToServer = async () => {
 		}
 	}
 	syncStatus.setPush('idle');
-	// Ensure persisted before the next refresh/navigation to avoid re-pushing locals.
+	// Keep a final save to coalesce any remaining in-memory updates.
 	await repo.saveTasks(tasks.getAll());
 	return { pushed, created };
 };

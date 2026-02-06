@@ -5,18 +5,20 @@ param(
 	[string]$AdminEmail = "admin@example.com",
 	[string]$ListId = "goal-management",
 	[string]$NewMemberEmail = "",
-	[string]$NewMemberDisplay = "Contributor Check"
+	[string]$NewMemberDisplay = "Contributor Check",
+	[string]$NewMemberPassword = "tasksync123"
 )
 
 $ErrorActionPreference = "Stop"
 
 function Login {
 	param(
-		[string]$Email
+		[string]$Email,
+		[string]$PasswordValue
 	)
 	$payload = @{
 		email = $Email
-		password = $Password
+		password = $PasswordValue
 		space_id = $SpaceId
 	} | ConvertTo-Json
 	return Invoke-RestMethod -Method Post -Uri "$ApiUrl/auth/login" -ContentType "application/json" -Body $payload
@@ -43,7 +45,7 @@ function Assert {
 }
 
 Write-Host "Logging in as admin..."
-$admin = Login -Email $AdminEmail
+$admin = Login -Email $AdminEmail -PasswordValue $Password
 $headers = JsonHeaders -Token $admin.token
 
 Write-Host "Checking /auth/me role..."
@@ -69,6 +71,7 @@ $memberBody = @{
 	email = $NewMemberEmail
 	display = $NewMemberDisplay
 	role = "contributor"
+	password = $NewMemberPassword
 	avatar_icon = "C1"
 } | ConvertTo-Json
 
@@ -102,7 +105,17 @@ $grants = Invoke-RestMethod -Method Get -Uri "$ApiUrl/auth/grants" -Headers $hea
 $hasGrant = @($grants | Where-Object { $_.user_id -eq $targetMember.user_id -and $_.list_id -eq $ListId }).Count -eq 1
 Assert $hasGrant "Expected grant not found in /auth/grants"
 
-Write-Host "OK: admin profile + member + grant APIs are healthy"
+Write-Host "Resetting contributor password via PATCH /auth/members/:id/password..."
+$passwordBody = @{
+	password = $NewMemberPassword
+} | ConvertTo-Json
+Invoke-RestMethod -Method Patch -Uri "$ApiUrl/auth/members/$($targetMember.user_id)/password" -Headers $headers -Body $passwordBody | Out-Null
+
+Write-Host "Verifying contributor can log in with reset password..."
+$memberSession = Login -Email $targetMember.email -PasswordValue $NewMemberPassword
+Assert ($memberSession.role -eq "contributor") "Expected contributor role login for '$($targetMember.email)'"
+
+Write-Host "OK: admin profile + member + grant + password reset APIs are healthy"
 $summary = @{
 	admin = @{
 		email = $me.email
@@ -118,5 +131,6 @@ $summary = @{
 		user_id = $grant.user_id
 		list_id = $grant.list_id
 	}
+	member_login_verified = $true
 }
 $summary | ConvertTo-Json -Depth 5
