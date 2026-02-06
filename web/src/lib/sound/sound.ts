@@ -1,14 +1,112 @@
-export type SoundTheme = 'chime_soft' | 'click_pop' | 'sparkle_short' | 'wood_tick';
+import type { SoundSettings, SoundTheme } from '$shared/types/settings';
 
-export interface SoundSettings {
-	enabled: boolean;
-	volume: number; // 0..100
-	theme: SoundTheme;
-	customSoundFileId?: string;
-}
+let audioContext: AudioContext | null = null;
 
-// Placeholder: actual implementation will live in a SharedWorker and pre-decode buffers.
-export const playCompletion = async (_settings: SoundSettings) => {
-	if (!_settings.enabled) return;
-	// TODO: load AudioBuffer from OPFS/cache and play with low latency (<20 ms).
+const clampVolume = (volume: number) => {
+	if (!Number.isFinite(volume)) return 0;
+	return Math.max(0, Math.min(100, volume)) / 100;
+};
+
+const getAudioContext = () => {
+	if (typeof window === 'undefined') return null;
+	if (audioContext) return audioContext;
+	const Ctor = window.AudioContext;
+	if (!Ctor) return null;
+	audioContext = new Ctor({ latencyHint: 'interactive' });
+	return audioContext;
+};
+
+const scheduleTone = (
+	ctx: AudioContext,
+	{
+		frequency,
+		type,
+		startAt,
+		duration,
+		peak
+	}: { frequency: number; type: OscillatorType; startAt: number; duration: number; peak: number }
+) => {
+	const osc = ctx.createOscillator();
+	const gain = ctx.createGain();
+	osc.type = type;
+	osc.frequency.setValueAtTime(frequency, startAt);
+	gain.gain.setValueAtTime(0.0001, startAt);
+	gain.gain.linearRampToValueAtTime(peak, startAt + 0.01);
+	gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+	osc.connect(gain);
+	gain.connect(ctx.destination);
+	osc.start(startAt);
+	osc.stop(startAt + duration + 0.02);
+};
+
+const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
+	const start = ctx.currentTime + 0.005;
+	switch (theme) {
+		case 'click_pop':
+			scheduleTone(ctx, {
+				frequency: 520,
+				type: 'square',
+				startAt: start,
+				duration: 0.05,
+				peak: 0.22 * volume
+			});
+			return;
+		case 'sparkle_short':
+			scheduleTone(ctx, {
+				frequency: 840,
+				type: 'triangle',
+				startAt: start,
+				duration: 0.09,
+				peak: 0.18 * volume
+			});
+			scheduleTone(ctx, {
+				frequency: 1260,
+				type: 'sine',
+				startAt: start + 0.06,
+				duration: 0.1,
+				peak: 0.14 * volume
+			});
+			return;
+		case 'wood_tick':
+			scheduleTone(ctx, {
+				frequency: 220,
+				type: 'triangle',
+				startAt: start,
+				duration: 0.06,
+				peak: 0.2 * volume
+			});
+			return;
+		case 'chime_soft':
+		default:
+			scheduleTone(ctx, {
+				frequency: 660,
+				type: 'sine',
+				startAt: start,
+				duration: 0.11,
+				peak: 0.15 * volume
+			});
+			scheduleTone(ctx, {
+				frequency: 990,
+				type: 'sine',
+				startAt: start + 0.045,
+				duration: 0.14,
+				peak: 0.1 * volume
+			});
+	}
+};
+
+export const playCompletion = async (settings: SoundSettings) => {
+	if (!settings.enabled) return;
+	const volume = clampVolume(settings.volume);
+	if (volume <= 0) return;
+	const ctx = getAudioContext();
+	if (!ctx) return;
+	if (ctx.state === 'suspended') {
+		try {
+			await ctx.resume();
+		} catch {
+			return;
+		}
+	}
+	playTheme(ctx, settings.theme, volume);
 };

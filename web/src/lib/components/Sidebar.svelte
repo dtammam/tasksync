@@ -1,14 +1,99 @@
 <script lang="ts">
+// @ts-nocheck
 import { page } from '$app/stores';
+import { createEventDispatcher } from 'svelte';
 import { lists } from '$lib/stores/lists';
 import { listCounts, myDayPending } from '$lib/stores/tasks';
+import { soundSettings, soundThemes } from '$lib/stores/settings';
+
+export let navPinned = false;
+
+const dispatch = createEventDispatcher();
+
+let showManager = false;
+let newListName = '';
+let newListIcon = '';
+let renameDraft = {};
+let listError = '';
+let busy = false;
+
+const togglePin = () => {
+	dispatch('togglePin', { pinned: !navPinned });
+};
+
+const resetDrafts = () => {
+	renameDraft = {};
+	newListName = '';
+	newListIcon = '';
+	listError = '';
+};
+
+const createList = async () => {
+	const name = newListName.trim();
+	if (!name) return;
+	busy = true;
+	listError = '';
+	try {
+		await lists.createRemote(name, newListIcon || undefined);
+		resetDrafts();
+	} catch (err) {
+		listError = err instanceof Error ? err.message : String(err);
+	} finally {
+		busy = false;
+	}
+};
+
+const renameList = async (id) => {
+	const name = (renameDraft[id] ?? '').trim();
+	if (!name) return;
+	busy = true;
+	listError = '';
+	try {
+		await lists.updateRemote(id, { name });
+		renameDraft = { ...renameDraft, [id]: '' };
+	} catch (err) {
+		listError = err instanceof Error ? err.message : String(err);
+	} finally {
+		busy = false;
+	}
+};
+
+const deleteList = async (id) => {
+	if (!confirm('Delete this list? Tasks within cannot be deleted yet.')) return;
+	busy = true;
+	listError = '';
+	try {
+		await lists.deleteRemote(id);
+	} catch (err) {
+		listError =
+			err instanceof Error && err.message.includes('409')
+				? 'Cannot delete: list still has tasks.'
+				: err instanceof Error
+					? err.message
+					: String(err);
+	} finally {
+		busy = false;
+	}
+};
 </script>
 
 <nav class="sidebar">
-	<div class="app-title">tasksync</div>
+	<div class="title-row">
+		<div class="app-title">tasksync</div>
+		<button
+			class={`pin ${navPinned ? 'active' : ''}`}
+			type="button"
+			data-testid="nav-pin"
+			aria-pressed={navPinned}
+			on:click={togglePin}
+			title={navPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+		>
+			{navPinned ? 'Unpin' : 'Pin'}
+		</button>
+	</div>
 	<div class="section-label">Today</div>
 	{#if $lists}
-		{#each $lists as list}
+		{#each [...$lists].sort((a, b) => (a.id === 'my-day' ? -1 : b.id === 'my-day' ? 1 : (a.order ?? '').localeCompare(b.order ?? ''))) as list}
 			{#if list.id === 'my-day'}
 				<a class:selected={$page.url.pathname === '/'} href="/">
 					<span class="icon">🌅</span>
@@ -28,12 +113,102 @@ import { listCounts, myDayPending } from '$lib/stores/tasks';
 		{/each}
 	{/if}
 	<div class="section-label muted">Collections</div>
-	<button class="add" type="button" aria-disabled="true">+ New list (coming soon)</button>
+	<button class="add" type="button" on:click={() => (showManager = !showManager)}>
+		{showManager ? 'Close list manager' : '+ New list'}
+	</button>
+	{#if showManager}
+		<div class="manager">
+			<label>
+				Name
+				<input
+					type="text"
+					placeholder="List name"
+					bind:value={newListName}
+					on:keydown={(e) => e.key === 'Enter' && createList()}
+				/>
+			</label>
+			<label>
+				Icon (optional)
+				<input
+					type="text"
+					placeholder="emoji"
+					maxlength="3"
+					bind:value={newListIcon}
+					on:keydown={(e) => e.key === 'Enter' && createList()}
+				/>
+			</label>
+			<button type="button" class="primary" on:click={createList} disabled={busy || !newListName.trim()}>
+				Create list
+			</button>
+			{#if listError}
+				<p class="error">{listError}</p>
+			{/if}
+			<div class="existing">
+				{#each $lists.filter((l) => l.id !== 'my-day') as list}
+					<div class="row">
+						<input
+							type="text"
+							placeholder={list.name}
+							bind:value={renameDraft[list.id]}
+							on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+						/>
+						<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
+							Rename
+						</button>
+						<button type="button" class="ghost" on:click={() => deleteList(list.id)} disabled={busy}>
+							Delete
+						</button>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+	<div class="section-label muted">Sound</div>
+	<div class="sound">
+		<label class="toggle" for="sound-enabled">
+			<input
+				id="sound-enabled"
+				data-testid="sound-enabled"
+				type="checkbox"
+				checked={$soundSettings.enabled}
+				on:change={(e) => soundSettings.setEnabled(e.target.checked)}
+			/>
+			Completion sound
+		</label>
+		<label>
+			Theme
+			<select
+				data-testid="sound-theme"
+				value={$soundSettings.theme}
+				on:change={(e) => soundSettings.setTheme(e.target.value)}
+			>
+				{#each soundThemes as theme}
+					<option value={theme}>{theme.replace('_', ' ')}</option>
+				{/each}
+			</select>
+		</label>
+		<label>
+			Volume
+			<div class="volume">
+				<input
+					data-testid="sound-volume"
+					type="range"
+					min="0"
+					max="100"
+					step="1"
+					value={$soundSettings.volume}
+					on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+				/>
+				<span>{$soundSettings.volume}%</span>
+			</div>
+		</label>
+	</div>
 </nav>
 
 <style>
 	.sidebar {
-		width: 240px;
+		width: 100%;
+		max-width: 240px;
 		background: #0a0f1c;
 		border-right: 1px solid #131a2d;
 		color: #cbd5e1;
@@ -44,6 +219,8 @@ import { listCounts, myDayPending } from '$lib/stores/tasks';
 		height: 100vh;
 		position: sticky;
 		top: 0;
+		overflow-y: auto;
+		box-sizing: border-box;
 	}
 
 	.app-title {
@@ -51,6 +228,34 @@ import { listCounts, myDayPending } from '$lib/stores/tasks';
 		letter-spacing: -0.03em;
 		color: #e2e8f0;
 		margin-bottom: 8px;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		margin-bottom: 8px;
+	}
+
+	.title-row .app-title {
+		margin-bottom: 0;
+	}
+
+	.pin {
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #cbd5e1;
+		border-radius: 999px;
+		padding: 4px 10px;
+		font-size: 11px;
+		cursor: pointer;
+	}
+
+	.pin.active {
+		border-color: #16a34a;
+		background: #0b3a2a;
+		color: #d1fae5;
 	}
 
 	.section-label {
@@ -95,12 +300,146 @@ import { listCounts, myDayPending } from '$lib/stores/tasks';
 	}
 
 	.add {
-		color: #94a3b8;
-		background: none;
-		border: 1px dashed #1f2937;
+		color: #e2e8f0;
+		background: #11192b;
+		border: 1px solid #1f2937;
 		border-radius: 10px;
 		padding: 8px 10px;
 		text-align: left;
-		cursor: not-allowed;
+		cursor: pointer;
+	}
+
+	.manager {
+		margin-top: 8px;
+		border: 1px solid #1f2937;
+		border-radius: 10px;
+		padding: 10px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		background: #0c1322;
+	}
+
+	.manager label {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 12px;
+		color: #cbd5e1;
+	}
+
+	.manager input {
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 8px;
+		padding: 6px 8px;
+	}
+
+	.manager .row {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		gap: 6px;
+		align-items: center;
+	}
+
+	.manager button.primary {
+		background: #1d4ed8;
+		border: none;
+		color: #fff;
+		padding: 8px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+	}
+
+	.manager button.ghost {
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		color: #cbd5e1;
+		padding: 8px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+	}
+
+	.manager .existing {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin-top: 6px;
+	}
+
+	.sound {
+		margin-top: 6px;
+		border: 1px solid #1f2937;
+		border-radius: 10px;
+		padding: 10px;
+		background: #0c1322;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.sound label {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 12px;
+		color: #cbd5e1;
+	}
+
+	.sound .toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.sound select,
+	.sound input[type='range'] {
+		width: 100%;
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 8px;
+		padding: 6px 8px;
+	}
+
+	.sound input[type='checkbox'] {
+		accent-color: #1d4ed8;
+	}
+
+	.sound .volume {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 8px;
+		align-items: center;
+	}
+
+	.sound .volume span {
+		color: #94a3b8;
+		font-size: 12px;
+		min-width: 38px;
+		text-align: right;
+	}
+
+	.error {
+		color: #ef4444;
+		font-size: 12px;
+	}
+
+	@media (max-width: 900px) {
+		.sidebar {
+			max-width: none;
+			padding: 14px 10px;
+		}
+
+		a {
+			padding: 7px 8px;
+			gap: 6px;
+			font-size: 13px;
+		}
+
+		.count {
+			font-size: 11px;
+		}
 	}
 </style>

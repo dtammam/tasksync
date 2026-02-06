@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { List } from '$shared/types/list';
 import type { Task } from '$shared/types/task';
+import type { SoundSettings } from '$shared/types/settings';
 
 interface TaskSyncDB extends DBSchema {
 	lists: {
@@ -12,6 +13,10 @@ interface TaskSyncDB extends DBSchema {
 		value: Task;
 		indexes: { 'by-list': string };
 	};
+	settings: {
+		key: string;
+		value: SoundSettings & { id: string };
+	};
 }
 
 let dbPromise: Promise<IDBPDatabase<TaskSyncDB>> | null = null;
@@ -21,11 +26,18 @@ export const getDb = () => {
 		return null;
 	}
 	if (!dbPromise) {
-		dbPromise = openDB<TaskSyncDB>('tasksync', 1, {
+		dbPromise = openDB<TaskSyncDB>('tasksync', 2, {
 			upgrade(db) {
-				db.createObjectStore('lists', { keyPath: 'id' });
-				const tasks = db.createObjectStore('tasks', { keyPath: 'id' });
-				tasks.createIndex('by-list', 'list_id');
+				if (!db.objectStoreNames.contains('lists')) {
+					db.createObjectStore('lists', { keyPath: 'id' });
+				}
+				if (!db.objectStoreNames.contains('tasks')) {
+					const tasks = db.createObjectStore('tasks', { keyPath: 'id' });
+					tasks.createIndex('by-list', 'list_id');
+				}
+				if (!db.objectStoreNames.contains('settings')) {
+					db.createObjectStore('settings', { keyPath: 'id' });
+				}
 			}
 		});
 	}

@@ -42,12 +42,13 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     let lists = vec![
-        ("l-inbox", "Inbox", "a"),
-        ("goal-management", "Goal Management", "b"),
-        ("daily-management", "Daily Management", "c"),
-        ("tasks", "Tasks", "d"),
-        ("health", "Health", "e"),
-        ("tech", "Tech Ideas", "f"),
+        ("my-day", "My Day", "a"),
+        ("l-inbox", "Inbox", "b"),
+        ("goal-management", "Goal Management", "c"),
+        ("daily-management", "Daily Management", "d"),
+        ("tasks", "Tasks", "e"),
+        ("health", "Health", "f"),
+        ("tech", "Tech Ideas", "g"),
     ];
 
     for (id, name, order) in &lists {

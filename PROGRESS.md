@@ -27,3 +27,18 @@
 - 2026-02-01 15:07 - Fully removed unused seed wiring from tasks store; tests/lint/check still green
 - 2026-02-01 15:28 - Stabilized Playwright e2e without client seeds (state reset + unique titles); all browsers passing
 - 2026-02-01 15:54 - Added scripts/4-prepush.ps1 to run lint/check/test/Playwright + cargo test with PATH fixes; documented in README
+- 2026-02-02 19:34 - Added task due dates, recurrence, notes, attachments + counts; clickable titles, row toggle, sync pill; sort menu; server PATCH/CORS updates; new migrations 0002/0003; lint/check/test passing
+- 2026-02-02 20:22 - List manager UI (create/rename/delete via API), detail drawer modal with full task meta, inline rename, safer list moves (My Day pinned), My Day date label, auto-sync wording, and recurrence/My Day unit tests.
+- 2026-02-02 21:10 - Added sidebar list manager (create/rename/delete via API), improved TaskRow details (no duplicate recurrence picker, fresh timestamps on edits), My Day date label, CORS allows DELETE, list store sync helpers, and new recurrence/My Day unit tests.
+- 2026-02-02 23:40 - Fixed API 401 by reseeding dev DB (`scripts/1-seed.ps1`), validated /health and /lists return 200 with admin headers; ready for server+web dev to resume.
+- 2026-02-02 23:58 - Fixed list view showing newly added tasks, added mobile nav drawer + responsive headers/task rows to mirror To Do on phones, ran web lint/check/tests (all passing).
+- 2026-02-02 00:08 - Locked body scroll to viewport, added bottom quick-add bar on mobile, set inputs to 16px to prevent iOS zoom, and made sidebar scrollable; web lint/check/tests passing.
+- 2026-02-02 00:14 - Blocked horizontal scroll/zoom on mobile (viewport meta, overflow-x hidden on html/body/main); web lint/check/tests passing.
+- 2026-02-02 00:23 - Added My Day suggestions list with add-to-My-Day actions, larger touch targets/focus rings, and new sync+check favicon; web lint/check/tests passing.
+- 2026-02-02 00:27 - Added long-press/ellipsis quick actions (Tomorrow, Next week, Star) on tasks; new store helpers for due date/priority with tests; web lint/check/tests passing.
+- 2026-02-02 08:00 - Simplified add flow to bottom bar only (desktop + mobile), exposed list add helper for e2e, all Playwright suites green; web lint/check/tests passing.
+- 2026-02-05 15:02 - Implemented completion sound + persisted sound settings (sidebar controls, IDB + localStorage fallback, app-ready hydration marker), wired completion audio into task toggles, added settings/task unit coverage and Playwright persistence flow; web lint/check/test + Playwright all passing.
+- 2026-02-05 16:42 - Added mobile sidebar pinning (pin/unpin control, persisted nav pin state, pin-aware auto-close/backdrop behavior), exposed sidebar drawer test id, and added cross-browser Playwright navigation coverage for pin behavior; web lint/check/test and targeted nav e2e passing.
+- 2026-02-05 16:49 - Updated docs/AGENTS.md command policy: script-first `.ps1` guidance, explicit "values to update" notes, and strict copy/paste-safe one-liner formatting with no leading/separator spacing.
+- 2026-02-05 17:48 - Refined mobile UX to feel closer to Microsoft To-Do: pinned sidebar now reflows to side-by-side split on mobile (no content hidden behind overlay), tightened sidebar sizing, simplified task-row chips/control density on small screens, and refreshed mobile header/quick-add spacing; web lint/check/test and targeted nav Playwright passing.
+- 2026-02-05 18:09 - UI accepted as "good enough" for MVP phase; reviewed architecture and re-prioritized next implementation slice to auth/role enforcement and durable sync protocol completion.

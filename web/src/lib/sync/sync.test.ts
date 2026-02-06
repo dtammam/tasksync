@@ -11,7 +11,8 @@ vi.mock('$lib/api/client', () => {
 			getLists: vi.fn(),
 			getTasks: vi.fn(),
 			createTask: vi.fn(),
-			updateTaskStatus: vi.fn()
+			updateTaskStatus: vi.fn(),
+			updateTaskMeta: vi.fn()
 		}
 	};
 });
@@ -64,6 +65,26 @@ describe('syncFromServer', () => {
 		expect(saved?.status).toBe('done');
 		expect(saved?.dirty).toBe(true);
 	});
+
+	it('keeps local tasks created while pull is in flight', async () => {
+		mockedApi.getLists.mockResolvedValue([]);
+		let resolveTasks: (value: ReturnType<typeof mockedApi.getTasks> extends Promise<infer T> ? T : never) =>
+			void;
+		const remoteTasks = new Promise<
+			ReturnType<typeof mockedApi.getTasks> extends Promise<infer T> ? T : never
+		>((resolve) => {
+			resolveTasks = resolve;
+		});
+		mockedApi.getTasks.mockReturnValue(remoteTasks as ReturnType<typeof mockedApi.getTasks>);
+
+		const pulling = syncFromServer();
+		const created = tasks.createLocal('created during pull', 'goal-management');
+		resolveTasks!([]);
+		await pulling;
+
+		const all = tasks.getAll();
+		expect(all.find((t) => t.id === created?.id)).toBeTruthy();
+	});
 });
 
 describe('pushPendingToServer', () => {
@@ -99,6 +120,41 @@ describe('pushPendingToServer', () => {
 		expect(saved?.dirty).toBe(false);
 		expect(saved?.local).toBe(false);
 		expect(all.find((t) => t.id === local?.id)).toBeUndefined();
+	});
+
+	it('keeps local edits made while create request is in flight', async () => {
+		const local = tasks.createLocal('race task', 'goal-management');
+		let resolveCreate: (
+			value: ReturnType<typeof mockedApi.createTask> extends Promise<infer T> ? T : never
+		) => void;
+		const createResponse = new Promise<
+			ReturnType<typeof mockedApi.createTask> extends Promise<infer T> ? T : never
+		>((resolve) => {
+			resolveCreate = resolve;
+		});
+		mockedApi.createTask.mockReturnValue(createResponse as ReturnType<typeof mockedApi.createTask>);
+
+		const pushing = pushPendingToServer();
+		if (local) {
+			tasks.toggle(local.id);
+		}
+		resolveCreate!({
+			id: 'srv-race-task',
+			space_id: 's1',
+			title: 'race task',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: 0,
+			order: 'z',
+			created_ts: 1,
+			updated_ts: 1
+		});
+		await pushing;
+
+		const saved = tasks.getAll().find((t) => t.id === 'srv-race-task');
+		expect(saved?.local).toBe(false);
+		expect(saved?.status).toBe('done');
+		expect(saved?.dirty).toBe(true);
 	});
 
 	it('drops legacy dirty tasks with non-server ids before pushing', async () => {
@@ -163,7 +219,7 @@ describe('pushPendingToServer', () => {
 			tasks.setAll([orphan, local]);
 		}
 
-		mockedApi.updateTaskStatus.mockRejectedValueOnce(new Error('API 404 Not Found'));
+		mockedApi.updateTaskMeta.mockRejectedValueOnce(new Error('API 404 Not Found'));
 		mockedApi.createTask.mockResolvedValue({
 			id: 'srv-keep',
 			space_id: 's1',

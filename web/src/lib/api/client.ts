@@ -21,6 +21,12 @@ export interface ApiTask {
 	order: string;
 	updated_ts: number;
 	created_ts: number;
+	url?: string;
+	recur_rule?: string;
+	attachments?: string;
+	due_date?: string;
+	occurrences_completed?: number;
+	notes?: string;
 }
 
 const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> => {
@@ -40,10 +46,47 @@ const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> =>
 
 export const api = {
 	getLists: () => fetchJson<ApiList[]>('/lists'),
+	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
+		fetchJson<ApiList>('/lists', { method: 'POST', body: JSON.stringify(body) }),
+	updateList: (id: string, body: { name?: string; icon?: string; color?: string; order?: string }) =>
+		fetchJson<ApiList>(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+	deleteList: (id: string) =>
+		fetchJson<void>(`/lists/${id}`, {
+			method: 'DELETE'
+		}),
 	getTasks: () => fetchJson<ApiTask[]>('/tasks'),
-	createTask: (body: { title: string; list_id: string; my_day?: boolean; order?: string }) =>
+	createTask: (body: {
+		title: string;
+		list_id: string;
+		my_day?: boolean;
+		order?: string;
+		url?: string;
+		recur_rule?: string;
+		attachments?: string;
+		due_date?: string;
+		notes?: string;
+	}) =>
 		fetchJson<ApiTask>('/tasks', {
 			method: 'POST',
+			body: JSON.stringify(body)
+		}),
+	updateTaskMeta: (
+		id: string,
+		body: {
+			title?: string;
+			status?: string;
+			list_id?: string;
+			my_day?: boolean;
+			url?: string;
+			recur_rule?: string;
+			attachments?: string;
+			due_date?: string;
+			notes?: string;
+			occurrences_completed?: number;
+		}
+	) =>
+		fetchJson<ApiTask>(`/tasks/${id}`, {
+			method: 'PATCH',
 			body: JSON.stringify(body)
 		}),
 	updateTaskStatus: (id: string, status: string) =>

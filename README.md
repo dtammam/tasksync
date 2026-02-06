@@ -11,6 +11,8 @@ Local‑first task manager with SvelteKit client and Rust (Axum + SQLite) server
 - See `docs/ARCHITECTURE.md` and `docs/AGENTS.md` for constraints and workflow.
 - Seed server data (space, users, lists) once: `cd server; set DATABASE_URL=sqlite://../data/tasksync.db; "%USERPROFILE%\\.cargo\\bin\\cargo.exe" run --bin seed` (client now starts empty; no legacy seed tasks are created locally)
 - Full test/pre-push suite from PowerShell: `scripts/4-prepush.ps1` (use `-SkipPlaywright` to omit browser run)
+- Migrations: apply new schema (`sqlx migrate run` or `scripts/1-seed.ps1`) to get task due dates/recurrence/notes/attachments columns before running the app.
+- List manager (sidebar) hits create/rename/delete list APIs; run as `VITE_ROLE=admin` to use it and re-sync after schema changes.
 
 ## Project Layout
 - `web/` — SvelteKit PWA, IndexedDB/OPFS first; tests via Vitest + Playwright.

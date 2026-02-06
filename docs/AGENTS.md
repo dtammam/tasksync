@@ -54,8 +54,9 @@
 3. Implement client logic (stores/repo), then UI.
 4. Add server endpoints/migrations only if required.
 5. Write tests and ensure perf budgets.
-6. When asking the user to test locally, provide one-line commands with env vars set explicitly for each terminal (see “Run Commands”).
-7. After each interaction with the user, briefly state overall percent completion for the project/feature.
+6. Prefer sharing runnable `.ps1` scripts from `scripts/` for local testing/setup. If a needed script does not exist and the command is reusable, create the script and share that path.
+7. If a one-liner is still needed, provide a strict copy/paste-safe command with no leading spaces and no extra separator spacing (for example `...;$env:FOO='x';& ...`, not `...; $env:FOO='x'; & ...`).
+8. After each interaction with the user, briefly state overall percent completion for the project/feature.
 
 **Prompt**
 ```
@@ -91,11 +92,25 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 - No new spinners; optimistic UI is immediate.
 - All budgets green in CI.
 
-## Run Commands (one-liners for manual testing)
-- **Server (Terminal 1)**: `cd server && set DATABASE_URL=sqlite://../data/tasksync.db && set RUST_LOG=info && "%USERPROFILE%\\.cargo\\bin\\cargo.exe" run`
-- **Web dev (Terminal 2)**: `cd web && npm run dev -- --host`
-- **Playwright e2e**: `cd web && npx playwright test`
-- **Web lint/check/unit**: `cd web && npm run lint && npm run check && npm run test`
+## Script-First Command Policy
+- Prefer sharing `.ps1` scripts in `scripts/` for repeated workflows instead of ad-hoc terminal one-liners.
+- When sharing a script, include a short "values to update" note if the user may need different paths/ports/IDs.
+- Keep one-liners as fallback only.
+
+## Run Commands (script-first + copy/paste-safe one-liner fallback)
+- **Server start (preferred script):** `scripts/2-serve.ps1`
+  - Values to update if needed: `DATABASE_URL`, `RUST_LOG`, server port/env in your terminal.
+  - One-liner fallback: `cd C:\Repositories\tasksync\server;$env:DATABASE_URL='sqlite://../data/tasksync.db';$env:RUST_LOG='info';& "$env:USERPROFILE\.cargo\bin\cargo.exe" run --bin tasksync-server`
+- **Web dev (preferred script):** `scripts/3-web.ps1`
+  - Values to update if needed: `VITE_API_URL`, `VITE_SPACE_ID`, `VITE_USER_ID`, `VITE_ROLE`, port.
+  - One-liner fallback: `cd C:\Repositories\tasksync\web;npm run dev -- --host`
+- **Seed data (preferred script):** `scripts/1-seed.ps1`
+  - Values to update if needed: `DATABASE_URL`.
+  - One-liner fallback: `cd C:\Repositories\tasksync\server;$env:DATABASE_URL='sqlite://../data/tasksync.db';& "$env:USERPROFILE\.cargo\bin\cargo.exe" run --bin seed`
+- **Pre-push verification (preferred script):** `scripts/4-prepush.ps1`
+  - Values to update if needed: optional `-SkipPlaywright`.
+  - One-liner fallback: `cd C:\Repositories\tasksync\web;npx playwright test`
+- **Web lint/check/unit fallback:** `cd C:\Repositories\tasksync\web;npm run lint;npm run check;npm run test`
 
 ## Backlog Starters
 - Sound settings panel

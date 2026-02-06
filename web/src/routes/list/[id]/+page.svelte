@@ -1,74 +1,91 @@
 <script lang="ts">
-	import { findListName } from '$lib/stores/lists';
-	import TaskRow from '$lib/components/TaskRow.svelte';
-	import { tasks, tasksByList } from '$lib/stores/tasks';
+	// @ts-nocheck
+	import { page } from '$app/stores';
+import TaskRow from '$lib/components/TaskRow.svelte';
+import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
+import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
+import { findListName } from '$lib/stores/lists';
 
-	export let data;
+let quickTitle = '';
+let detailId = null;
+$: listId = $page.params.id;
+let listTasks = tasksByList(listId);
+$: listTasks = tasksByList(listId);
+$: listName = findListName(listId);
 
-	const listStore = tasksByList(data.listId);
+const quickAdd = () => {
+	if (!quickTitle.trim()) return;
+	const activeList = listId || (typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : '');
+	if (!activeList) return;
+	tasks.createLocal(quickTitle, activeList);
+	quickTitle = '';
+};
 
-	let newTitle = '';
+if (typeof window !== 'undefined') {
+	Reflect.set(window, '__addTaskList', () => quickAdd());
+	Reflect.set(window, '__addTaskListWithTitle', (title) => {
+		const activeList = listId || window.location.pathname.split('/').pop();
+		if (!activeList) return;
+		tasks.createLocal(title, activeList);
+	});
+}
 
-	const addTask = () => {
-		if (!newTitle.trim()) return;
-		tasks.createLocal(newTitle, data.listId, { my_day: false });
-		newTitle = '';
-	};
+const openDetail = (event) => (detailId = event.detail.id);
+const closeDetail = () => (detailId = null);
+$: detailTask = detailId ? getTask(detailId) : null;
 
-	if (typeof window !== 'undefined') {
-		Reflect.set(window, '__addTaskList', () => addTask());
-	}
-
-	$: pending = ($listStore ?? []).filter((t) => t.status === 'pending');
-	$: completed = ($listStore ?? []).filter((t) => t.status === 'done');
+const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 </script>
 
 <header class="page-header">
 	<div>
 		<p class="eyebrow">List</p>
-		<h1>{findListName(data.listId)}</h1>
-		<p class="sub">{pending.length} pending • {completed.length} completed</p>
-	</div>
-	<div class="actions">
-		<div class="add">
-			<input
-				type="text"
-				placeholder="Add a task"
-				bind:value={newTitle}
-				data-testid="new-task-input"
-				autocomplete="off"
-				on:keydown={(e) => e.key === 'Enter' && addTask()}
-			/>
-			<button type="button" data-testid="new-task-submit" on:click={addTask}>Add</button>
-		</div>
+		<h1>{listName}</h1>
+		<p class="sub">Tasks in this list.</p>
 	</div>
 </header>
 
 <section class="block">
 	<div class="section-title">Pending</div>
 	<div class="stack">
-		{#if pending.length}
-			{#each pending as task (task.id)}
-				<TaskRow {task} />
+		{#if sortTasks($listTasks?.filter((t) => t.status === 'pending') ?? []).length}
+			{#each sortTasks($listTasks.filter((t) => t.status === 'pending')) as task (task.id)}
+				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
-			<p class="empty">All caught up in this list.</p>
+			<p class="empty">No pending tasks.</p>
 		{/if}
 	</div>
 </section>
 
 <section class="block">
-	<div class="section-title">Completed ({completed.length})</div>
+	<div class="section-title">Completed</div>
 	<div class="stack" data-testid="completed-section">
-		{#if completed.length}
-			{#each completed as task (task.id)}
-				<TaskRow {task} />
+		{#if sortTasks($listTasks?.filter((t) => t.status === 'done') ?? []).length}
+			{#each sortTasks($listTasks.filter((t) => t.status === 'done')) as task (task.id)}
+				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
 			<p class="empty subtle">No completed tasks yet.</p>
 		{/if}
 	</div>
 </section>
+
+<TaskDetailDrawer task={detailTask} open={!!detailTask} on:close={closeDetail} />
+
+<div class="mobile-add" aria-label="Quick add">
+	<div class="bar">
+		<input
+			type="text"
+			placeholder={`Add a task to ${listName}`}
+			bind:value={quickTitle}
+			autocomplete="off"
+			data-testid="new-task-input"
+			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
+		/>
+		<button type="button" data-testid="new-task-submit" on:click={quickAdd}>Add</button>
+	</div>
+</div>
 
 <style>
 	.page-header {
@@ -97,18 +114,8 @@
 		color: #94a3b8;
 	}
 
-	.actions button {
-		background: #1d4ed8;
-		border: none;
-		color: white;
-		padding: 10px 14px;
-		border-radius: 10px;
-		cursor: pointer;
-		opacity: 1;
-	}
-
 	.block {
-		margin-top: 12px;
+		margin-top: 14px;
 	}
 
 	.section-title {
@@ -119,7 +126,7 @@
 
 	.stack {
 		display: grid;
-		gap: 8px;
+		gap: 10px;
 	}
 
 	.empty {
@@ -135,17 +142,58 @@
 		color: #64748b;
 	}
 
-	.add {
-		display: flex;
-		gap: 8px;
+	.mobile-add {
+		display: block;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+		padding: 0 14px;
+		z-index: 15;
 	}
 
-	.add input {
-		border-radius: 10px;
+	.mobile-add .bar {
+		background: rgba(15, 23, 42, 0.96);
 		border: 1px solid #1f2937;
-		background: #0f172a;
-		padding: 10px 12px;
+		border-radius: 16px;
+		padding: 7px;
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 8px;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		max-width: 720px;
+		margin: 0 auto;
+	}
+
+	.mobile-add input {
+		width: 100%;
+		background: #0b1221;
+		border: 1px solid #1f2937;
 		color: #e2e8f0;
-		min-width: 220px;
+		border-radius: 10px;
+		padding: 10px 12px;
+	}
+
+	.mobile-add button {
+		background: #2563eb;
+		color: white;
+		border: none;
+		border-radius: 11px;
+		padding: 10px 14px;
+		cursor: pointer;
+	}
+
+	@media (max-width: 900px) {
+		.page-header {
+			margin-bottom: 12px;
+		}
+
+		.stack {
+			padding-bottom: 88px;
+		}
+
+		h1 {
+			font-size: 24px;
+		}
 	}
 </style>

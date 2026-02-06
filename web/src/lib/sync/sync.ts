@@ -21,7 +21,12 @@ const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task =
 	tags: [],
 	checklist: [],
 	order: t.order,
-	attachments: [],
+	attachments: t.attachments ? JSON.parse(t.attachments) : [],
+	url: t.url ?? undefined,
+	recurrence_id: t.recur_rule ?? undefined,
+	due_date: t.due_date ?? undefined,
+	occurrences_completed: t.occurrences_completed ?? 0,
+	notes: t.notes ?? undefined,
 	created_ts: t.created_ts,
 	updated_ts: t.updated_ts
 });
@@ -31,7 +36,6 @@ export const syncFromServer = async () => {
 	try {
 		const [remoteLists, remoteTasks] = await Promise.all([api.getLists(), api.getTasks()]);
 		const toTasks: Task[] = remoteTasks.map(mapApiTask);
-		const remoteIds = new Set(toTasks.map((t) => t.id));
 
 		const toLists: List[] = remoteLists.map((l) => ({
 			id: l.id,
@@ -41,23 +45,9 @@ export const syncFromServer = async () => {
 			order: l.order
 		}));
 
-		const current = tasks.getAll();
-		const unsynced = current.filter((t) => t.dirty);
-
 		lists.setAll(toLists);
-		const mergedMap = new Map<string, Task>();
-		for (const t of toTasks) mergedMap.set(t.id, t);
-		for (const t of unsynced) {
-			if (remoteIds.has(t.id)) {
-				// keep local dirty version to avoid status regressions until push succeeds
-				mergedMap.set(t.id, t);
-			} else {
-				mergedMap.set(t.id, t);
-			}
-		}
-		const merged = Array.from(mergedMap.values());
-		tasks.setAll(merged);
-		await repo.saveTasks(merged);
+		tasks.mergeRemote(toTasks);
+		await repo.saveTasks(tasks.getAll());
 		syncStatus.setPull('idle');
 		return { lists: toLists.length, tasks: toTasks.length };
 	} catch (err) {
@@ -88,13 +78,29 @@ export const pushPendingToServer = async () => {
 					title: t.title,
 					list_id: t.list_id,
 					order: t.order,
-					my_day: t.my_day ?? false
+					my_day: t.my_day ?? false,
+					url: t.url,
+					recur_rule: t.recurrence_id,
+					attachments: t.attachments ? JSON.stringify(t.attachments) : undefined,
+					due_date: t.due_date,
+					notes: t.notes
 				});
-				tasks.replaceWithRemote(t.id, mapApiTask(createdTask));
+				tasks.replaceWithRemote(t.id, mapApiTask(createdTask), t);
 				created += 1;
 				pushed += 1;
 			} else {
-				await api.updateTaskStatus(t.id, t.status);
+				await api.updateTaskMeta(t.id, {
+					title: t.title,
+					status: t.status,
+					list_id: t.list_id,
+					my_day: t.my_day ?? false,
+					url: t.url,
+					recur_rule: t.recurrence_id,
+					attachments: t.attachments ? JSON.stringify(t.attachments) : undefined,
+					due_date: t.due_date,
+					notes: t.notes,
+					occurrences_completed: t.occurrences_completed
+				});
 				tasks.clearDirty(t.id);
 				pushed += 1;
 			}
