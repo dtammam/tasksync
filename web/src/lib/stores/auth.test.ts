@@ -61,6 +61,35 @@ describe('auth store', () => {
 		expect(mockedApi.me).not.toHaveBeenCalled();
 	});
 
+	it('keeps token auth session when /auth/me fails due to network', async () => {
+		localStorage.setItem('tasksync:auth-mode', 'token');
+		localStorage.setItem('tasksync:auth-token', 'jwt-token');
+		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
+		mockedApi.me.mockRejectedValue(new Error('TypeError: Failed to fetch'));
+
+		await auth.hydrate();
+
+		expect(getAuthToken()).toBe('jwt-token');
+		expect(auth.get().status).toBe('authenticated');
+		expect(auth.get().source).toBe('token');
+		expect(auth.get().user?.user_id).toBe('admin');
+		expect(auth.get().error).toContain('Failed to fetch');
+	});
+
+	it('clears token auth session when /auth/me returns unauthorized', async () => {
+		localStorage.setItem('tasksync:auth-mode', 'token');
+		localStorage.setItem('tasksync:auth-token', 'jwt-token');
+		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
+		mockedApi.me.mockRejectedValue(new Error('API 401 Unauthorized'));
+
+		await auth.hydrate();
+
+		expect(getAuthToken()).toBeNull();
+		expect(auth.get().status).toBe('anonymous');
+		expect(auth.get().source).toBeNull();
+		expect(auth.get().user).toBeNull();
+	});
+
 	it('clears token on logout', async () => {
 		mockedApi.login.mockResolvedValue({
 			token: 'jwt-token',

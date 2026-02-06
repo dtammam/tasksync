@@ -1,0 +1,13 @@
+.git
+.gitignore
+data
+node_modules
+target
+web/node_modules
+web/.svelte-kit
+web/test-results
+web/playwright-report
+web/coverage
+server/target
+**/*.log
+

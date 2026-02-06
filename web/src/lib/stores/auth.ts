@@ -69,6 +69,18 @@ const persistUser = (user: AuthUser | null) => {
 };
 
 const authError = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const apiStatusCode = (err: unknown): number | null => {
+	const message = authError(err);
+	const match = /^API\s+(\d{3})\b/.exec(message);
+	if (!match) return null;
+	const parsed = Number.parseInt(match[1], 10);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isAuthFailure = (err: unknown) => {
+	const code = apiStatusCode(err);
+	return code === 401 || code === 403;
+};
 
 export const auth = {
 	subscribe: authStore.subscribe,
@@ -112,7 +124,33 @@ export const auth = {
 				error: null
 			});
 		} catch (err) {
-			if (token) {
+			if (isAuthFailure(err)) {
+				if (token) {
+					setAuthToken(null);
+				}
+				persistUser(null);
+				authStore.set({
+					status: 'anonymous',
+					mode,
+					source: null,
+					user: null,
+					error: authError(err)
+				});
+				return;
+			}
+
+			if (mode === 'token' && token && cachedUser) {
+				authStore.set({
+					status: 'authenticated',
+					mode,
+					source: 'token',
+					user: cachedUser,
+					error: authError(err)
+				});
+				return;
+			}
+
+			if (token && mode !== 'token') {
 				setAuthToken(null);
 			}
 			persistUser(null);

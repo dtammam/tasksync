@@ -14,6 +14,18 @@ Local‑first task manager with SvelteKit client and Rust (Axum + SQLite) server
 - Migrations: apply new schema (`sqlx migrate run` or `scripts/1-seed.ps1`) to get task due dates/recurrence/notes/attachments columns before running the app.
 - List manager (sidebar) hits create/rename/delete list APIs; run as `VITE_ROLE=admin` to use it and re-sync after schema changes.
 
+## Docker Self-Hosting
+- Start containers (build + run): `scripts/8-docker-up.ps1`
+- Seed default users/lists in Docker volume: `scripts/9-docker-seed.ps1`
+- Stop containers: `scripts/10-docker-down.ps1`
+- Web URL: `http://<host-ip>:5173` and API URL: `http://<host-ip>:3000`
+- Default seeded accounts: `admin@example.com` / `tasksync`, `contrib@example.com` / `tasksync` (change passwords for real deployment).
+
+## Offline Behavior
+- Each signed-in user gets a scoped local IndexedDB cache on each device.
+- If the server is temporarily unreachable, existing signed-in sessions stay available locally and unsynced edits remain queued.
+- Devices re-converge once connectivity returns and background sync succeeds.
+
 ## Project Layout
 - `web/` — SvelteKit PWA, IndexedDB/OPFS first; tests via Vitest + Playwright.
 - `server/` — Axum server with SQLite via SQLx (WAL), role-enforced routes.
