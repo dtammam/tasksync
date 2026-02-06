@@ -1,4 +1,4 @@
-FROM rust:1.82-bookworm AS build
+FROM rustlang/rust:nightly-bookworm AS build
 WORKDIR /app
 
 COPY server/Cargo.toml Cargo.toml
