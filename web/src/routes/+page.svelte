@@ -1,14 +1,17 @@
 <script lang="ts">
 	// @ts-nocheck
 	import TaskRow from '$lib/components/TaskRow.svelte';
+	import { auth } from '$lib/stores/auth';
 	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
+	import { members } from '$lib/stores/members';
 	import { getTask } from '$lib/stores/tasks';
 	import { myDaySuggestions } from '$lib/stores/tasks';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 
 	const listsStore = lists;
 	let quickTitle = '';
+	let quickAssignee = '';
 	let sortMode = 'created';
 	let detailId = null;
 	$: detailTask = detailId ? getTask(detailId) : null;
@@ -44,9 +47,20 @@
 		detailId = null;
 	};
 
+	$: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
+	$: if ($auth.user && !quickAssignee) {
+		quickAssignee = $auth.user.user_id;
+	}
+	$: if (quickAddMembers.length && !quickAddMembers.find((m) => m.user_id === quickAssignee)) {
+		quickAssignee = quickAddMembers[0].user_id;
+	}
+
 	const quickAdd = () => {
 		if (!quickTitle.trim()) return;
-		tasks.createLocal(quickTitle, defaultListId, { my_day: true });
+		tasks.createLocal(quickTitle, defaultListId, {
+			my_day: true,
+			assignee_user_id: quickAssignee || $auth.user?.user_id
+		});
 		quickTitle = '';
 	};
 </script>
@@ -131,6 +145,13 @@
 			data-testid="new-task-input"
 			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
 		/>
+		{#if quickAddMembers.length > 1}
+			<select bind:value={quickAssignee} data-testid="new-task-assignee" aria-label="Assign task to">
+				{#each quickAddMembers as member}
+					<option value={member.user_id}>{member.display}</option>
+				{/each}
+			</select>
+		{/if}
 		<button type="button" data-testid="new-task-submit" on:click={quickAdd}>Add</button>
 	</div>
 </div>
@@ -286,7 +307,7 @@
 		border-radius: 16px;
 		padding: 7px;
 		display: grid;
-		grid-template-columns: 1fr auto;
+		grid-template-columns: 1fr auto auto;
 		gap: 8px;
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
@@ -295,6 +316,14 @@
 
 	.mobile-add input {
 		width: 100%;
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 10px;
+		padding: 10px 12px;
+	}
+
+	.mobile-add select {
 		background: #0b1221;
 		border: 1px solid #1f2937;
 		color: #e2e8f0;

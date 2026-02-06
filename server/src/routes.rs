@@ -138,7 +138,11 @@ pub fn task_routes(pool: &SqlitePool) -> Router {
 
 pub fn auth_routes(pool: &SqlitePool) -> Router {
     let state = app_state(pool);
-    Router::new().route("/login", post(login)).route("/me", get(auth_me)).with_state(state)
+    Router::new()
+        .route("/login", post(login))
+        .route("/me", get(auth_me))
+        .route("/members", get(auth_members))
+        .with_state(state)
 }
 
 #[derive(Deserialize)]
@@ -168,6 +172,15 @@ struct LoginResponse {
 
 #[derive(Serialize, FromRow)]
 struct AuthMeResponse {
+    user_id: String,
+    email: String,
+    display: String,
+    space_id: String,
+    role: String,
+}
+
+#[derive(Serialize, FromRow)]
+struct AuthMemberResponse {
     user_id: String,
     email: String,
     display: String,
@@ -223,6 +236,21 @@ async fn auth_me(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::UNAUTHORIZED)?;
     Ok(Json(me))
+}
+
+async fn auth_members(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<AuthMemberResponse>>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let members = sqlx::query_as::<_, AuthMemberResponse>(
+        "select u.id as user_id, u.email, u.display, m.space_id, m.role from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.display asc",
+    )
+    .bind(&ctx.space_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(members))
 }
 
 #[derive(Serialize, FromRow)]
@@ -369,6 +397,8 @@ struct TaskRow {
     due_date: Option<String>,
     occurrences_completed: i64,
     notes: Option<String>,
+    assignee_user_id: Option<String>,
+    created_by_user_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -382,6 +412,7 @@ struct CreateTask {
     attachments: Option<String>,
     due_date: Option<String>,
     notes: Option<String>,
+    assignee_user_id: Option<String>,
 }
 
 async fn get_tasks(
@@ -389,13 +420,24 @@ async fn get_tasks(
     headers: HeaderMap,
 ) -> Result<Json<Vec<TaskRow>>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
-    let rows = sqlx::query_as::<_, TaskRow>(
-		"select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes from task where space_id = ?1 order by task_order asc",
-	)
-	.bind(&ctx.space_id)
-	.fetch_all(&state.pool)
-	.await
-	.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = if ctx.role == Role::Admin {
+        sqlx::query_as::<_, TaskRow>(
+            "select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+        )
+        .bind(&ctx.space_id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    } else {
+        sqlx::query_as::<_, TaskRow>(
+            "select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 and (assignee_user_id = ?2 or created_by_user_id = ?2 or assignee_user_id is null) order by task_order asc",
+        )
+        .bind(&ctx.space_id)
+        .bind(&ctx.user_id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    };
     Ok(Json(rows))
 }
 
@@ -433,12 +475,24 @@ async fn create_task(
         }
     }
 
+    let assignee_user_id = body.assignee_user_id.clone().unwrap_or_else(|| ctx.user_id.clone());
+    let assignee_exists: Option<i64> =
+        sqlx::query_scalar("select 1 from membership where space_id = ?1 and user_id = ?2")
+            .bind(&ctx.space_id)
+            .bind(&assignee_user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if assignee_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
     let id = Uuid::new_v4().to_string();
     let order = body.order.unwrap_or_else(|| "z".into());
     let now = chrono::Utc::now().timestamp_millis();
     let my_day = if body.my_day.unwrap_or(false) { 1 } else { 0 };
     let rec = sqlx::query_as::<_, TaskRow>(
-		"insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, 0, ?12) returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes",
+		"insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13, ?14) returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&id)
 	.bind(&ctx.space_id)
@@ -452,6 +506,8 @@ async fn create_task(
 	.bind(&body.attachments)
 	.bind(&body.due_date)
 	.bind(&body.notes)
+    .bind(&assignee_user_id)
+    .bind(&ctx.user_id)
 	.fetch_one(&state.pool)
 	.await
 	.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -476,6 +532,7 @@ struct UpdateTaskMeta {
     due_date: Option<String>,
     notes: Option<String>,
     occurrences_completed: Option<i64>,
+    assignee_user_id: Option<String>,
 }
 
 async fn update_task_status(
@@ -492,7 +549,7 @@ async fn update_task_status(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-		"update task set status = ?1, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts",
+		"update task set status = ?1, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&body.status)
 	.bind(now)
@@ -528,11 +585,23 @@ async fn update_task_meta(
             return Err(StatusCode::NOT_FOUND);
         }
     }
+    if let Some(assignee_user_id) = &body.assignee_user_id {
+        let exists: Option<i64> =
+            sqlx::query_scalar("select 1 from membership where space_id = ?1 and user_id = ?2")
+                .bind(&ctx.space_id)
+                .bind(assignee_user_id)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if exists.is_none() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
 
     let now = chrono::Utc::now().timestamp_millis();
     let my_day = body.my_day.unwrap_or(false);
     let rec = sqlx::query_as::<_, TaskRow>(
-		"update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = case when ?4 then 1 else my_day end, url = coalesce(?5, url), recur_rule = coalesce(?6, recur_rule), attachments = coalesce(?7, attachments), due_date = coalesce(?8, due_date), occurrences_completed = coalesce(?9, occurrences_completed), notes = coalesce(?10, notes), updated_ts = ?11 where id = ?12 and space_id = ?13 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes",
+		"update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = case when ?4 then 1 else my_day end, url = coalesce(?5, url), recur_rule = coalesce(?6, recur_rule), attachments = coalesce(?7, attachments), due_date = coalesce(?8, due_date), occurrences_completed = coalesce(?9, occurrences_completed), notes = coalesce(?10, notes), assignee_user_id = coalesce(?11, assignee_user_id), updated_ts = ?12 where id = ?13 and space_id = ?14 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&body.title)
 	.bind(&body.status)
@@ -544,9 +613,10 @@ async fn update_task_meta(
 	.bind(&body.due_date)
 	.bind(body.occurrences_completed)
 	.bind(&body.notes)
-	.bind(now)
-	.bind(&id)
-	.bind(&ctx.space_id)
+    .bind(&body.assignee_user_id)
+    .bind(now)
+    .bind(&id)
+    .bind(&ctx.space_id)
 	.fetch_one(&state.pool)
 	.await
 	.map_err(|_| StatusCode::NOT_FOUND)?;
@@ -581,6 +651,30 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert membership");
+        sqlx::query(
+            "insert into user (id, email, display) values ('u-contrib', 'contrib@example.com', 'Contributor')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert contributor");
+        sqlx::query(
+            "insert into membership (id, space_id, user_id, role) values ('m-contrib', 's1', 'u-contrib', 'contributor')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert contributor membership");
+        sqlx::query(
+            "insert into list (id, space_id, name, list_order) values ('goal-management', 's1', 'Goal Management', 'a')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert list");
+        sqlx::query(
+            "insert into list_grant (id, space_id, list_id, user_id) values ('g-contrib-goal', 's1', 'goal-management', 'u-contrib')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert grant");
 
         pool
     }
@@ -637,5 +731,75 @@ mod tests {
         )
         .await;
         assert_eq!(result.err(), Some(StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn contributor_can_create_task_assigned_to_admin() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+
+        let created = create_task(
+            State(state),
+            headers,
+            Json(CreateTask {
+                title: "Assigned by contributor".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                url: None,
+                recur_rule: None,
+                attachments: None,
+                due_date: None,
+                notes: None,
+                assignee_user_id: Some("u-admin".to_string()),
+            }),
+        )
+        .await
+        .expect("create should work")
+        .1
+         .0;
+
+        assert_eq!(created.assignee_user_id.as_deref(), Some("u-admin"));
+        assert_eq!(created.created_by_user_id.as_deref(), Some("u-contrib"));
+    }
+
+    #[tokio::test]
+    async fn contributor_cannot_update_or_reassign_task() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t1', 's1', 'Task', 'pending', 'goal-management', 0, 'a', 1, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert task");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+
+        let result = update_task_meta(
+            State(state),
+            headers,
+            Path("t1".to_string()),
+            Json(UpdateTaskMeta {
+                title: None,
+                status: None,
+                list_id: None,
+                my_day: None,
+                url: None,
+                recur_rule: None,
+                attachments: None,
+                due_date: None,
+                notes: None,
+                occurrences_completed: None,
+                assignee_user_id: Some("u-contrib".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(StatusCode::FORBIDDEN));
     }
 }

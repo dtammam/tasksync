@@ -3,6 +3,8 @@
 import { createEventDispatcher, onMount } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
+import { auth } from '$lib/stores/auth';
+import { members } from '$lib/stores/members';
 
 export let task = null;
 export let open = false;
@@ -17,6 +19,7 @@ let notes = '';
 let attachments = [];
 let myDay = false;
 let listId = '';
+let assigneeUserId = '';
 
 onMount(() => {
 	if (open && task) hydrate(task);
@@ -33,6 +36,7 @@ function hydrate(t) {
 	attachments = t.attachments ?? [];
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
+	assigneeUserId = t.assignee_user_id ?? '';
 }
 
 const close = () => dispatch('close');
@@ -49,6 +53,9 @@ const save = () => {
 	});
 	tasks.setMyDay(task.id, myDay);
 	tasks.moveToList(task.id, listId);
+	if (assigneeUserId !== (task.assignee_user_id ?? '')) {
+		tasks.setAssignee(task.id, assigneeUserId || undefined);
+	}
 };
 
 const toggleStatus = () => {
@@ -136,6 +143,17 @@ const skip = () => {
 					{/each}
 				</select>
 			</label>
+			{#if ($auth.user?.role === 'admin' || task.local) && $members.length > 0}
+				<label>
+					Assignee
+					<select bind:value={assigneeUserId}>
+						<option value=''>Unassigned</option>
+						{#each $members as member}
+							<option value={member.user_id}>{member.display}</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
 
 			<label>
 				URL

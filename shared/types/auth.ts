@@ -15,3 +15,5 @@ export interface AuthUser {
 export interface AuthLoginResponse extends AuthUser {
 	token: string;
 }
+
+export interface SpaceMember extends AuthUser {}

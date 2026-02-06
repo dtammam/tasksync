@@ -1,5 +1,5 @@
 import { buildHeaders } from './headers';
-import type { AuthLoginRequest, AuthLoginResponse, AuthUser } from '$shared/types/auth';
+import type { AuthLoginRequest, AuthLoginResponse, AuthUser, SpaceMember } from '$shared/types/auth';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -28,6 +28,8 @@ export interface ApiTask {
 	due_date?: string;
 	occurrences_completed?: number;
 	notes?: string;
+	assignee_user_id?: string;
+	created_by_user_id?: string;
 }
 
 const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> => {
@@ -49,6 +51,7 @@ export const api = {
 	login: (body: AuthLoginRequest) =>
 		fetchJson<AuthLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 	me: () => fetchJson<AuthUser>('/auth/me'),
+	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),
 	getLists: () => fetchJson<ApiList[]>('/lists'),
 	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
 		fetchJson<ApiList>('/lists', { method: 'POST', body: JSON.stringify(body) }),
@@ -69,6 +72,7 @@ export const api = {
 		attachments?: string;
 		due_date?: string;
 		notes?: string;
+		assignee_user_id?: string;
 	}) =>
 		fetchJson<ApiTask>('/tasks', {
 			method: 'POST',
@@ -87,6 +91,7 @@ export const api = {
 			due_date?: string;
 			notes?: string;
 			occurrences_completed?: number;
+			assignee_user_id?: string;
 		}
 	) =>
 		fetchJson<ApiTask>(`/tasks/${id}`, {

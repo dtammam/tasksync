@@ -5,8 +5,11 @@ import TaskRow from '$lib/components/TaskRow.svelte';
 import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
 import { findListName } from '$lib/stores/lists';
+import { auth } from '$lib/stores/auth';
+import { members } from '$lib/stores/members';
 
 let quickTitle = '';
+let quickAssignee = '';
 let detailId = null;
 $: listId = $page.params.id;
 let listTasks = tasksByList(listId);
@@ -17,16 +20,24 @@ const quickAdd = () => {
 	if (!quickTitle.trim()) return;
 	const activeList = listId || (typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : '');
 	if (!activeList) return;
-	tasks.createLocal(quickTitle, activeList);
+	tasks.createLocal(quickTitle, activeList, { assignee_user_id: quickAssignee || $auth.user?.user_id });
 	quickTitle = '';
 };
+
+$: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
+$: if ($auth.user && !quickAssignee) {
+	quickAssignee = $auth.user.user_id;
+}
+$: if (quickAddMembers.length && !quickAddMembers.find((m) => m.user_id === quickAssignee)) {
+	quickAssignee = quickAddMembers[0].user_id;
+}
 
 if (typeof window !== 'undefined') {
 	Reflect.set(window, '__addTaskList', () => quickAdd());
 	Reflect.set(window, '__addTaskListWithTitle', (title) => {
 		const activeList = listId || window.location.pathname.split('/').pop();
 		if (!activeList) return;
-		tasks.createLocal(title, activeList);
+		tasks.createLocal(title, activeList, { assignee_user_id: quickAssignee || $auth.user?.user_id });
 	});
 }
 
@@ -83,6 +94,13 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 			data-testid="new-task-input"
 			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
 		/>
+		{#if quickAddMembers.length > 1}
+			<select bind:value={quickAssignee} data-testid="new-task-assignee" aria-label="Assign task to">
+				{#each quickAddMembers as member}
+					<option value={member.user_id}>{member.display}</option>
+				{/each}
+			</select>
+		{/if}
 		<button type="button" data-testid="new-task-submit" on:click={quickAdd}>Add</button>
 	</div>
 </div>
@@ -158,7 +176,7 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 		border-radius: 16px;
 		padding: 7px;
 		display: grid;
-		grid-template-columns: 1fr auto;
+		grid-template-columns: 1fr auto auto;
 		gap: 8px;
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
@@ -167,6 +185,14 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 
 	.mobile-add input {
 		width: 100%;
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 10px;
+		padding: 10px 12px;
+	}
+
+	.mobile-add select {
 		background: #0b1221;
 		border: 1px solid #1f2937;
 		color: #e2e8f0;

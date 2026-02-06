@@ -6,6 +6,7 @@
 	import { get } from 'svelte/store';
 	import { afterNavigate } from '$app/navigation';
 	import { lists } from '$lib/stores/lists';
+	import { members } from '$lib/stores/members';
 	import { tasks } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
 	import { auth } from '$lib/stores/auth';
@@ -80,6 +81,7 @@ const runSync = async () => {
 			soundSettings.hydrateFromDb(),
 			auth.hydrate()
 		]);
+		await members.hydrateFromServer();
 		appReady = true;
 		if (auth.isAuthenticated()) {
 			void runSync();
@@ -103,10 +105,12 @@ const runSync = async () => {
 			: '';
 	$: if (appReady && authKey && authKey !== lastAuthKey) {
 		lastAuthKey = authKey;
+		void members.hydrateFromServer();
 		void runSync();
 	}
 	$: if (!authKey) {
 		lastAuthKey = '';
+		members.clear();
 	}
 </script>
 

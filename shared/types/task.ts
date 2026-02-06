@@ -39,6 +39,8 @@ export interface Task {
 	occurrences_completed?: number;
 	created_ts: number;
 	updated_ts: number;
+	assignee_user_id?: string;
+	created_by_user_id?: string;
 	my_day?: boolean;
 	dirty?: boolean;
 	local?: boolean;

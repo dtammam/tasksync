@@ -3,6 +3,7 @@
 import { createEventDispatcher } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
+import { members } from '$lib/stores/members';
 
 export let task;
 
@@ -65,6 +66,11 @@ const endPress = () => {
 };
 
 const closeActions = () => (showActions = false);
+
+$: assigneeDisplay =
+	task.assignee_user_id && members.find(task.assignee_user_id)
+		? members.find(task.assignee_user_id).display
+		: task.assignee_user_id;
 </script>
 
 <div
@@ -116,6 +122,9 @@ const closeActions = () => (showActions = false);
 			{/if}
 			{#if task.recurrence_id}
 				<span class="chip subtle recur-chip">{task.recurrence_id}</span>
+			{/if}
+			{#if assigneeDisplay}
+				<span class="chip subtle assignee-chip">To: {assigneeDisplay}</span>
 			{/if}
 			<label class="chip toggle day-chip">
 				<input type="checkbox" checked={task.my_day} on:change={toggleMyDay} />

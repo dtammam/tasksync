@@ -115,6 +115,9 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 - **Auth login test (preferred script):** `scripts/5-login.ps1`
   - Values to update if needed: `-ApiUrl`, `-Email`, `-Password`, `-SpaceId`.
   - One-liner fallback: `Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/auth/login' -ContentType 'application/json' -Body '{"email":"admin@example.com","password":"tasksync","space_id":"s1"}'`
+- **Ownership/contributor API test (preferred script):** `scripts/6-ownership-check.ps1`
+  - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-ListId`, `-AssigneeEmail`, `-CreatorEmail`.
+  - One-liner fallback: `cd C:\Repositories\tasksync;scripts\6-ownership-check.ps1`
 - **Web lint/check/unit fallback:** `cd C:\Repositories\tasksync\web;npm run lint;npm run check;npm run test`
 
 ## Backlog Starters
