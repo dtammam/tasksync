@@ -37,6 +37,8 @@
 - For each entry, state the user/project outcome first (what capability is now possible, safer, faster, or clearer).
 - Tie each update to the larger goals in `docs/ARCHITECTURE.md` (speed, local-first reliability, sync safety, simplicity, multi-user collaboration).
 - Keep implementation detail brief and only include it when needed to explain impact.
+- Treat `PROGRESS.md` as append-only by default: do not rewrite, reorder, or remove prior entries unless the user explicitly asks for a historical rewrite.
+- If a correction is needed, append a new correction entry instead of silently editing old history lines.
 
 ## Security & Compliance
 - Follow `SECURITY.md` for disclosures; avoid logging secrets.
