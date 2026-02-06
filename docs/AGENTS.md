@@ -56,7 +56,8 @@
 5. Write tests and ensure perf budgets.
 6. Prefer sharing runnable `.ps1` scripts from `scripts/` for local testing/setup. If a needed script does not exist and the command is reusable, create the script and share that path.
 7. If a one-liner is still needed, provide a strict copy/paste-safe command with no leading spaces and no extra separator spacing (for example `...;$env:FOO='x';& ...`, not `...; $env:FOO='x'; & ...`).
-8. After each interaction with the user, briefly state overall percent completion for the project/feature.
+8. When outputting runnable commands, never prefix with bullets/dashes/numbers and never wrap a single command onto multiple lines; place each command on its own plain line or in a fenced code block.
+9. After each interaction with the user, briefly state overall percent completion for the project/feature.
 
 **Prompt**
 ```
@@ -96,10 +97,11 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 - Prefer sharing `.ps1` scripts in `scripts/` for repeated workflows instead of ad-hoc terminal one-liners.
 - When sharing a script, include a short "values to update" note if the user may need different paths/ports/IDs.
 - Keep one-liners as fallback only.
+- Command formatting rule: commands must be copy/paste-safe (`no list markers`, `no leading spaces`, `no extra separator spaces`, `no accidental line wraps`).
 
 ## Run Commands (script-first + copy/paste-safe one-liner fallback)
 - **Server start (preferred script):** `scripts/2-serve.ps1`
-  - Values to update if needed: `DATABASE_URL`, `RUST_LOG`, server port/env in your terminal.
+  - Values to update if needed: `DATABASE_URL`, `RUST_LOG`, `JWT_SECRET`, `DEV_LOGIN_PASSWORD`, server port/env in your terminal.
   - One-liner fallback: `cd C:\Repositories\tasksync\server;$env:DATABASE_URL='sqlite://../data/tasksync.db';$env:RUST_LOG='info';& "$env:USERPROFILE\.cargo\bin\cargo.exe" run --bin tasksync-server`
 - **Web dev (preferred script):** `scripts/3-web.ps1`
   - Values to update if needed: `VITE_API_URL`, `VITE_SPACE_ID`, `VITE_USER_ID`, `VITE_ROLE`, port.
@@ -110,6 +112,15 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 - **Pre-push verification (preferred script):** `scripts/4-prepush.ps1`
   - Values to update if needed: optional `-SkipPlaywright`.
   - One-liner fallback: `cd C:\Repositories\tasksync\web;npx playwright test`
+- **Auth login test (preferred script):** `scripts/5-login.ps1`
+  - Values to update if needed: `-ApiUrl`, `-Email`, `-Password`, `-SpaceId`.
+  - One-liner fallback: `Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/auth/login' -ContentType 'application/json' -Body '{"email":"admin@example.com","password":"tasksync","space_id":"s1"}'`
+- **Ownership/contributor API test (preferred script):** `scripts/6-ownership-check.ps1`
+  - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-ListId`, `-AssigneeEmail`, `-CreatorEmail`.
+  - One-liner fallback: `cd C:\Repositories\tasksync;scripts\6-ownership-check.ps1`
+- **Admin/profile + grants API test (preferred script):** `scripts/7-admin-check.ps1`
+  - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-AdminEmail`, `-ListId`, optional `-NewMemberEmail`, optional `-NewMemberDisplay`.
+  - One-liner fallback: `cd C:\Repositories\tasksync;scripts\7-admin-check.ps1`
 - **Web lint/check/unit fallback:** `cd C:\Repositories\tasksync\web;npm run lint;npm run check;npm run test`
 
 ## Backlog Starters

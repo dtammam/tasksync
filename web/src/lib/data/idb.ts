@@ -20,13 +20,36 @@ interface TaskSyncDB extends DBSchema {
 }
 
 let dbPromise: Promise<IDBPDatabase<TaskSyncDB>> | null = null;
+let dbScope = 'legacy';
+
+const sanitizeScope = (scope: string) =>
+	scope
+		.toLowerCase()
+		.replace(/[^a-z0-9_-]/g, '_')
+		.slice(0, 80) || 'legacy';
+
+const dbNameForScope = (scope: string) => `tasksync_${scope}`;
+
+export const setDbScope = (scope: string) => {
+	const next = sanitizeScope(scope);
+	if (next === dbScope) return;
+	if (dbPromise) {
+		void dbPromise
+			.then((db) => db.close())
+			.catch(() => undefined);
+	}
+	dbPromise = null;
+	dbScope = next;
+};
+
+export const getDbScope = () => dbScope;
 
 export const getDb = () => {
 	if (typeof indexedDB === 'undefined') {
 		return null;
 	}
 	if (!dbPromise) {
-		dbPromise = openDB<TaskSyncDB>('tasksync', 2, {
+		dbPromise = openDB<TaskSyncDB>(dbNameForScope(dbScope), 2, {
 			upgrade(db) {
 				if (!db.objectStoreNames.contains('lists')) {
 					db.createObjectStore('lists', { keyPath: 'id' });

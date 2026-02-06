@@ -6,8 +6,11 @@
 	import { get } from 'svelte/store';
 	import { afterNavigate } from '$app/navigation';
 	import { lists } from '$lib/stores/lists';
+	import { members } from '$lib/stores/members';
 	import { tasks } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
+	import { setDbScope } from '$lib/data/idb';
+	import { auth } from '$lib/stores/auth';
 	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
 
@@ -15,6 +18,7 @@
 	let navOpen = false;
 	let navPinned = false;
 	let appReady = false;
+	let syncInFlight = null;
 	const toggleNav = () => {
 		if (navPinned && navOpen) {
 			savePinned(false);
@@ -44,6 +48,9 @@
 	});
 
 const runSync = async () => {
+		if (!auth.isAuthenticated()) return;
+		if (syncInFlight) return syncInFlight;
+		syncInFlight = (async () => {
 		try {
 			syncStatus.resetError();
 			await syncFromServer();
@@ -54,21 +61,45 @@ const runSync = async () => {
 			}
 		} catch (err) {
 			console.warn('sync retry failed', err);
+		} finally {
+			syncInFlight = null;
 		}
+	})();
+		return syncInFlight;
 	};
 
 	let retryTimer = null;
+	let lastScopeKey = '';
+
+	const storageScopeFromAuth = (state) => {
+		if (state.status === 'authenticated' && state.user) {
+			return `space:${state.user.space_id}:user:${state.user.user_id}`;
+		}
+		return state.mode === 'token' ? 'token-anonymous' : 'legacy-default';
+	};
+
+	const hydrateScopedStores = async () => {
+		const scope = storageScopeFromAuth(auth.get());
+		setDbScope(scope);
+		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb(), soundSettings.hydrateFromDb()]);
+	};
 
 	onMount(async () => {
 		if (typeof localStorage !== 'undefined') {
 			navPinned = localStorage.getItem(NAV_PIN_KEY) === '1';
 			navOpen = navPinned;
 		}
-		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb(), soundSettings.hydrateFromDb()]);
+		await auth.hydrate();
+		await hydrateScopedStores();
+		await members.hydrateFromServer();
+		lastScopeKey = storageScopeFromAuth(auth.get());
 		appReady = true;
-		void runSync();
+		if (auth.isAuthenticated()) {
+			void runSync();
+		}
 		retryTimer = setInterval(() => {
 			const s = get(syncStatus);
+			if (!auth.isAuthenticated()) return;
 			if (s.pull === 'error' || s.push === 'error' || tasks.getAll().some((t) => t.dirty)) {
 				void runSync();
 			}
@@ -78,6 +109,21 @@ const runSync = async () => {
 	onDestroy(() => {
 		if (retryTimer) clearInterval(retryTimer);
 	});
+
+	$: scopeKey = storageScopeFromAuth($auth);
+	$: if (appReady && scopeKey !== lastScopeKey) {
+		lastScopeKey = scopeKey;
+		void (async () => {
+			await hydrateScopedStores();
+			await members.hydrateFromServer();
+			if (auth.isAuthenticated()) {
+				await runSync();
+			}
+		})();
+	}
+	$: if (!auth.isAuthenticated()) {
+		members.clear();
+	}
 </script>
 
 <svelte:head>
@@ -117,7 +163,11 @@ const runSync = async () => {
 					}`}
 				>
 					<button class="link" on:click={runSync} title="Auto-sync runs every 15s; click to retry now">
-						{#if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
+						{#if $auth.status === 'loading'}
+							Checking auth...
+						{:else if $auth.status !== 'authenticated'}
+							Sign in to sync
+						{:else if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
 							Auto-syncing…
 						{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
 							Sync error (auto-retrying)
@@ -168,6 +218,7 @@ const runSync = async () => {
 	}
 
 	.app-shell {
+		--sidebar-offset: 240px;
 		display: grid;
 		grid-template-columns: 240px 1fr;
 		min-height: 100vh;
@@ -277,6 +328,7 @@ const runSync = async () => {
 		}
 
 		.app-shell {
+			--sidebar-offset: 0px;
 			grid-template-columns: 1fr;
 		}
 
@@ -298,6 +350,7 @@ const runSync = async () => {
 		}
 
 		.app-shell.nav-split {
+			--sidebar-offset: min(208px, 58vw);
 			grid-template-columns: min(208px, 58vw) 1fr;
 		}
 

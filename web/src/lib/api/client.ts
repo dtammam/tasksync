@@ -1,4 +1,14 @@
 import { buildHeaders } from './headers';
+import type {
+	AuthCreateMemberRequest,
+	AuthLoginRequest,
+	AuthLoginResponse,
+	AuthUpdateProfileRequest,
+	AuthUser,
+	ListGrant,
+	SetListGrantRequest,
+	SpaceMember
+} from '$shared/types/auth';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -27,6 +37,8 @@ export interface ApiTask {
 	due_date?: string;
 	occurrences_completed?: number;
 	notes?: string;
+	assignee_user_id?: string;
+	created_by_user_id?: string;
 }
 
 const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> => {
@@ -45,6 +57,17 @@ const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> =>
 };
 
 export const api = {
+	login: (body: AuthLoginRequest) =>
+		fetchJson<AuthLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+	me: () => fetchJson<AuthUser>('/auth/me'),
+	updateMe: (body: AuthUpdateProfileRequest) =>
+		fetchJson<AuthUser>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
+	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),
+	createMember: (body: AuthCreateMemberRequest) =>
+		fetchJson<SpaceMember>('/auth/members', { method: 'POST', body: JSON.stringify(body) }),
+	getListGrants: () => fetchJson<ListGrant[]>('/auth/grants'),
+	setListGrant: (body: SetListGrantRequest) =>
+		fetchJson<ListGrant>('/auth/grants', { method: 'PUT', body: JSON.stringify(body) }),
 	getLists: () => fetchJson<ApiList[]>('/lists'),
 	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
 		fetchJson<ApiList>('/lists', { method: 'POST', body: JSON.stringify(body) }),
@@ -65,6 +88,7 @@ export const api = {
 		attachments?: string;
 		due_date?: string;
 		notes?: string;
+		assignee_user_id?: string;
 	}) =>
 		fetchJson<ApiTask>('/tasks', {
 			method: 'POST',
@@ -83,6 +107,7 @@ export const api = {
 			due_date?: string;
 			notes?: string;
 			occurrences_completed?: number;
+			assignee_user_id?: string;
 		}
 	) =>
 		fetchJson<ApiTask>(`/tasks/${id}`, {

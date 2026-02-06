@@ -3,6 +3,8 @@
 import { createEventDispatcher, onMount } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
+import { auth } from '$lib/stores/auth';
+import { members } from '$lib/stores/members';
 
 export let task = null;
 export let open = false;
@@ -17,6 +19,7 @@ let notes = '';
 let attachments = [];
 let myDay = false;
 let listId = '';
+let assigneeUserId = '';
 
 onMount(() => {
 	if (open && task) hydrate(task);
@@ -33,12 +36,14 @@ function hydrate(t) {
 	attachments = t.attachments ?? [];
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
+	assigneeUserId = t.assignee_user_id ?? '';
 }
 
 const close = () => dispatch('close');
+$: isContributor = $auth.user?.role === 'contributor';
 
 const save = () => {
-	if (!task) return;
+	if (!task || isContributor) return;
 	tasks.rename(task.id, title);
 	tasks.updateDetails(task.id, {
 		due_date: due || undefined,
@@ -49,16 +54,19 @@ const save = () => {
 	});
 	tasks.setMyDay(task.id, myDay);
 	tasks.moveToList(task.id, listId);
+	if (assigneeUserId !== (task.assignee_user_id ?? '')) {
+		tasks.setAssignee(task.id, assigneeUserId || undefined);
+	}
 };
 
 const toggleStatus = () => {
-	if (!task) return;
+	if (!task || isContributor) return;
 	tasks.toggle(task.id);
 };
 
 let newAttachment = '';
 const addAttachment = () => {
-	if (!newAttachment.trim() || !task) return;
+	if (!newAttachment.trim() || !task || isContributor) return;
 	const name = newAttachment.split('/').filter(Boolean).pop() ?? 'attachment';
 	const ref = {
 		id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
@@ -73,8 +81,15 @@ const addAttachment = () => {
 };
 
 const skip = () => {
-	if (!task) return;
+	if (!task || isContributor) return;
 	tasks.skip(task.id);
+};
+
+const memberAvatar = (member) => {
+	const icon = member?.avatar_icon?.trim();
+	if (icon) return icon.slice(0, 4);
+	const source = (member?.display ?? member?.email ?? '').trim();
+	return source ? source.charAt(0).toUpperCase() : '?';
 };
 </script>
 
@@ -95,30 +110,30 @@ const skip = () => {
 		<div class="form">
 			<label>
 				Title
-				<input type="text" bind:value={title} />
+				<input type="text" bind:value={title} disabled={isContributor} />
 			</label>
 
 			<div class="row">
 				<label>
 					Status
-					<button class="status" type="button" on:click={toggleStatus}>
+					<button class="status" type="button" on:click={toggleStatus} disabled={isContributor}>
 						{task.status === 'done' ? 'Mark pending' : 'Mark done'}
 					</button>
 				</label>
 				<label>
 					My Day
-					<input type="checkbox" bind:checked={myDay} />
+					<input type="checkbox" bind:checked={myDay} disabled={isContributor} />
 				</label>
 			</div>
 
 			<div class="row two">
 				<label>
 					Due date
-					<input type="date" bind:value={due} />
+					<input type="date" bind:value={due} disabled={isContributor} />
 				</label>
 				<label>
 					Recurrence
-					<select bind:value={recur}>
+					<select bind:value={recur} disabled={isContributor}>
 						<option value=''>None</option>
 						<option value='daily'>Daily</option>
 						<option value='weekly'>Weekly</option>
@@ -130,21 +145,32 @@ const skip = () => {
 
 			<label>
 				List
-				<select bind:value={listId}>
+				<select bind:value={listId} disabled={isContributor}>
 					{#each $lists as list}
 						<option value={list.id}>{list.name}</option>
 					{/each}
 				</select>
 			</label>
+			{#if ($auth.user?.role === 'admin' || task.local) && $members.length > 0}
+				<label>
+					Assignee
+					<select bind:value={assigneeUserId} disabled={isContributor}>
+						<option value=''>Unassigned</option>
+						{#each $members as member}
+							<option value={member.user_id}>{memberAvatar(member)} {member.display} ({member.role})</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
 
 			<label>
 				URL
-				<input type="url" bind:value={url} placeholder="https://..." />
+				<input type="url" bind:value={url} placeholder="https://..." disabled={isContributor} />
 			</label>
 
 			<label>
 				Notes
-				<textarea rows="4" bind:value={notes}></textarea>
+				<textarea rows="4" bind:value={notes} disabled={isContributor}></textarea>
 			</label>
 
 			<div class="row attach">
@@ -153,8 +179,9 @@ const skip = () => {
 					placeholder="https://link-to-file"
 					bind:value={newAttachment}
 					on:keydown={(e) => e.key === 'Enter' && addAttachment()}
+					disabled={isContributor}
 				/>
-				<button type="button" on:click={addAttachment}>Add attachment</button>
+				<button type="button" on:click={addAttachment} disabled={isContributor}>Add attachment</button>
 			</div>
 			{#if attachments?.length}
 				<ul class="attachments">
@@ -167,9 +194,13 @@ const skip = () => {
 			{/if}
 
 			<div class="row buttons">
-				<button class="primary" type="button" on:click={save}>Save</button>
-				{#if task.recurrence_id}
-					<button class="ghost" type="button" on:click={skip}>Skip occurrence</button>
+				{#if isContributor}
+					<p class="muted">Contributor access is add-only. Existing tasks are read-only.</p>
+				{:else}
+					<button class="primary" type="button" on:click={save}>Save</button>
+					{#if task.recurrence_id}
+						<button class="ghost" type="button" on:click={skip}>Skip occurrence</button>
+					{/if}
 				{/if}
 			</div>
 		</div>
@@ -297,6 +328,14 @@ const skip = () => {
 		padding: 10px 12px;
 		border-radius: 8px;
 		cursor: pointer;
+	}
+
+	input:disabled,
+	select:disabled,
+	textarea:disabled,
+	button:disabled {
+		opacity: 0.65;
+		cursor: not-allowed;
 	}
 
 	.attachments {

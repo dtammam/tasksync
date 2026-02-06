@@ -1,8 +1,10 @@
 <script lang="ts">
 	// @ts-nocheck
 	import TaskRow from '$lib/components/TaskRow.svelte';
+	import { auth } from '$lib/stores/auth';
 	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
+	import { members } from '$lib/stores/members';
 	import { getTask } from '$lib/stores/tasks';
 	import { myDaySuggestions } from '$lib/stores/tasks';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
@@ -44,9 +46,23 @@
 		detailId = null;
 	};
 
+	$: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
+
+	const defaultAssignee = (currentUser, availableMembers) => {
+		if (!currentUser) return '';
+		if (currentUser.role === 'contributor') {
+			return availableMembers.find((m) => m.role === 'admin')?.user_id ?? currentUser.user_id;
+		}
+		return currentUser.user_id;
+	};
+	$: resolvedAssignee = defaultAssignee($auth.user, quickAddMembers);
+
 	const quickAdd = () => {
 		if (!quickTitle.trim()) return;
-		tasks.createLocal(quickTitle, defaultListId, { my_day: true });
+		tasks.createLocal(quickTitle, defaultListId, {
+			my_day: true,
+			assignee_user_id: resolvedAssignee || $auth.user?.user_id
+		});
 		quickTitle = '';
 	};
 </script>
@@ -99,7 +115,13 @@
 							{/if}
 						</p>
 					</div>
-					<button type="button" on:click={() => tasks.setMyDay(suggestion.id, true)}>Add to My Day</button>
+					<button
+						type="button"
+						on:click={() => $auth.user?.role !== 'contributor' && tasks.setMyDay(suggestion.id, true)}
+						disabled={$auth.user?.role === 'contributor'}
+					>
+						Add to My Day
+					</button>
 				</div>
 			{/each}
 		</div>
@@ -273,11 +295,12 @@
 	.mobile-add {
 		display: block;
 		position: fixed;
-		left: 0;
+		left: var(--sidebar-offset, 0px);
 		right: 0;
 		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
 		padding: 0 14px;
 		z-index: 15;
+		pointer-events: none;
 	}
 
 	.mobile-add .bar {
@@ -291,6 +314,7 @@
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
 		margin: 0 auto;
+		pointer-events: auto;
 	}
 
 	.mobile-add input {

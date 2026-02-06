@@ -3,6 +3,7 @@ import type { Task } from '$shared/types/task';
 import { repo } from '$lib/data/repo';
 import { playCompletion } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
+import { auth } from '$lib/stores/auth';
 
 const tasksStore = writable<Task[]>([]);
 
@@ -42,11 +43,13 @@ const makeLocalTask = (
 		recurrence_id?: string;
 		url?: string;
 		notes?: string;
+		assignee_user_id?: string;
 	}
 ) => {
 	const nowTs = Date.now();
 	const id = `local-${crypto.randomUUID ? crypto.randomUUID() : nowTs.toString(36)}`;
 	const order = `local-${nowTs}`;
+	const currentUserId = auth.get().user?.user_id;
 	const task: Task = {
 		id,
 		title,
@@ -62,6 +65,8 @@ const makeLocalTask = (
 		recurrence_id: opts?.recurrence_id,
 		url: opts?.url,
 		notes: opts?.notes,
+		assignee_user_id: opts?.assignee_user_id ?? currentUserId,
+		created_by_user_id: currentUserId,
 		occurrences_completed: 0,
 		created_ts: nowTs,
 		updated_ts: nowTs,
@@ -81,6 +86,7 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.recurrence_id !== sent.recurrence_id ||
 	current.due_date !== sent.due_date ||
 	current.notes !== sent.notes ||
+	current.assignee_user_id !== sent.assignee_user_id ||
 	(current.occurrences_completed ?? 0) !== (sent.occurrences_completed ?? 0) ||
 	JSON.stringify(current.attachments ?? []) !== JSON.stringify(sent.attachments ?? []);
 
@@ -90,13 +96,18 @@ export const tasks = {
 		tasksStore.update((list) => [...list, task]);
 		void repo.saveTasks(get(tasksStore));
 	},
-	createLocal(title: string, list_id: string, opts?: { my_day?: boolean }) {
+	createLocal(title: string, list_id: string, opts?: { my_day?: boolean; assignee_user_id?: string }) {
 		return tasks.createLocalWithOptions(title, list_id, opts);
 	},
 	createLocalWithOptions(
 		title: string,
 		list_id: string,
-		opts?: { my_day?: boolean; status?: Task['status']; priority?: Task['priority'] }
+		opts?: {
+			my_day?: boolean;
+			status?: Task['status'];
+			priority?: Task['priority'];
+			assignee_user_id?: string;
+		}
 	) {
 		const trimmed = title.trim();
 		if (!trimmed) return;
@@ -256,6 +267,22 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
+	setAssignee(id: string, assignee_user_id?: string) {
+		const now = Date.now();
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							assignee_user_id,
+							dirty: true,
+							updated_ts: now
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	skip(id: string) {
 		tasksStore.update((list) =>
 			list.map((t) =>
@@ -323,9 +350,7 @@ export const tasks = {
 	},
 	async hydrateFromDb() {
 		const { tasks: stored } = await repo.loadAll();
-		if (stored.length) {
-			tasksStore.set(stored);
-		}
+		tasksStore.set(stored);
 	}
 };
 
@@ -335,21 +360,37 @@ export const pendingCount = derived(tasksStore, ($tasks) =>
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isToday = (date?: string) => date && date === todayIso();
+const canSeeTask = (task: Task, userId?: string | null, role?: string | null) => {
+	void task;
+	void userId;
+	void role;
+	return true;
+};
 
 const inMyDay = (task: Task) => {
 	if (task.my_day) return true;
 	return isToday(task.due_date);
 };
 
-export const myDayPending = derived(tasksStore, ($tasks) =>
-	$tasks.filter((task) => inMyDay(task) && task.status === 'pending')
+export const myDayPending = derived([tasksStore, auth], ([$tasks, $auth]) =>
+	$tasks.filter(
+		(task) =>
+			canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+			inMyDay(task) &&
+			task.status === 'pending'
+	)
 );
 
-export const myDayCompleted = derived(tasksStore, ($tasks) =>
-	$tasks.filter((task) => inMyDay(task) && task.status === 'done')
+export const myDayCompleted = derived([tasksStore, auth], ([$tasks, $auth]) =>
+	$tasks.filter(
+		(task) =>
+			canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+			inMyDay(task) &&
+			task.status === 'done'
+	)
 );
 
-export const myDaySuggestions = derived(tasksStore, ($tasks) => {
+export const myDaySuggestions = derived([tasksStore, auth], ([$tasks, $auth]) => {
 	const today = todayIso();
 	const tomorrow = (() => {
 		const d = new Date();
@@ -359,6 +400,7 @@ export const myDaySuggestions = derived(tasksStore, ($tasks) => {
 	return $tasks
 		.filter(
 			(t) =>
+				canSeeTask(t, $auth.user?.user_id, $auth.user?.role) &&
 				t.status === 'pending' &&
 				!inMyDay(t) &&
 				(t.due_date === today || t.due_date === tomorrow || (!t.due_date && t.priority > 0))
@@ -375,10 +417,15 @@ export const myDaySuggestions = derived(tasksStore, ($tasks) => {
 });
 
 export const tasksByList = (listId: string) =>
-	derived(tasksStore, ($tasks) => $tasks.filter((task) => task.list_id === listId));
+	derived([tasksStore, auth], ([$tasks, $auth]) =>
+		$tasks.filter(
+			(task) => task.list_id === listId && canSeeTask(task, $auth.user?.user_id, $auth.user?.role)
+		)
+	);
 
-export const listCounts = derived(tasksStore, ($tasks) => {
+export const listCounts = derived([tasksStore, auth], ([$tasks, $auth]) => {
 	return $tasks.reduce<Record<string, { pending: number; total: number }>>((acc, task) => {
+		if (!canSeeTask(task, $auth.user?.user_id, $auth.user?.role)) return acc;
 		const entry = acc[task.list_id] ?? { pending: 0, total: 0 };
 		entry.total += 1;
 		if (task.status === 'pending') entry.pending += 1;

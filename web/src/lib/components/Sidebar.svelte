@@ -5,6 +5,9 @@ import { createEventDispatcher } from 'svelte';
 import { lists } from '$lib/stores/lists';
 import { listCounts, myDayPending } from '$lib/stores/tasks';
 import { soundSettings, soundThemes } from '$lib/stores/settings';
+import { auth } from '$lib/stores/auth';
+import { members } from '$lib/stores/members';
+import { api } from '$lib/api/client';
 
 export let navPinned = false;
 
@@ -17,9 +20,43 @@ let renameDraft = {};
 let listError = '';
 let busy = false;
 
-const togglePin = () => {
-	dispatch('togglePin', { pinned: !navPinned });
+let authBusy = false;
+let loginEmail = 'admin@example.com';
+let loginPassword = '';
+let loginSpaceId = 's1';
+let showProfileEditor = false;
+let profileBusy = false;
+let profileDisplay = '';
+let profileIcon = '';
+let profileMessage = '';
+let profileError = '';
+let profileSeedUserId = '';
+
+let showTeam = false;
+let teamBusy = false;
+let teamError = '';
+let grantsLoading = false;
+let grants = [];
+let loadedAdminScope = '';
+let newMemberEmail = '';
+let newMemberDisplay = '';
+let newMemberRole = 'contributor';
+let newMemberIcon = '';
+let adminMode = false;
+
+const iconFromIdentity = (display, email) => {
+	const source = (display ?? email ?? '').trim();
+	if (!source) return '?';
+	return source.charAt(0).toUpperCase();
 };
+
+const avatarFor = (user) => {
+	const icon = user?.avatar_icon?.trim();
+	if (icon) return icon.slice(0, 4);
+	return iconFromIdentity(user?.display, user?.email);
+};
+
+const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
 
 const resetDrafts = () => {
 	renameDraft = {};
@@ -28,7 +65,14 @@ const resetDrafts = () => {
 	listError = '';
 };
 
+$: adminMode = $auth.status === 'authenticated' && $auth.user?.role === 'admin';
+
+const togglePin = () => {
+	dispatch('togglePin', { pinned: !navPinned });
+};
+
 const createList = async () => {
+	if (!adminMode) return;
 	const name = newListName.trim();
 	if (!name) return;
 	busy = true;
@@ -44,6 +88,7 @@ const createList = async () => {
 };
 
 const renameList = async (id) => {
+	if (!adminMode) return;
 	const name = (renameDraft[id] ?? '').trim();
 	if (!name) return;
 	busy = true;
@@ -59,6 +104,7 @@ const renameList = async (id) => {
 };
 
 const deleteList = async (id) => {
+	if (!adminMode) return;
 	if (!confirm('Delete this list? Tasks within cannot be deleted yet.')) return;
 	busy = true;
 	listError = '';
@@ -75,147 +121,469 @@ const deleteList = async (id) => {
 		busy = false;
 	}
 };
+
+const signIn = async () => {
+	const email = loginEmail.trim();
+	const password = loginPassword.trim();
+	const spaceId = loginSpaceId.trim();
+	if (!email || !password) return;
+	authBusy = true;
+	try {
+		await auth.login(email, password, spaceId || undefined);
+		loginPassword = '';
+	} catch {
+		// Error messaging comes from the auth store.
+	} finally {
+		authBusy = false;
+	}
+};
+
+const signOut = () => {
+	auth.logout();
+	loginPassword = '';
+	showProfileEditor = false;
+	profileMessage = '';
+	profileError = '';
+};
+
+const saveProfile = async () => {
+	if ($auth.status !== 'authenticated') return;
+	const display = profileDisplay.trim();
+	if (!display) {
+		profileError = 'Display name is required.';
+		return;
+	}
+	profileBusy = true;
+	profileError = '';
+	profileMessage = '';
+	try {
+		await auth.updateProfile({
+			display,
+			avatar_icon: profileIcon
+		});
+		await members.hydrateFromServer();
+		profileMessage = 'Profile updated.';
+	} catch (err) {
+		profileError = err instanceof Error ? err.message : String(err);
+	} finally {
+		profileBusy = false;
+	}
+};
+
+const loadGrants = async () => {
+	if (!adminMode) return;
+	grantsLoading = true;
+	teamError = '';
+	try {
+		grants = await api.getListGrants();
+	} catch (err) {
+		teamError = err instanceof Error ? err.message : String(err);
+	} finally {
+		grantsLoading = false;
+	}
+};
+
+const createMember = async () => {
+	if (!adminMode) return;
+	const email = newMemberEmail.trim().toLowerCase();
+	const display = newMemberDisplay.trim();
+	if (!email || !display) return;
+	teamBusy = true;
+	teamError = '';
+	try {
+		await api.createMember({
+			email,
+			display,
+			role: newMemberRole,
+			avatar_icon: newMemberIcon
+		});
+		newMemberEmail = '';
+		newMemberDisplay = '';
+		newMemberRole = 'contributor';
+		newMemberIcon = '';
+		await Promise.all([members.hydrateFromServer(), loadGrants()]);
+	} catch (err) {
+		teamError = err instanceof Error ? err.message : String(err);
+	} finally {
+		teamBusy = false;
+	}
+};
+
+const hasGrant = (userId, listId) =>
+	grants.some((grant) => grant.user_id === userId && grant.list_id === listId);
+
+const setGrant = async (userId, listId, granted) => {
+	if (!adminMode) return;
+	teamBusy = true;
+	teamError = '';
+	try {
+		await api.setListGrant({ user_id: userId, list_id: listId, granted });
+		if (granted) {
+			if (!hasGrant(userId, listId)) {
+				grants = [...grants, { user_id: userId, list_id: listId }];
+			}
+		} else {
+			grants = grants.filter((grant) => !(grant.user_id === userId && grant.list_id === listId));
+		}
+	} catch (err) {
+		teamError = err instanceof Error ? err.message : String(err);
+	} finally {
+		teamBusy = false;
+	}
+};
+
+$: if ($auth.user?.user_id && profileSeedUserId !== $auth.user.user_id) {
+	profileSeedUserId = $auth.user.user_id;
+	profileDisplay = $auth.user.display ?? '';
+	profileIcon = $auth.user.avatar_icon ?? '';
+	profileMessage = '';
+	profileError = '';
+	showProfileEditor = false;
+}
+
+$: adminScope = adminMode && $auth.user ? `${$auth.user.space_id}:${$auth.user.user_id}` : '';
+$: if (adminScope && adminScope !== loadedAdminScope) {
+	loadedAdminScope = adminScope;
+	void Promise.all([members.hydrateFromServer(), loadGrants()]);
+}
+$: if (!adminScope && loadedAdminScope) {
+	loadedAdminScope = '';
+	grants = [];
+	showTeam = false;
+}
+
+$: contributorMembers = ($members ?? []).filter((member) => member.role === 'contributor');
+$: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 </script>
 
 <nav class="sidebar">
-	<div class="title-row">
-		<div class="app-title">tasksync</div>
-		<button
-			class={`pin ${navPinned ? 'active' : ''}`}
-			type="button"
-			data-testid="nav-pin"
-			aria-pressed={navPinned}
-			on:click={togglePin}
-			title={navPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
-		>
-			{navPinned ? 'Unpin' : 'Pin'}
-		</button>
-	</div>
-	<div class="section-label">Today</div>
-	{#if $lists}
-		{#each [...$lists].sort((a, b) => (a.id === 'my-day' ? -1 : b.id === 'my-day' ? 1 : (a.order ?? '').localeCompare(b.order ?? ''))) as list}
-			{#if list.id === 'my-day'}
-				<a class:selected={$page.url.pathname === '/'} href="/">
-					<span class="icon">🌅</span>
-					<span>{list.name}</span>
-					<span class="count">{$myDayPending?.length ?? 0}</span>
-				</a>
-			{:else}
-				<a
-					class:selected={$page.url.pathname === `/list/${list.id}`}
-					href={`/list/${list.id}`}
-				>
-					<span class="icon">{list.icon ?? '•'}</span>
-					<span>{list.name}</span>
-					<span class="count">{$listCounts?.[list.id]?.pending ?? 0}</span>
-				</a>
-			{/if}
-		{/each}
-	{/if}
-	<div class="section-label muted">Collections</div>
-	<button class="add" type="button" on:click={() => (showManager = !showManager)}>
-		{showManager ? 'Close list manager' : '+ New list'}
-	</button>
-	{#if showManager}
-		<div class="manager">
-			<label>
-				Name
-				<input
-					type="text"
-					placeholder="List name"
-					bind:value={newListName}
-					on:keydown={(e) => e.key === 'Enter' && createList()}
-				/>
-			</label>
-			<label>
-				Icon (optional)
-				<input
-					type="text"
-					placeholder="emoji"
-					maxlength="3"
-					bind:value={newListIcon}
-					on:keydown={(e) => e.key === 'Enter' && createList()}
-				/>
-			</label>
-			<button type="button" class="primary" on:click={createList} disabled={busy || !newListName.trim()}>
-				Create list
+	<div class="sidebar-main">
+		<div class="title-row">
+			<div class="app-title">tasksync</div>
+			<button
+				class={`pin ${navPinned ? 'active' : ''}`}
+				type="button"
+				data-testid="nav-pin"
+				aria-pressed={navPinned}
+				on:click={togglePin}
+				title={navPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+			>
+				{navPinned ? 'Unpin' : 'Pin'}
 			</button>
-			{#if listError}
-				<p class="error">{listError}</p>
-			{/if}
-			<div class="existing">
-				{#each $lists.filter((l) => l.id !== 'my-day') as list}
-					<div class="row">
+		</div>
+
+		<div class="section-label">Today</div>
+		{#if $lists}
+			{#each [...$lists].sort((a, b) => (a.id === 'my-day' ? -1 : b.id === 'my-day' ? 1 : (a.order ?? '').localeCompare(b.order ?? ''))) as list}
+				{#if list.id === 'my-day'}
+					<a class:selected={$page.url.pathname === '/'} href="/">
+						<span class="icon">🌅</span>
+						<span>{list.name}</span>
+						<span class="count">{$myDayPending?.length ?? 0}</span>
+					</a>
+				{:else}
+					<a class:selected={$page.url.pathname === `/list/${list.id}`} href={`/list/${list.id}`}>
+						<span class="icon">{list.icon ?? '•'}</span>
+						<span>{list.name}</span>
+						<span class="count">{$listCounts?.[list.id]?.pending ?? 0}</span>
+					</a>
+				{/if}
+			{/each}
+		{/if}
+
+		{#if adminMode}
+			<div class="section-label muted">Collections</div>
+			<button class="section-toggle" type="button" on:click={() => (showManager = !showManager)}>
+				{showManager ? 'Close list manager' : '+ New list'}
+			</button>
+			{#if showManager}
+				<div class="card manager">
+					<label>
+						Name
 						<input
 							type="text"
-							placeholder={list.name}
-							bind:value={renameDraft[list.id]}
-							on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+							placeholder="List name"
+							bind:value={newListName}
+							on:keydown={(e) => e.key === 'Enter' && createList()}
 						/>
-						<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
-							Rename
-						</button>
-						<button type="button" class="ghost" on:click={() => deleteList(list.id)} disabled={busy}>
-							Delete
+					</label>
+					<label>
+						Icon (optional)
+						<input
+							type="text"
+							placeholder="emoji"
+							maxlength="4"
+							bind:value={newListIcon}
+							on:keydown={(e) => e.key === 'Enter' && createList()}
+						/>
+					</label>
+					<button
+						type="button"
+						class="primary"
+						on:click={createList}
+						disabled={busy || !newListName.trim()}
+					>
+						Create list
+					</button>
+					{#if listError}
+						<p class="error">{listError}</p>
+					{/if}
+					<div class="existing">
+						{#each $lists.filter((l) => l.id !== 'my-day') as list}
+							<div class="row">
+								<input
+									type="text"
+									placeholder={list.name}
+									bind:value={renameDraft[list.id]}
+									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+								/>
+								<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
+									Rename
+								</button>
+								<button type="button" class="ghost" on:click={() => deleteList(list.id)} disabled={busy}>
+									Delete
+								</button>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			<div class="section-label muted">Team</div>
+			<button class="section-toggle" type="button" on:click={() => (showTeam = !showTeam)}>
+				{showTeam ? 'Close team manager' : 'Manage contributors'}
+			</button>
+			{#if showTeam}
+				<div class="card team">
+					<div class="create-member">
+						<p class="team-helper">Create a member, then toggle list access below.</p>
+						<div class="field-row">
+							<label>
+								Display
+								<input type="text" placeholder="Name" bind:value={newMemberDisplay} />
+							</label>
+							<label>
+								Email
+								<input type="email" placeholder="person@example.com" bind:value={newMemberEmail} />
+							</label>
+						</div>
+						<div class="field-row">
+							<label>
+								Role
+								<select bind:value={newMemberRole}>
+									<option value="contributor">Contributor</option>
+									<option value="admin">Admin</option>
+								</select>
+							</label>
+							<label>
+								Icon
+								<input type="text" placeholder="AA" maxlength="4" bind:value={newMemberIcon} />
+							</label>
+						</div>
+						<button
+							type="button"
+							class="primary"
+							on:click={createMember}
+							disabled={teamBusy || !newMemberDisplay.trim() || !newMemberEmail.trim()}
+						>
+							Add member
 						</button>
 					</div>
-				{/each}
-			</div>
-		</div>
-	{/if}
-	<div class="section-label muted">Sound</div>
-	<div class="sound">
-		<label class="toggle" for="sound-enabled">
-			<input
-				id="sound-enabled"
-				data-testid="sound-enabled"
-				type="checkbox"
-				checked={$soundSettings.enabled}
-				on:change={(e) => soundSettings.setEnabled(e.target.checked)}
-			/>
-			Completion sound
-		</label>
-		<label>
-			Theme
-			<select
-				data-testid="sound-theme"
-				value={$soundSettings.theme}
-				on:change={(e) => soundSettings.setTheme(e.target.value)}
-			>
-				{#each soundThemes as theme}
-					<option value={theme}>{theme.replace('_', ' ')}</option>
-				{/each}
-			</select>
-		</label>
-		<label>
-			Volume
-			<div class="volume">
+
+					{#if grantsLoading}
+						<p class="muted-note">Loading access matrix...</p>
+					{:else}
+						<div class="member-list">
+							{#if contributorMembers.length}
+								{#each contributorMembers as member}
+									<div class="member-row">
+										<div class="member-head">
+											<span class="avatar small">{avatarFor(member)}</span>
+											<div>
+												<strong>{member.display}</strong>
+												<span>{member.email}</span>
+											</div>
+											<span class="role-chip">{roleLabel(member.role)}</span>
+										</div>
+										<div class="grant-grid">
+											{#each managedLists as list}
+												<label class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}>
+													<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
+													<span class="grant-controls">
+														<span class="grant-state">{hasGrant(member.user_id, list.id) ? 'On' : 'Off'}</span>
+														<input
+															type="checkbox"
+															checked={hasGrant(member.user_id, list.id)}
+															disabled={teamBusy}
+															on:change={(e) =>
+																setGrant(member.user_id, list.id, e.currentTarget.checked)}
+														/>
+													</span>
+												</label>
+											{/each}
+										</div>
+									</div>
+								{/each}
+							{:else}
+								<p class="muted-note">No contributors yet. Add one above.</p>
+							{/if}
+						</div>
+					{/if}
+					{#if teamError}
+						<p class="error">{teamError}</p>
+					{/if}
+				</div>
+			{/if}
+		{/if}
+	</div>
+
+	<div class="sidebar-bottom">
+		<div class="section-label muted">Sound</div>
+		<div class="card sound">
+			<label class="toggle" for="sound-enabled">
 				<input
-					data-testid="sound-volume"
-					type="range"
-					min="0"
-					max="100"
-					step="1"
-					value={$soundSettings.volume}
-					on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+					id="sound-enabled"
+					data-testid="sound-enabled"
+					type="checkbox"
+					checked={$soundSettings.enabled}
+					on:change={(e) => soundSettings.setEnabled(e.target.checked)}
 				/>
-				<span>{$soundSettings.volume}%</span>
-			</div>
-		</label>
+				Completion sound
+			</label>
+			<label>
+				Theme
+				<select
+					data-testid="sound-theme"
+					value={$soundSettings.theme}
+					on:change={(e) => soundSettings.setTheme(e.target.value)}
+				>
+					{#each soundThemes as theme}
+						<option value={theme}>{theme.replace('_', ' ')}</option>
+					{/each}
+				</select>
+			</label>
+			<label>
+				Volume
+				<div class="volume">
+					<input
+						data-testid="sound-volume"
+						type="range"
+						min="0"
+						max="100"
+						step="1"
+						value={$soundSettings.volume}
+						on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+					/>
+					<span>{$soundSettings.volume}%</span>
+				</div>
+			</label>
+		</div>
+
+		<div class="section-label muted">Account</div>
+		<div class="card account" data-testid="auth-panel">
+			{#if $auth.status === 'loading'}
+				<p class="muted-note">Checking session...</p>
+			{:else if $auth.status === 'authenticated' && $auth.user}
+				<div class="user-head" data-testid="auth-user">
+					<span class="avatar">{avatarFor($auth.user)}</span>
+					<div class="who">
+						<strong>{$auth.user.display}</strong>
+						<span>{$auth.user.email}</span>
+						<span class="meta">{roleLabel($auth.user.role)} · {$auth.user.space_id}</span>
+					</div>
+				</div>
+
+				<div class="account-actions">
+					<button type="button" class="ghost" on:click={() => (showProfileEditor = !showProfileEditor)}>
+						{showProfileEditor ? 'Close profile edit' : 'Edit profile'}
+					</button>
+					<button type="button" class="ghost danger" data-testid="auth-signout" on:click={signOut}>
+						Sign out
+					</button>
+				</div>
+
+				{#if showProfileEditor}
+					<div class="profile-editor">
+						<label>
+							Display
+							<input type="text" bind:value={profileDisplay} />
+						</label>
+						<label>
+							Icon
+							<input type="text" placeholder="emoji or initials" maxlength="4" bind:value={profileIcon} />
+						</label>
+						<button
+							type="button"
+							class="primary"
+							on:click={saveProfile}
+							disabled={profileBusy || !profileDisplay.trim()}
+						>
+							{profileBusy ? 'Saving...' : 'Save profile'}
+						</button>
+						{#if profileMessage}
+							<p class="ok">{profileMessage}</p>
+						{/if}
+						{#if profileError}
+							<p class="error">{profileError}</p>
+						{/if}
+					</div>
+				{/if}
+			{:else}
+				<label>
+					Email
+					<input
+						type="email"
+						placeholder="you@example.com"
+						autocomplete="username"
+						data-testid="auth-email"
+						bind:value={loginEmail}
+					/>
+				</label>
+				<label>
+					Password
+					<input
+						type="password"
+						placeholder="password"
+						autocomplete="current-password"
+						data-testid="auth-password"
+						bind:value={loginPassword}
+						on:keydown={(e) => e.key === 'Enter' && signIn()}
+					/>
+				</label>
+				<label>
+					Space
+					<input type="text" placeholder="s1" data-testid="auth-space" bind:value={loginSpaceId} />
+				</label>
+				<button
+					type="button"
+					class="primary"
+					data-testid="auth-signin"
+					disabled={authBusy || !loginEmail.trim() || !loginPassword.trim()}
+					on:click={signIn}
+				>
+					{authBusy ? 'Signing in...' : 'Sign in'}
+				</button>
+				{#if $auth.error}
+					<p class="error">{$auth.error}</p>
+				{/if}
+			{/if}
+		</div>
 	</div>
 </nav>
 
 <style>
 	.sidebar {
 		width: 100%;
-		max-width: 240px;
-		background: #0a0f1c;
-		border-right: 1px solid #131a2d;
+		max-width: 264px;
+		background:
+			radial-gradient(circle at 10% 10%, rgba(29, 78, 216, 0.16), transparent 48%),
+			linear-gradient(180deg, #0a0f1c 0%, #090d18 100%);
+		border-right: 1px solid #13203a;
 		color: #cbd5e1;
-		padding: 16px 12px;
+		padding: 14px 12px;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 10px;
 		height: 100vh;
 		position: sticky;
 		top: 0;
@@ -223,11 +591,19 @@ const deleteList = async (id) => {
 		box-sizing: border-box;
 	}
 
-	.app-title {
-		font-weight: 700;
-		letter-spacing: -0.03em;
-		color: #e2e8f0;
-		margin-bottom: 8px;
+	.sidebar-main {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.sidebar-bottom {
+		margin-top: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding-top: 10px;
+		border-top: 1px solid rgba(71, 85, 105, 0.35);
 	}
 
 	.title-row {
@@ -235,11 +611,14 @@ const deleteList = async (id) => {
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		margin-bottom: 8px;
+		margin-bottom: 4px;
 	}
 
-	.title-row .app-title {
-		margin-bottom: 0;
+	.app-title {
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		color: #e2e8f0;
+		font-size: 24px;
 	}
 
 	.pin {
@@ -261,17 +640,18 @@ const deleteList = async (id) => {
 	.section-label {
 		text-transform: uppercase;
 		font-size: 11px;
-		color: #64748b;
+		color: #6b7a95;
 		margin: 6px 6px 2px;
+		letter-spacing: 0.08em;
 	}
 
 	.section-label.muted {
-		color: #475569;
+		color: #55617a;
 	}
 
 	a {
 		display: grid;
-		grid-template-columns: 28px 1fr auto;
+		grid-template-columns: 26px 1fr auto;
 		align-items: center;
 		gap: 8px;
 		color: #cbd5e1;
@@ -282,12 +662,12 @@ const deleteList = async (id) => {
 	}
 
 	a:hover {
-		background: #11192b;
+		background: #111c31;
 	}
 
 	a.selected {
-		background: linear-gradient(90deg, #1f2a44, #182135);
-		color: #e2e8f0;
+		background: linear-gradient(90deg, rgba(37, 99, 235, 0.3), rgba(15, 23, 42, 0.8));
+		color: #f1f5f9;
 	}
 
 	.icon {
@@ -299,41 +679,82 @@ const deleteList = async (id) => {
 		color: #94a3b8;
 	}
 
-	.add {
+	.section-toggle {
 		color: #e2e8f0;
-		background: #11192b;
-		border: 1px solid #1f2937;
+		background: #111a2d;
+		border: 1px solid #23314f;
 		border-radius: 10px;
 		padding: 8px 10px;
 		text-align: left;
 		cursor: pointer;
 	}
 
-	.manager {
-		margin-top: 8px;
-		border: 1px solid #1f2937;
-		border-radius: 10px;
+	.card {
+		border: 1px solid #21314f;
+		border-radius: 12px;
 		padding: 10px;
+		background: linear-gradient(180deg, #0c1426, #0b1221);
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		background: #0c1322;
 	}
 
-	.manager label {
+	.card input,
+	.card select {
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
+	}
+
+	.manager label,
+	.account label,
+	.team label,
+	.sound label,
+	.profile-editor label {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
 		font-size: 12px;
-		color: #cbd5e1;
+		color: #d0deef;
 	}
 
-	.manager input {
+	input,
+	select {
 		background: #0f172a;
-		border: 1px solid #1f2937;
+		border: 1px solid #243148;
 		color: #e2e8f0;
 		border-radius: 8px;
-		padding: 6px 8px;
+		padding: 7px 9px;
+	}
+
+	button.primary {
+		background: linear-gradient(180deg, #2563eb, #1d4ed8);
+		border: none;
+		color: #fff;
+		padding: 8px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+		font-weight: 600;
+	}
+
+	button.ghost {
+		background: #0b1221;
+		border: 1px solid #27344f;
+		color: #cbd5e1;
+		padding: 8px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+	}
+
+	button.ghost.danger {
+		border-color: #7f1d1d;
+		color: #fecaca;
+	}
+
+	button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.manager .row {
@@ -343,64 +764,208 @@ const deleteList = async (id) => {
 		align-items: center;
 	}
 
-	.manager button.primary {
-		background: #1d4ed8;
-		border: none;
-		color: #fff;
-		padding: 8px 10px;
-		border-radius: 8px;
-		cursor: pointer;
-	}
-
-	.manager button.ghost {
-		background: #0b1221;
-		border: 1px solid #1f2937;
-		color: #cbd5e1;
-		padding: 8px 10px;
-		border-radius: 8px;
-		cursor: pointer;
-	}
-
 	.manager .existing {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		margin-top: 6px;
+		margin-top: 4px;
 	}
 
-	.sound {
-		margin-top: 6px;
-		border: 1px solid #1f2937;
+	.team .create-member {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 8px;
+		border: 1px solid #25344f;
 		border-radius: 10px;
-		padding: 10px;
-		background: #0c1322;
+		background: rgba(11, 19, 36, 0.7);
+		overflow: hidden;
+	}
+
+	.team .create-member .field-row {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 7px;
+		min-width: 0;
+	}
+
+	.team .create-member label {
+		min-width: 0;
+	}
+
+	.team-helper {
+		margin: 0;
+		font-size: 11px;
+		color: #8fa1bc;
+		line-height: 1.3;
+	}
+
+	.member-list {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.member-row {
+		border: 1px solid #25344f;
+		background: rgba(9, 15, 28, 0.75);
+		border-radius: 10px;
+		padding: 8px;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
 	}
 
-	.sound label {
+	.member-head {
+		display: grid;
+		grid-template-columns: 28px 1fr auto;
+		gap: 8px;
+		align-items: center;
+	}
+
+	.member-head strong {
+		color: #e2e8f0;
+		font-size: 13px;
+	}
+
+	.member-head span {
+		color: #94a3b8;
+		font-size: 11px;
+	}
+
+	.member-head .role-chip {
+		color: #bfdbfe;
+		font-size: 10px;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		border: 1px solid #32507e;
+		background: rgba(37, 99, 235, 0.22);
+		padding: 4px 6px;
+		border-radius: 999px;
+	}
+
+	.grant-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 6px;
+	}
+
+	.grant-row {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		align-items: center;
+		gap: 10px;
+		border: 1px solid #25344f;
+		border-radius: 10px;
+		padding: 7px 10px;
+		font-size: 12px;
+		color: #bfd0e7;
+		background: #0b1324;
+	}
+
+	.grant-row.on {
+		border-color: #2563eb;
+		background: rgba(37, 99, 235, 0.18);
+		color: #dbeafe;
+	}
+
+	.grant-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.grant-controls {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.grant-state {
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #94a3b8;
+		min-width: 24px;
+		text-align: right;
+	}
+
+	.grant-row.on .grant-state {
+		color: #dbeafe;
+	}
+
+	.grant-row input {
+		margin: 0;
+		accent-color: #3b82f6;
+	}
+
+	.account .user-head {
+		display: grid;
+		grid-template-columns: 36px 1fr;
+		gap: 10px;
+		align-items: center;
+	}
+
+	.avatar {
+		width: 36px;
+		height: 36px;
+		display: grid;
+		place-items: center;
+		border-radius: 50%;
+		background: linear-gradient(180deg, #1d4ed8, #1e3a8a);
+		color: white;
+		font-size: 16px;
+		font-weight: 700;
+		border: 1px solid rgba(191, 219, 254, 0.45);
+	}
+
+	.avatar.small {
+		width: 28px;
+		height: 28px;
+		font-size: 13px;
+	}
+
+	.account .who {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 2px;
+	}
+
+	.account .who strong {
+		color: #eef2ff;
+		line-height: 1.2;
+	}
+
+	.account .who span {
+		color: #9fb0c8;
 		font-size: 12px;
-		color: #cbd5e1;
+		line-height: 1.2;
+	}
+
+	.account .meta {
+		color: #7c94b3;
+		font-size: 11px;
+	}
+
+	.account-actions {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+
+	.profile-editor {
+		border-top: 1px solid #23314b;
+		padding-top: 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
 	}
 
 	.sound .toggle {
 		flex-direction: row;
 		align-items: center;
 		gap: 8px;
-	}
-
-	.sound select,
-	.sound input[type='range'] {
-		width: 100%;
-		background: #0f172a;
-		border: 1px solid #1f2937;
-		color: #e2e8f0;
-		border-radius: 8px;
-		padding: 6px 8px;
 	}
 
 	.sound input[type='checkbox'] {
@@ -421,15 +986,32 @@ const deleteList = async (id) => {
 		text-align: right;
 	}
 
-	.error {
-		color: #ef4444;
+	.muted-note {
+		margin: 0;
+		color: #94a3b8;
 		font-size: 12px;
+	}
+
+	.error {
+		color: #fda4af;
+		font-size: 12px;
+		margin: 0;
+	}
+
+	.ok {
+		color: #86efac;
+		font-size: 12px;
+		margin: 0;
 	}
 
 	@media (max-width: 900px) {
 		.sidebar {
 			max-width: none;
-			padding: 14px 10px;
+			padding: 12px 10px;
+		}
+
+		.app-title {
+			font-size: 30px;
 		}
 
 		a {
@@ -438,8 +1020,8 @@ const deleteList = async (id) => {
 			font-size: 13px;
 		}
 
-		.count {
-			font-size: 11px;
+		.team .create-member {
+			padding: 7px;
 		}
 	}
 </style>

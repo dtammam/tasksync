@@ -27,6 +27,8 @@ const mapApiTask = (t: Awaited<ReturnType<typeof api.getTasks>>[number]): Task =
 	due_date: t.due_date ?? undefined,
 	occurrences_completed: t.occurrences_completed ?? 0,
 	notes: t.notes ?? undefined,
+	assignee_user_id: t.assignee_user_id ?? undefined,
+	created_by_user_id: t.created_by_user_id ?? undefined,
 	created_ts: t.created_ts,
 	updated_ts: t.updated_ts
 });
@@ -83,7 +85,8 @@ export const pushPendingToServer = async () => {
 					recur_rule: t.recurrence_id,
 					attachments: t.attachments ? JSON.stringify(t.attachments) : undefined,
 					due_date: t.due_date,
-					notes: t.notes
+					notes: t.notes,
+					assignee_user_id: t.assignee_user_id
 				});
 				tasks.replaceWithRemote(t.id, mapApiTask(createdTask), t);
 				created += 1;
@@ -100,6 +103,8 @@ export const pushPendingToServer = async () => {
 					due_date: t.due_date,
 					notes: t.notes,
 					occurrences_completed: t.occurrences_completed
+					,
+					assignee_user_id: t.assignee_user_id
 				});
 				tasks.clearDirty(t.id);
 				pushed += 1;

@@ -5,6 +5,8 @@ import TaskRow from '$lib/components/TaskRow.svelte';
 import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
 import { findListName } from '$lib/stores/lists';
+import { auth } from '$lib/stores/auth';
+import { members } from '$lib/stores/members';
 
 let quickTitle = '';
 let detailId = null;
@@ -17,16 +19,26 @@ const quickAdd = () => {
 	if (!quickTitle.trim()) return;
 	const activeList = listId || (typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : '');
 	if (!activeList) return;
-	tasks.createLocal(quickTitle, activeList);
+	tasks.createLocal(quickTitle, activeList, { assignee_user_id: resolvedAssignee || $auth.user?.user_id });
 	quickTitle = '';
 };
+
+$: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
+const defaultAssignee = (currentUser, availableMembers) => {
+	if (!currentUser) return '';
+	if (currentUser.role === 'contributor') {
+		return availableMembers.find((m) => m.role === 'admin')?.user_id ?? currentUser.user_id;
+	}
+	return currentUser.user_id;
+};
+$: resolvedAssignee = defaultAssignee($auth.user, quickAddMembers);
 
 if (typeof window !== 'undefined') {
 	Reflect.set(window, '__addTaskList', () => quickAdd());
 	Reflect.set(window, '__addTaskListWithTitle', (title) => {
 		const activeList = listId || window.location.pathname.split('/').pop();
 		if (!activeList) return;
-		tasks.createLocal(title, activeList);
+		tasks.createLocal(title, activeList, { assignee_user_id: resolvedAssignee || $auth.user?.user_id });
 	});
 }
 
@@ -145,11 +157,12 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 	.mobile-add {
 		display: block;
 		position: fixed;
-		left: 0;
+		left: var(--sidebar-offset, 0px);
 		right: 0;
 		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
 		padding: 0 14px;
 		z-index: 15;
+		pointer-events: none;
 	}
 
 	.mobile-add .bar {
@@ -163,6 +176,7 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
 		margin: 0 auto;
+		pointer-events: auto;
 	}
 
 	.mobile-add input {
