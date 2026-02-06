@@ -1,16 +1,30 @@
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     routing::{get, patch, post},
     Json, Router,
 };
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
+use std::{
+    env,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppState {
     pool: SqlitePool,
+    jwt_secret: String,
+    login_password: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct AuthClaims {
+    sub: String,
+    space_id: String,
+    exp: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,10 +40,69 @@ struct RequestCtx {
     role: Role,
 }
 
-async fn ctx_from_headers(
-    headers: &HeaderMap,
+fn app_state(pool: &SqlitePool) -> AppState {
+    AppState {
+        pool: pool.clone(),
+        jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| "tasksync-dev-secret".to_string()),
+        login_password: env::var("DEV_LOGIN_PASSWORD").unwrap_or_else(|_| "tasksync".to_string()),
+    }
+}
+
+fn unix_now_secs() -> usize {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as usize).unwrap_or(0)
+}
+
+fn issue_token(user_id: &str, space_id: &str, secret: &str) -> Result<String, StatusCode> {
+    let claims = AuthClaims {
+        sub: user_id.to_string(),
+        space_id: space_id.to_string(),
+        exp: unix_now_secs() + (60 * 60 * 24 * 30),
+    };
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn role_from_membership(
     pool: &SqlitePool,
-) -> Result<RequestCtx, StatusCode> {
+    space_id: &str,
+    user_id: &str,
+) -> Result<Role, StatusCode> {
+    let role_str: Option<String> = sqlx::query_scalar(
+        "select role from membership where space_id = ?1 and user_id = ?2 limit 1",
+    )
+    .bind(space_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match role_str.as_deref() {
+        Some("admin") => Ok(Role::Admin),
+        Some("contributor") => Ok(Role::Contributor),
+        _ => Err(StatusCode::UNAUTHORIZED),
+    }
+}
+
+async fn ctx_from_headers(headers: &HeaderMap, state: &AppState) -> Result<RequestCtx, StatusCode> {
+    if let Some(auth) = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok()) {
+        if let Some(token) = auth.strip_prefix("Bearer ") {
+            let decoded = decode::<AuthClaims>(
+                token,
+                &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
+                &Validation::default(),
+            )
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+            let role =
+                role_from_membership(&state.pool, &decoded.claims.space_id, &decoded.claims.sub)
+                    .await?;
+            return Ok(RequestCtx {
+                space_id: decoded.claims.space_id,
+                user_id: decoded.claims.sub,
+                role,
+            });
+        }
+    }
+
     let space_id = headers
         .get("x-space-id")
         .and_then(|v| v.to_str().ok())
@@ -41,26 +114,13 @@ async fn ctx_from_headers(
         .ok_or(StatusCode::UNAUTHORIZED)?
         .to_string();
 
-    let role_str: Option<String> = sqlx::query_scalar(
-        "select role from membership where space_id = ?1 and user_id = ?2 limit 1",
-    )
-    .bind(&space_id)
-    .bind(&user_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let role = match role_str.as_deref() {
-        Some("admin") => Role::Admin,
-        Some("contributor") => Role::Contributor,
-        _ => return Err(StatusCode::UNAUTHORIZED),
-    };
+    let role = role_from_membership(&state.pool, &space_id, &user_id).await?;
 
     Ok(RequestCtx { space_id, user_id, role })
 }
 
 pub fn list_routes(pool: &SqlitePool) -> Router {
-    let state = AppState { pool: pool.clone() };
+    let state = app_state(pool);
     Router::new()
         .route("/", get(get_lists).post(create_list))
         .route("/:id", patch(update_list).delete(delete_list))
@@ -68,12 +128,101 @@ pub fn list_routes(pool: &SqlitePool) -> Router {
 }
 
 pub fn task_routes(pool: &SqlitePool) -> Router {
-    let state = AppState { pool: pool.clone() };
+    let state = app_state(pool);
     Router::new()
         .route("/", get(get_tasks).post(create_task))
         .route("/:id", patch(update_task_meta))
         .route("/:id/status", post(update_task_status))
         .with_state(state)
+}
+
+pub fn auth_routes(pool: &SqlitePool) -> Router {
+    let state = app_state(pool);
+    Router::new().route("/login", post(login)).route("/me", get(auth_me)).with_state(state)
+}
+
+#[derive(Deserialize)]
+struct LoginBody {
+    email: String,
+    password: String,
+    space_id: Option<String>,
+}
+
+#[derive(Serialize, FromRow)]
+struct LoginUserRow {
+    user_id: String,
+    email: String,
+    display: String,
+    role: String,
+}
+
+#[derive(Serialize)]
+struct LoginResponse {
+    token: String,
+    user_id: String,
+    email: String,
+    display: String,
+    space_id: String,
+    role: String,
+}
+
+#[derive(Serialize, FromRow)]
+struct AuthMeResponse {
+    user_id: String,
+    email: String,
+    display: String,
+    space_id: String,
+    role: String,
+}
+
+async fn login(
+    State(state): State<AppState>,
+    Json(body): Json<LoginBody>,
+) -> Result<Json<LoginResponse>, StatusCode> {
+    if body.password != state.login_password {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let email = body.email.trim();
+    if email.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let space_id = body.space_id.unwrap_or_else(|| "s1".to_string());
+    let user = sqlx::query_as::<_, LoginUserRow>(
+        "select u.id as user_id, u.email, u.display, m.role from user u join membership m on m.user_id = u.id where lower(u.email) = lower(?1) and m.space_id = ?2 limit 1",
+    )
+    .bind(email)
+    .bind(&space_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let token = issue_token(&user.user_id, &space_id, &state.jwt_secret)?;
+    Ok(Json(LoginResponse {
+        token,
+        user_id: user.user_id,
+        email: user.email,
+        display: user.display,
+        space_id,
+        role: user.role,
+    }))
+}
+
+async fn auth_me(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<AuthMeResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let me = sqlx::query_as::<_, AuthMeResponse>(
+        "select u.id as user_id, u.email, u.display, m.space_id, m.role from user u join membership m on m.user_id = u.id where u.id = ?1 and m.space_id = ?2 limit 1",
+    )
+    .bind(&ctx.user_id)
+    .bind(&ctx.space_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::UNAUTHORIZED)?;
+    Ok(Json(me))
 }
 
 #[derive(Serialize, FromRow)]
@@ -106,7 +255,7 @@ async fn get_lists(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<ListRow>>, StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
     let lists = sqlx::query_as::<_, ListRow>(
 		"select id, space_id, name, icon, color, list_order as \"order\" from list where space_id = ?1 order by list_order asc",
 	)
@@ -122,7 +271,7 @@ async fn create_list(
     headers: HeaderMap,
     Json(body): Json<CreateList>,
 ) -> Result<(StatusCode, Json<ListRow>), StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
     if ctx.role != Role::Admin {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -150,7 +299,7 @@ async fn update_list(
     Path(id): Path<String>,
     Json(body): Json<UpdateList>,
 ) -> Result<Json<ListRow>, StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
     if ctx.role != Role::Admin {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -175,7 +324,7 @@ async fn delete_list(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
     if ctx.role != Role::Admin {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -239,7 +388,7 @@ async fn get_tasks(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<TaskRow>>, StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
     let rows = sqlx::query_as::<_, TaskRow>(
 		"select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes from task where space_id = ?1 order by task_order asc",
 	)
@@ -255,7 +404,7 @@ async fn create_task(
     headers: HeaderMap,
     Json(body): Json<CreateTask>,
 ) -> Result<(StatusCode, Json<TaskRow>), StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
 
     // ensure list belongs to space
     let list_exists: Option<i64> =
@@ -335,7 +484,7 @@ async fn update_task_status(
     Path(id): Path<String>,
     Json(body): Json<UpdateTaskStatus>,
 ) -> Result<Json<TaskRow>, StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
 
     if ctx.role == Role::Contributor {
         return Err(StatusCode::FORBIDDEN);
@@ -362,7 +511,7 @@ async fn update_task_meta(
     Path(id): Path<String>,
     Json(body): Json<UpdateTaskMeta>,
 ) -> Result<Json<TaskRow>, StatusCode> {
-    let ctx = ctx_from_headers(&headers, &state.pool).await?;
+    let ctx = ctx_from_headers(&headers, &state).await?;
     if ctx.role == Role::Contributor {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -403,4 +552,90 @@ async fn update_task_meta(
 	.map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(Json(rec))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::extract::State;
+    use axum::Json;
+    use sqlx::SqlitePool;
+
+    async fn setup_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
+        sqlx::migrate!("./migrations").run(&pool).await.expect("migrations");
+
+        sqlx::query("insert into space (id, name) values ('s1', 'Default')")
+            .execute(&pool)
+            .await
+            .expect("insert space");
+        sqlx::query(
+            "insert into user (id, email, display) values ('u-admin', 'admin@example.com', 'Admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert user");
+        sqlx::query(
+            "insert into membership (id, space_id, user_id, role) values ('m-admin', 's1', 'u-admin', 'admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert membership");
+
+        pool
+    }
+
+    fn test_state(pool: &SqlitePool) -> AppState {
+        AppState {
+            pool: pool.clone(),
+            jwt_secret: "test-secret".to_string(),
+            login_password: "test-pass".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn login_returns_token_for_valid_credentials() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+
+        let response = login(
+            State(state.clone()),
+            Json(LoginBody {
+                email: "admin@example.com".to_string(),
+                password: "test-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await
+        .expect("login should succeed")
+        .0;
+
+        assert!(!response.token.is_empty());
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            format!("Bearer {}", response.token).parse().expect("auth header"),
+        );
+        let ctx = ctx_from_headers(&headers, &state).await.expect("ctx");
+        assert_eq!(ctx.user_id, "u-admin");
+        assert_eq!(ctx.space_id, "s1");
+        assert_eq!(ctx.role, Role::Admin);
+    }
+
+    #[tokio::test]
+    async fn login_rejects_invalid_password() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let result = login(
+            State(state),
+            Json(LoginBody {
+                email: "admin@example.com".to_string(),
+                password: "wrong".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(StatusCode::UNAUTHORIZED));
+    }
 }

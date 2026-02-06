@@ -1,4 +1,5 @@
 import { buildHeaders } from './headers';
+import type { AuthLoginRequest, AuthLoginResponse, AuthUser } from '$shared/types/auth';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -45,6 +46,9 @@ const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> =>
 };
 
 export const api = {
+	login: (body: AuthLoginRequest) =>
+		fetchJson<AuthLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+	me: () => fetchJson<AuthUser>('/auth/me'),
 	getLists: () => fetchJson<ApiList[]>('/lists'),
 	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
 		fetchJson<ApiList>('/lists', { method: 'POST', body: JSON.stringify(body) }),

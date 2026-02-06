@@ -1,7 +1,7 @@
 mod routes;
 
 use axum::{routing::get, Router};
-use routes::{list_routes, task_routes};
+use routes::{auth_routes, list_routes, task_routes};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
 use tower_http::cors::{Any, CorsLayer};
@@ -40,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(|| async { "tasksync server ready" }))
         .route("/health", get(|| async { "ok" }))
+        .nest("/auth", auth_routes(&pool))
         .nest("/lists", list_routes(&pool))
         .nest("/tasks", task_routes(&pool))
         .layer(
