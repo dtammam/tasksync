@@ -10,7 +10,9 @@ export default defineConfig({
 	},
 	use: {
 		baseURL: 'http://localhost:4173',
-		trace: 'retain-on-failure'
+		trace: 'retain-on-failure',
+		// Keep e2e deterministic and avoid browser-level service worker interference across tests.
+		serviceWorkers: 'block'
 	},
 	projects: [
 		{

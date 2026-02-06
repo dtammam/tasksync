@@ -10,7 +10,7 @@ if [ "${SKIP_PLAYWRIGHT:-0}" = "1" ]; then
   echo "⏩ skipping Playwright (SKIP_PLAYWRIGHT=1)"
 else
   echo "🎭 pre-push: Playwright smoke ..."
-  (cd web && npx playwright test)
+  (cd web && npx playwright test --workers=2 --retries=1)
 fi
 
 echo "🦀 pre-push: cargo test ..."

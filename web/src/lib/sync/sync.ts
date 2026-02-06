@@ -60,6 +60,7 @@ export const syncFromServer = async () => {
 		lists.setAll(toLists);
 		tasks.mergeRemote(toTasks);
 		await repo.saveTasks(tasks.getAll());
+		syncStatus.setQueueDepth(tasks.getAll().filter((t) => t.dirty).length);
 		syncStatus.setPull('idle');
 		return { lists: toLists.length, tasks: toTasks.length };
 	} catch (err) {
@@ -72,17 +73,21 @@ export const syncFromServer = async () => {
 export const pushPendingToServer = async () => {
 	syncStatus.setPush('running');
 	const dirty = tasks.getAll().filter((t) => t.dirty);
+	syncStatus.setQueueDepth(dirty.length);
 	if (!dirty.length) {
 		syncStatus.setPush('idle');
 		return { pushed: 0 };
 	}
 	let pushed = 0;
 	let created = 0;
+	let processed = 0;
 	for (const t of dirty) {
 		if (!t.local && !isServerId(t.id)) {
 			// Drop legacy seed IDs that were never created on the server.
 			tasks.remove(t.id);
 			await repo.saveTasks(tasks.getAll());
+			processed += 1;
+			syncStatus.setQueueDepth(Math.max(dirty.length - processed, 0));
 			continue;
 		}
 		try {
@@ -114,8 +119,7 @@ export const pushPendingToServer = async () => {
 					attachments: t.attachments ? JSON.stringify(t.attachments) : undefined,
 					due_date: t.due_date,
 					notes: t.notes,
-					occurrences_completed: t.occurrences_completed
-					,
+					occurrences_completed: t.occurrences_completed,
 					assignee_user_id: t.assignee_user_id
 				});
 				tasks.clearDirty(t.id);
@@ -123,19 +127,26 @@ export const pushPendingToServer = async () => {
 			}
 			// Persist each mutation to minimize duplicate creates if the page reloads mid-push.
 			await repo.saveTasks(tasks.getAll());
+			processed += 1;
+			syncStatus.setQueueDepth(Math.max(dirty.length - processed, 0));
 		} catch (err) {
 			console.warn('push failed', t.id, err);
 			const msg = err instanceof Error ? err.message : String(err);
 			if (msg.includes('404')) {
 				tasks.remove(t.id);
 				await repo.saveTasks(tasks.getAll());
+				processed += 1;
+				syncStatus.setQueueDepth(Math.max(dirty.length - processed, 0));
 				continue;
 			}
 			syncStatus.setPush('error', msg);
+			syncStatus.setQueueDepth(Math.max(dirty.length - processed, 0));
 			return { pushed, created, error: true };
 		}
 	}
 	syncStatus.setPush('idle');
+	syncStatus.setQueueDepth(0);
+	syncStatus.markReplay();
 	// Keep a final save to coalesce any remaining in-memory updates.
 	await repo.saveTasks(tasks.getAll());
 	return { pushed, created };
