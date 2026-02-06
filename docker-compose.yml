@@ -1,26 +1,20 @@
 services:
   server:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
+    image: tasksync-server:latest
     environment:
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///data/tasksync.db}
-      JWT_SECRET: ${JWT_SECRET:-change-me}
-      DEV_LOGIN_PASSWORD: ${DEV_LOGIN_PASSWORD:-tasksync}
-      RUST_LOG: ${RUST_LOG:-info}
-      PORT: 3000
+      - DATABASE_URL=sqlite:///data/tasksync.db
+      - JWT_SECRET=super-secret
+      - DEV_LOGIN_PASSWORD=tasksync
+      - RUST_LOG=info
+      - PORT=3000
     ports:
       - "3000:3000"
     volumes:
-      - tasksync_data:/data
+      - /srv/tasksync/data:/data
     restart: unless-stopped
 
   web:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-}
+    image: tasksync-web:latest
     depends_on:
       - server
     ports:
@@ -28,19 +22,12 @@ services:
     restart: unless-stopped
 
   seed:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
+    image: tasksync-server:latest
     command: ["seed"]
-    profiles: ["setup"]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///data/tasksync.db}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-tasksync}
-      SEED_CONTRIB_PASSWORD: ${SEED_CONTRIB_PASSWORD:-tasksync}
+      - DATABASE_URL=sqlite:///data/tasksync.db
+      - SEED_ADMIN_PASSWORD=admin
+      - SEED_CONTRIB_PASSWORD=contrib
     volumes:
-      - tasksync_data:/data
+      - /srv/tasksync/data:/data
     restart: "no"
-
-volumes:
-  tasksync_data:
-
