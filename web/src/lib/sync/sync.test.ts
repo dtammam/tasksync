@@ -11,9 +11,7 @@ vi.mock('$lib/api/client', () => {
 	return {
 		api: {
 			syncPull: vi.fn(),
-			syncPush: vi.fn(),
-			getLists: vi.fn(),
-			getTasks: vi.fn()
+			syncPush: vi.fn()
 		}
 	};
 });
@@ -141,28 +139,13 @@ describe('syncFromServer', () => {
 		expect(mockedApi.syncPull).toHaveBeenNthCalledWith(3, { since_ts: undefined });
 	});
 
-	it('falls back to full pull when sync endpoint is unavailable', async () => {
-		mockedApi.syncPull.mockRejectedValue(new Error('API 404 Not Found'));
-		mockedApi.getLists.mockResolvedValue([]);
-		mockedApi.getTasks.mockResolvedValue([
-			{
-				id: 'fallback-1',
-				space_id: 's1',
-				title: 'fallback task',
-				status: 'pending',
-				list_id: 'goal-management',
-				my_day: 0,
-				order: 'z',
-				created_ts: 1,
-				updated_ts: 2
-			}
-		]);
+	it('reports pull error when sync endpoint fails', async () => {
+		mockedApi.syncPull.mockRejectedValue(new Error('API 500 Internal Server Error'));
 
-		await syncFromServer();
+		const result = await syncFromServer();
 
-		expect(mockedApi.getLists).toHaveBeenCalledOnce();
-		expect(mockedApi.getTasks).toHaveBeenCalledOnce();
-		expect(tasks.getAll().some((task) => task.id === 'fallback-1')).toBe(true);
+		expect(result.error).toBe(true);
+		expect(readStatus().pull).toBe('error');
 	});
 });
 

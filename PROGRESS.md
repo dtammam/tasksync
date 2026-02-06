@@ -64,3 +64,4 @@
 - 2026-02-06 12:56 - Advanced the app toward dependable multi-device sync by introducing the first delta-sync foundation, enabling more deterministic state convergence across tabs, users, and devices.
 - 2026-02-06 13:14 - Corrected process: progress logging is now enforced as append-only in agent policy to prevent history churn; future adjustments should be logged as explicit correction entries instead of rewriting earlier milestones.
 - 2026-02-06 13:42 - Completed delta push integration so unsynced work now batches through one sync path with explicit server rejection handling, making cross-device task convergence more reliable and reducing duplicate-write risk.
+- 2026-02-06 13:49 - Removed legacy sync fallback behavior so the app now fails fast on unsupported server versions, reducing hidden drift paths and making sync reliability issues easier to detect and fix.

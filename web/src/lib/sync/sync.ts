@@ -126,27 +126,12 @@ const rejectMessage = (rejected: SyncPushRejected) =>
 export const syncFromServer = async () => {
 	syncStatus.setPull('running');
 	try {
-		let remoteLists: Awaited<ReturnType<typeof api.getLists>>;
-		let remoteTasks: Awaited<ReturnType<typeof api.getTasks>>;
-		let cursorTs = lastPullCursorTs ?? 0;
-		try {
-			const pull = await api.syncPull({
-				since_ts: typeof lastPullCursorTs === 'number' ? lastPullCursorTs : undefined
-			});
-			remoteLists = pull.lists;
-			remoteTasks = pull.tasks;
-			cursorTs = pull.cursor_ts;
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			if (!msg.includes('404')) {
-				throw err;
-			}
-			[remoteLists, remoteTasks] = await Promise.all([api.getLists(), api.getTasks()]);
-			cursorTs = remoteTasks.reduce((maxTs, task) => Math.max(maxTs, task.updated_ts), 0);
-		}
-		const toTasks: Task[] = remoteTasks.map(mapApiTask);
+		const pull = await api.syncPull({
+			since_ts: typeof lastPullCursorTs === 'number' ? lastPullCursorTs : undefined
+		});
+		const toTasks: Task[] = pull.tasks.map(mapApiTask);
 
-		const toLists: List[] = remoteLists.map((l) => ({
+		const toLists: List[] = pull.lists.map((l) => ({
 			id: l.id,
 			name: l.name,
 			icon: l.icon ?? undefined,
@@ -156,7 +141,7 @@ export const syncFromServer = async () => {
 
 		lists.setAll(toLists);
 		tasks.mergeRemote(toTasks);
-		bumpSyncCursor(cursorTs);
+		bumpSyncCursor(pull.cursor_ts);
 		await repo.saveTasks(tasks.getAll());
 		syncStatus.setQueueDepth(tasks.getAll().filter((t) => t.dirty).length);
 		syncStatus.setPull('idle');
