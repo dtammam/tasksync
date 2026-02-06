@@ -5,6 +5,7 @@ import { createEventDispatcher } from 'svelte';
 import { lists } from '$lib/stores/lists';
 import { listCounts, myDayPending } from '$lib/stores/tasks';
 import { soundSettings, soundThemes } from '$lib/stores/settings';
+import { auth } from '$lib/stores/auth';
 
 export let navPinned = false;
 
@@ -16,6 +17,10 @@ let newListIcon = '';
 let renameDraft = {};
 let listError = '';
 let busy = false;
+let authBusy = false;
+let loginEmail = 'admin@example.com';
+let loginPassword = '';
+let loginSpaceId = 's1';
 
 const togglePin = () => {
 	dispatch('togglePin', { pinned: !navPinned });
@@ -74,6 +79,27 @@ const deleteList = async (id) => {
 	} finally {
 		busy = false;
 	}
+};
+
+const signIn = async () => {
+	const email = loginEmail.trim();
+	const password = loginPassword.trim();
+	const spaceId = loginSpaceId.trim();
+	if (!email || !password) return;
+	authBusy = true;
+	try {
+		await auth.login(email, password, spaceId || undefined);
+		loginPassword = '';
+	} catch {
+		// Error messaging comes from the auth store.
+	} finally {
+		authBusy = false;
+	}
+};
+
+const signOut = () => {
+	auth.logout();
+	loginPassword = '';
 };
 </script>
 
@@ -163,6 +189,62 @@ const deleteList = async (id) => {
 			</div>
 		</div>
 	{/if}
+	<div class="section-label muted">Account</div>
+	<div class="account" data-testid="auth-panel">
+		{#if $auth.status === 'loading'}
+			<p class="muted-note">Checking session...</p>
+		{:else if $auth.status === 'authenticated' && $auth.user}
+			<div class="who" data-testid="auth-user">
+				<strong>{$auth.user.display}</strong>
+				<span>{$auth.user.email}</span>
+				<span class="meta">
+					{$auth.user.role} in {$auth.user.space_id}
+					{$auth.source === 'token' ? '(token)' : '(legacy)'}
+				</span>
+			</div>
+			<button type="button" class="ghost" data-testid="auth-signout" on:click={signOut}>
+				Sign out
+			</button>
+		{:else}
+			<label>
+				Email
+				<input
+					type="email"
+					placeholder="you@example.com"
+					autocomplete="username"
+					data-testid="auth-email"
+					bind:value={loginEmail}
+				/>
+			</label>
+			<label>
+				Password
+				<input
+					type="password"
+					placeholder="password"
+					autocomplete="current-password"
+					data-testid="auth-password"
+					bind:value={loginPassword}
+					on:keydown={(e) => e.key === 'Enter' && signIn()}
+				/>
+			</label>
+			<label>
+				Space
+				<input type="text" placeholder="s1" data-testid="auth-space" bind:value={loginSpaceId} />
+			</label>
+			<button
+				type="button"
+				class="primary"
+				data-testid="auth-signin"
+				disabled={authBusy || !loginEmail.trim() || !loginPassword.trim()}
+				on:click={signIn}
+			>
+				{authBusy ? 'Signing in...' : 'Sign in'}
+			</button>
+			{#if $auth.error}
+				<p class="error">{$auth.error}</p>
+			{/if}
+		{/if}
+	</div>
 	<div class="section-label muted">Sound</div>
 	<div class="sound">
 		<label class="toggle" for="sound-enabled">
@@ -366,6 +448,72 @@ const deleteList = async (id) => {
 		flex-direction: column;
 		gap: 6px;
 		margin-top: 6px;
+	}
+
+	.account {
+		margin-top: 6px;
+		border: 1px solid #1f2937;
+		border-radius: 10px;
+		padding: 10px;
+		background: #0c1322;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.account label {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 12px;
+		color: #cbd5e1;
+	}
+
+	.account input {
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #e2e8f0;
+		border-radius: 8px;
+		padding: 6px 8px;
+	}
+
+	.account .who {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.account .who strong {
+		color: #e2e8f0;
+	}
+
+	.account .meta {
+		color: #94a3b8;
+		font-size: 11px;
+	}
+
+	.account .muted-note {
+		margin: 0;
+		color: #94a3b8;
+		font-size: 12px;
+	}
+
+	.account button.primary {
+		background: #1d4ed8;
+		border: none;
+		color: #fff;
+		padding: 8px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+	}
+
+	.account button.ghost {
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		color: #cbd5e1;
+		padding: 8px 10px;
+		border-radius: 8px;
+		cursor: pointer;
 	}
 
 	.sound {
