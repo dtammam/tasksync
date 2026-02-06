@@ -66,3 +66,4 @@
 - 2026-02-06 13:42 - Completed delta push integration so unsynced work now batches through one sync path with explicit server rejection handling, making cross-device task convergence more reliable and reducing duplicate-write risk.
 - 2026-02-06 13:49 - Removed legacy sync fallback behavior so the app now fails fast on unsupported server versions, reducing hidden drift paths and making sync reliability issues easier to detect and fix.
 - 2026-02-06 14:31 - Prepared self-hosting baseline by adding Docker/Compose packaging and seed workflow, while improving offline continuity so signed-in users keep working locally during temporary server outages.
+- 2026-02-06 14:58 - Unblocked reverse-proxy hosting by adding configurable Vite allowed-host support and Docker build args, so production domains can be permitted without hardcoding environment-specific hostnames.
