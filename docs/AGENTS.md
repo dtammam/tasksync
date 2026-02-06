@@ -121,6 +121,15 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 - **Pre-push verification (preferred script):** `scripts/4-prepush.ps1`
   - Values to update if needed: optional `-SkipPlaywright`.
   - One-liner fallback: `cd C:\Repositories\tasksync\web;npx playwright test --workers=2 --retries=1`
+- **Docker start (preferred script):** `scripts/8-docker-up.ps1`
+  - Values to update if needed: `.env` values like `JWT_SECRET`, `DATABASE_URL`, optional `VITE_API_URL`.
+  - One-liner fallback: `cd C:\Repositories\tasksync;docker compose up --build -d server web`
+- **Docker seed (preferred script):** `scripts/9-docker-seed.ps1`
+  - Values to update if needed: `-AdminPassword`, `-ContributorPassword`.
+  - One-liner fallback: `cd C:\Repositories\tasksync;$env:SEED_ADMIN_PASSWORD='tasksync';$env:SEED_CONTRIB_PASSWORD='tasksync';docker compose --profile setup run --rm seed`
+- **Docker stop (preferred script):** `scripts/10-docker-down.ps1`
+  - Values to update if needed: none.
+  - One-liner fallback: `cd C:\Repositories\tasksync;docker compose down`
 - **Auth login test (preferred script):** `scripts/5-login.ps1`
   - Values to update if needed: `-ApiUrl`, `-Email`, `-Password`, `-SpaceId`.
   - One-liner fallback: `Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/auth/login' -ContentType 'application/json' -Body '{"email":"admin@example.com","password":"tasksync","space_id":"s1"}'`

@@ -18,7 +18,14 @@ import type {
 	SyncPushResponse
 } from '$shared/types/sync';
 
-const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const defaultApiUrl = () => {
+	if (typeof window === 'undefined') return 'http://localhost:3000';
+	const apiOrigin = new URL(window.location.origin);
+	apiOrigin.port = '3000';
+	return apiOrigin.origin;
+};
+
+const baseUrl = import.meta.env.VITE_API_URL ?? defaultApiUrl();
 
 export interface ApiList {
 	id: string;
