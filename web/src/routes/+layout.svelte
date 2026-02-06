@@ -11,7 +11,7 @@
 	import { soundSettings } from '$lib/stores/settings';
 	import { setDbScope } from '$lib/data/idb';
 	import { auth } from '$lib/stores/auth';
-	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
+	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
 	import { createSyncCoordinator } from '$lib/sync/coordinator';
 
@@ -60,7 +60,7 @@
 				await syncFromServer();
 				const pushResult = await pushPendingToServer();
 				// Re-pull after successful push to persist server IDs and avoid repeat creations on refresh.
-				if (pushResult.pushed || pushResult.created) {
+				if (pushResult.pushed || pushResult.created || pushResult.rejected) {
 					await syncFromServer();
 				}
 			} catch (err) {
@@ -155,6 +155,7 @@
 	$: if (appReady && scopeKey !== lastScopeKey) {
 		lastScopeKey = scopeKey;
 		void (async () => {
+			resetSyncCursor();
 			await hydrateScopedStores();
 			await members.hydrateFromServer();
 			if (auth.isAuthenticated()) {
@@ -167,6 +168,7 @@
 	}
 	$: if (!auth.isAuthenticated()) {
 		members.clear();
+		resetSyncCursor();
 		syncStatus.setSnapshot({ pull: 'idle', push: 'idle' });
 	}
 </script>

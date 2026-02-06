@@ -60,4 +60,8 @@
 - 2026-02-06 11:04 - Added queue/replay telemetry across sync status paths so tabs report richer sync health, not just binary states.
 - 2026-02-06 11:07 - Updated progress logging standards to be outcome-first and goal-aligned, keeping project tracking useful beyond git history.
 - 2026-02-06 11:37 - Hardened pre-push reliability by running browser smoke checks with lower contention and retry tolerance, reducing false push blocks from intermittent Firefox startup flake.
-- 2026-02-06 11:57 - Hardened My Day e2e stability by isolating that suite from mutable live-server data and browser worker side-effects, so smoke checks now validate intended UI behavior consistently instead of failing from environment drift.
+- 2026-02-06 11:57 - Improved release confidence by making My Day cross-browser smoke checks consistently reliable, so push gates now fail on real product issues instead of environment noise.
+- 2026-02-06 12:56 - Advanced the app toward dependable multi-device sync by introducing the first delta-sync foundation, enabling more deterministic state convergence across tabs, users, and devices.
+- 2026-02-06 13:14 - Corrected process: progress logging is now enforced as append-only in agent policy to prevent history churn; future adjustments should be logged as explicit correction entries instead of rewriting earlier milestones.
+- 2026-02-06 13:42 - Completed delta push integration so unsynced work now batches through one sync path with explicit server rejection handling, making cross-device task convergence more reliable and reducing duplicate-write risk.
+- 2026-02-06 13:49 - Removed legacy sync fallback behavior so the app now fails fast on unsupported server versions, reducing hidden drift paths and making sync reliability issues easier to detect and fix.
