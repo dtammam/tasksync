@@ -56,11 +56,11 @@ describe('createSyncCoordinator', () => {
 		expect(port.messages[2]).toEqual({ type: 'request-sync', reason: 'manual' });
 
 		port.emit({ type: 'leader', tabId: 'tab-a' });
-		coordinator.publishStatus({ pull: 'running', push: 'idle' });
+		coordinator.publishStatus({ pull: 'running', push: 'idle', queueDepth: 2, lastReplayTs: 123 });
 		expect(port.messages[3]).toEqual({
 			type: 'status',
 			tabId: 'tab-a',
-			status: { pull: 'running', push: 'idle' }
+			status: { pull: 'running', push: 'idle', queueDepth: 2, lastReplayTs: 123 }
 		});
 	});
 
@@ -102,10 +102,10 @@ describe('createSyncCoordinator', () => {
 		port.emit({
 			type: 'status',
 			sourceTabId: 'tab-b',
-			status: { pull: 'running', push: 'idle', lastError: 'x' }
+			status: { pull: 'running', push: 'idle', queueDepth: 1, lastReplayTs: 456, lastError: 'x' }
 		});
 		expect(onStatus).toHaveBeenCalledWith(
-			{ pull: 'running', push: 'idle', lastError: 'x' },
+			{ pull: 'running', push: 'idle', queueDepth: 1, lastReplayTs: 456, lastError: 'x' },
 			'tab-b'
 		);
 	});

@@ -1,3 +1,5 @@
+import type { SyncStatus } from './types';
+
 type CoordinatorMessage =
 	| { type: 'register'; tabId: string }
 	| { type: 'unregister'; tabId: string }
@@ -6,7 +8,7 @@ type CoordinatorMessage =
 	| {
 			type: 'status';
 			tabId: string;
-			status: { pull: 'idle' | 'running' | 'error'; push: 'idle' | 'running' | 'error'; lastError?: string };
+			status: SyncStatus;
 	  };
 
 type CoordinatorBroadcast =
@@ -15,7 +17,7 @@ type CoordinatorBroadcast =
 	| {
 			type: 'status';
 			sourceTabId: string | null;
-			status: { pull: 'idle' | 'running' | 'error'; push: 'idle' | 'running' | 'error'; lastError?: string };
+			status: SyncStatus;
 	  };
 
 interface TabConnection {
@@ -25,9 +27,10 @@ interface TabConnection {
 
 const tabs = new Map<string, TabConnection>();
 let leaderTabId: string | null = null;
-let leaderStatus: { pull: 'idle' | 'running' | 'error'; push: 'idle' | 'running' | 'error'; lastError?: string } = {
+let leaderStatus: SyncStatus = {
 	pull: 'idle',
-	push: 'idle'
+	push: 'idle',
+	queueDepth: 0
 };
 
 const postMessageSafe = (port: MessagePort, message: CoordinatorBroadcast) => {
@@ -65,7 +68,7 @@ const electLeader = () => {
 	}
 	leaderTabId = nextLeader;
 	if (previousLeader !== leaderTabId) {
-		leaderStatus = { pull: 'idle', push: 'idle' };
+		leaderStatus = { pull: 'idle', push: 'idle', queueDepth: 0 };
 	}
 	broadcastLeader();
 	broadcastStatus();
@@ -110,6 +113,8 @@ const handleMessage = (port: MessagePort, data: CoordinatorMessage) => {
 		leaderStatus = {
 			pull: data.status.pull,
 			push: data.status.push,
+			queueDepth: Math.max(0, data.status.queueDepth ?? 0),
+			lastReplayTs: data.status.lastReplayTs,
 			lastError: data.status.lastError
 		};
 		broadcastStatus();

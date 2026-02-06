@@ -4,6 +4,8 @@ import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
+import type { SyncStatus } from './types';
+import type { Writable } from 'svelte/store';
 
 vi.mock('$lib/api/client', () => {
 	return {
@@ -20,10 +22,18 @@ vi.mock('$lib/api/client', () => {
 import { api } from '$lib/api/client';
 const mockedApi = vi.mocked(api);
 
+const readStatus = () => {
+	let current: SyncStatus | undefined;
+	const unsub = (syncStatus as unknown as Writable<SyncStatus>).subscribe((v) => (current = v));
+	unsub();
+	return current as SyncStatus;
+};
+
 beforeEach(() => {
 	tasks.setAll([]);
 	lists.setAll([]);
 	vi.clearAllMocks();
+	syncStatus.setSnapshot({ pull: 'idle', push: 'idle', queueDepth: 0 });
 	syncStatus.resetError();
 });
 
@@ -238,5 +248,28 @@ describe('pushPendingToServer', () => {
 		const all = tasks.getAll();
 		expect(all.find((t) => t.id === orphan.id)).toBeUndefined();
 		expect(all.find((t) => t.id === 'srv-keep')?.dirty).toBe(false);
+	});
+
+	it('resets queue depth and records replay timestamp after successful push', async () => {
+		tasks.createLocal('telemetry', 'goal-management');
+		mockedApi.createTask.mockResolvedValue({
+			id: 'srv-telemetry',
+			space_id: 's1',
+			title: 'telemetry',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: 0,
+			order: 'z',
+			created_ts: 1,
+			updated_ts: 1
+		});
+		const before = Date.now();
+
+		await pushPendingToServer();
+
+		const status = readStatus();
+		expect(status.queueDepth).toBe(0);
+		expect(status.lastReplayTs).toBeDefined();
+		expect(status.lastReplayTs).toBeGreaterThanOrEqual(before);
 	});
 });

@@ -32,6 +32,12 @@
 - Prefer conventional-ish commits (`feat:`, `fix:`, `chore:`) to keep history tidy.
 - Keep `PROGRESS.md` updated when you finish a meaningful chunk.
 
+## Progress Log Standard
+- Write `PROGRESS.md` entries as product progress, not git/activity logs.
+- For each entry, state the user/project outcome first (what capability is now possible, safer, faster, or clearer).
+- Tie each update to the larger goals in `docs/ARCHITECTURE.md` (speed, local-first reliability, sync safety, simplicity, multi-user collaboration).
+- Keep implementation detail brief and only include it when needed to explain impact.
+
 ## Security & Compliance
 - Follow `SECURITY.md` for disclosures; avoid logging secrets.
 - Use linters for security signals (ESLint rules, future dependency scans). Keep deps lean; prefer upgrades over pinning vulnerable packages where feasible.
@@ -111,7 +117,7 @@ Return JSON with explicit errors per change on sync push. Update shared types.
   - One-liner fallback: `cd C:\Repositories\tasksync\server;$env:DATABASE_URL='sqlite://../data/tasksync.db';& "$env:USERPROFILE\.cargo\bin\cargo.exe" run --bin seed`
 - **Pre-push verification (preferred script):** `scripts/4-prepush.ps1`
   - Values to update if needed: optional `-SkipPlaywright`.
-  - One-liner fallback: `cd C:\Repositories\tasksync\web;npx playwright test`
+  - One-liner fallback: `cd C:\Repositories\tasksync\web;npx playwright test --workers=2 --retries=1`
 - **Auth login test (preferred script):** `scripts/5-login.ps1`
   - Values to update if needed: `-ApiUrl`, `-Email`, `-Password`, `-SpaceId`.
   - One-liner fallback: `Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/auth/login' -ContentType 'application/json' -Body '{"email":"admin@example.com","password":"tasksync","space_id":"s1"}'`

@@ -14,6 +14,7 @@ describe('sync status store', () => {
 	it('tracks pull/push and errors', () => {
 		let val = getVal();
 		expect(val.pull).toBe('idle');
+		expect(val.queueDepth).toBe(0);
 		syncStatus.setPull('running');
 		val = getVal();
 		expect(val.pull).toBe('running');
@@ -27,10 +28,26 @@ describe('sync status store', () => {
 	});
 
 	it('can replace status snapshot', () => {
-		syncStatus.setSnapshot({ pull: 'running', push: 'error', lastError: 'sync failed' });
+		syncStatus.setSnapshot({
+			pull: 'running',
+			push: 'error',
+			queueDepth: 3,
+			lastReplayTs: 1234,
+			lastError: 'sync failed'
+		});
 		const val = getVal();
 		expect(val.pull).toBe('running');
 		expect(val.push).toBe('error');
+		expect(val.queueDepth).toBe(3);
+		expect(val.lastReplayTs).toBe(1234);
 		expect(val.lastError).toBe('sync failed');
+	});
+
+	it('tracks queue depth and replay timestamp', () => {
+		syncStatus.setQueueDepth(6);
+		syncStatus.markReplay(987654);
+		const val = getVal();
+		expect(val.queueDepth).toBe(6);
+		expect(val.lastReplayTs).toBe(987654);
 	});
 });

@@ -1,59 +1,62 @@
-- 2026-31-01 19:13 - Initialized repo scaffolding (docs/AGENTS.md, docs/ARCHITECTURE.md, web/ SvelteKit app with lint/test config, server/ Axum stub, shared/types/task.ts, root tool configs)
-- 2026-31-01 19:13 - Ran npm audit (dev deps show 3 low from cookie in @sveltejs/kit/adapter-auto); rust toolchain not available (rustc missing)
-- 2026-31-01 19:14 - Installed Rust toolchain (rustc 1.93.0), ran cargo fmt/clippy/test for tasksync-server (all ok)
-- 2026-31-01 19:19 - Added GitHub Actions CI (web lint/check/test + Playwright install/run, server fmt/clippy/test); prepared workflows directory
-- 2026-31-01 19:25 - Tightened .gitignore (logs, Playwright test-results, turbo/cache) for dependency noise
-- 2026-31-01 19:29 - Added git hooks (pre-commit: web lint/check/test + rust fmt/clippy; pre-push: web tests + Playwright smoke + server tests), set core.hooksPath, documented in README
-- 2026-31-01 19:33 - Added licenses (MIT/Apache-2.0), editorconfig, SECURITY/CONTRIBUTING, .env.example, CODEOWNERS, PR template; CI caches for npm/cargo
-- 2026-31-01 19:35 - Updated docs/AGENTS.md with hook/lint discipline, commit hygiene, security notes
-- 2026-31-01 19:39 - Enforced test rule in AGENTS: every new component/module needs unit + functional/e2e tests (Vitest/Playwright or Rust)
-- 2026-31-01 20:34 - Built My Day + List UI (Svelte) with sidebar, task rows, stores, seed data; added list route, new Vitest + Playwright coverage; lint/check/test/Playwright passing
-- 2026-31-01 23:22 - Added IDB persistence for lists/tasks (repo layer, hydration on mount, fake-indexeddb for tests); Playwright/Vitest/lint passing and merged to main
-- 2026-31-01 23:50 - Added run-command guidance to AGENTS (one-liner env for server/web/Playwright/tests)
-- 2026-31-01 23:55 - Server foundation pushed (SQLite migrations, list/task routes, path fixes); local server + web tests confirmed
-- 2026-02-01 00:32 - Client API sync bootstrap (env-driven headers, fetch lists/tasks from server into stores/IDB)
-- 2026-01-02 00:49 - Added client push of dirty task toggles (store dirty flag, sync helpers, layout triggers), seeded default space/users/lists via server/src/bin/seed.rs
-- 2026-01-02 09:31 - Offline task creation: new add forms, local task flagging/push-to-server, sync merge of unsynced tasks, seed server lists to match client, added unit + Playwright coverage
-- 2026-01-02 15:13 - Added helper scripts (scripts/1-seed.ps1, 2-serve.ps1, 3-web.ps1) for one-line setup/run on Windows terminals
-- 2026-01-02 15:25 - Fixed helper scripts to use absolute DATABASE_URL and create data dir before seed/run
-- 2026-02-01 13:16 - Filtered legacy seed task IDs out of push flow (skip non-server IDs, drop 404s) and added sync unit tests; web lint/check/test passing
-- 2026-02-01 14:05 - Stopped task re-seeding on hydrate (no refresh dupes); added store hydration test; web lint/check/test passing
-- 2026-02-01 14:09 - Sequenced sync to pull → push → pull, ensuring freshly pushed tasks persist server IDs before refresh; web lint/check/test passing
-- 2026-02-01 14:18 - Forced sync writes to await IDB persistence after pull/push to avoid re-pushing locals on fast refresh; web lint/check/test passing
-- 2026-02-01 14:56 - Cleared IDB stores before saves to avoid stale local task records causing duplicate pushes; web lint/check/test passing
-- 2026-02-01 14:59 - Local dirty tasks now win over remote copies during pull (prevents checked-off tasks flipping back to pending); added coverage; web lint/check/test passing
-- 2026-02-01 15:02 - Confirmed no dupes and status stays after refresh; ready for next tasks
-- 2026-02-01 15:06 - Removed legacy client seed tasks (app starts empty; server seed only) and updated README; web lint/check/test passing
-- 2026-02-01 15:07 - Fully removed unused seed wiring from tasks store; tests/lint/check still green
-- 2026-02-01 15:28 - Stabilized Playwright e2e without client seeds (state reset + unique titles); all browsers passing
-- 2026-02-01 15:54 - Added scripts/4-prepush.ps1 to run lint/check/test/Playwright + cargo test with PATH fixes; documented in README
-- 2026-02-02 19:34 - Added task due dates, recurrence, notes, attachments + counts; clickable titles, row toggle, sync pill; sort menu; server PATCH/CORS updates; new migrations 0002/0003; lint/check/test passing
-- 2026-02-02 20:22 - List manager UI (create/rename/delete via API), detail drawer modal with full task meta, inline rename, safer list moves (My Day pinned), My Day date label, auto-sync wording, and recurrence/My Day unit tests.
-- 2026-02-02 21:10 - Added sidebar list manager (create/rename/delete via API), improved TaskRow details (no duplicate recurrence picker, fresh timestamps on edits), My Day date label, CORS allows DELETE, list store sync helpers, and new recurrence/My Day unit tests.
-- 2026-02-02 23:40 - Fixed API 401 by reseeding dev DB (`scripts/1-seed.ps1`), validated /health and /lists return 200 with admin headers; ready for server+web dev to resume.
-- 2026-02-02 23:58 - Fixed list view showing newly added tasks, added mobile nav drawer + responsive headers/task rows to mirror To Do on phones, ran web lint/check/tests (all passing).
-- 2026-02-02 00:08 - Locked body scroll to viewport, added bottom quick-add bar on mobile, set inputs to 16px to prevent iOS zoom, and made sidebar scrollable; web lint/check/tests passing.
-- 2026-02-02 00:14 - Blocked horizontal scroll/zoom on mobile (viewport meta, overflow-x hidden on html/body/main); web lint/check/tests passing.
-- 2026-02-02 00:23 - Added My Day suggestions list with add-to-My-Day actions, larger touch targets/focus rings, and new sync+check favicon; web lint/check/tests passing.
-- 2026-02-02 00:27 - Added long-press/ellipsis quick actions (Tomorrow, Next week, Star) on tasks; new store helpers for due date/priority with tests; web lint/check/tests passing.
-- 2026-02-02 08:00 - Simplified add flow to bottom bar only (desktop + mobile), exposed list add helper for e2e, all Playwright suites green; web lint/check/tests passing.
-- 2026-02-05 15:02 - Implemented completion sound + persisted sound settings (sidebar controls, IDB + localStorage fallback, app-ready hydration marker), wired completion audio into task toggles, added settings/task unit coverage and Playwright persistence flow; web lint/check/test + Playwright all passing.
-- 2026-02-05 16:42 - Added mobile sidebar pinning (pin/unpin control, persisted nav pin state, pin-aware auto-close/backdrop behavior), exposed sidebar drawer test id, and added cross-browser Playwright navigation coverage for pin behavior; web lint/check/test and targeted nav e2e passing.
-- 2026-02-05 16:49 - Updated docs/AGENTS.md command policy: script-first `.ps1` guidance, explicit "values to update" notes, and strict copy/paste-safe one-liner formatting with no leading/separator spacing.
-- 2026-02-05 17:48 - Refined mobile UX to feel closer to Microsoft To-Do: pinned sidebar now reflows to side-by-side split on mobile (no content hidden behind overlay), tightened sidebar sizing, simplified task-row chips/control density on small screens, and refreshed mobile header/quick-add spacing; web lint/check/test and targeted nav Playwright passing.
-- 2026-02-05 18:09 - UI accepted as "good enough" for MVP phase; reviewed architecture and re-prioritized next implementation slice to auth/role enforcement and durable sync protocol completion.
-- 2026-02-06 20:15 - Started auth/sync phase on `feat/auth-shared-sync`: added `/auth/login` + `/auth/me` (JWT bearer with legacy header fallback), wired web API/header token support with shared auth types, added login helper script (`scripts/5-login.ps1`), and added auth unit coverage on server + headers coverage on web; server fmt/clippy/test and web lint/check/test/Playwright passing.
-- 2026-02-06 21:45 - Added client auth session layer: new auth store (`token` vs `legacy` mode), sidebar account panel (sign in/sign out + session status), sync gating to authenticated sessions with in-flight lock to prevent overlapping sync runs, and auth session e2e coverage (`web/tests/e2e/auth.spec.ts`); web lint/check/test and full Playwright passing.
-- 2026-02-06 22:25 - Implemented user-based task ownership and contributor handoff flow: added task ownership migration (`0004_task_ownership.sql`) with `assignee_user_id` + `created_by_user_id`, server auth members endpoint (`GET /auth/members`), contributor-visible task filtering (assigned/created), contributor create-to-other-user support with server validation, client members store and assignee selectors on quick-add forms, task assignee display/edit support, and added server + web unit coverage; server fmt/clippy/test and web lint/check/test/Playwright passing.
-- 2026-02-06 22:38 - Added script-first ownership test workflow (`scripts/6-ownership-check.ps1`) to validate contributor-create/admin-assigned behavior and contributor edit denial, then documented it in `docs/AGENTS.md` run commands for repeatable manual verification.
-- 2026-02-06 22:47 - Scoped client persistence by auth/session identity (`tasksync_<scope>` DB naming in IDB), rehydrated lists/tasks/settings on scope changes to prevent cross-account local data bleed, and stabilized e2e reset/IDB wait helpers for scoped DB names; web lint/check/test and full Playwright passing.
-- 2026-02-06 23:12 - Switched contributor read access to list-grant scope (server `GET /lists` + `GET /tasks` now grant-filtered), so contributors can see admin tasks in granted lists while staying create-only on writes; aligned client visibility and read-only UI guards for contributor task interactions, updated ownership check script to assert contributor can see admin baseline tasks, and added server coverage for granted-list visibility; server fmt/clippy/test and web lint/check/test/Playwright passing.
-- 2026-02-06 23:34 - Reworked sidebar UX to a cleaner split with bottom-anchored account panel, added per-user profile icon support (`avatar_icon`) with self-edit API (`PATCH /auth/me`), introduced admin team management APIs/UI (`POST /auth/members`, `GET/PUT /auth/grants`) for creating members and toggling contributor list access, refreshed assignee dropdowns with icon+role presentation, and fixed quick-add overlay pointer interception affecting auth clicks; server fmt/clippy/test and web lint/check/test/Playwright passing.
-- 2026-02-06 23:45 - Simplified mobile quick-add assignment UX: removed assignee dropdown from My Day/List add bars and switched to silent defaults (admin -> self, contributor -> first admin), reducing visual density while preserving contributor handoff behavior; web lint/check/test and auth+myday Playwright suites passing.
-- 2026-02-06 23:52 - Added `scripts/7-admin-check.ps1` for one-command verification of admin profile update + member creation + contributor list-grant flows, documented in `docs/AGENTS.md`, and patched server CORS to include `PUT` for `/auth/grants` calls.
-- 2026-02-07 00:08 - Fixed admin UI visibility reliability by switching sidebar admin gating to an explicit reactive flag (`adminMode`) and added Playwright auth assertion that `Manage contributors` is visible for admin sessions; web lint/check/test and auth e2e passing.
-- 2026-02-07 00:39 - Implemented per-user credential storage: added migration `0006_user_password_hash.sql`, switched `/auth/login` to bcrypt hash verification with one-time legacy fallback upgrade for old rows, required password on `POST /auth/members`, updated seed/script/docs flows for user-specific passwords (`SEED_ADMIN_PASSWORD`/`SEED_CONTRIB_PASSWORD`, `NewMemberPassword`), and added server coverage for legacy hash upgrade; server fmt/clippy/test and web lint/check/test/Playwright passing.
-- 2026-02-07 08:15 - Added lightweight password lifecycle (no invite complexity): new self-service password change endpoint (`PATCH /auth/password`) with account UI controls, admin member reset endpoint (`PATCH /auth/members/:user_id/password`) with team reset action, updated admin verification script to assert reset+login path, and expanded server/auth e2e coverage; server fmt/clippy/test and web lint/check/test/Playwright passing.
-- 2026-02-06 09:45 - Added SharedWorker-based sync tab coordination: introduced `coordinator.worker.ts` leader election (prefers authenticated tabs), new sync coordinator client abstraction + unit tests, and updated app layout to run 15s auto-sync only on the elected leader while follower tabs issue sync requests through the worker; web lint/check/test and full Playwright passing.
-- 2026-02-06 10:05 - Added cross-tab sync status mirroring + create idempotency hardening: leader now publishes pull/push/error snapshots through SharedWorker to follower tabs (badge/health stays accurate), server `POST /tasks` now supports client-provided IDs for retry-safe idempotent creates (duplicate create returns existing task), client push now sends deterministic request IDs and persists each push mutation immediately to reduce reload races; server fmt/clippy/test and web lint/check/test/Playwright passing.
-- 2026-02-06 10:17 - Stabilized Playwright pre-push reliability by reducing browser worker fan-out (`workers: 3` local / `2` CI) and increasing e2e per-test timeout to 45s to prevent intermittent Firefox page setup timeouts; re-ran targeted Firefox repeat and full Playwright (all passing).
+- 2026-31-01 19:13 - Established the shared web/server/types foundation so the product could evolve as a single local-first system instead of disconnected prototypes.
+- 2026-31-01 19:13 - Audited dependencies and environment readiness early to reduce avoidable security and setup risk before feature work.
+- 2026-31-01 19:14 - Enabled the Rust toolchain and validated server quality gates so backend work could move forward with confidence.
+- 2026-31-01 19:19 - Added CI coverage across web and server to protect speed and reliability as the codebase grows.
+- 2026-31-01 19:25 - Cleaned repository noise so contributors can focus on meaningful changes and test signals.
+- 2026-31-01 19:29 - Introduced commit/push guardrails to catch regressions before they reach shared branches.
+- 2026-31-01 19:33 - Added governance and security baseline docs so the project can scale beyond solo development safely.
+- 2026-31-01 19:35 - Clarified AI assistant operating rules to keep implementation consistent with product principles.
+- 2026-31-01 19:39 - Enforced a test-first expectation for new modules to prevent silent regressions as scope expands.
+- 2026-31-01 20:34 - Delivered the first usable My Day + List experience, proving the core workflow feels fast and coherent.
+- 2026-31-01 23:22 - Made task/list state durable across reloads and offline periods, reinforcing local-first behavior.
+- 2026-31-01 23:50 - Documented reliable run commands so daily development and troubleshooting are faster.
+- 2026-31-01 23:55 - Brought the server to a functional baseline with SQLite-backed task/list APIs, enabling real sync progress.
+- 2026-02-01 00:32 - Connected client hydration to server data, moving from demo-only behavior toward shared state.
+- 2026-01-02 00:49 - Enabled pushing local task updates upstream so device-side edits can converge to a canonical backend state.
+- 2026-01-02 09:31 - Enabled offline task creation that survives reconnect, protecting user flow when connectivity is poor.
+- 2026-01-02 15:13 - Added repeatable startup scripts to reduce setup friction and improve team velocity.
+- 2026-01-02 15:25 - Hardened scripts for path and DB reliability so local environments start consistently.
+- 2026-02-01 13:16 - Removed legacy-ID sync noise to prevent false errors and improve trust in sync behavior.
+- 2026-02-01 14:05 - Stopped accidental reseeding on hydrate, eliminating duplicate task confusion.
+- 2026-02-01 14:09 - Reordered sync stages so pushed items resolve to stable server identity sooner.
+- 2026-02-01 14:18 - Closed a persistence race window that could re-trigger duplicate pushes after fast refreshes.
+- 2026-02-01 14:56 - Cleared stale local records during saves to avoid ghost data and inconsistent sync outcomes.
+- 2026-02-01 14:59 - Prioritized unsynced local edits over remote snapshots to preserve user intent.
+- 2026-02-01 15:02 - Confirmed sync stability after duplicate/status regressions, improving confidence to continue feature work.
+- 2026-02-01 15:06 - Removed legacy seed content so environments begin from real data, not demo artifacts.
+- 2026-02-01 15:07 - Completed seed-code cleanup to reduce maintenance drag and accidental reintroduction of old behavior.
+- 2026-02-01 15:28 - Stabilized e2e behavior around real runtime data, improving release confidence.
+- 2026-02-01 15:54 - Added a single pre-push verification path to standardize quality checks before sharing code.
+- 2026-02-02 19:34 - Expanded task planning depth (due dates, recurrence, notes, attachments, sorting), making the app practical for real workflows.
+- 2026-02-02 20:22 - Added richer list and task-detail management so users can organize and edit without leaving core flow.
+- 2026-02-02 21:10 - Improved management ergonomics in sidebar/detail views to reduce friction in day-to-day task editing.
+- 2026-02-02 23:40 - Restored local auth/dev continuity after a 401 interruption so feature work could continue without drift.
+- 2026-02-02 23:58 - Fixed list-view add behavior and improved mobile navigation, raising confidence in phone-first usage.
+- 2026-02-02 00:08 - Tightened mobile viewport behavior and quick-add ergonomics for cleaner one-handed interaction.
+- 2026-02-02 00:14 - Removed unintended horizontal movement on mobile to make the UI feel stable and intentional.
+- 2026-02-02 00:23 - Added My Day suggestions to reduce planning effort and speed up daily prioritization.
+- 2026-02-02 00:27 - Added quick actions for common scheduling intents, reducing taps for frequent operations.
+- 2026-02-02 08:00 - Simplified task-entry to one consistent quick-add path, lowering cognitive load.
+- 2026-02-05 15:02 - Added completion sound personalization with persisted settings, improving delight without sacrificing reliability.
+- 2026-02-05 16:42 - Added sidebar pin behavior so navigation state follows user preference across sessions.
+- 2026-02-05 16:49 - Updated agent command policy to script-first and copy/paste-safe formatting, reducing execution errors.
+- 2026-02-05 17:48 - Tuned mobile pinned-sidebar layout to avoid overlap and align closer with the target product feel.
+- 2026-02-05 18:09 - Marked UI slice as sufficient for MVP and redirected effort toward auth and sync durability.
+- 2026-02-06 20:15 - Introduced JWT-based authentication groundwork so sync can be identity-aware across devices.
+- 2026-02-06 21:45 - Added client session UX and auth-gated sync to prevent unauthorized or ambiguous background updates.
+- 2026-02-06 22:25 - Implemented task ownership semantics so multi-user collaboration has clear responsibility boundaries.
+- 2026-02-06 22:38 - Added ownership verification script to make role-behavior QA repeatable.
+- 2026-02-06 22:47 - Scoped local persistence by authenticated identity to prevent cross-user data bleed on shared devices.
+- 2026-02-06 23:12 - Shifted contributor visibility to explicit list grants, enabling safer shared workflows.
+- 2026-02-06 23:34 - Delivered cleaner account/team controls and user icon support, improving admin usability and clarity.
+- 2026-02-06 23:45 - Simplified mobile assignment UI to preserve capability while reducing visual overload.
+- 2026-02-06 23:52 - Added admin flow verification script and fixed grant-update CORS path, improving operational reliability.
+- 2026-02-07 00:08 - Fixed admin-control visibility logic so privileged tooling is reliably discoverable.
+- 2026-02-07 00:39 - Moved to per-user password storage with upgrade path, strengthening account security posture.
+- 2026-02-07 08:15 - Added practical password lifecycle flows (self-change + admin reset) to support real account management.
+- 2026-02-06 09:45 - Introduced SharedWorker leader coordination so only one tab drives periodic sync, reducing duplicate work.
+- 2026-02-06 10:05 - Hardened sync safety with idempotent create semantics and cross-tab status mirroring for consistent feedback.
+- 2026-02-06 10:17 - Reduced pre-push test flakiness by tuning browser concurrency/timeouts, improving delivery cadence.
+- 2026-02-06 11:04 - Added queue/replay telemetry across sync status paths so tabs report richer sync health, not just binary states.
+- 2026-02-06 11:07 - Updated progress logging standards to be outcome-first and goal-aligned, keeping project tracking useful beyond git history.
+- 2026-02-06 11:37 - Hardened pre-push reliability by running browser smoke checks with lower contention and retry tolerance, reducing false push blocks from intermittent Firefox startup flake.

@@ -23,8 +23,8 @@ npm run test
 if ($SkipPlaywright) {
 	Write-Host "web: skipping Playwright (SkipPlaywright switch set)"
 } else {
-	Write-Host "web: npx playwright test"
-	npx playwright test
+	Write-Host "web: npx playwright test --workers=2 --retries=1"
+	npx playwright test --workers=2 --retries=1
 }
 Pop-Location
 
