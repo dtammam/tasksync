@@ -1,11 +1,11 @@
 FROM rust:1.82-bookworm AS build
 WORKDIR /app
 
-COPY server/Cargo.toml server/Cargo.toml
-COPY server/src server/src
-COPY server/migrations server/migrations
+COPY Cargo.toml Cargo.toml
+COPY src src
+COPY migrations migrations
 
-RUN cargo build --release --manifest-path server/Cargo.toml --bin tasksync-server --bin seed
+RUN cargo build --release --bin tasksync-server --bin seed
 
 FROM debian:bookworm-slim
 RUN apt-get update \
