@@ -71,6 +71,19 @@ const makeLocalTask = (
 	return task;
 };
 
+const hasChangesSinceCreate = (current: Task, sent: Task) =>
+	current.title !== sent.title ||
+	current.status !== sent.status ||
+	current.list_id !== sent.list_id ||
+	current.my_day !== sent.my_day ||
+	current.order !== sent.order ||
+	current.url !== sent.url ||
+	current.recurrence_id !== sent.recurrence_id ||
+	current.due_date !== sent.due_date ||
+	current.notes !== sent.notes ||
+	(current.occurrences_completed ?? 0) !== (sent.occurrences_completed ?? 0) ||
+	JSON.stringify(current.attachments ?? []) !== JSON.stringify(sent.attachments ?? []);
+
 export const tasks = {
 	subscribe: tasksStore.subscribe,
 	add(task: Task) {
@@ -289,11 +302,18 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
-	replaceWithRemote(localId: string, remote: Task) {
+	replaceWithRemote(localId: string, remote: Task, sent?: Task) {
 		tasksStore.update((list) =>
 			list.map((task) =>
 				task.id === localId
-					? { ...remote, dirty: false, local: false }
+					? sent && hasChangesSinceCreate(task, sent)
+						? {
+								...task,
+								id: remote.id,
+								local: false,
+								dirty: true
+							}
+						: { ...remote, dirty: false, local: false }
 					: task.id === remote.id
 						? task
 						: task

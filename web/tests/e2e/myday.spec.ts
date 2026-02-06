@@ -1,14 +1,36 @@
 import { expect, test, type Page } from '@playwright/test';
 
-interface TaskHelpers extends Window {
-	__addTaskMyDay?: () => void;
-	__addTaskList?: () => void;
-	__addTaskListWithTitle?: (title: string) => void;
-}
-
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 
 test.describe.configure({ mode: 'serial' });
+
+const waitForTaskInIdb = async (page: Page, title: string) => {
+	await expect
+		.poll(async () =>
+			page.evaluate(async (taskTitle) => {
+				const db = await new Promise<IDBDatabase | null>((resolve) => {
+					const req = indexedDB.open('tasksync');
+					req.onsuccess = () => resolve(req.result);
+					req.onerror = () => resolve(null);
+				});
+				if (!db) return false;
+				const tx = db.transaction('tasks', 'readonly');
+				const store = tx.objectStore('tasks');
+				const allReq = store.getAll();
+				const all = await new Promise<unknown[]>((resolve) => {
+					allReq.onsuccess = () => resolve(allReq.result ?? []);
+					allReq.onerror = () => resolve([]);
+				});
+				db.close();
+				return all.some((task) => {
+					if (!task || typeof task !== 'object') return false;
+					if (!('title' in task)) return false;
+					return (task as { title?: unknown }).title === taskTitle;
+				});
+			}, title)
+		)
+		.toBe(true);
+};
 
 const resetClientState = async (page: Page) => {
 	await page.goto('/');
@@ -34,8 +56,8 @@ test.describe('My Day', () => {
 
 		const title = makeTitle('Playwright seed');
 		await page.getByTestId('new-task-input').fill(title);
-		await page.waitForFunction(() => typeof (window as TaskHelpers).__addTaskMyDay === 'function');
-		await page.evaluate(() => (window as TaskHelpers).__addTaskMyDay?.());
+		await page.getByTestId('new-task-submit').click();
+		await expect(page.getByTestId('new-task-input')).toHaveValue('');
 		const seedRow = page.getByTestId('task-row').filter({ hasText: title });
 		await expect(seedRow).toHaveCount(1);
 
@@ -50,11 +72,11 @@ test.describe('My Day', () => {
 		await resetClientState(page);
 		const title = makeTitle('Playwright-added task');
 		await page.getByTestId('new-task-input').fill(title);
-		await page.waitForFunction(() => typeof (window as TaskHelpers).__addTaskMyDay === 'function');
-		await page.evaluate(() => (window as TaskHelpers).__addTaskMyDay?.());
+		await page.getByTestId('new-task-submit').click();
 		await expect(page.getByTestId('new-task-input')).toHaveValue('');
 		const rows = page.getByTestId('task-row');
 		await expect(rows.filter({ hasText: title })).toHaveCount(1);
+		await waitForTaskInIdb(page, title);
 		await page.reload();
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 	});

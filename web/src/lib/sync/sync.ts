@@ -85,7 +85,7 @@ export const pushPendingToServer = async () => {
 					due_date: t.due_date,
 					notes: t.notes
 				});
-				tasks.replaceWithRemote(t.id, mapApiTask(createdTask));
+				tasks.replaceWithRemote(t.id, mapApiTask(createdTask), t);
 				created += 1;
 				pushed += 1;
 			} else {

@@ -122,6 +122,41 @@ describe('pushPendingToServer', () => {
 		expect(all.find((t) => t.id === local?.id)).toBeUndefined();
 	});
 
+	it('keeps local edits made while create request is in flight', async () => {
+		const local = tasks.createLocal('race task', 'goal-management');
+		let resolveCreate: (
+			value: ReturnType<typeof mockedApi.createTask> extends Promise<infer T> ? T : never
+		) => void;
+		const createResponse = new Promise<
+			ReturnType<typeof mockedApi.createTask> extends Promise<infer T> ? T : never
+		>((resolve) => {
+			resolveCreate = resolve;
+		});
+		mockedApi.createTask.mockReturnValue(createResponse as ReturnType<typeof mockedApi.createTask>);
+
+		const pushing = pushPendingToServer();
+		if (local) {
+			tasks.toggle(local.id);
+		}
+		resolveCreate!({
+			id: 'srv-race-task',
+			space_id: 's1',
+			title: 'race task',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: 0,
+			order: 'z',
+			created_ts: 1,
+			updated_ts: 1
+		});
+		await pushing;
+
+		const saved = tasks.getAll().find((t) => t.id === 'srv-race-task');
+		expect(saved?.local).toBe(false);
+		expect(saved?.status).toBe('done');
+		expect(saved?.dirty).toBe(true);
+	});
+
 	it('drops legacy dirty tasks with non-server ids before pushing', async () => {
 		const legacy: Task = {
 			id: 't1',
