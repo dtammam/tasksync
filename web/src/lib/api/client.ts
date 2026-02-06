@@ -1,8 +1,10 @@
 import { buildHeaders } from './headers';
 import type {
 	AuthCreateMemberRequest,
+	AuthChangePasswordRequest,
 	AuthLoginRequest,
 	AuthLoginResponse,
+	AuthSetMemberPasswordRequest,
 	AuthUpdateProfileRequest,
 	AuthUser,
 	ListGrant,
@@ -53,7 +55,14 @@ const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> =>
 	if (!res.ok) {
 		throw new Error(`API ${res.status} ${res.statusText}`);
 	}
-	return (await res.json()) as T;
+	if (res.status === 204) {
+		return undefined as T;
+	}
+	const raw = await res.text();
+	if (!raw.trim()) {
+		return undefined as T;
+	}
+	return JSON.parse(raw) as T;
 };
 
 export const api = {
@@ -62,9 +71,16 @@ export const api = {
 	me: () => fetchJson<AuthUser>('/auth/me'),
 	updateMe: (body: AuthUpdateProfileRequest) =>
 		fetchJson<AuthUser>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
+	changePassword: (body: AuthChangePasswordRequest) =>
+		fetchJson<void>('/auth/password', { method: 'PATCH', body: JSON.stringify(body) }),
 	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),
 	createMember: (body: AuthCreateMemberRequest) =>
 		fetchJson<SpaceMember>('/auth/members', { method: 'POST', body: JSON.stringify(body) }),
+	setMemberPassword: (userId: string, body: AuthSetMemberPasswordRequest) =>
+		fetchJson<void>(`/auth/members/${userId}/password`, {
+			method: 'PATCH',
+			body: JSON.stringify(body)
+		}),
 	getListGrants: () => fetchJson<ListGrant[]>('/auth/grants'),
 	setListGrant: (body: SetListGrantRequest) =>
 		fetchJson<ListGrant>('/auth/grants', { method: 'PUT', body: JSON.stringify(body) }),

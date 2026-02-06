@@ -31,16 +31,25 @@ let profileIcon = '';
 let profileMessage = '';
 let profileError = '';
 let profileSeedUserId = '';
+let showPasswordEditor = false;
+let passwordBusy = false;
+let currentPasswordDraft = '';
+let newPasswordDraft = '';
+let confirmPasswordDraft = '';
+let passwordMessage = '';
+let passwordError = '';
 
 let showTeam = false;
 let teamBusy = false;
 let teamError = '';
+let teamMessage = '';
 let grantsLoading = false;
 let grants = [];
 let loadedAdminScope = '';
 let newMemberEmail = '';
 let newMemberDisplay = '';
 let newMemberRole = 'contributor';
+let newMemberPassword = '';
 let newMemberIcon = '';
 let adminMode = false;
 
@@ -57,6 +66,8 @@ const avatarFor = (user) => {
 };
 
 const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
+
+const passwordIsValid = (value) => value.trim().length >= 8;
 
 const resetDrafts = () => {
 	renameDraft = {};
@@ -142,8 +153,14 @@ const signOut = () => {
 	auth.logout();
 	loginPassword = '';
 	showProfileEditor = false;
+	showPasswordEditor = false;
 	profileMessage = '';
 	profileError = '';
+	passwordMessage = '';
+	passwordError = '';
+	currentPasswordDraft = '';
+	newPasswordDraft = '';
+	confirmPasswordDraft = '';
 };
 
 const saveProfile = async () => {
@@ -170,10 +187,47 @@ const saveProfile = async () => {
 	}
 };
 
+const savePassword = async () => {
+	if ($auth.status !== 'authenticated') return;
+	const currentPassword = currentPasswordDraft.trim();
+	const newPassword = newPasswordDraft.trim();
+	const confirmPassword = confirmPasswordDraft.trim();
+	if (!currentPassword) {
+		passwordError = 'Current password is required.';
+		return;
+	}
+	if (!passwordIsValid(newPassword)) {
+		passwordError = 'New password must be at least 8 characters.';
+		return;
+	}
+	if (newPassword !== confirmPassword) {
+		passwordError = 'New passwords do not match.';
+		return;
+	}
+	passwordBusy = true;
+	passwordError = '';
+	passwordMessage = '';
+	try {
+		await api.changePassword({
+			current_password: currentPassword,
+			new_password: newPassword
+		});
+		currentPasswordDraft = '';
+		newPasswordDraft = '';
+		confirmPasswordDraft = '';
+		passwordMessage = 'Password updated.';
+	} catch (err) {
+		passwordError = err instanceof Error ? err.message : String(err);
+	} finally {
+		passwordBusy = false;
+	}
+};
+
 const loadGrants = async () => {
 	if (!adminMode) return;
 	grantsLoading = true;
 	teamError = '';
+	teamMessage = '';
 	try {
 		grants = await api.getListGrants();
 	} catch (err) {
@@ -187,21 +241,29 @@ const createMember = async () => {
 	if (!adminMode) return;
 	const email = newMemberEmail.trim().toLowerCase();
 	const display = newMemberDisplay.trim();
-	if (!email || !display) return;
+	const password = newMemberPassword.trim();
+	if (!email || !display || !passwordIsValid(password)) {
+		teamError = 'Member password must be at least 8 characters.';
+		return;
+	}
 	teamBusy = true;
 	teamError = '';
+	teamMessage = '';
 	try {
 		await api.createMember({
 			email,
 			display,
 			role: newMemberRole,
+			password,
 			avatar_icon: newMemberIcon
 		});
 		newMemberEmail = '';
 		newMemberDisplay = '';
 		newMemberRole = 'contributor';
+		newMemberPassword = '';
 		newMemberIcon = '';
 		await Promise.all([members.hydrateFromServer(), loadGrants()]);
+		teamMessage = `Added ${display}.`;
 	} catch (err) {
 		teamError = err instanceof Error ? err.message : String(err);
 	} finally {
@@ -216,6 +278,7 @@ const setGrant = async (userId, listId, granted) => {
 	if (!adminMode) return;
 	teamBusy = true;
 	teamError = '';
+	teamMessage = '';
 	try {
 		await api.setListGrant({ user_id: userId, list_id: listId, granted });
 		if (granted) {
@@ -232,13 +295,42 @@ const setGrant = async (userId, listId, granted) => {
 	}
 };
 
+const resetMemberPassword = async (member) => {
+	if (!adminMode) return;
+	const draft = prompt(`New password for ${member.display}`, '');
+	if (draft === null) return;
+	const password = draft.trim();
+	if (!passwordIsValid(password)) {
+		teamError = 'Member password must be at least 8 characters.';
+		teamMessage = '';
+		return;
+	}
+	teamBusy = true;
+	teamError = '';
+	teamMessage = '';
+	try {
+		await api.setMemberPassword(member.user_id, { password });
+		teamMessage = `Password reset for ${member.display}.`;
+	} catch (err) {
+		teamError = err instanceof Error ? err.message : String(err);
+	} finally {
+		teamBusy = false;
+	}
+};
+
 $: if ($auth.user?.user_id && profileSeedUserId !== $auth.user.user_id) {
 	profileSeedUserId = $auth.user.user_id;
 	profileDisplay = $auth.user.display ?? '';
 	profileIcon = $auth.user.avatar_icon ?? '';
 	profileMessage = '';
 	profileError = '';
+	passwordMessage = '';
+	passwordError = '';
+	currentPasswordDraft = '';
+	newPasswordDraft = '';
+	confirmPasswordDraft = '';
 	showProfileEditor = false;
+	showPasswordEditor = false;
 }
 
 $: adminScope = adminMode && $auth.user ? `${$auth.user.space_id}:${$auth.user.user_id}` : '';
@@ -250,6 +342,7 @@ $: if (!adminScope && loadedAdminScope) {
 	loadedAdminScope = '';
 	grants = [];
 	showTeam = false;
+	teamMessage = '';
 }
 
 $: contributorMembers = ($members ?? []).filter((member) => member.role === 'contributor');
@@ -376,6 +469,15 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 								</select>
 							</label>
 							<label>
+								Password
+								<input
+									type="password"
+									placeholder="min 8 chars"
+									autocomplete="new-password"
+									bind:value={newMemberPassword}
+								/>
+							</label>
+							<label>
 								Icon
 								<input type="text" placeholder="AA" maxlength="4" bind:value={newMemberIcon} />
 							</label>
@@ -384,7 +486,12 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 							type="button"
 							class="primary"
 							on:click={createMember}
-							disabled={teamBusy || !newMemberDisplay.trim() || !newMemberEmail.trim()}
+							disabled={
+								teamBusy ||
+								!newMemberDisplay.trim() ||
+								!newMemberEmail.trim() ||
+								newMemberPassword.trim().length < 8
+							}
 						>
 							Add member
 						</button>
@@ -404,6 +511,16 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 												<span>{member.email}</span>
 											</div>
 											<span class="role-chip">{roleLabel(member.role)}</span>
+										</div>
+										<div class="member-tools">
+											<button
+												type="button"
+												class="ghost tiny"
+												disabled={teamBusy}
+												on:click={() => resetMemberPassword(member)}
+											>
+												Reset password
+											</button>
 										</div>
 										<div class="grant-grid">
 											{#each managedLists as list}
@@ -428,6 +545,9 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 								<p class="muted-note">No contributors yet. Add one above.</p>
 							{/if}
 						</div>
+					{/if}
+					{#if teamMessage}
+						<p class="ok">{teamMessage}</p>
 					{/if}
 					{#if teamError}
 						<p class="error">{teamError}</p>
@@ -497,6 +617,17 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 					<button type="button" class="ghost" on:click={() => (showProfileEditor = !showProfileEditor)}>
 						{showProfileEditor ? 'Close profile edit' : 'Edit profile'}
 					</button>
+					<button
+						type="button"
+						class="ghost"
+						on:click={() => {
+							showPasswordEditor = !showPasswordEditor;
+							passwordError = '';
+							passwordMessage = '';
+						}}
+					>
+						{showPasswordEditor ? 'Close password edit' : 'Change password'}
+					</button>
 					<button type="button" class="ghost danger" data-testid="auth-signout" on:click={signOut}>
 						Sign out
 					</button>
@@ -525,6 +656,47 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 						{/if}
 						{#if profileError}
 							<p class="error">{profileError}</p>
+						{/if}
+					</div>
+				{/if}
+
+				{#if showPasswordEditor}
+					<div class="profile-editor">
+						<label>
+							Current password
+							<input type="password" autocomplete="current-password" bind:value={currentPasswordDraft} />
+						</label>
+						<label>
+							New password
+							<input
+								type="password"
+								placeholder="min 8 chars"
+								autocomplete="new-password"
+								bind:value={newPasswordDraft}
+							/>
+						</label>
+						<label>
+							Confirm new password
+							<input
+								type="password"
+								placeholder="repeat new password"
+								autocomplete="new-password"
+								bind:value={confirmPasswordDraft}
+							/>
+						</label>
+						<button
+							type="button"
+							class="primary"
+							on:click={savePassword}
+							disabled={passwordBusy || !currentPasswordDraft.trim() || !newPasswordDraft.trim()}
+						>
+							{passwordBusy ? 'Updating...' : 'Update password'}
+						</button>
+						{#if passwordMessage}
+							<p class="ok">{passwordMessage}</p>
+						{/if}
+						{#if passwordError}
+							<p class="error">{passwordError}</p>
 						{/if}
 					</div>
 				{/if}
@@ -844,6 +1016,11 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 		border-radius: 999px;
 	}
 
+	.member-tools {
+		display: flex;
+		justify-content: flex-end;
+	}
+
 	.grant-grid {
 		display: grid;
 		grid-template-columns: 1fr;
@@ -950,8 +1127,13 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 
 	.account-actions {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr;
 		gap: 8px;
+	}
+
+	button.ghost.tiny {
+		padding: 6px 8px;
+		font-size: 12px;
 	}
 
 	.profile-editor {

@@ -24,11 +24,21 @@ export interface AuthUpdateProfileRequest {
 	avatar_icon?: string;
 }
 
+export interface AuthChangePasswordRequest {
+	current_password: string;
+	new_password: string;
+}
+
 export interface AuthCreateMemberRequest {
 	email: string;
 	display: string;
 	role: 'admin' | 'contributor';
+	password: string;
 	avatar_icon?: string;
+}
+
+export interface AuthSetMemberPasswordRequest {
+	password: string;
 }
 
 export interface ListGrant {

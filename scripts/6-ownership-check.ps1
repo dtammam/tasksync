@@ -1,6 +1,8 @@
 param(
 	[string]$ApiUrl = "http://localhost:3000",
 	[string]$Password = "tasksync",
+	[string]$AssigneePassword = "",
+	[string]$CreatorPassword = "",
 	[string]$SpaceId = "s1",
 	[string]$ListId = "goal-management",
 	[string]$AssigneeEmail = "admin@example.com",
@@ -11,11 +13,12 @@ $ErrorActionPreference = "Stop"
 
 function Login {
 	param(
-		[string]$Email
+		[string]$Email,
+		[string]$PasswordValue
 	)
 	$payload = @{
 		email = $Email
-		password = $Password
+		password = $PasswordValue
 		space_id = $SpaceId
 	} | ConvertTo-Json
 	return Invoke-RestMethod -Method Post -Uri "$ApiUrl/auth/login" -ContentType "application/json" -Body $payload
@@ -50,8 +53,10 @@ function StatusFromException {
 }
 
 Write-Host "Logging in admin and contributor..."
-$admin = Login -Email $AssigneeEmail
-$contrib = Login -Email $CreatorEmail
+$resolvedAssigneePassword = if ($AssigneePassword.Trim()) { $AssigneePassword } else { $Password }
+$resolvedCreatorPassword = if ($CreatorPassword.Trim()) { $CreatorPassword } else { $Password }
+$admin = Login -Email $AssigneeEmail -PasswordValue $resolvedAssigneePassword
+$contrib = Login -Email $CreatorEmail -PasswordValue $resolvedCreatorPassword
 
 Write-Host "Loading members..."
 $members = Invoke-RestMethod -Method Get -Uri "$ApiUrl/auth/members" -Headers (JsonHeaders -Token $admin.token)
