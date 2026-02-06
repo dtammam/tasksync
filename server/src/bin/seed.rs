@@ -18,13 +18,13 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     sqlx::query(
-        "insert or ignore into user (id, email, display) values (?1,'admin@example.com','Admin')",
+        "insert or ignore into user (id, email, display, avatar_icon) values (?1,'admin@example.com','Admin','🛠')",
     )
     .bind(admin)
     .execute(&pool)
     .await?;
     sqlx::query(
-        "insert or ignore into user (id, email, display) values (?1,'contrib@example.com','Contributor')",
+        "insert or ignore into user (id, email, display, avatar_icon) values (?1,'contrib@example.com','Contributor','✨')",
     )
     .bind(contrib)
     .execute(&pool)

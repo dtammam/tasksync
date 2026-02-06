@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { getAuthMode, getAuthToken, setAuthMode, setAuthToken, type AuthMode } from '$lib/api/headers';
-import type { AuthUser } from '$shared/types/auth';
+import type { AuthUpdateProfileRequest, AuthUser } from '$shared/types/auth';
 
 const authUserKey = 'tasksync:auth-user';
 
@@ -42,6 +42,7 @@ const normalizeUser = (value: unknown): AuthUser | null => {
 		user_id: candidate.user_id,
 		email: candidate.email,
 		display: candidate.display,
+		avatar_icon: typeof candidate.avatar_icon === 'string' ? candidate.avatar_icon : undefined,
 		space_id: candidate.space_id,
 		role: candidate.role
 	};
@@ -141,6 +142,7 @@ export const auth = {
 				user_id: response.user_id,
 				email: response.email,
 				display: response.display,
+				avatar_icon: response.avatar_icon,
 				space_id: response.space_id,
 				role: response.role
 			};
@@ -165,6 +167,20 @@ export const auth = {
 			});
 			throw err;
 		}
+	},
+	async updateProfile(body: AuthUpdateProfileRequest) {
+		const current = get(authStore);
+		if (current.status !== 'authenticated' || !current.user) {
+			throw new Error('Not authenticated');
+		}
+		const updated = await api.updateMe(body);
+		persistUser(updated);
+		authStore.set({
+			...current,
+			user: updated,
+			error: null
+		});
+		return updated;
 	},
 	logout() {
 		setAuthMode('token');

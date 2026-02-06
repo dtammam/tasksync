@@ -84,6 +84,13 @@ const skip = () => {
 	if (!task || isContributor) return;
 	tasks.skip(task.id);
 };
+
+const memberAvatar = (member) => {
+	const icon = member?.avatar_icon?.trim();
+	if (icon) return icon.slice(0, 4);
+	const source = (member?.display ?? member?.email ?? '').trim();
+	return source ? source.charAt(0).toUpperCase() : '?';
+};
 </script>
 
 {#if open && task}
@@ -150,7 +157,7 @@ const skip = () => {
 					<select bind:value={assigneeUserId} disabled={isContributor}>
 						<option value=''>Unassigned</option>
 						{#each $members as member}
-							<option value={member.user_id}>{member.display}</option>
+							<option value={member.user_id}>{memberAvatar(member)} {member.display} ({member.role})</option>
 						{/each}
 					</select>
 				</label>

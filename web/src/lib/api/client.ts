@@ -1,5 +1,14 @@
 import { buildHeaders } from './headers';
-import type { AuthLoginRequest, AuthLoginResponse, AuthUser, SpaceMember } from '$shared/types/auth';
+import type {
+	AuthCreateMemberRequest,
+	AuthLoginRequest,
+	AuthLoginResponse,
+	AuthUpdateProfileRequest,
+	AuthUser,
+	ListGrant,
+	SetListGrantRequest,
+	SpaceMember
+} from '$shared/types/auth';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -51,7 +60,14 @@ export const api = {
 	login: (body: AuthLoginRequest) =>
 		fetchJson<AuthLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 	me: () => fetchJson<AuthUser>('/auth/me'),
+	updateMe: (body: AuthUpdateProfileRequest) =>
+		fetchJson<AuthUser>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
 	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),
+	createMember: (body: AuthCreateMemberRequest) =>
+		fetchJson<SpaceMember>('/auth/members', { method: 'POST', body: JSON.stringify(body) }),
+	getListGrants: () => fetchJson<ListGrant[]>('/auth/grants'),
+	setListGrant: (body: SetListGrantRequest) =>
+		fetchJson<ListGrant>('/auth/grants', { method: 'PUT', body: JSON.stringify(body) }),
 	getLists: () => fetchJson<ApiList[]>('/lists'),
 	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
 		fetchJson<ApiList>('/lists', { method: 'POST', body: JSON.stringify(body) }),

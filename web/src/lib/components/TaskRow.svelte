@@ -81,10 +81,13 @@ const endPress = () => {
 
 const closeActions = () => (showActions = false);
 
-$: assigneeDisplay =
-	task.assignee_user_id && members.find(task.assignee_user_id)
-		? members.find(task.assignee_user_id).display
-		: task.assignee_user_id;
+$: assigneeMember = task.assignee_user_id ? members.find(task.assignee_user_id) : null;
+$: assigneeDisplay = assigneeMember?.display ?? task.assignee_user_id;
+$: assigneeIcon = assigneeMember?.avatar_icon?.trim()
+	? assigneeMember.avatar_icon.slice(0, 4)
+	: assigneeDisplay?.trim()
+		? assigneeDisplay.trim().charAt(0).toUpperCase()
+		: '?';
 $: isContributor = $auth.user?.role === 'contributor';
 </script>
 
@@ -142,7 +145,7 @@ $: isContributor = $auth.user?.role === 'contributor';
 				<span class="chip subtle recur-chip">{task.recurrence_id}</span>
 			{/if}
 			{#if assigneeDisplay}
-				<span class="chip subtle assignee-chip">To: {assigneeDisplay}</span>
+				<span class="chip subtle assignee-chip">To: {assigneeIcon} {assigneeDisplay}</span>
 			{/if}
 			<label class="chip toggle day-chip">
 				<input

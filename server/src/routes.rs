@@ -140,9 +140,27 @@ pub fn auth_routes(pool: &SqlitePool) -> Router {
     let state = app_state(pool);
     Router::new()
         .route("/login", post(login))
-        .route("/me", get(auth_me))
-        .route("/members", get(auth_members))
+        .route("/me", get(auth_me).patch(auth_update_me))
+        .route("/members", get(auth_members).post(auth_create_member))
+        .route("/grants", get(auth_grants).put(auth_set_grant))
         .with_state(state)
+}
+
+fn normalize_avatar_icon(raw: Option<String>) -> Option<String> {
+    raw.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        Some(trimmed.chars().take(4).collect())
+    })
+}
+
+fn is_unique_violation(err: &sqlx::Error) -> bool {
+    match err {
+        sqlx::Error::Database(db_err) => db_err.message().contains("UNIQUE constraint failed"),
+        _ => false,
+    }
 }
 
 #[derive(Deserialize)]
@@ -157,6 +175,7 @@ struct LoginUserRow {
     user_id: String,
     email: String,
     display: String,
+    avatar_icon: Option<String>,
     role: String,
 }
 
@@ -166,6 +185,7 @@ struct LoginResponse {
     user_id: String,
     email: String,
     display: String,
+    avatar_icon: Option<String>,
     space_id: String,
     role: String,
 }
@@ -175,6 +195,7 @@ struct AuthMeResponse {
     user_id: String,
     email: String,
     display: String,
+    avatar_icon: Option<String>,
     space_id: String,
     role: String,
 }
@@ -184,8 +205,36 @@ struct AuthMemberResponse {
     user_id: String,
     email: String,
     display: String,
+    avatar_icon: Option<String>,
     space_id: String,
     role: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateProfileBody {
+    display: Option<String>,
+    avatar_icon: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CreateMemberBody {
+    email: String,
+    display: String,
+    role: String,
+    avatar_icon: Option<String>,
+}
+
+#[derive(Serialize, FromRow)]
+struct ListGrantResponse {
+    user_id: String,
+    list_id: String,
+}
+
+#[derive(Deserialize)]
+struct SetListGrantBody {
+    user_id: String,
+    list_id: String,
+    granted: bool,
 }
 
 async fn login(
@@ -201,7 +250,7 @@ async fn login(
     }
     let space_id = body.space_id.unwrap_or_else(|| "s1".to_string());
     let user = sqlx::query_as::<_, LoginUserRow>(
-        "select u.id as user_id, u.email, u.display, m.role from user u join membership m on m.user_id = u.id where lower(u.email) = lower(?1) and m.space_id = ?2 limit 1",
+        "select u.id as user_id, u.email, u.display, u.avatar_icon, m.role from user u join membership m on m.user_id = u.id where lower(u.email) = lower(?1) and m.space_id = ?2 limit 1",
     )
     .bind(email)
     .bind(&space_id)
@@ -216,6 +265,7 @@ async fn login(
         user_id: user.user_id,
         email: user.email,
         display: user.display,
+        avatar_icon: user.avatar_icon,
         space_id,
         role: user.role,
     }))
@@ -227,7 +277,7 @@ async fn auth_me(
 ) -> Result<Json<AuthMeResponse>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
     let me = sqlx::query_as::<_, AuthMeResponse>(
-        "select u.id as user_id, u.email, u.display, m.space_id, m.role from user u join membership m on m.user_id = u.id where u.id = ?1 and m.space_id = ?2 limit 1",
+        "select u.id as user_id, u.email, u.display, u.avatar_icon, m.space_id, m.role from user u join membership m on m.user_id = u.id where u.id = ?1 and m.space_id = ?2 limit 1",
     )
     .bind(&ctx.user_id)
     .bind(&ctx.space_id)
@@ -238,19 +288,188 @@ async fn auth_me(
     Ok(Json(me))
 }
 
+async fn auth_update_me(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<UpdateProfileBody>,
+) -> Result<Json<AuthMeResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let display = body
+        .display
+        .as_ref()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let clear_avatar =
+        body.avatar_icon.as_ref().map(|value| value.trim().is_empty()).unwrap_or(false);
+    let avatar_icon = if clear_avatar { None } else { normalize_avatar_icon(body.avatar_icon) };
+    sqlx::query(
+        "update user set display = coalesce(?1, display), avatar_icon = case when ?2 then null when ?3 is not null then ?3 else avatar_icon end where id = ?4",
+    )
+    .bind(display)
+    .bind(clear_avatar)
+    .bind(avatar_icon)
+    .bind(&ctx.user_id)
+    .execute(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    auth_me(State(state), headers).await
+}
+
 async fn auth_members(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<AuthMemberResponse>>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
     let members = sqlx::query_as::<_, AuthMemberResponse>(
-        "select u.id as user_id, u.email, u.display, m.space_id, m.role from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.display asc",
+        "select u.id as user_id, u.email, u.display, u.avatar_icon, m.space_id, m.role from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.display asc",
     )
     .bind(&ctx.space_id)
     .fetch_all(&state.pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(members))
+}
+
+async fn auth_create_member(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CreateMemberBody>,
+) -> Result<(StatusCode, Json<AuthMemberResponse>), StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    if ctx.role != Role::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let email = body.email.trim().to_lowercase();
+    let display = body.display.trim();
+    if email.is_empty() || display.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if body.role != "admin" && body.role != "contributor" {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let existing_user_id: Option<String> =
+        sqlx::query_scalar("select id from user where lower(email) = lower(?1) limit 1")
+            .bind(&email)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let user_id = if let Some(found) = existing_user_id {
+        found
+    } else {
+        let new_user_id = format!("u-{}", Uuid::new_v4());
+        sqlx::query("insert into user (id, email, display, avatar_icon) values (?1, ?2, ?3, ?4)")
+            .bind(&new_user_id)
+            .bind(&email)
+            .bind(display)
+            .bind(normalize_avatar_icon(body.avatar_icon))
+            .execute(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        new_user_id
+    };
+
+    let membership_id = format!("m-{}", Uuid::new_v4());
+    let membership_res =
+        sqlx::query("insert into membership (id, space_id, user_id, role) values (?1, ?2, ?3, ?4)")
+            .bind(membership_id)
+            .bind(&ctx.space_id)
+            .bind(&user_id)
+            .bind(&body.role)
+            .execute(&state.pool)
+            .await;
+    if let Err(err) = membership_res {
+        if is_unique_violation(&err) {
+            return Err(StatusCode::CONFLICT);
+        }
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    let member = sqlx::query_as::<_, AuthMemberResponse>(
+        "select u.id as user_id, u.email, u.display, u.avatar_icon, m.space_id, m.role from user u join membership m on m.user_id = u.id where u.id = ?1 and m.space_id = ?2 limit 1",
+    )
+    .bind(&user_id)
+    .bind(&ctx.space_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::CREATED, Json(member)))
+}
+
+async fn auth_grants(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<ListGrantResponse>>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    if ctx.role != Role::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let grants = sqlx::query_as::<_, ListGrantResponse>(
+        "select g.user_id, g.list_id from list_grant g join membership m on m.user_id = g.user_id and m.space_id = g.space_id where g.space_id = ?1 and m.role = 'contributor' order by g.user_id asc, g.list_id asc",
+    )
+    .bind(&ctx.space_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(grants))
+}
+
+async fn auth_set_grant(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<SetListGrantBody>,
+) -> Result<Json<ListGrantResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    if ctx.role != Role::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let membership_role: Option<String> = sqlx::query_scalar(
+        "select role from membership where space_id = ?1 and user_id = ?2 limit 1",
+    )
+    .bind(&ctx.space_id)
+    .bind(&body.user_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if membership_role.as_deref() != Some("contributor") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let list_exists: Option<i64> =
+        sqlx::query_scalar("select 1 from list where id = ?1 and space_id = ?2")
+            .bind(&body.list_id)
+            .bind(&ctx.space_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if list_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    if body.granted {
+        let grant_id = format!("g-{}", Uuid::new_v4());
+        sqlx::query(
+            "insert or ignore into list_grant (id, space_id, list_id, user_id) values (?1, ?2, ?3, ?4)",
+        )
+        .bind(grant_id)
+        .bind(&ctx.space_id)
+        .bind(&body.list_id)
+        .bind(&body.user_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    } else {
+        sqlx::query("delete from list_grant where space_id = ?1 and list_id = ?2 and user_id = ?3")
+            .bind(&ctx.space_id)
+            .bind(&body.list_id)
+            .bind(&body.user_id)
+            .execute(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+    Ok(Json(ListGrantResponse { user_id: body.user_id, list_id: body.list_id }))
 }
 
 #[derive(Serialize, FromRow)]
@@ -742,6 +961,110 @@ mod tests {
         )
         .await;
         assert_eq!(result.err(), Some(StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn update_profile_sets_avatar_icon() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let updated = auth_update_me(
+            State(state),
+            headers,
+            Json(UpdateProfileBody {
+                display: Some("Admin Prime".to_string()),
+                avatar_icon: Some("⭐".to_string()),
+            }),
+        )
+        .await
+        .expect("update profile should work")
+        .0;
+
+        assert_eq!(updated.display, "Admin Prime");
+        assert_eq!(updated.avatar_icon.as_deref(), Some("⭐"));
+    }
+
+    #[tokio::test]
+    async fn admin_can_create_member_and_manage_grants() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let created = auth_create_member(
+            State(state.clone()),
+            headers.clone(),
+            Json(CreateMemberBody {
+                email: "wife@example.com".to_string(),
+                display: "Wife".to_string(),
+                role: "contributor".to_string(),
+                avatar_icon: Some("🦊".to_string()),
+            }),
+        )
+        .await
+        .expect("create member should work")
+        .1
+         .0;
+        assert_eq!(created.role, "contributor");
+        assert_eq!(created.avatar_icon.as_deref(), Some("🦊"));
+
+        let granted = auth_set_grant(
+            State(state.clone()),
+            headers.clone(),
+            Json(SetListGrantBody {
+                user_id: created.user_id.clone(),
+                list_id: "goal-management".to_string(),
+                granted: true,
+            }),
+        )
+        .await
+        .expect("set grant should work")
+        .0;
+        assert_eq!(granted.user_id, created.user_id);
+        assert_eq!(granted.list_id, "goal-management");
+
+        let grants = auth_grants(State(state), headers).await.expect("load grants should work").0;
+        assert!(grants
+            .iter()
+            .any(|grant| grant.user_id == created.user_id && grant.list_id == "goal-management"));
+    }
+
+    #[tokio::test]
+    async fn contributor_cannot_manage_members_or_grants() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+
+        let create_result = auth_create_member(
+            State(state.clone()),
+            headers.clone(),
+            Json(CreateMemberBody {
+                email: "blocked@example.com".to_string(),
+                display: "Blocked".to_string(),
+                role: "contributor".to_string(),
+                avatar_icon: Some("🚫".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(create_result.err(), Some(StatusCode::FORBIDDEN));
+
+        let grant_result = auth_set_grant(
+            State(state),
+            headers,
+            Json(SetListGrantBody {
+                user_id: "u-contrib".to_string(),
+                list_id: "goal-management".to_string(),
+                granted: true,
+            }),
+        )
+        .await;
+        assert_eq!(grant_result.err(), Some(StatusCode::FORBIDDEN));
     }
 
     #[tokio::test]

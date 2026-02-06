@@ -25,6 +25,13 @@ const quickAdd = () => {
 };
 
 $: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
+const memberAvatar = (member) => {
+	const icon = member?.avatar_icon?.trim();
+	if (icon) return icon.slice(0, 4);
+	const source = (member?.display ?? member?.email ?? '').trim();
+	return source ? source.charAt(0).toUpperCase() : '?';
+};
+const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
 const defaultAssignee = (currentUser, availableMembers) => {
 	if (!currentUser) return '';
 	if (currentUser.role === 'contributor') {
@@ -39,6 +46,7 @@ $: if ($auth.user && !quickAssignee) {
 $: if (quickAddMembers.length && !quickAddMembers.find((m) => m.user_id === quickAssignee)) {
 	quickAssignee = defaultAssignee($auth.user, quickAddMembers);
 }
+$: selectedQuickAssignee = quickAddMembers.find((m) => m.user_id === quickAssignee);
 
 if (typeof window !== 'undefined') {
 	Reflect.set(window, '__addTaskList', () => quickAdd());
@@ -103,11 +111,17 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
 		/>
 		{#if quickAddMembers.length > 1}
-			<select bind:value={quickAssignee} data-testid="new-task-assignee" aria-label="Assign task to">
-				{#each quickAddMembers as member}
-					<option value={member.user_id}>{member.display}</option>
-				{/each}
-			</select>
+			<div class="assignee-select-wrap">
+				<span class="assignee-chip">
+					{memberAvatar(selectedQuickAssignee)}
+					{selectedQuickAssignee?.display ?? 'Assignee'}
+				</span>
+				<select bind:value={quickAssignee} data-testid="new-task-assignee" aria-label="Assign task to">
+					{#each quickAddMembers as member}
+						<option value={member.user_id}>{memberAvatar(member)} {member.display} ({roleLabel(member.role)})</option>
+					{/each}
+				</select>
+			</div>
 		{/if}
 		<button type="button" data-testid="new-task-submit" on:click={quickAdd}>Add</button>
 	</div>
@@ -176,6 +190,7 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
 		padding: 0 14px;
 		z-index: 15;
+		pointer-events: none;
 	}
 
 	.mobile-add .bar {
@@ -189,6 +204,7 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
 		margin: 0 auto;
+		pointer-events: auto;
 	}
 
 	.mobile-add input {
@@ -206,6 +222,39 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 		color: #e2e8f0;
 		border-radius: 10px;
 		padding: 10px 12px;
+	}
+
+	.assignee-select-wrap {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 8px;
+		align-items: center;
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		border-radius: 10px;
+		padding: 6px 8px;
+		min-width: 190px;
+	}
+
+	.assignee-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: #dbeafe;
+		background: rgba(37, 99, 235, 0.2);
+		border: 1px solid rgba(96, 165, 250, 0.45);
+		border-radius: 999px;
+		padding: 4px 8px;
+		white-space: nowrap;
+	}
+
+	.assignee-select-wrap select {
+		border: none;
+		background: transparent;
+		color: #e2e8f0;
+		min-width: 0;
+		padding: 0;
 	}
 
 	.mobile-add button {
