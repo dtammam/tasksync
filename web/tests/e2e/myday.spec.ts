@@ -8,18 +8,45 @@ const waitForTaskInIdb = async (page: Page, title: string) => {
 	await expect
 		.poll(async () =>
 			page.evaluate(async (taskTitle) => {
+				const resolveScopedDbName = () => {
+					const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
+					const rawUser = localStorage.getItem('tasksync:auth-user');
+					let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
+					if (rawUser) {
+						try {
+							const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
+							if (parsed.user_id && parsed.space_id) {
+								scope = `space:${parsed.space_id}:user:${parsed.user_id}`;
+							}
+						} catch {
+							// Keep fallback scope.
+						}
+					}
+					const sanitized = scope.toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 80) || 'legacy';
+					return `tasksync_${sanitized}`;
+				};
+				const dbName = resolveScopedDbName();
 				const db = await new Promise<IDBDatabase | null>((resolve) => {
-					const req = indexedDB.open('tasksync');
+					const req = indexedDB.open(dbName);
 					req.onsuccess = () => resolve(req.result);
 					req.onerror = () => resolve(null);
 				});
 				if (!db) return false;
-				const tx = db.transaction('tasks', 'readonly');
-				const store = tx.objectStore('tasks');
-				const allReq = store.getAll();
+				const storeNames = Array.from(db.objectStoreNames);
+				if (!storeNames.includes('tasks')) {
+					db.close();
+					return false;
+				}
 				const all = await new Promise<unknown[]>((resolve) => {
-					allReq.onsuccess = () => resolve(allReq.result ?? []);
-					allReq.onerror = () => resolve([]);
+					try {
+						const tx = db.transaction('tasks', 'readonly');
+						const store = tx.objectStore('tasks');
+						const allReq = store.getAll();
+						allReq.onsuccess = () => resolve(allReq.result ?? []);
+						allReq.onerror = () => resolve([]);
+					} catch {
+						resolve([]);
+					}
 				});
 				db.close();
 				return all.some((task) => {
@@ -36,12 +63,36 @@ const resetClientState = async (page: Page) => {
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 	await page.evaluate(async () => {
-		await new Promise<void>((resolve) => {
-			const req = indexedDB.deleteDatabase('tasksync');
-			req.onsuccess = () => resolve();
-			req.onerror = () => resolve();
-			req.onblocked = () => resolve();
-		});
+		const deleteDb = async (name: string) => {
+			await new Promise<void>((resolve) => {
+				const req = indexedDB.deleteDatabase(name);
+				req.onsuccess = () => resolve();
+				req.onerror = () => resolve();
+				req.onblocked = () => resolve();
+			});
+		};
+		const indexedDbWithList = indexedDB as IDBFactory & {
+			databases?: () => Promise<{ name?: string }[]>;
+		};
+		if (typeof indexedDbWithList.databases === 'function') {
+			const all = await indexedDbWithList.databases();
+			for (const db of all) {
+				if (db.name?.startsWith('tasksync')) {
+					await deleteDb(db.name);
+				}
+			}
+		} else {
+			// Fallback set for browsers without indexedDB.databases().
+			for (const name of [
+				'tasksync',
+				'tasksync_legacy-default',
+				'tasksync_token-anonymous',
+				'tasksync_space_s1_user_admin',
+				'tasksync_space_s1_user_contrib'
+			]) {
+				await deleteDb(name);
+			}
+		}
 		localStorage.clear();
 		sessionStorage.clear();
 	});

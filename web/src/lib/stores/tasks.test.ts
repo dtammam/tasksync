@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { repo } from '$lib/data/repo';
 
 vi.mock('$lib/sound/sound', () => ({
 	playCompletion: vi.fn()
@@ -112,5 +113,16 @@ describe('tasks store helpers', () => {
 		tasks.toggle('sound-1');
 
 		expect(mockedPlayCompletion).toHaveBeenCalledTimes(1);
+	});
+
+	it('replaces in-memory tasks with empty storage snapshot during hydrate', async () => {
+		tasks.setAll([baseTask({ id: 'stale' })]);
+		const loadSpy = vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({ lists: [], tasks: [] });
+
+		await tasks.hydrateFromDb();
+
+		expect(loadSpy).toHaveBeenCalledTimes(1);
+		expect(tasks.getAll()).toEqual([]);
+		loadSpy.mockRestore();
 	});
 });

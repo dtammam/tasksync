@@ -62,6 +62,7 @@ export const lists = {
 		if (stored.length) {
 			listStore.set(stored);
 		} else {
+			listStore.set(seedLists);
 			await repo.saveLists(seedLists);
 		}
 	}

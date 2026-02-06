@@ -48,11 +48,20 @@
 	};
 
 	$: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
+
+	const defaultAssignee = (currentUser, availableMembers) => {
+		if (!currentUser) return '';
+		if (currentUser.role === 'contributor') {
+			return availableMembers.find((m) => m.role === 'admin')?.user_id ?? currentUser.user_id;
+		}
+		return currentUser.user_id;
+	};
+
 	$: if ($auth.user && !quickAssignee) {
-		quickAssignee = $auth.user.user_id;
+		quickAssignee = defaultAssignee($auth.user, quickAddMembers);
 	}
 	$: if (quickAddMembers.length && !quickAddMembers.find((m) => m.user_id === quickAssignee)) {
-		quickAssignee = quickAddMembers[0].user_id;
+		quickAssignee = defaultAssignee($auth.user, quickAddMembers);
 	}
 
 	const quickAdd = () => {
@@ -113,7 +122,13 @@
 							{/if}
 						</p>
 					</div>
-					<button type="button" on:click={() => tasks.setMyDay(suggestion.id, true)}>Add to My Day</button>
+					<button
+						type="button"
+						on:click={() => $auth.user?.role !== 'contributor' && tasks.setMyDay(suggestion.id, true)}
+						disabled={$auth.user?.role === 'contributor'}
+					>
+						Add to My Day
+					</button>
 				</div>
 			{/each}
 		</div>

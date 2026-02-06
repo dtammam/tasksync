@@ -4,6 +4,7 @@ import { createEventDispatcher } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { members } from '$lib/stores/members';
+import { auth } from '$lib/stores/auth';
 
 export let task;
 
@@ -15,12 +16,14 @@ let pressTimer = null;
 
 /** @param {Event & { target: HTMLSelectElement }} event */
 const updateList = (event) => {
+	if ($auth.user?.role === 'contributor') return;
 	const select = event.target;
 	tasks.moveToList(task.id, select.value);
 };
 
 /** @param {Event & { target: HTMLInputElement }} event */
 const toggleMyDay = (event) => {
+	if ($auth.user?.role === 'contributor') return;
 	const input = event.target;
 	tasks.setMyDay(task.id, input.checked);
 };
@@ -30,6 +33,7 @@ const badge = task.priority > 1 ? '🔥' : '•';
 let justSaved = false;
 
 const saveTitle = () => {
+	if ($auth.user?.role === 'contributor') return;
 	if (!titleDraft.trim()) return;
 	tasks.rename(task.id, titleDraft);
 	editing = false;
@@ -51,11 +55,21 @@ const nextWeekIso = () => {
 	return d.toISOString().slice(0, 10);
 };
 
-const addTomorrow = () => tasks.setDueDate(task.id, tomorrowIso());
-const addNextWeek = () => tasks.setDueDate(task.id, nextWeekIso());
-const toggleStar = () => tasks.setPriority(task.id, task.priority > 0 ? 0 : 1);
+const addTomorrow = () => {
+	if ($auth.user?.role === 'contributor') return;
+	tasks.setDueDate(task.id, tomorrowIso());
+};
+const addNextWeek = () => {
+	if ($auth.user?.role === 'contributor') return;
+	tasks.setDueDate(task.id, nextWeekIso());
+};
+const toggleStar = () => {
+	if ($auth.user?.role === 'contributor') return;
+	tasks.setPriority(task.id, task.priority > 0 ? 0 : 1);
+};
 
 const startPress = () => {
+	if ($auth.user?.role === 'contributor') return;
 	pressTimer = setTimeout(() => {
 		showActions = true;
 	}, 400);
@@ -71,6 +85,7 @@ $: assigneeDisplay =
 	task.assignee_user_id && members.find(task.assignee_user_id)
 		? members.find(task.assignee_user_id).display
 		: task.assignee_user_id;
+$: isContributor = $auth.user?.role === 'contributor';
 </script>
 
 <div
@@ -86,8 +101,9 @@ $: assigneeDisplay =
 		<button
 			class="status"
 			aria-label="toggle task"
-			on:click={() => tasks.toggle(task.id)}
+			on:click={() => !isContributor && tasks.toggle(task.id)}
 			data-testid="task-toggle"
+			disabled={isContributor}
 		>
 			{task.status === 'done' ? '✔' : '○'}
 		</button>
@@ -107,9 +123,11 @@ $: assigneeDisplay =
 				{:else}
 					<span class="title-text" data-testid="task-title">{task.title}</span>
 				{/if}
-				<button class="icon-btn" type="button" title="Rename task" on:click={() => (editing = true)}>
-					✎
-				</button>
+				{#if !isContributor}
+					<button class="icon-btn" type="button" title="Rename task" on:click={() => (editing = true)}>
+						✎
+					</button>
+				{/if}
 			{/if}
 			{#if task.tags.length}
 				<span class="tags">{task.tags.join(', ')}</span>
@@ -127,12 +145,17 @@ $: assigneeDisplay =
 				<span class="chip subtle assignee-chip">To: {assigneeDisplay}</span>
 			{/if}
 			<label class="chip toggle day-chip">
-				<input type="checkbox" checked={task.my_day} on:change={toggleMyDay} />
+				<input
+					type="checkbox"
+					checked={task.my_day}
+					on:change={toggleMyDay}
+					disabled={isContributor}
+				/>
 				My Day
 			</label>
 			<span class="chip subtle list-chip">
 				List:
-				<select on:change={updateList} title="Move task to list">
+				<select on:change={updateList} title="Move task to list" disabled={isContributor}>
 					{#each $lists as list}
 						<option value={list.id} selected={list.id === task.list_id}>{list.name}</option>
 					{/each}
@@ -142,7 +165,9 @@ $: assigneeDisplay =
 				{task.dirty ? 'Pending sync' : justSaved ? 'Saved' : 'Synced'}
 			</span>
 			<button class="chip ghost details-chip" type="button" on:click={openDetail}>Details</button>
-			<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
+			{#if !isContributor}
+				<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
+			{/if}
 		</div>
 	</div>
 	{#if showActions}
@@ -185,6 +210,11 @@ $: assigneeDisplay =
 		cursor: pointer;
 		font-size: 16px;
 		line-height: 1;
+	}
+
+	.status:disabled {
+		cursor: not-allowed;
+		opacity: 0.6;
 	}
 
 	.meta {
@@ -274,6 +304,12 @@ $: assigneeDisplay =
 	input[type='checkbox'] {
 		accent-color: #38bdf8;
 		cursor: pointer;
+	}
+
+	input[type='checkbox']:disabled,
+	.list-chip select:disabled {
+		cursor: not-allowed;
+		opacity: 0.65;
 	}
 
 	.tags {

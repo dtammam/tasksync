@@ -9,6 +9,7 @@
 	import { members } from '$lib/stores/members';
 	import { tasks } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
+	import { setDbScope } from '$lib/data/idb';
 	import { auth } from '$lib/stores/auth';
 	import { pushPendingToServer, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
@@ -68,20 +69,30 @@ const runSync = async () => {
 	};
 
 	let retryTimer = null;
-	let lastAuthKey = '';
+	let lastScopeKey = '';
+
+	const storageScopeFromAuth = (state) => {
+		if (state.status === 'authenticated' && state.user) {
+			return `space:${state.user.space_id}:user:${state.user.user_id}`;
+		}
+		return state.mode === 'token' ? 'token-anonymous' : 'legacy-default';
+	};
+
+	const hydrateScopedStores = async () => {
+		const scope = storageScopeFromAuth(auth.get());
+		setDbScope(scope);
+		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb(), soundSettings.hydrateFromDb()]);
+	};
 
 	onMount(async () => {
 		if (typeof localStorage !== 'undefined') {
 			navPinned = localStorage.getItem(NAV_PIN_KEY) === '1';
 			navOpen = navPinned;
 		}
-		await Promise.all([
-			lists.hydrateFromDb(),
-			tasks.hydrateFromDb(),
-			soundSettings.hydrateFromDb(),
-			auth.hydrate()
-		]);
+		await auth.hydrate();
+		await hydrateScopedStores();
 		await members.hydrateFromServer();
+		lastScopeKey = storageScopeFromAuth(auth.get());
 		appReady = true;
 		if (auth.isAuthenticated()) {
 			void runSync();
@@ -99,17 +110,18 @@ const runSync = async () => {
 		if (retryTimer) clearInterval(retryTimer);
 	});
 
-	$: authKey =
-		$auth.status === 'authenticated' && $auth.user
-			? `${$auth.user.user_id}:${$auth.user.space_id}:${$auth.source}`
-			: '';
-	$: if (appReady && authKey && authKey !== lastAuthKey) {
-		lastAuthKey = authKey;
-		void members.hydrateFromServer();
-		void runSync();
+	$: scopeKey = storageScopeFromAuth($auth);
+	$: if (appReady && scopeKey !== lastScopeKey) {
+		lastScopeKey = scopeKey;
+		void (async () => {
+			await hydrateScopedStores();
+			await members.hydrateFromServer();
+			if (auth.isAuthenticated()) {
+				await runSync();
+			}
+		})();
 	}
-	$: if (!authKey) {
-		lastAuthKey = '';
+	$: if (!auth.isAuthenticated()) {
 		members.clear();
 	}
 </script>

@@ -284,13 +284,24 @@ async fn get_lists(
     headers: HeaderMap,
 ) -> Result<Json<Vec<ListRow>>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
-    let lists = sqlx::query_as::<_, ListRow>(
-		"select id, space_id, name, icon, color, list_order as \"order\" from list where space_id = ?1 order by list_order asc",
-	)
-	.bind(&ctx.space_id)
-	.fetch_all(&state.pool)
-	.await
-	.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let lists = if ctx.role == Role::Admin {
+        sqlx::query_as::<_, ListRow>(
+            "select id, space_id, name, icon, color, list_order as \"order\" from list where space_id = ?1 order by list_order asc",
+        )
+        .bind(&ctx.space_id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    } else {
+        sqlx::query_as::<_, ListRow>(
+            "select l.id, l.space_id, l.name, l.icon, l.color, l.list_order as \"order\" from list l join list_grant g on g.list_id = l.id and g.space_id = l.space_id where l.space_id = ?1 and g.user_id = ?2 order by l.list_order asc",
+        )
+        .bind(&ctx.space_id)
+        .bind(&ctx.user_id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    };
     Ok(Json(lists))
 }
 
@@ -430,7 +441,7 @@ async fn get_tasks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
         sqlx::query_as::<_, TaskRow>(
-            "select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 and (assignee_user_id = ?2 or created_by_user_id = ?2 or assignee_user_id is null) order by task_order asc",
+            "select t.id, t.space_id, t.title, t.status, t.list_id, t.my_day, t.task_order as \"order\", t.updated_ts, t.created_ts, t.url, t.recur_rule, t.attachments, t.due_date, t.occurrences_completed, t.notes, t.assignee_user_id, t.created_by_user_id from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.task_order asc",
         )
         .bind(&ctx.space_id)
         .bind(&ctx.user_id)
@@ -801,5 +812,43 @@ mod tests {
         )
         .await;
         assert_eq!(result.err(), Some(StatusCode::FORBIDDEN));
+    }
+
+    #[tokio::test]
+    async fn contributor_reads_only_granted_lists_and_admin_tasks_within_them() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into list (id, space_id, name, list_order) values ('admin-private', 's1', 'Admin Private', 'z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert private list");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-visible', 's1', 'Admin visible task', 'pending', 'goal-management', 0, 'a', 1, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert visible task");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-hidden', 's1', 'Admin hidden task', 'pending', 'admin-private', 0, 'b', 1, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert hidden task");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+
+        let visible_lists =
+            get_lists(State(state.clone()), headers.clone()).await.expect("lists should load").0;
+        assert_eq!(visible_lists.len(), 1);
+        assert_eq!(visible_lists[0].id, "goal-management");
+
+        let visible_tasks = get_tasks(State(state), headers).await.expect("tasks should load").0;
+        assert_eq!(visible_tasks.len(), 1);
+        assert_eq!(visible_tasks[0].id, "t-visible");
+        assert_eq!(visible_tasks[0].created_by_user_id.as_deref(), Some("u-admin"));
     }
 }

@@ -350,9 +350,7 @@ export const tasks = {
 	},
 	async hydrateFromDb() {
 		const { tasks: stored } = await repo.loadAll();
-		if (stored.length) {
-			tasksStore.set(stored);
-		}
+		tasksStore.set(stored);
 	}
 };
 
@@ -362,12 +360,12 @@ export const pendingCount = derived(tasksStore, ($tasks) =>
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isToday = (date?: string) => date && date === todayIso();
-const canSeeTask = (task: Task, userId?: string | null, role?: string | null) =>
-	role === 'admin' ||
-	!userId ||
-	!task.assignee_user_id ||
-	task.assignee_user_id === userId ||
-	task.created_by_user_id === userId;
+const canSeeTask = (task: Task, userId?: string | null, role?: string | null) => {
+	void task;
+	void userId;
+	void role;
+	return true;
+};
 
 const inMyDay = (task: Task) => {
 	if (task.my_day) return true;

@@ -25,11 +25,19 @@ const quickAdd = () => {
 };
 
 $: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
+const defaultAssignee = (currentUser, availableMembers) => {
+	if (!currentUser) return '';
+	if (currentUser.role === 'contributor') {
+		return availableMembers.find((m) => m.role === 'admin')?.user_id ?? currentUser.user_id;
+	}
+	return currentUser.user_id;
+};
+
 $: if ($auth.user && !quickAssignee) {
-	quickAssignee = $auth.user.user_id;
+	quickAssignee = defaultAssignee($auth.user, quickAddMembers);
 }
 $: if (quickAddMembers.length && !quickAddMembers.find((m) => m.user_id === quickAssignee)) {
-	quickAssignee = quickAddMembers[0].user_id;
+	quickAssignee = defaultAssignee($auth.user, quickAddMembers);
 }
 
 if (typeof window !== 'undefined') {

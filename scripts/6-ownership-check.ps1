@@ -59,6 +59,18 @@ $assignee = $members | Where-Object { $_.email -eq $AssigneeEmail } | Select-Obj
 Assert ($null -ne $assignee) "Could not find assignee member '$AssigneeEmail'"
 
 $taskTitle = "Ownership check $(Get-Date -Format 'yyyyMMdd-HHmmss')"
+$adminVisibleTitle = "Admin baseline $(Get-Date -Format 'yyyyMMdd-HHmmss')"
+$adminCreatePayload = @{
+	title = $adminVisibleTitle
+	list_id = $ListId
+	my_day = $false
+	assignee_user_id = $assignee.user_id
+} | ConvertTo-Json
+
+Write-Host "Creating admin baseline task for contributor-read check..."
+$adminCreated = Invoke-RestMethod -Method Post -Uri "$ApiUrl/tasks" -Headers (JsonHeaders -Token $admin.token) -Body $adminCreatePayload
+Assert ($adminCreated.created_by_user_id -eq $admin.user_id) "Admin baseline task should be created by admin"
+
 $createPayload = @{
 	title = $taskTitle
 	list_id = $ListId
@@ -91,8 +103,10 @@ $adminTasks = Invoke-RestMethod -Method Get -Uri "$ApiUrl/tasks" -Headers (JsonH
 $contribTasks = Invoke-RestMethod -Method Get -Uri "$ApiUrl/tasks" -Headers (JsonHeaders -Token $contrib.token)
 $adminSees = @($adminTasks | Where-Object { $_.id -eq $created.id }).Count -eq 1
 $contribSees = @($contribTasks | Where-Object { $_.id -eq $created.id }).Count -eq 1
+$contribSeesAdminTask = @($contribTasks | Where-Object { $_.id -eq $adminCreated.id }).Count -eq 1
 Assert $adminSees "Admin should see created task"
 Assert $contribSees "Contributor should see created task they created"
+Assert $contribSeesAdminTask "Contributor should see admin task in granted list"
 
 Write-Host "OK: ownership/contributor flow passed"
 $summary = @{
