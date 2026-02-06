@@ -42,6 +42,7 @@ let newMemberEmail = '';
 let newMemberDisplay = '';
 let newMemberRole = 'contributor';
 let newMemberIcon = '';
+let adminMode = false;
 
 const iconFromIdentity = (display, email) => {
 	const source = (display ?? email ?? '').trim();
@@ -64,14 +65,14 @@ const resetDrafts = () => {
 	listError = '';
 };
 
-const isAdmin = () => $auth.status === 'authenticated' && $auth.user?.role === 'admin';
+$: adminMode = $auth.status === 'authenticated' && $auth.user?.role === 'admin';
 
 const togglePin = () => {
 	dispatch('togglePin', { pinned: !navPinned });
 };
 
 const createList = async () => {
-	if (!isAdmin()) return;
+	if (!adminMode) return;
 	const name = newListName.trim();
 	if (!name) return;
 	busy = true;
@@ -87,7 +88,7 @@ const createList = async () => {
 };
 
 const renameList = async (id) => {
-	if (!isAdmin()) return;
+	if (!adminMode) return;
 	const name = (renameDraft[id] ?? '').trim();
 	if (!name) return;
 	busy = true;
@@ -103,7 +104,7 @@ const renameList = async (id) => {
 };
 
 const deleteList = async (id) => {
-	if (!isAdmin()) return;
+	if (!adminMode) return;
 	if (!confirm('Delete this list? Tasks within cannot be deleted yet.')) return;
 	busy = true;
 	listError = '';
@@ -170,7 +171,7 @@ const saveProfile = async () => {
 };
 
 const loadGrants = async () => {
-	if (!isAdmin()) return;
+	if (!adminMode) return;
 	grantsLoading = true;
 	teamError = '';
 	try {
@@ -183,7 +184,7 @@ const loadGrants = async () => {
 };
 
 const createMember = async () => {
-	if (!isAdmin()) return;
+	if (!adminMode) return;
 	const email = newMemberEmail.trim().toLowerCase();
 	const display = newMemberDisplay.trim();
 	if (!email || !display) return;
@@ -212,7 +213,7 @@ const hasGrant = (userId, listId) =>
 	grants.some((grant) => grant.user_id === userId && grant.list_id === listId);
 
 const setGrant = async (userId, listId, granted) => {
-	if (!isAdmin()) return;
+	if (!adminMode) return;
 	teamBusy = true;
 	teamError = '';
 	try {
@@ -240,10 +241,7 @@ $: if ($auth.user?.user_id && profileSeedUserId !== $auth.user.user_id) {
 	showProfileEditor = false;
 }
 
-$: adminScope =
-	$auth.status === 'authenticated' && $auth.user?.role === 'admin' && $auth.user
-		? `${$auth.user.space_id}:${$auth.user.user_id}`
-		: '';
+$: adminScope = adminMode && $auth.user ? `${$auth.user.space_id}:${$auth.user.user_id}` : '';
 $: if (adminScope && adminScope !== loadedAdminScope) {
 	loadedAdminScope = adminScope;
 	void Promise.all([members.hydrateFromServer(), loadGrants()]);
@@ -293,7 +291,7 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 			{/each}
 		{/if}
 
-		{#if isAdmin()}
+		{#if adminMode}
 			<div class="section-label muted">Collections</div>
 			<button class="section-toggle" type="button" on:click={() => (showManager = !showManager)}>
 				{showManager ? 'Close list manager' : '+ New list'}
@@ -358,25 +356,30 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 			{#if showTeam}
 				<div class="card team">
 					<div class="create-member">
-						<label>
-							Display
-							<input type="text" placeholder="Name" bind:value={newMemberDisplay} />
-						</label>
-						<label>
-							Email
-							<input type="email" placeholder="person@example.com" bind:value={newMemberEmail} />
-						</label>
-						<label>
-							Role
-							<select bind:value={newMemberRole}>
-								<option value="contributor">Contributor</option>
-								<option value="admin">Admin</option>
-							</select>
-						</label>
-						<label>
-							Icon
-							<input type="text" placeholder="⭐" maxlength="4" bind:value={newMemberIcon} />
-						</label>
+						<p class="team-helper">Create a member, then toggle list access below.</p>
+						<div class="field-row">
+							<label>
+								Display
+								<input type="text" placeholder="Name" bind:value={newMemberDisplay} />
+							</label>
+							<label>
+								Email
+								<input type="email" placeholder="person@example.com" bind:value={newMemberEmail} />
+							</label>
+						</div>
+						<div class="field-row">
+							<label>
+								Role
+								<select bind:value={newMemberRole}>
+									<option value="contributor">Contributor</option>
+									<option value="admin">Admin</option>
+								</select>
+							</label>
+							<label>
+								Icon
+								<input type="text" placeholder="AA" maxlength="4" bind:value={newMemberIcon} />
+							</label>
+						</div>
 						<button
 							type="button"
 							class="primary"
@@ -400,18 +403,22 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 												<strong>{member.display}</strong>
 												<span>{member.email}</span>
 											</div>
+											<span class="role-chip">{roleLabel(member.role)}</span>
 										</div>
 										<div class="grant-grid">
 											{#each managedLists as list}
-												<label class={`grant-pill ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}>
-													<input
-														type="checkbox"
-														checked={hasGrant(member.user_id, list.id)}
-														disabled={teamBusy}
-														on:change={(e) =>
-															setGrant(member.user_id, list.id, e.currentTarget.checked)}
-													/>
-													<span>{list.icon ?? '•'} {list.name}</span>
+												<label class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}>
+													<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
+													<span class="grant-controls">
+														<span class="grant-state">{hasGrant(member.user_id, list.id) ? 'On' : 'Off'}</span>
+														<input
+															type="checkbox"
+															checked={hasGrant(member.user_id, list.id)}
+															disabled={teamBusy}
+															on:change={(e) =>
+																setGrant(member.user_id, list.id, e.currentTarget.checked)}
+														/>
+													</span>
 												</label>
 											{/each}
 										</div>
@@ -692,6 +699,14 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 		gap: 8px;
 	}
 
+	.card input,
+	.card select {
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
+	}
+
 	.manager label,
 	.account label,
 	.team label,
@@ -757,14 +772,32 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 	}
 
 	.team .create-member {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 7px;
-		align-items: end;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 8px;
+		border: 1px solid #25344f;
+		border-radius: 10px;
+		background: rgba(11, 19, 36, 0.7);
+		overflow: hidden;
 	}
 
-	.team .create-member button {
-		grid-column: 1 / -1;
+	.team .create-member .field-row {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 7px;
+		min-width: 0;
+	}
+
+	.team .create-member label {
+		min-width: 0;
+	}
+
+	.team-helper {
+		margin: 0;
+		font-size: 11px;
+		color: #8fa1bc;
+		line-height: 1.3;
 	}
 
 	.member-list {
@@ -785,7 +818,7 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 
 	.member-head {
 		display: grid;
-		grid-template-columns: 28px 1fr;
+		grid-template-columns: 28px 1fr auto;
 		gap: 8px;
 		align-items: center;
 	}
@@ -800,32 +833,71 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 		font-size: 11px;
 	}
 
+	.member-head .role-chip {
+		color: #bfdbfe;
+		font-size: 10px;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		border: 1px solid #32507e;
+		background: rgba(37, 99, 235, 0.22);
+		padding: 4px 6px;
+		border-radius: 999px;
+	}
+
 	.grant-grid {
 		display: grid;
 		grid-template-columns: 1fr;
 		gap: 6px;
 	}
 
-	.grant-pill {
-		display: flex;
+	.grant-row {
+		display: grid;
+		grid-template-columns: 1fr auto;
 		align-items: center;
-		gap: 8px;
+		gap: 10px;
 		border: 1px solid #25344f;
-		border-radius: 999px;
-		padding: 6px 10px;
+		border-radius: 10px;
+		padding: 7px 10px;
 		font-size: 12px;
 		color: #bfd0e7;
 		background: #0b1324;
 	}
 
-	.grant-pill.on {
+	.grant-row.on {
 		border-color: #2563eb;
 		background: rgba(37, 99, 235, 0.18);
 		color: #dbeafe;
 	}
 
-	.grant-pill input {
+	.grant-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.grant-controls {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.grant-state {
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #94a3b8;
+		min-width: 24px;
+		text-align: right;
+	}
+
+	.grant-row.on .grant-state {
+		color: #dbeafe;
+	}
+
+	.grant-row input {
 		margin: 0;
+		accent-color: #3b82f6;
 	}
 
 	.account .user-head {
@@ -949,7 +1021,7 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 		}
 
 		.team .create-member {
-			grid-template-columns: 1fr;
+			padding: 7px;
 		}
 	}
 </style>

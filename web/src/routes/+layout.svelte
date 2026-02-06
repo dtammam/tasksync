@@ -218,6 +218,7 @@ const runSync = async () => {
 	}
 
 	.app-shell {
+		--sidebar-offset: 240px;
 		display: grid;
 		grid-template-columns: 240px 1fr;
 		min-height: 100vh;
@@ -327,6 +328,7 @@ const runSync = async () => {
 		}
 
 		.app-shell {
+			--sidebar-offset: 0px;
 			grid-template-columns: 1fr;
 		}
 
@@ -348,6 +350,7 @@ const runSync = async () => {
 		}
 
 		.app-shell.nav-split {
+			--sidebar-offset: min(208px, 58vw);
 			grid-template-columns: min(208px, 58vw) 1fr;
 		}
 

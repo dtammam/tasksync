@@ -118,6 +118,9 @@ Return JSON with explicit errors per change on sync push. Update shared types.
 - **Ownership/contributor API test (preferred script):** `scripts/6-ownership-check.ps1`
   - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-ListId`, `-AssigneeEmail`, `-CreatorEmail`.
   - One-liner fallback: `cd C:\Repositories\tasksync;scripts\6-ownership-check.ps1`
+- **Admin/profile + grants API test (preferred script):** `scripts/7-admin-check.ps1`
+  - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-AdminEmail`, `-ListId`, optional `-NewMemberEmail`, optional `-NewMemberDisplay`.
+  - One-liner fallback: `cd C:\Repositories\tasksync;scripts\7-admin-check.ps1`
 - **Web lint/check/unit fallback:** `cd C:\Repositories\tasksync\web;npm run lint;npm run check;npm run test`
 
 ## Backlog Starters
