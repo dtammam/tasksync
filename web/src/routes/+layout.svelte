@@ -60,7 +60,7 @@
 				await syncFromServer();
 				const pushResult = await pushPendingToServer();
 				// Re-pull after successful push to persist server IDs and avoid repeat creations on refresh.
-				if (pushResult.pushed || pushResult.created) {
+				if (pushResult.pushed || pushResult.created || pushResult.rejected) {
 					await syncFromServer();
 				}
 			} catch (err) {

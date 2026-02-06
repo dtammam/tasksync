@@ -1,7 +1,7 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { resetSyncCursor, syncFromServer, pushPendingToServer } from './sync';
-import { tasks } from '$lib/stores/tasks';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { pushPendingToServer, resetSyncCursor, syncFromServer } from './sync';
 import { lists } from '$lib/stores/lists';
+import { tasks } from '$lib/stores/tasks';
 import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
 import type { SyncStatus } from './types';
@@ -13,10 +13,7 @@ vi.mock('$lib/api/client', () => {
 			syncPull: vi.fn(),
 			syncPush: vi.fn(),
 			getLists: vi.fn(),
-			getTasks: vi.fn(),
-			createTask: vi.fn(),
-			updateTaskStatus: vi.fn(),
-			updateTaskMeta: vi.fn()
+			getTasks: vi.fn()
 		}
 	};
 });
@@ -44,6 +41,12 @@ beforeEach(() => {
 		lists: [],
 		tasks: []
 	});
+	mockedApi.syncPush.mockResolvedValue({
+		protocol: 'delta-v1',
+		cursor_ts: 0,
+		applied: [],
+		rejected: []
+	});
 });
 
 describe('syncFromServer', () => {
@@ -59,30 +62,30 @@ describe('syncFromServer', () => {
 	it('keeps local dirty status instead of remote pending copy', async () => {
 		const local = tasks.createLocal('flip me', 'goal-management');
 		if (local) {
-			tasks.toggle(local.id); // mark done + dirty
+			tasks.toggle(local.id);
 		}
 		mockedApi.syncPull.mockResolvedValue({
 			protocol: 'delta-v1',
 			cursor_ts: 1,
 			lists: [],
 			tasks: [
-			{
-				id: local?.id ?? 'missing',
-				space_id: 's1',
-				title: 'flip me',
-				status: 'pending',
-				list_id: 'goal-management',
-				my_day: 0,
-				order: 'z',
-				created_ts: 1,
-				updated_ts: 1
-			}
-		]
+				{
+					id: local?.id ?? 'missing',
+					space_id: 's1',
+					title: 'flip me',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'z',
+					created_ts: 1,
+					updated_ts: 1
+				}
+			]
 		});
 
 		await syncFromServer();
 
-		const saved = tasks.getAll().find((t) => t.id === local?.id);
+		const saved = tasks.getAll().find((task) => task.id === local?.id);
 		expect(saved?.status).toBe('done');
 		expect(saved?.dirty).toBe(true);
 	});
@@ -90,8 +93,7 @@ describe('syncFromServer', () => {
 	it('keeps local tasks created while pull is in flight', async () => {
 		let resolvePull: (
 			value: ReturnType<typeof mockedApi.syncPull> extends Promise<infer T> ? T : never
-		) =>
-			void;
+		) => void;
 		const remotePull = new Promise<
 			ReturnType<typeof mockedApi.syncPull> extends Promise<infer T> ? T : never
 		>((resolve) => {
@@ -105,7 +107,7 @@ describe('syncFromServer', () => {
 		await pulling;
 
 		const all = tasks.getAll();
-		expect(all.find((t) => t.id === created?.id)).toBeTruthy();
+		expect(all.find((task) => task.id === created?.id)).toBeTruthy();
 	});
 
 	it('uses incremental cursor across pulls and resets when requested', async () => {
@@ -167,68 +169,78 @@ describe('syncFromServer', () => {
 describe('pushPendingToServer', () => {
 	it('creates local tasks remotely and clears dirty flag', async () => {
 		const local = tasks.createLocal('offline', 'goal-management');
-		mockedApi.createTask.mockResolvedValue({
-			id: 'srv-1',
-			space_id: 's1',
-			title: 'offline',
-			status: 'pending',
-			list_id: 'goal-management',
-			my_day: 0,
-			order: 'z',
-			created_ts: 1,
-			updated_ts: 1
-		});
-		mockedApi.updateTaskStatus.mockResolvedValue({
-			id: 'srv-1',
-			space_id: 's1',
-			title: 'offline',
-			status: 'done',
-			list_id: 'goal-management',
-			my_day: 0,
-			order: 'z',
-			created_ts: 1,
-			updated_ts: 2
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 12,
+			applied: [
+				{
+					id: 'srv-1',
+					space_id: 's1',
+					title: 'offline',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'z',
+					created_ts: 1,
+					updated_ts: 12
+				}
+			],
+			rejected: []
 		});
 
 		const result = await pushPendingToServer();
-		expect(result.created).toBe(1);
+
+		expect(result).toMatchObject({ pushed: 1, created: 1, rejected: 0 });
+		expect(mockedApi.syncPush).toHaveBeenCalledOnce();
+		expect(mockedApi.syncPush.mock.calls[0]?.[0]?.changes).toHaveLength(1);
+		expect(mockedApi.syncPush.mock.calls[0]?.[0]?.changes?.[0]).toMatchObject({
+			kind: 'create_task',
+			body: { title: 'offline', list_id: 'goal-management' }
+		});
 		const all = tasks.getAll();
-		const saved = all.find((t) => t.id === 'srv-1');
+		const saved = all.find((task) => task.id === 'srv-1');
 		expect(saved?.dirty).toBe(false);
 		expect(saved?.local).toBe(false);
-		expect(all.find((t) => t.id === local?.id)).toBeUndefined();
+		expect(all.find((task) => task.id === local?.id)).toBeUndefined();
 	});
 
-	it('keeps local edits made while create request is in flight', async () => {
+	it('keeps local edits made while push request is in flight', async () => {
 		const local = tasks.createLocal('race task', 'goal-management');
-		let resolveCreate: (
-			value: ReturnType<typeof mockedApi.createTask> extends Promise<infer T> ? T : never
+		let resolvePush: (
+			value: ReturnType<typeof mockedApi.syncPush> extends Promise<infer T> ? T : never
 		) => void;
-		const createResponse = new Promise<
-			ReturnType<typeof mockedApi.createTask> extends Promise<infer T> ? T : never
+		const pendingPush = new Promise<
+			ReturnType<typeof mockedApi.syncPush> extends Promise<infer T> ? T : never
 		>((resolve) => {
-			resolveCreate = resolve;
+			resolvePush = resolve;
 		});
-		mockedApi.createTask.mockReturnValue(createResponse as ReturnType<typeof mockedApi.createTask>);
+		mockedApi.syncPush.mockReturnValue(pendingPush as ReturnType<typeof mockedApi.syncPush>);
 
 		const pushing = pushPendingToServer();
 		if (local) {
 			tasks.toggle(local.id);
 		}
-		resolveCreate!({
-			id: 'srv-race-task',
-			space_id: 's1',
-			title: 'race task',
-			status: 'pending',
-			list_id: 'goal-management',
-			my_day: 0,
-			order: 'z',
-			created_ts: 1,
-			updated_ts: 1
+		resolvePush!({
+			protocol: 'delta-v1',
+			cursor_ts: 9,
+			applied: [
+				{
+					id: 'srv-race-task',
+					space_id: 's1',
+					title: 'race task',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'z',
+					created_ts: 1,
+					updated_ts: 9
+				}
+			],
+			rejected: []
 		});
 		await pushing;
 
-		const saved = tasks.getAll().find((t) => t.id === 'srv-race-task');
+		const saved = tasks.getAll().find((task) => task.id === 'srv-race-task');
 		expect(saved?.local).toBe(false);
 		expect(saved?.status).toBe('done');
 		expect(saved?.dirty).toBe(true);
@@ -255,27 +267,37 @@ describe('pushPendingToServer', () => {
 			tasks.setAll([legacy, local]);
 		}
 
-		mockedApi.createTask.mockResolvedValue({
-			id: 'srv-legacy-1',
-			space_id: 's1',
-			title: 'new',
-			status: 'pending',
-			list_id: 'goal-management',
-			my_day: 0,
-			order: 'z',
-			created_ts: 1,
-			updated_ts: 1
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 7,
+			applied: [
+				{
+					id: 'srv-legacy-1',
+					space_id: 's1',
+					title: 'new',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'z',
+					created_ts: 1,
+					updated_ts: 7
+				}
+			],
+			rejected: []
 		});
 
 		const result = await pushPendingToServer();
+
 		expect(result.error).toBeUndefined();
 		expect(result.created).toBe(1);
+		expect(mockedApi.syncPush.mock.calls[0]?.[0]?.changes).toHaveLength(1);
+		expect(mockedApi.syncPush.mock.calls[0]?.[0]?.changes?.[0]).toMatchObject({ kind: 'create_task' });
 		const all = tasks.getAll();
-		expect(all.find((t) => t.id === 't1')).toBeUndefined();
-		expect(all.find((t) => t.id === 'srv-legacy-1')?.dirty).toBe(false);
+		expect(all.find((task) => task.id === 't1')).toBeUndefined();
+		expect(all.find((task) => task.id === 'srv-legacy-1')?.dirty).toBe(false);
 	});
 
-	it('removes tasks that return 404 on update and continues pushing others', async () => {
+	it('removes tasks rejected with 404 and continues applying others', async () => {
 		const orphan: Task = {
 			id: '123e4567-e89b-12d3-a456-426614174000',
 			title: 'orphaned',
@@ -296,39 +318,129 @@ describe('pushPendingToServer', () => {
 			tasks.setAll([orphan, local]);
 		}
 
-		mockedApi.updateTaskMeta.mockRejectedValueOnce(new Error('API 404 Not Found'));
-		mockedApi.createTask.mockResolvedValue({
-			id: 'srv-keep',
-			space_id: 's1',
-			title: 'keep me',
-			status: 'pending',
-			list_id: 'goal-management',
-			my_day: 0,
-			order: 'z',
-			created_ts: 1,
-			updated_ts: 1
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 3,
+			applied: [
+				{
+					id: 'srv-keep',
+					space_id: 's1',
+					title: 'keep me',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'z',
+					created_ts: 1,
+					updated_ts: 3
+				}
+			],
+			rejected: [{ op_id: 'update-0', status: 404, error: 'Not Found' }]
 		});
 
 		const result = await pushPendingToServer();
+
 		expect(result.error).toBeUndefined();
 		expect(result.created).toBe(1);
+		expect(result.rejected).toBe(1);
 		const all = tasks.getAll();
-		expect(all.find((t) => t.id === orphan.id)).toBeUndefined();
-		expect(all.find((t) => t.id === 'srv-keep')?.dirty).toBe(false);
+		expect(all.find((task) => task.id === orphan.id)).toBeUndefined();
+		expect(all.find((task) => task.id === 'srv-keep')?.dirty).toBe(false);
+	});
+
+	it('marks forbidden update rejections as error and clears dirty updates', async () => {
+		const task: Task = {
+			id: '123e4567-e89b-12d3-a456-426614174111',
+			title: 'forbidden update',
+			status: 'done',
+			list_id: 'goal-management',
+			my_day: false,
+			priority: 0,
+			tags: [],
+			checklist: [],
+			order: 'a',
+			attachments: [],
+			created_ts: 1,
+			updated_ts: 1,
+			dirty: true
+		};
+		tasks.setAll([task]);
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 8,
+			applied: [],
+			rejected: [{ op_id: 'update-0', status: 403, error: 'Forbidden' }]
+		});
+
+		const result = await pushPendingToServer();
+
+		expect(result.error).toBe(true);
+		expect(result.rejected).toBe(1);
+		expect(tasks.getAll().find((item) => item.id === task.id)?.dirty).toBe(false);
+		expect(readStatus().push).toBe('error');
+	});
+
+	it('uses sync push cursor as next pull boundary', async () => {
+		mockedApi.syncPull
+			.mockResolvedValueOnce({
+				protocol: 'delta-v1',
+				cursor_ts: 11,
+				lists: [],
+				tasks: []
+			})
+			.mockResolvedValueOnce({
+				protocol: 'delta-v1',
+				cursor_ts: 60,
+				lists: [],
+				tasks: []
+			});
+
+		await syncFromServer();
+		tasks.createLocal('cursor check', 'goal-management');
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 50,
+			applied: [
+				{
+					id: 'srv-cursor',
+					space_id: 's1',
+					title: 'cursor check',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'z',
+					created_ts: 1,
+					updated_ts: 50
+				}
+			],
+			rejected: []
+		});
+
+		await pushPendingToServer();
+		await syncFromServer();
+
+		expect(mockedApi.syncPull).toHaveBeenNthCalledWith(1, { since_ts: undefined });
+		expect(mockedApi.syncPull).toHaveBeenNthCalledWith(2, { since_ts: 50 });
 	});
 
 	it('resets queue depth and records replay timestamp after successful push', async () => {
 		tasks.createLocal('telemetry', 'goal-management');
-		mockedApi.createTask.mockResolvedValue({
-			id: 'srv-telemetry',
-			space_id: 's1',
-			title: 'telemetry',
-			status: 'pending',
-			list_id: 'goal-management',
-			my_day: 0,
-			order: 'z',
-			created_ts: 1,
-			updated_ts: 1
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 4,
+			applied: [
+				{
+					id: 'srv-telemetry',
+					space_id: 's1',
+					title: 'telemetry',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'z',
+					created_ts: 1,
+					updated_ts: 4
+				}
+			],
+			rejected: []
 		});
 		const before = Date.now();
 
