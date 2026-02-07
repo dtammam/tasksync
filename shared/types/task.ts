@@ -37,6 +37,7 @@ export interface Task {
 	attachments: FileRef[];
 	notes?: string;
 	occurrences_completed?: number;
+	completed_ts?: number;
 	created_ts: number;
 	updated_ts: number;
 	assignee_user_id?: string;

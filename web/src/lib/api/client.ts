@@ -51,6 +51,7 @@ export interface ApiTask {
 	attachments?: string;
 	due_date?: string;
 	occurrences_completed?: number;
+	completed_ts?: number;
 	notes?: string;
 	assignee_user_id?: string;
 	created_by_user_id?: string;
@@ -89,6 +90,10 @@ export const api = {
 	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),
 	createMember: (body: AuthCreateMemberRequest) =>
 		fetchJson<SpaceMember>('/auth/members', { method: 'POST', body: JSON.stringify(body) }),
+	deleteMember: (userId: string) =>
+		fetchJson<void>(`/auth/members/${userId}`, {
+			method: 'DELETE'
+		}),
 	setMemberPassword: (userId: string, body: AuthSetMemberPasswordRequest) =>
 		fetchJson<void>(`/auth/members/${userId}/password`, {
 			method: 'PATCH',
@@ -147,6 +152,7 @@ export const api = {
 			due_date?: string;
 			notes?: string;
 			occurrences_completed?: number;
+			completed_ts?: number;
 			assignee_user_id?: string;
 		}
 	) =>

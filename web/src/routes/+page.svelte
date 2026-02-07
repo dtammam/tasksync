@@ -14,6 +14,7 @@
 	let sortMode = 'created';
 	let sortLoaded = false;
 	let detailId = null;
+	let showSuggestions = false;
 	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
 	const compareAlpha = (left, right) => {
 		const a = (left ?? '').trim().toLowerCase();
@@ -84,6 +85,7 @@
 	$: resolvedAssignee = defaultAssignee($auth.user, quickAddMembers);
 
 	const quickAdd = () => {
+		if ($auth.user?.role === 'contributor') return;
 		if (!quickTitle.trim()) return;
 		tasks.createLocal(quickTitle, defaultListId, {
 			my_day: true,
@@ -91,6 +93,16 @@
 		});
 		quickTitle = '';
 	};
+
+	const addSuggestionToMyDay = (id) => {
+		if ($auth.user?.role === 'contributor') return;
+		tasks.setMyDay(id, true);
+		showSuggestions = false;
+	};
+
+	$: if (!$myDaySuggestions?.length) {
+		showSuggestions = false;
+	}
 </script>
 
 <header class="page-header">
@@ -125,35 +137,6 @@
 	</div>
 </section>
 
-{#if $myDaySuggestions?.length}
-	<section class="block">
-		<div class="section-title">Suggestions</div>
-		<div class="suggestions">
-			{#each $myDaySuggestions as suggestion (suggestion.id)}
-				<div class="suggestion">
-					<div>
-						<p class="title">{suggestion.title}</p>
-						<p class="meta">
-							{#if suggestion.due_date}
-								Due {suggestion.due_date}
-							{:else}
-								No due date
-							{/if}
-						</p>
-					</div>
-					<button
-						type="button"
-						on:click={() => $auth.user?.role !== 'contributor' && tasks.setMyDay(suggestion.id, true)}
-						disabled={$auth.user?.role === 'contributor'}
-					>
-						Add to My Day
-					</button>
-				</div>
-			{/each}
-		</div>
-	</section>
-{/if}
-
 <section class="block">
 	<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
 	<div class="stack" data-testid="completed-section">
@@ -167,19 +150,61 @@
 	</div>
 </section>
 
+{#if $myDaySuggestions?.length}
+	<div class="suggestions-flyout">
+		{#if showSuggestions}
+			<div class="suggestions-panel">
+				<div class="panel-head">
+					<strong>Suggestions</strong>
+					<button type="button" class="ghost tiny" on:click={() => (showSuggestions = false)}>Close</button>
+				</div>
+				<div class="suggestions">
+					{#each $myDaySuggestions as suggestion (suggestion.id)}
+						<div class="suggestion">
+							<div>
+								<p class="title">{suggestion.title}</p>
+								<p class="meta">
+									{#if suggestion.due_date}
+										Due {suggestion.due_date}
+									{:else}
+										No due date
+									{/if}
+								</p>
+							</div>
+							<button
+								type="button"
+								on:click={() => addSuggestionToMyDay(suggestion.id)}
+								disabled={$auth.user?.role === 'contributor'}
+							>
+								Add
+							</button>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+		<button class="suggestions-toggle" type="button" on:click={() => (showSuggestions = !showSuggestions)}>
+			Suggestions {$myDaySuggestions.length}
+		</button>
+	</div>
+{/if}
+
 <TaskDetailDrawer task={detailTask} open={!!detailTask} on:close={closeDetail} />
 
 <div class="mobile-add" aria-label="Quick add">
 	<div class="bar">
 		<input
 			type="text"
-			placeholder="Add a task to My Day"
+			placeholder={$auth.user?.role === 'contributor' ? 'Contributors add tasks from lists' : 'Add a task to My Day'}
 			bind:value={quickTitle}
 			autocomplete="off"
 			data-testid="new-task-input"
+			disabled={$auth.user?.role === 'contributor'}
 			on:keydown={(e) => e.key === 'Enter' && quickAdd()}
 		/>
-		<button type="button" data-testid="new-task-submit" on:click={quickAdd}>Add</button>
+		<button type="button" data-testid="new-task-submit" on:click={quickAdd} disabled={$auth.user?.role === 'contributor'}>
+			Add
+		</button>
 	</div>
 </div>
 
@@ -260,6 +285,56 @@
 		border: 1px solid #1f2937;
 		border-radius: 12px;
 		padding: 10px 12px;
+	}
+
+	.suggestions-flyout {
+		position: fixed;
+		right: 14px;
+		bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+		display: grid;
+		gap: 10px;
+		justify-items: end;
+		z-index: 16;
+	}
+
+	.suggestions-toggle {
+		background: rgba(15, 23, 42, 0.96);
+		color: #dbeafe;
+		border: 1px solid #334155;
+		border-radius: 999px;
+		padding: 8px 14px;
+		font-size: 12px;
+		cursor: pointer;
+		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+	}
+
+	.suggestions-panel {
+		width: min(420px, calc(100vw - 28px));
+		max-height: min(50vh, 420px);
+		overflow: auto;
+		background: rgba(11, 18, 33, 0.97);
+		border: 1px solid #334155;
+		border-radius: 14px;
+		padding: 12px;
+		box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+	}
+
+	.panel-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+		color: #e2e8f0;
+	}
+
+	.panel-head .ghost.tiny {
+		background: #0f172a;
+		color: #cbd5e1;
+		border: 1px solid #334155;
+		border-radius: 999px;
+		padding: 5px 10px;
+		font-size: 12px;
+		cursor: pointer;
 	}
 
 	.suggestion .title {
@@ -379,6 +454,12 @@
 		.suggestion {
 			grid-template-columns: 1fr;
 			gap: 8px;
+		}
+
+		.suggestions-flyout {
+			right: 10px;
+			left: auto;
+			bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
 		}
 
 		h1 {

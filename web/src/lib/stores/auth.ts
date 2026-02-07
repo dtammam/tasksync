@@ -18,7 +18,7 @@ export interface AuthState {
 
 const initialState: AuthState = {
 	status: 'loading',
-	mode: 'legacy',
+	mode: 'token',
 	source: null,
 	user: null,
 	error: null

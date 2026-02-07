@@ -8,6 +8,7 @@ import { soundSettings, soundThemes } from '$lib/stores/settings';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
 import { api } from '$lib/api/client';
+import { playCompletion } from '$lib/sound/sound';
 
 export let navPinned = false;
 
@@ -16,8 +17,10 @@ const dispatch = createEventDispatcher();
 let showManager = false;
 let newListName = '';
 let newListIcon = '';
+let newListColor = '#3b82f6';
 let renameDraft = {};
 let iconDraft = {};
+let colorDraft = {};
 let listError = '';
 let busy = false;
 let listSortMode = 'manual';
@@ -56,6 +59,9 @@ let newMemberRole = 'contributor';
 let newMemberPassword = '';
 let newMemberIcon = '';
 let adminMode = false;
+let soundBusy = false;
+let soundError = '';
+let soundMessage = '';
 
 const iconFromIdentity = (display, email) => {
 	const source = (display ?? email ?? '').trim();
@@ -73,11 +79,62 @@ const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
 
 const passwordIsValid = (value) => value.trim().length >= 8;
 
+const readAsDataUrl = (file) =>
+	new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result ?? ''));
+		reader.onerror = () => reject(new Error('Could not read sound file.'));
+		reader.readAsDataURL(file);
+	});
+
+const uploadCustomSound = async (event) => {
+	const input = event.currentTarget;
+	const file = input?.files?.[0];
+	if (!file) return;
+	if (!/\.(mp3|wav)$/i.test(file.name)) {
+		soundError = 'Please upload an MP3 or WAV file.';
+		soundMessage = '';
+		input.value = '';
+		return;
+	}
+	if (file.size > 2 * 1024 * 1024) {
+		soundError = 'Sound file is too large (max 2MB).';
+		soundMessage = '';
+		input.value = '';
+		return;
+	}
+	soundBusy = true;
+	soundError = '';
+	soundMessage = '';
+	try {
+		const dataUrl = await readAsDataUrl(file);
+		soundSettings.setCustomSound(dataUrl, file.name);
+		soundMessage = `Custom sound loaded: ${file.name}`;
+	} catch (err) {
+		soundError = err instanceof Error ? err.message : String(err);
+	} finally {
+		soundBusy = false;
+		input.value = '';
+	}
+};
+
+const clearCustomSound = () => {
+	soundSettings.clearCustomSound();
+	soundError = '';
+	soundMessage = 'Custom sound removed.';
+};
+
+const previewSound = async () => {
+	await playCompletion(soundSettings.get());
+};
+
 const resetDrafts = () => {
 	renameDraft = {};
 	iconDraft = {};
+	colorDraft = {};
 	newListName = '';
 	newListIcon = '';
+	newListColor = '#3b82f6';
 	listError = '';
 };
 
@@ -99,7 +156,7 @@ const createList = async () => {
 	busy = true;
 	listError = '';
 	try {
-		await lists.createRemote(name, newListIcon || undefined);
+		await lists.createRemote(name, newListIcon || undefined, newListColor || undefined);
 		resetDrafts();
 	} catch (err) {
 		listError = err instanceof Error ? err.message : String(err);
@@ -112,20 +169,27 @@ const renameList = async (id) => {
 	if (!adminMode) return;
 	const name = (renameDraft[id] ?? '').trim();
 	const iconInput = iconDraft[id];
+	const colorInput = colorDraft[id];
 	const icon =
 		typeof iconInput === 'string'
 			? iconInput.trim()
 			: undefined;
-	if (!name && typeof iconInput !== 'string') return;
+	const color =
+		typeof colorInput === 'string'
+			? colorInput.trim()
+			: undefined;
+	if (!name && typeof iconInput !== 'string' && typeof colorInput !== 'string') return;
 	busy = true;
 	listError = '';
 	try {
 		await lists.updateRemote(id, {
 			name: name || undefined,
-			icon: typeof iconInput === 'string' ? icon || '' : undefined
+			icon: typeof iconInput === 'string' ? icon || '' : undefined,
+			color: typeof colorInput === 'string' ? color || '' : undefined
 		});
 		renameDraft = { ...renameDraft, [id]: '' };
 		iconDraft = { ...iconDraft, [id]: '' };
+		colorDraft = { ...colorDraft, [id]: '' };
 	} catch (err) {
 		listError = err instanceof Error ? err.message : String(err);
 	} finally {
@@ -369,6 +433,29 @@ const resetMemberPassword = async (member) => {
 	}
 };
 
+const canDeleteMember = (member) =>
+	adminMode &&
+	$auth.user &&
+	member.user_id !== $auth.user.user_id;
+
+const deleteMember = async (member) => {
+	if (!canDeleteMember(member) || teamBusy) return;
+	const confirmed = confirm(`Delete ${member.display} from this space?`);
+	if (!confirmed) return;
+	teamBusy = true;
+	teamError = '';
+	teamMessage = '';
+	try {
+		await api.deleteMember(member.user_id);
+		await Promise.all([members.hydrateFromServer(), loadGrants()]);
+		teamMessage = `Removed ${member.display}.`;
+	} catch (err) {
+		teamError = err instanceof Error ? err.message : String(err);
+	} finally {
+		teamBusy = false;
+	}
+};
+
 $: if ($auth.user?.user_id && profileSeedUserId !== $auth.user.user_id) {
 	profileSeedUserId = $auth.user.user_id;
 	profileDisplay = $auth.user.display ?? '';
@@ -396,7 +483,7 @@ $: if (!adminScope && loadedAdminScope) {
 	teamMessage = '';
 }
 
-$: contributorMembers = ($members ?? []).filter((member) => member.role === 'contributor');
+$: teamMembers = ($members ?? []).filter((member) => member.user_id !== $auth.user?.user_id);
 $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 $: managedListsManual = sortByOrder($lists ?? []).filter((list) => list.id !== 'my-day');
 $: if (typeof localStorage !== 'undefined' && !listSortLoaded) {
@@ -490,6 +577,10 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 							on:keydown={(e) => e.key === 'Enter' && createList()}
 						/>
 					</label>
+					<label>
+						Color (optional)
+						<input type="color" bind:value={newListColor} />
+					</label>
 					<button
 						type="button"
 						class="primary"
@@ -519,6 +610,12 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 									maxlength="4"
 									bind:value={iconDraft[list.id]}
 									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+								/>
+								<input
+									class="color-input"
+									type="color"
+									value={colorDraft[list.id] ?? list.color ?? '#3b82f6'}
+									on:input={(e) => (colorDraft[list.id] = e.currentTarget.value)}
 								/>
 								<div class="row-actions">
 									<button
@@ -556,7 +653,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 			<div class="section-label muted">Team</div>
 			<button class="section-toggle" type="button" on:click={() => (showTeam = !showTeam)}>
-				{showTeam ? 'Close team manager' : 'Manage contributors'}
+				{showTeam ? 'Close team manager' : 'Manage members'}
 			</button>
 			{#if showTeam}
 				<div class="card team">
@@ -613,8 +710,8 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 						<p class="muted-note">Loading access matrix...</p>
 					{:else}
 						<div class="member-list">
-							{#if contributorMembers.length}
-								{#each contributorMembers as member}
+							{#if teamMembers.length}
+								{#each teamMembers as member}
 									<div class="member-row">
 										<div class="member-head">
 											<span class="avatar small">{avatarFor(member)}</span>
@@ -633,28 +730,38 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 											>
 												Reset password
 											</button>
+											<button
+												type="button"
+												class="ghost tiny danger"
+												disabled={!canDeleteMember(member) || teamBusy}
+												on:click={() => deleteMember(member)}
+											>
+												Delete member
+											</button>
 										</div>
-										<div class="grant-grid">
-											{#each managedLists as list}
-												<label class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}>
-													<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
-													<span class="grant-controls">
-														<span class="grant-state">{hasGrant(member.user_id, list.id) ? 'On' : 'Off'}</span>
-														<input
-															type="checkbox"
-															checked={hasGrant(member.user_id, list.id)}
-															disabled={teamBusy}
-															on:change={(e) =>
-																setGrant(member.user_id, list.id, e.currentTarget.checked)}
-														/>
-													</span>
-												</label>
-											{/each}
-										</div>
+										{#if member.role === 'contributor'}
+											<div class="grant-grid">
+												{#each managedLists as list}
+													<label class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}>
+														<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
+														<span class="grant-controls">
+															<span class="grant-state">{hasGrant(member.user_id, list.id) ? 'On' : 'Off'}</span>
+															<input
+																type="checkbox"
+																checked={hasGrant(member.user_id, list.id)}
+																disabled={teamBusy}
+																on:change={(e) =>
+																	setGrant(member.user_id, list.id, e.currentTarget.checked)}
+															/>
+														</span>
+													</label>
+												{/each}
+											</div>
+										{/if}
 									</div>
 								{/each}
 							{:else}
-								<p class="muted-note">No contributors yet. Add one above.</p>
+								<p class="muted-note">No other members yet. Add one above.</p>
 							{/if}
 						</div>
 					{/if}
@@ -694,6 +801,32 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 					{/each}
 				</select>
 			</label>
+			<label>
+				Custom sound (mp3/wav)
+				<input type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" on:change={uploadCustomSound} disabled={soundBusy} />
+			</label>
+			<div class="sound-actions">
+				<button type="button" class="ghost tiny" on:click={previewSound}>
+					Test sound
+				</button>
+				<button
+					type="button"
+					class="ghost tiny"
+					on:click={clearCustomSound}
+					disabled={!$soundSettings.customSoundDataUrl}
+				>
+					Clear custom
+				</button>
+			</div>
+			{#if $soundSettings.customSoundFileName}
+				<p class="muted-note">Loaded: {$soundSettings.customSoundFileName}</p>
+			{/if}
+			{#if soundMessage}
+				<p class="ok">{soundMessage}</p>
+			{/if}
+			{#if soundError}
+				<p class="error">{soundError}</p>
+			{/if}
 			<label>
 				Volume
 				<div class="volume">
@@ -1061,7 +1194,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	.manager .row {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(74px, 86px);
+		grid-template-columns: minmax(0, 1fr) minmax(74px, 86px) 44px;
 		gap: 6px;
 		align-items: start;
 	}
@@ -1072,6 +1205,13 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	.manager .row .icon-input {
 		width: 100%;
+	}
+
+	.manager .row .color-input {
+		width: 44px;
+		height: 36px;
+		padding: 3px;
+		border-radius: 8px;
 	}
 
 	.manager .row .row-actions {
@@ -1303,6 +1443,12 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		flex-direction: row;
 		align-items: center;
 		gap: 8px;
+	}
+
+	.sound .sound-actions {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 6px;
 	}
 
 	.sound input[type='checkbox'] {

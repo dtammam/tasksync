@@ -2,7 +2,16 @@ import { get, writable } from 'svelte/store';
 import { repo } from '$lib/data/repo';
 import type { SoundSettings, SoundTheme } from '$shared/types/settings';
 
-export const soundThemes: SoundTheme[] = ['chime_soft', 'click_pop', 'sparkle_short', 'wood_tick'];
+export const soundThemes: SoundTheme[] = [
+	'chime_soft',
+	'click_pop',
+	'sparkle_short',
+	'wood_tick',
+	'bell_crisp',
+	'marimba_blip',
+	'pulse_soft',
+	'custom_file'
+];
 
 export const defaultSoundSettings: SoundSettings = {
 	enabled: true,
@@ -22,7 +31,11 @@ const normalizeSettings = (settings: Partial<SoundSettings>): SoundSettings => (
 	enabled: settings.enabled ?? defaultSoundSettings.enabled,
 	volume: normalizeVolume(settings.volume ?? defaultSoundSettings.volume),
 	theme: normalizeTheme(settings.theme),
-	customSoundFileId: settings.customSoundFileId
+	customSoundFileId: settings.customSoundFileId,
+	customSoundDataUrl:
+		typeof settings.customSoundDataUrl === 'string' ? settings.customSoundDataUrl : undefined,
+	customSoundFileName:
+		typeof settings.customSoundFileName === 'string' ? settings.customSoundFileName : undefined
 });
 
 const soundSettingsStore = writable<SoundSettings>(defaultSoundSettings);
@@ -55,6 +68,36 @@ export const soundSettings = {
 		settingsMutationVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = { ...current, theme: nextTheme };
+			void repo.saveSoundSettings(next);
+			return next;
+		});
+	},
+	setCustomSound(dataUrl: string, fileName?: string) {
+		settingsMutationVersion += 1;
+		soundSettingsStore.update((current) => {
+			const next = {
+				...current,
+				theme: 'custom_file' as SoundTheme,
+				customSoundDataUrl: dataUrl,
+				customSoundFileName: fileName?.trim() || current.customSoundFileName,
+				customSoundFileId: undefined
+			};
+			void repo.saveSoundSettings(next);
+			return next;
+		});
+	},
+	clearCustomSound() {
+		settingsMutationVersion += 1;
+		soundSettingsStore.update((current) => {
+			const nextTheme =
+				current.theme === 'custom_file' ? defaultSoundSettings.theme : current.theme;
+			const next = {
+				...current,
+				theme: nextTheme,
+				customSoundDataUrl: undefined,
+				customSoundFileName: undefined,
+				customSoundFileId: undefined
+			};
 			void repo.saveSoundSettings(next);
 			return next;
 		});

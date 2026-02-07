@@ -12,13 +12,12 @@ const dispatch = createEventDispatcher();
 let editing = false;
 let titleDraft = task.title;
 let showActions = false;
-let pressTimer = null;
 let deleting = false;
 let actionError = '';
 
 /** @param {Event & { target: HTMLSelectElement }} event */
 const updateList = (event) => {
-	if ($auth.user?.role === 'contributor') return;
+	if (!canEditTask) return;
 	const select = event.target;
 	tasks.moveToList(task.id, select.value);
 };
@@ -35,7 +34,7 @@ const badge = task.priority > 1 ? '🔥' : '•';
 let justSaved = false;
 
 const saveTitle = () => {
-	if ($auth.user?.role === 'contributor') return;
+	if (!canEditTask) return;
 	if (!titleDraft.trim()) return;
 	tasks.rename(task.id, titleDraft);
 	editing = false;
@@ -58,33 +57,22 @@ const nextWeekIso = () => {
 };
 
 const addTomorrow = () => {
-	if ($auth.user?.role === 'contributor') return;
+	if (!canEditTask) return;
 	tasks.setDueDate(task.id, tomorrowIso());
 };
 const addNextWeek = () => {
-	if ($auth.user?.role === 'contributor') return;
+	if (!canEditTask) return;
 	tasks.setDueDate(task.id, nextWeekIso());
 };
 const toggleStar = () => {
-	if ($auth.user?.role === 'contributor') return;
+	if (!canEditTask) return;
 	tasks.setPriority(task.id, task.priority > 0 ? 0 : 1);
-};
-
-const startPress = () => {
-	if ($auth.user?.role === 'contributor') return;
-	pressTimer = setTimeout(() => {
-		showActions = true;
-	}, 400);
-};
-
-const endPress = () => {
-	if (pressTimer) clearTimeout(pressTimer);
 };
 
 const closeActions = () => (showActions = false);
 
 const deleteTask = async () => {
-	if (isContributor || deleting) return;
+	if (!canEditTask || deleting) return;
 	if (!confirm('Delete this task?')) return;
 	deleting = true;
 	actionError = '';
@@ -98,14 +86,43 @@ const deleteTask = async () => {
 	}
 };
 
+const openDetailFromMenu = () => {
+	openDetail();
+	showActions = false;
+};
+
+const toRgba = (hex, alpha) => {
+	if (!hex || typeof hex !== 'string') return '';
+	const clean = hex.trim().replace('#', '');
+	const normalized =
+		clean.length === 3
+			? clean
+					.split('')
+					.map((ch) => ch + ch)
+					.join('')
+			: clean;
+	if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return '';
+	const value = Number.parseInt(normalized, 16);
+	const r = (value >> 16) & 255;
+	const g = (value >> 8) & 255;
+	const b = value & 255;
+	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 $: assigneeMember = task.assignee_user_id ? members.find(task.assignee_user_id) : null;
 $: assigneeDisplay = assigneeMember?.display ?? task.assignee_user_id;
 $: assigneeIcon = assigneeMember?.avatar_icon?.trim()
 	? assigneeMember.avatar_icon.slice(0, 4)
-	: assigneeDisplay?.trim()
-		? assigneeDisplay.trim().charAt(0).toUpperCase()
-		: '?';
+		: assigneeDisplay?.trim()
+			? assigneeDisplay.trim().charAt(0).toUpperCase()
+			: '?';
 $: isContributor = $auth.user?.role === 'contributor';
+$: isOwner = !!$auth.user?.user_id && task.created_by_user_id === $auth.user.user_id;
+$: canEditTask = !isContributor || isOwner;
+$: canToggleStatus = canEditTask;
+$: taskList = $lists.find((list) => list.id === task.list_id);
+$: listColor = taskList?.color?.trim() || '#334155';
+$: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 </script>
 
 <div
@@ -113,17 +130,15 @@ $: isContributor = $auth.user?.role === 'contributor';
 	data-testid="task-row"
 	title={`Created ${new Date(task.created_ts).toLocaleString()}\nUpdated ${new Date(task.updated_ts).toLocaleString()}`}
 	role="group"
-	on:pointerdown={startPress}
-	on:pointerup={endPress}
-	on:pointerleave={endPress}
+	style={`--list-accent:${listColor};--list-accent-soft:${listColorSoft};`}
 >
 	<div class="left">
 		<button
 			class="status"
 			aria-label="toggle task"
-			on:click={() => !isContributor && tasks.toggle(task.id)}
+			on:click={() => canToggleStatus && tasks.toggle(task.id)}
 			data-testid="task-toggle"
-			disabled={isContributor}
+			disabled={!canToggleStatus}
 		>
 			{task.status === 'done' ? '✔' : '○'}
 		</button>
@@ -143,7 +158,7 @@ $: isContributor = $auth.user?.role === 'contributor';
 				{:else}
 					<span class="title-text" data-testid="task-title">{task.title}</span>
 				{/if}
-				{#if !isContributor}
+				{#if canEditTask}
 					<button class="icon-btn" type="button" title="Rename task" on:click={() => (editing = true)}>
 						✎
 					</button>
@@ -175,7 +190,7 @@ $: isContributor = $auth.user?.role === 'contributor';
 			</label>
 			<span class="chip subtle list-chip">
 				List:
-				<select on:change={updateList} title="Move task to list" disabled={isContributor}>
+				<select on:change={updateList} title="Move task to list" disabled={!canEditTask}>
 					{#each $lists as list}
 						<option value={list.id} selected={list.id === task.list_id}>{list.name}</option>
 					{/each}
@@ -184,20 +199,20 @@ $: isContributor = $auth.user?.role === 'contributor';
 			<span class={`chip sync-chip ${task.dirty ? 'pending' : 'synced'}`} aria-live="polite">
 				{task.dirty ? 'Pending sync' : justSaved ? 'Saved' : 'Synced'}
 			</span>
-			<button class="chip ghost details-chip" type="button" on:click={openDetail}>Details</button>
-			{#if !isContributor}
-				<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
-			{/if}
+			<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
 		</div>
 	</div>
 		{#if showActions}
 			<div class="quick">
-				<button type="button" on:click={addTomorrow}>Tomorrow</button>
-				<button type="button" on:click={addNextWeek}>Next week</button>
-				<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
-				<button class="danger" type="button" on:click={deleteTask} disabled={deleting}>
-					{deleting ? 'Deleting...' : 'Delete'}
-				</button>
+				<button type="button" on:click={openDetailFromMenu}>Details</button>
+				{#if canEditTask}
+					<button type="button" on:click={addTomorrow}>Tomorrow</button>
+					<button type="button" on:click={addNextWeek}>Next week</button>
+					<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
+					<button class="danger" type="button" on:click={deleteTask} disabled={deleting}>
+						{deleting ? 'Deleting...' : 'Delete'}
+					</button>
+				{/if}
 				<button class="ghost" type="button" on:click={closeActions}>Close</button>
 			</div>
 			{#if actionError}
@@ -212,7 +227,8 @@ $: isContributor = $auth.user?.role === 'contributor';
 		grid-template-columns: auto 1fr;
 		gap: 12px;
 		background: linear-gradient(180deg, #0f172a, #0c1425);
-		border: 1px solid #1f2937;
+		border: 1px solid var(--list-accent, #1f2937);
+		box-shadow: inset 3px 0 0 var(--list-accent, #334155);
 		border-radius: 14px;
 		padding: 11px 12px;
 		align-items: start;
@@ -321,6 +337,11 @@ $: isContributor = $auth.user?.role === 'contributor';
 		color: inherit;
 		padding: 0 2px;
 		max-width: 124px;
+	}
+
+	.list-chip {
+		border-color: var(--list-accent, #334155);
+		background: var(--list-accent-soft, #0b1221);
 	}
 
 	.list-chip select:focus-visible {

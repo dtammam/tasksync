@@ -30,10 +30,11 @@ export const lists = {
 		listStore.update((prev) => [...prev, list]);
 		void repo.saveLists(get(listStore));
 	},
-	async createRemote(name: string, icon?: string) {
+	async createRemote(name: string, icon?: string, color?: string) {
 		const created = await api.createList({
 			name,
 			icon,
+			color,
 			order: nextOrder()
 		});
 		const mapped = mapApiList(created);
