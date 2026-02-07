@@ -1,6 +1,6 @@
 services:
   server:
-    image: deantammam/tasksync-server:2026.02.06
+    image: deantammam/tasksync-server:latest
     pull_policy: always
     ports:
       - "3000:3000"
@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: deantammam/tasksync-web:2026.02.06
+    image: deantammam/tasksync-web:latest
     pull_policy: always
     environment:
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   seed:
-    image: deantammam/tasksync-server:2026.02.06
+    image: deantammam/tasksync-server:latest
     command: ["seed"]
     profiles: ["setup"]
     environment:
