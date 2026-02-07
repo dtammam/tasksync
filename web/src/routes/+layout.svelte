@@ -23,6 +23,9 @@
 	let syncCoordinator = null;
 	let syncLeader = true;
 	let syncStatusUnsub = null;
+	let manualRefreshBusy = false;
+	let lastFollowerReplayTs = 0;
+	let lastFollowerHydrateAt = 0;
 	const toggleNav = () => {
 		if (navPinned && navOpen) {
 			savePinned(false);
@@ -74,11 +77,28 @@
 
 	const requestSync = (reason = 'manual') => {
 		if (!auth.isAuthenticated()) return;
-		if (syncCoordinator) {
+		if (syncCoordinator && !syncLeader) {
 			syncCoordinator.requestSync(reason);
 			return;
 		}
-		void runSync();
+		return runSync();
+	};
+
+	const refreshNow = async () => {
+		if (manualRefreshBusy) return;
+		manualRefreshBusy = true;
+		try {
+			if (auth.isAuthenticated()) {
+				await requestSync('manual');
+				if (syncCoordinator && !syncLeader) {
+					await new Promise((resolve) => setTimeout(resolve, 350));
+				}
+			}
+			await hydrateScopedStores();
+			await members.hydrateFromServer();
+		} finally {
+			manualRefreshBusy = false;
+		}
 	};
 
 	const publishSyncStatus = () => {
@@ -119,6 +139,24 @@
 			onStatus: (status) => {
 				if (!syncLeader && auth.isAuthenticated()) {
 					syncStatus.setSnapshot(status);
+					const replayTs = status.lastReplayTs ?? 0;
+					let shouldHydrate = false;
+					if (replayTs > lastFollowerReplayTs) {
+						lastFollowerReplayTs = replayTs;
+						shouldHydrate = true;
+					}
+					if (
+						status.pull === 'idle' &&
+						status.push === 'idle' &&
+						!status.lastError &&
+						Date.now() - lastFollowerHydrateAt > 1000
+					) {
+						shouldHydrate = true;
+					}
+					if (shouldHydrate) {
+						lastFollowerHydrateAt = Date.now();
+						void hydrateScopedStores();
+					}
 				}
 			}
 		});
@@ -211,11 +249,12 @@
 				>
 					<button
 						class="link"
-						on:click={() => requestSync('manual')}
+						on:click={refreshNow}
+						disabled={manualRefreshBusy}
 						title={
 							syncLeader
-								? 'Auto-sync runs every 15s; click to retry now'
-								: 'Auto-sync is managed by another open tab; click to request sync now'
+								? 'Auto-sync runs every 15s; click to sync and refresh now'
+								: 'Auto-sync is managed by another open tab; click to refresh local view'
 						}
 					>
 						{#if $auth.status === 'loading'}
@@ -228,11 +267,16 @@
 							Auto-syncing…
 						{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
 							Sync error (auto-retrying)
+						{:else if manualRefreshBusy}
+							Refreshing…
 						{:else}
 							Auto-sync ready
 						{/if}
 					</button>
 				</span>
+				<button class="refresh-btn" type="button" on:click={refreshNow} disabled={manualRefreshBusy}>
+					{manualRefreshBusy ? 'Refreshing…' : 'Refresh'}
+				</button>
 				{#if $syncStatus.lastError}
 					<span class="err-msg">{$syncStatus.lastError}</span>
 				{/if}
@@ -370,6 +414,21 @@
 		cursor: pointer;
 	}
 
+	.refresh-btn {
+		background: #0f172a;
+		border: 1px solid #1f2937;
+		color: #cbd5e1;
+		border-radius: 999px;
+		padding: 6px 10px;
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.refresh-btn:disabled {
+		opacity: 0.65;
+		cursor: progress;
+	}
+
 	.drawer-backdrop {
 		position: fixed;
 		inset: 0;
@@ -448,6 +507,11 @@
 		}
 
 		.badge {
+			font-size: 11px;
+			padding: 6px 8px;
+		}
+
+		.refresh-btn {
 			font-size: 11px;
 			padding: 6px 8px;
 		}

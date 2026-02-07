@@ -10,10 +10,19 @@ import { members } from '$lib/stores/members';
 
 let quickTitle = '';
 let detailId = null;
+let sortMode = 'created';
+let sortLoaded = false;
 $: listId = $page.params.id;
 let listTasks = tasksByList(listId);
 $: listTasks = tasksByList(listId);
 $: listName = findListName(listId);
+const LIST_SORT_KEY = 'tasksync:sort:list';
+const compareAlpha = (left, right) => {
+	const a = (left ?? '').trim().toLowerCase();
+	const b = (right ?? '').trim().toLowerCase();
+	if (a === b) return 0;
+	return a < b ? -1 : 1;
+};
 
 const quickAdd = () => {
 	if (!quickTitle.trim()) return;
@@ -46,7 +55,32 @@ const openDetail = (event) => (detailId = event.detail.id);
 const closeDetail = () => (detailId = null);
 $: detailTask = detailId ? getTask(detailId) : null;
 
-const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
+const sortTasks = (arr, mode = sortMode) => {
+	const copy = [...arr];
+	if (mode === 'alpha') {
+		copy.sort((a, b) => {
+			const byTitle = compareAlpha(a.title, b.title);
+			return byTitle === 0 ? a.created_ts - b.created_ts : byTitle;
+		});
+	} else {
+		copy.sort((a, b) => a.created_ts - b.created_ts);
+	}
+	return copy;
+};
+$: pendingTasks = sortTasks(($listTasks ?? []).filter((t) => t.status === 'pending'), sortMode);
+$: completedTasks = sortTasks(($listTasks ?? []).filter((t) => t.status === 'done'), sortMode);
+
+$: if (typeof window !== 'undefined' && !sortLoaded) {
+	const saved = localStorage.getItem(LIST_SORT_KEY);
+	if (saved === 'alpha' || saved === 'created') {
+		sortMode = saved;
+	}
+	sortLoaded = true;
+}
+
+$: if (typeof window !== 'undefined' && sortLoaded) {
+	localStorage.setItem(LIST_SORT_KEY, sortMode);
+}
 </script>
 
 <header class="page-header">
@@ -55,13 +89,24 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 		<h1>{listName}</h1>
 		<p class="sub">Tasks in this list.</p>
 	</div>
+	<div class="actions">
+		<div class="sorter">
+			<label>
+				<span>Sort</span>
+				<select bind:value={sortMode} aria-label="Sort tasks">
+					<option value="created">Creation</option>
+					<option value="alpha">Alphabetical</option>
+				</select>
+			</label>
+		</div>
+	</div>
 </header>
 
 <section class="block">
 	<div class="section-title">Pending</div>
 	<div class="stack">
-		{#if sortTasks($listTasks?.filter((t) => t.status === 'pending') ?? []).length}
-			{#each sortTasks($listTasks.filter((t) => t.status === 'pending')) as task (task.id)}
+		{#if pendingTasks.length}
+			{#each pendingTasks as task (task.id)}
 				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
@@ -73,8 +118,8 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 <section class="block">
 	<div class="section-title">Completed</div>
 	<div class="stack" data-testid="completed-section">
-		{#if sortTasks($listTasks?.filter((t) => t.status === 'done') ?? []).length}
-			{#each sortTasks($listTasks.filter((t) => t.status === 'done')) as task (task.id)}
+		{#if completedTasks.length}
+			{#each completedTasks as task (task.id)}
 				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
@@ -105,6 +150,36 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 18px;
+		gap: 12px;
+	}
+
+	.actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		margin-left: auto;
+	}
+
+	.sorter label {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.sorter span {
+		font-size: 11px;
+		color: #94a3b8;
+	}
+
+	.sorter select {
+		background: #0f172a;
+		color: #e2e8f0;
+		border: 1px solid #1f2937;
+		border-radius: 999px;
+		padding: 6px 10px;
+		min-height: 32px;
+		font-size: 13px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
 	}
 
 	.eyebrow {
@@ -200,10 +275,15 @@ const sortTasks = (arr) => [...arr].sort((a, b) => a.created_ts - b.created_ts);
 	@media (max-width: 900px) {
 		.page-header {
 			margin-bottom: 12px;
+			gap: 8px;
 		}
 
 		.stack {
 			padding-bottom: 88px;
+		}
+
+		.sorter span {
+			display: none;
 		}
 
 		h1 {

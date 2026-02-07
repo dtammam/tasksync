@@ -12,7 +12,15 @@
 	const listsStore = lists;
 	let quickTitle = '';
 	let sortMode = 'created';
+	let sortLoaded = false;
 	let detailId = null;
+	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
+	const compareAlpha = (left, right) => {
+		const a = (left ?? '').trim().toLowerCase();
+		const b = (right ?? '').trim().toLowerCase();
+		if (a === b) return 0;
+		return a < b ? -1 : 1;
+	};
 	$: detailTask = detailId ? getTask(detailId) : null;
 	const today = new Date();
 	const dateLabel = today.toLocaleDateString(undefined, {
@@ -24,15 +32,33 @@
 	$: defaultListId =
 		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
 
-	const sortTasks = (arr) => {
+	const sortTasks = (arr, mode = sortMode) => {
 		const copy = [...arr];
-		if (sortMode === 'alpha') {
-			copy.sort((a, b) => a.title.localeCompare(b.title));
-		} else if (sortMode === 'created') {
+		if (mode === 'alpha') {
+			copy.sort((a, b) => {
+				const byTitle = compareAlpha(a.title, b.title);
+				return byTitle === 0 ? a.created_ts - b.created_ts : byTitle;
+			});
+		} else if (mode === 'created') {
 			copy.sort((a, b) => a.created_ts - b.created_ts);
 		}
 		return copy;
 	};
+
+	$: sortedPending = sortTasks($myDayPending ?? [], sortMode);
+	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode);
+
+	$: if (typeof window !== 'undefined' && !sortLoaded) {
+		const saved = localStorage.getItem(MY_DAY_SORT_KEY);
+		if (saved === 'alpha' || saved === 'created') {
+			sortMode = saved;
+		}
+		sortLoaded = true;
+	}
+
+	$: if (typeof window !== 'undefined' && sortLoaded) {
+		localStorage.setItem(MY_DAY_SORT_KEY, sortMode);
+	}
 
 	if (typeof window !== 'undefined') {
 		Reflect.set(window, '__addTaskMyDay', () => quickAdd());
@@ -89,8 +115,8 @@
 <section class="block">
 	<div class="section-title">Planned</div>
 	<div class="stack">
-			{#if sortTasks($myDayPending)?.length}
-			{#each sortTasks($myDayPending) as task (task.id)}
+			{#if sortedPending.length}
+			{#each sortedPending as task (task.id)}
 				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
@@ -131,8 +157,8 @@
 <section class="block">
 	<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
 	<div class="stack" data-testid="completed-section">
-			{#if sortTasks($myDayCompleted)?.length}
-			{#each sortTasks($myDayCompleted) as task (task.id)}
+			{#if sortedCompleted.length}
+			{#each sortedCompleted as task (task.id)}
 				<TaskRow {task} on:openDetail={openDetail} />
 			{/each}
 		{:else}
