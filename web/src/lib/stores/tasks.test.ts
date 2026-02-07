@@ -152,6 +152,31 @@ describe('tasks store helpers', () => {
 		expect(completed.map((t) => t.id)).toEqual(['done-today']);
 	});
 
+	it('drops completed My Day tasks after midnight while the view stays open', () => {
+		vi.setSystemTime(new Date('2026-02-02T23:59:00'));
+		tasks.setAll([
+			baseTask({
+				id: 'done-today',
+				status: 'done',
+				my_day: true,
+				completed_ts: new Date('2026-02-02T23:50:00').getTime()
+			})
+		]);
+
+		let completed: Task[] = [];
+		const unsubscribe = myDayCompleted.subscribe((items) => {
+			completed = items;
+		});
+
+		expect(completed.map((t) => t.id)).toEqual(['done-today']);
+
+		vi.setSystemTime(new Date('2026-02-03T00:01:00'));
+		vi.advanceTimersByTime(60 * 1000);
+
+		expect(completed).toEqual([]);
+		unsubscribe();
+	});
+
 	it('replaces in-memory tasks with empty storage snapshot during hydrate', async () => {
 		tasks.setAll([baseTask({ id: 'stale' })]);
 		const loadSpy = vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({ lists: [], tasks: [] });

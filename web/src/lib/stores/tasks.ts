@@ -1,4 +1,4 @@
-import { derived, get, writable } from 'svelte/store';
+import { derived, get, readable, writable } from 'svelte/store';
 import type { Task } from '$shared/types/task';
 import { repo } from '$lib/data/repo';
 import { playCompletion } from '$lib/sound/sound';
@@ -411,6 +411,20 @@ const todayIso = () => toLocalIsoDate(new Date());
 const isToday = (date?: string) => date && date === todayIso();
 const isTodayTs = (ts?: number) =>
 	typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayIso();
+const myDayDateKey = readable(todayIso(), (set) => {
+	if (typeof window === 'undefined') return;
+	let lastSeenDay = todayIso();
+	const tick = () => {
+		const nextDay = todayIso();
+		if (nextDay === lastSeenDay) return;
+		lastSeenDay = nextDay;
+		set(nextDay);
+	};
+	const intervalId = window.setInterval(tick, 60 * 1000);
+	return () => {
+		window.clearInterval(intervalId);
+	};
+});
 const canSeeTask = (task: Task, userId?: string | null, role?: string | null) => {
 	void task;
 	void userId;
@@ -428,45 +442,57 @@ const wasCompletedToday = (task: Task) => {
 	return isTodayTs(task.completed_ts ?? task.updated_ts);
 };
 
-export const myDayPending = derived([tasksStore, auth], ([$tasks, $auth]) =>
-	$tasks.filter(
-		(task) =>
-			canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
-			inMyDay(task) &&
-			task.status === 'pending'
-	)
+export const myDayPending = derived(
+	[tasksStore, auth, myDayDateKey],
+	([$tasks, $auth, _myDayDateKey]) => {
+		void _myDayDateKey;
+		return $tasks.filter(
+			(task) =>
+				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+				inMyDay(task) &&
+				task.status === 'pending'
+		);
+	}
 );
 
-export const myDayCompleted = derived([tasksStore, auth], ([$tasks, $auth]) =>
-	$tasks.filter(
-		(task) =>
-			canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
-			inMyDay(task) &&
-			wasCompletedToday(task)
-	)
+export const myDayCompleted = derived(
+	[tasksStore, auth, myDayDateKey],
+	([$tasks, $auth, _myDayDateKey]) => {
+		void _myDayDateKey;
+		return $tasks.filter(
+			(task) =>
+				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+				inMyDay(task) &&
+				wasCompletedToday(task)
+		);
+	}
 );
 
-export const myDaySuggestions = derived([tasksStore, auth], ([$tasks, $auth]) => {
-	const today = todayIso();
-	const tomorrow = addDays(today, 1);
-	return $tasks
-		.filter(
-			(t) =>
-				canSeeTask(t, $auth.user?.user_id, $auth.user?.role) &&
-				t.status === 'pending' &&
-				!inMyDay(t) &&
-				(t.due_date === today || t.due_date === tomorrow || (!t.due_date && t.priority > 0))
-		)
-		.sort((a, b) => {
-			// Prioritize due today, then tomorrow, then priority
-			const aScore = a.due_date === today ? 2 : a.due_date === tomorrow ? 1 : 0;
-			const bScore = b.due_date === today ? 2 : b.due_date === tomorrow ? 1 : 0;
-			if (aScore !== bScore) return bScore - aScore;
-			if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
-			return a.created_ts - b.created_ts;
-		})
-		.slice(0, 6);
-});
+export const myDaySuggestions = derived(
+	[tasksStore, auth, myDayDateKey],
+	([$tasks, $auth, _myDayDateKey]) => {
+		void _myDayDateKey;
+		const today = todayIso();
+		const tomorrow = addDays(today, 1);
+		return $tasks
+			.filter(
+				(t) =>
+					canSeeTask(t, $auth.user?.user_id, $auth.user?.role) &&
+					t.status === 'pending' &&
+					!inMyDay(t) &&
+					(t.due_date === today || t.due_date === tomorrow || (!t.due_date && t.priority > 0))
+			)
+			.sort((a, b) => {
+				// Prioritize due today, then tomorrow, then priority
+				const aScore = a.due_date === today ? 2 : a.due_date === tomorrow ? 1 : 0;
+				const bScore = b.due_date === today ? 2 : b.due_date === tomorrow ? 1 : 0;
+				if (aScore !== bScore) return bScore - aScore;
+				if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+				return a.created_ts - b.created_ts;
+			})
+			.slice(0, 6);
+	}
+);
 
 export const tasksByList = (listId: string) =>
 	derived([tasksStore, auth], ([$tasks, $auth]) =>
