@@ -1,6 +1,7 @@
 services:
   server:
-    image: tasksync-server:latest
+    image: deantammam/tasksync-server:2026.02.06
+    pull_policy: always
     ports:
       - "3000:3000"
     environment:
@@ -14,16 +15,10 @@ services:
     restart: unless-stopped
 
   web:
-    image: tasksync-web:latest
-    build:
-      context: .
-      dockerfile: web/Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-}
-        VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
+    image: deantammam/tasksync-web:2026.02.06
+    pull_policy: always
     environment:
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
-      VITE_API_URL: ${VITE_API_URL:-}
     ports:
       - "5173:5173"
     depends_on:
@@ -31,7 +26,7 @@ services:
     restart: unless-stopped
 
   seed:
-    image: tasksync-server:latest
+    image: deantammam/tasksync-server:2026.02.06
     command: ["seed"]
     profiles: ["setup"]
     environment:
