@@ -21,6 +21,8 @@ COPY --from=build /app/web ./web
 COPY --from=build /app/shared ./shared
 
 WORKDIR /app/web
+ARG VITE_ALLOWED_HOSTS
+ENV VITE_ALLOWED_HOSTS=${VITE_ALLOWED_HOSTS}
 ENV NODE_ENV=production
 EXPOSE 5173
 
