@@ -1,6 +1,7 @@
 import type { SoundSettings, SoundTheme } from '$shared/types/settings';
 
 let audioContext: AudioContext | null = null;
+const decodedSoundCache = new Map<string, Promise<AudioBuffer>>();
 
 const clampVolume = (volume: number) => {
 	if (!Number.isFinite(volume)) return 0;
@@ -76,6 +77,8 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.2 * volume
 			});
 			return;
+		case 'custom_file':
+			return;
 		case 'chime_soft':
 		default:
 			scheduleTone(ctx, {
@@ -95,10 +98,53 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 	}
 };
 
+export const playCustomDataUrl = async (dataUrl: string, volumePercent: number) => {
+	const source = dataUrl?.trim();
+	if (!source.startsWith('data:')) return false;
+	const volume = clampVolume(volumePercent);
+	if (volume <= 0) return false;
+	const ctx = getAudioContext();
+	if (!ctx) return false;
+	if (ctx.state === 'suspended') {
+		try {
+			await ctx.resume();
+		} catch {
+			return false;
+		}
+	}
+	try {
+		let bufferPromise = decodedSoundCache.get(source);
+		if (!bufferPromise) {
+			bufferPromise = fetch(source)
+				.then((res) => res.arrayBuffer())
+				.then((arr) => ctx.decodeAudioData(arr.slice(0)));
+			decodedSoundCache.set(source, bufferPromise);
+		}
+		const buffer = await bufferPromise;
+		const gain = ctx.createGain();
+		gain.gain.value = volume;
+		const node = ctx.createBufferSource();
+		node.buffer = buffer;
+		node.connect(gain);
+		gain.connect(ctx.destination);
+		node.start();
+		return true;
+	} catch {
+		decodedSoundCache.delete(source);
+		return false;
+	}
+};
+
 export const playCompletion = async (settings: SoundSettings) => {
 	if (!settings.enabled) return;
 	const volume = clampVolume(settings.volume);
 	if (volume <= 0) return;
+	if (settings.theme === 'custom_file') {
+		const selected =
+			settings.customSounds?.find((sound) => sound.id === settings.customSoundFileId)?.data_url ?? '';
+		const played = await playCustomDataUrl(selected, settings.volume);
+		if (played) return;
+	}
 	const ctx = getAudioContext();
 	if (!ctx) return;
 	if (ctx.state === 'suspended') {

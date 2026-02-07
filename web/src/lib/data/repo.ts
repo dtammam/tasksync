@@ -23,7 +23,8 @@ const readSoundSettingsFromLocalStorage = (): SoundSettings | null => {
 			enabled: parsed.enabled,
 			volume: parsed.volume,
 			theme: parsed.theme,
-			customSoundFileId: parsed.customSoundFileId
+			customSoundFileId: parsed.customSoundFileId,
+			customSounds: parsed.customSounds
 		};
 	} catch {
 		return null;
@@ -73,7 +74,8 @@ export const repo = {
 			enabled: stored.enabled,
 			volume: stored.volume,
 			theme: stored.theme,
-			customSoundFileId: stored.customSoundFileId
+			customSoundFileId: stored.customSoundFileId,
+			customSounds: stored.customSounds
 		};
 		writeSoundSettingsToLocalStorage(parsed);
 		return parsed;

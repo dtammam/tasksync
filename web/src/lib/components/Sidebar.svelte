@@ -8,6 +8,7 @@ import { soundSettings, soundThemes } from '$lib/stores/settings';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
 import { api } from '$lib/api/client';
+import { playCompletion, playCustomDataUrl } from '$lib/sound/sound';
 
 export let navPinned = false;
 
@@ -56,6 +57,9 @@ let newMemberRole = 'contributor';
 let newMemberPassword = '';
 let newMemberIcon = '';
 let adminMode = false;
+let soundBusy = false;
+let soundError = '';
+let soundMessage = '';
 
 const iconFromIdentity = (display, email) => {
 	const source = (display ?? email ?? '').trim();
@@ -72,6 +76,71 @@ const avatarFor = (user) => {
 const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
 
 const passwordIsValid = (value) => value.trim().length >= 8;
+
+const readAsDataUrl = (file) =>
+	new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result ?? ''));
+		reader.onerror = () => reject(new Error('Could not read sound file.'));
+		reader.readAsDataURL(file);
+	});
+
+const uploadCustomSound = async (event) => {
+	const input = event.currentTarget;
+	const file = input?.files?.[0];
+	if (!file) return;
+	if (!/\.(mp3|wav)$/i.test(file.name)) {
+		soundError = 'Upload an MP3 or WAV file.';
+		soundMessage = '';
+		input.value = '';
+		return;
+	}
+	if (file.size > 2 * 1024 * 1024) {
+		soundError = 'Sound file is too large (max 2MB).';
+		soundMessage = '';
+		input.value = '';
+		return;
+	}
+	soundBusy = true;
+	soundError = '';
+	soundMessage = '';
+	try {
+		const dataUrl = await readAsDataUrl(file);
+		soundSettings.addCustomSound(file.name, dataUrl);
+		soundMessage = `Saved ${file.name}.`;
+	} catch (err) {
+		soundError = err instanceof Error ? err.message : String(err);
+	} finally {
+		soundBusy = false;
+		input.value = '';
+	}
+};
+
+const testCurrentSound = async () => {
+	await playCompletion(soundSettings.get());
+};
+
+const testCustomSound = async (dataUrl) => {
+	await playCustomDataUrl(dataUrl, soundSettings.get().volume);
+};
+
+const useCustomSound = (id) => {
+	soundSettings.selectCustomSound(id);
+	soundMessage = 'Custom sound selected.';
+	soundError = '';
+};
+
+const deleteCustomSound = (id) => {
+	soundSettings.deleteCustomSound(id);
+	soundMessage = 'Custom sound removed.';
+	soundError = '';
+};
+
+const resetDefaultSounds = () => {
+	soundSettings.resetDefaultSounds();
+	soundMessage = 'Sound library reset to defaults.';
+	soundError = '';
+};
 
 const resetDrafts = () => {
 	renameDraft = {};
@@ -695,6 +764,46 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 				</select>
 			</label>
 			<label>
+				Add custom sound
+				<input
+					type="file"
+					accept=".mp3,.wav,audio/mpeg,audio/wav"
+					on:change={uploadCustomSound}
+					disabled={soundBusy}
+				/>
+			</label>
+			<div class="sound-actions">
+				<button type="button" class="ghost tiny" on:click={testCurrentSound}>Test current</button>
+				<button type="button" class="ghost tiny" on:click={resetDefaultSounds}>Reset defaults</button>
+			</div>
+			{#if $soundSettings.customSounds?.length}
+				<div class="sound-library">
+					<p class="muted-note">Saved sounds</p>
+					{#each $soundSettings.customSounds as custom}
+						<div class="sound-item">
+							<span class="sound-name">{custom.name}</span>
+							<div class="sound-item-actions">
+								<button type="button" class="ghost tiny" on:click={() => useCustomSound(custom.id)}>
+									Use
+								</button>
+								<button type="button" class="ghost tiny" on:click={() => testCustomSound(custom.data_url)}>
+									Test
+								</button>
+								<button type="button" class="ghost tiny danger" on:click={() => deleteCustomSound(custom.id)}>
+									Delete
+								</button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+			{#if soundMessage}
+				<p class="ok">{soundMessage}</p>
+			{/if}
+			{#if soundError}
+				<p class="error">{soundError}</p>
+			{/if}
+			<label>
 				Volume
 				<div class="volume">
 					<input
@@ -1303,6 +1412,41 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		flex-direction: row;
 		align-items: center;
 		gap: 8px;
+	}
+
+	.sound .sound-actions {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 6px;
+	}
+
+	.sound .sound-library {
+		display: grid;
+		gap: 6px;
+	}
+
+	.sound .sound-item {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 8px;
+		align-items: center;
+		background: #0b1221;
+		border: 1px solid #1f2937;
+		border-radius: 8px;
+		padding: 6px 8px;
+	}
+
+	.sound .sound-name {
+		color: #cbd5e1;
+		font-size: 12px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.sound .sound-item-actions {
+		display: inline-flex;
+		gap: 4px;
 	}
 
 	.sound input[type='checkbox'] {
