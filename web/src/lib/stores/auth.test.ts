@@ -28,6 +28,7 @@ describe('auth store', () => {
 	});
 
 	it('hydrates via legacy mode by calling /auth/me', async () => {
+		localStorage.setItem('tasksync:auth-mode', 'legacy');
 		mockedApi.me.mockResolvedValue(meUser);
 
 		await auth.hydrate();
@@ -51,8 +52,7 @@ describe('auth store', () => {
 		expect(auth.get().source).toBe('token');
 	});
 
-	it('becomes anonymous without calling /auth/me when token mode has no token', async () => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
+	it('becomes anonymous without calling /auth/me when mode has no token', async () => {
 
 		await auth.hydrate();
 

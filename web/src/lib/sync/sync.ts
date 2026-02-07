@@ -49,6 +49,7 @@ const mapApiTask = (t: ApiTask | SyncTask): Task => ({
 	recurrence_id: t.recur_rule ?? undefined,
 	due_date: t.due_date ?? undefined,
 	occurrences_completed: t.occurrences_completed ?? 0,
+	completed_ts: t.completed_ts ?? undefined,
 	notes: t.notes ?? undefined,
 	assignee_user_id: t.assignee_user_id ?? undefined,
 	created_by_user_id: t.created_by_user_id ?? undefined,
@@ -113,7 +114,10 @@ const toPushChange = (
 				due_date: task.due_date,
 				notes: task.notes,
 				occurrences_completed: task.occurrences_completed,
-				assignee_user_id: task.assignee_user_id
+				assignee_user_id: task.assignee_user_id,
+				...(typeof task.completed_ts === 'number'
+					? { completed_ts: task.completed_ts }
+					: {})
 			}
 		},
 		op: { op_id, kind: 'update_task', localTaskId: task.id, sent: task }

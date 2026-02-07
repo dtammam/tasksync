@@ -22,6 +22,7 @@ export interface SyncTask {
 	attachments?: string;
 	due_date?: string;
 	occurrences_completed?: number;
+	completed_ts?: number;
 	notes?: string;
 	assignee_user_id?: string;
 	created_by_user_id?: string;
@@ -71,6 +72,7 @@ export interface SyncUpdateTaskChange {
 		due_date?: string;
 		notes?: string;
 		occurrences_completed?: number;
+		completed_ts?: number;
 		assignee_user_id?: string;
 	};
 }

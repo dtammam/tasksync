@@ -6,7 +6,7 @@ vi.mock('$lib/sound/sound', () => ({
 	playCompletion: vi.fn()
 }));
 
-import { myDayPending, myDaySuggestions, tasks } from './tasks';
+import { myDayCompleted, myDayPending, myDaySuggestions, tasks } from './tasks';
 import { playCompletion } from '$lib/sound/sound';
 import type { Task } from '$shared/types/task';
 
@@ -30,7 +30,8 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	due_date: overrides.due_date,
 	recurrence_id: overrides.recurrence_id,
 	notes: overrides.notes,
-	url: overrides.url
+	url: overrides.url,
+	completed_ts: overrides.completed_ts
 });
 
 describe('tasks store helpers', () => {
@@ -73,6 +74,22 @@ describe('tasks store helpers', () => {
 		expect(updated?.status).toBe('pending');
 	});
 
+	it('rolls weekday recurrence to next business day', () => {
+		vi.setSystemTime(new Date('2026-02-06T12:00:00Z'));
+		const rec = baseTask({
+			id: 'rec-weekdays',
+			recurrence_id: 'weekdays',
+			due_date: '2026-02-06',
+			status: 'pending',
+			dirty: true
+		});
+		tasks.setAll([rec]);
+
+		tasks.toggle('rec-weekdays');
+		const updated = tasks.getAll().find((t) => t.id === 'rec-weekdays');
+		expect(updated?.due_date).toBe('2026-02-09');
+	});
+
 	it('renames a task and marks it dirty', () => {
 		const t = baseTask({ id: 'r1', title: 'old', dirty: false });
 		tasks.setAll([t]);
@@ -113,6 +130,26 @@ describe('tasks store helpers', () => {
 		tasks.toggle('sound-1');
 
 		expect(mockedPlayCompletion).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows completed My Day tasks only for the completion day', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'done-today',
+				status: 'done',
+				my_day: true,
+				completed_ts: new Date('2026-02-02T08:00:00Z').getTime()
+			}),
+			baseTask({
+				id: 'done-yesterday',
+				status: 'done',
+				my_day: true,
+				completed_ts: new Date('2026-02-01T08:00:00Z').getTime()
+			})
+		]);
+
+		const completed = get(myDayCompleted);
+		expect(completed.map((t) => t.id)).toEqual(['done-today']);
 	});
 
 	it('replaces in-memory tasks with empty storage snapshot during hydrate', async () => {

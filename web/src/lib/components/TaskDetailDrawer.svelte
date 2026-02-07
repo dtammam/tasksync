@@ -41,9 +41,13 @@ function hydrate(t) {
 
 const close = () => dispatch('close');
 $: isContributor = $auth.user?.role === 'contributor';
+$: isOwner = !!$auth.user?.user_id && task?.created_by_user_id === $auth.user.user_id;
+$: canEditTask = !isContributor || isOwner;
+$: canEditMyDay = !isContributor;
+$: canEditAssignee = !isContributor;
 
 const save = () => {
-	if (!task || isContributor) return;
+	if (!task || !canEditTask) return;
 	tasks.rename(task.id, title);
 	tasks.updateDetails(task.id, {
 		due_date: due || undefined,
@@ -52,21 +56,23 @@ const save = () => {
 		notes,
 		attachments
 	});
-	tasks.setMyDay(task.id, myDay);
+	if (canEditMyDay) {
+		tasks.setMyDay(task.id, myDay);
+	}
 	tasks.moveToList(task.id, listId);
-	if (assigneeUserId !== (task.assignee_user_id ?? '')) {
+	if (canEditAssignee && assigneeUserId !== (task.assignee_user_id ?? '')) {
 		tasks.setAssignee(task.id, assigneeUserId || undefined);
 	}
 };
 
 const toggleStatus = () => {
-	if (!task || isContributor) return;
+	if (!task || !canEditTask) return;
 	tasks.toggle(task.id);
 };
 
 let newAttachment = '';
 const addAttachment = () => {
-	if (!newAttachment.trim() || !task || isContributor) return;
+	if (!newAttachment.trim() || !task || !canEditTask) return;
 	const name = newAttachment.split('/').filter(Boolean).pop() ?? 'attachment';
 	const ref = {
 		id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
@@ -81,7 +87,7 @@ const addAttachment = () => {
 };
 
 const skip = () => {
-	if (!task || isContributor) return;
+	if (!task || !canEditTask) return;
 	tasks.skip(task.id);
 };
 
@@ -110,32 +116,33 @@ const memberAvatar = (member) => {
 		<div class="form">
 			<label>
 				Title
-				<input type="text" bind:value={title} disabled={isContributor} />
+				<input type="text" bind:value={title} disabled={!canEditTask} />
 			</label>
 
 			<div class="row">
 				<label>
 					Status
-					<button class="status" type="button" on:click={toggleStatus} disabled={isContributor}>
+					<button class="status" type="button" on:click={toggleStatus} disabled={!canEditTask}>
 						{task.status === 'done' ? 'Mark pending' : 'Mark done'}
 					</button>
 				</label>
 				<label>
 					My Day
-					<input type="checkbox" bind:checked={myDay} disabled={isContributor} />
+					<input type="checkbox" bind:checked={myDay} disabled={!canEditMyDay} />
 				</label>
 			</div>
 
 			<div class="row two">
 				<label>
 					Due date
-					<input type="date" bind:value={due} disabled={isContributor} />
+					<input type="date" bind:value={due} disabled={!canEditTask} />
 				</label>
 				<label>
 					Recurrence
-					<select bind:value={recur} disabled={isContributor}>
+					<select bind:value={recur} disabled={!canEditTask}>
 						<option value=''>None</option>
 						<option value='daily'>Daily</option>
+						<option value='weekdays'>Weekdays</option>
 						<option value='weekly'>Weekly</option>
 						<option value='biweekly'>Every 2 weeks</option>
 						<option value='monthly'>Monthly</option>
@@ -145,7 +152,7 @@ const memberAvatar = (member) => {
 
 			<label>
 				List
-				<select bind:value={listId} disabled={isContributor}>
+				<select bind:value={listId} disabled={!canEditTask}>
 					{#each $lists as list}
 						<option value={list.id}>{list.name}</option>
 					{/each}
@@ -154,7 +161,7 @@ const memberAvatar = (member) => {
 			{#if ($auth.user?.role === 'admin' || task.local) && $members.length > 0}
 				<label>
 					Assignee
-					<select bind:value={assigneeUserId} disabled={isContributor}>
+					<select bind:value={assigneeUserId} disabled={!canEditAssignee}>
 						<option value=''>Unassigned</option>
 						{#each $members as member}
 							<option value={member.user_id}>{memberAvatar(member)} {member.display} ({member.role})</option>
@@ -165,12 +172,12 @@ const memberAvatar = (member) => {
 
 			<label>
 				URL
-				<input type="url" bind:value={url} placeholder="https://..." disabled={isContributor} />
+				<input type="url" bind:value={url} placeholder="https://..." disabled={!canEditTask} />
 			</label>
 
 			<label>
 				Notes
-				<textarea rows="4" bind:value={notes} disabled={isContributor}></textarea>
+				<textarea rows="4" bind:value={notes} disabled={!canEditTask}></textarea>
 			</label>
 
 			<div class="row attach">
@@ -179,9 +186,9 @@ const memberAvatar = (member) => {
 					placeholder="https://link-to-file"
 					bind:value={newAttachment}
 					on:keydown={(e) => e.key === 'Enter' && addAttachment()}
-					disabled={isContributor}
+					disabled={!canEditTask}
 				/>
-				<button type="button" on:click={addAttachment} disabled={isContributor}>Add attachment</button>
+				<button type="button" on:click={addAttachment} disabled={!canEditTask}>Add attachment</button>
 			</div>
 			{#if attachments?.length}
 				<ul class="attachments">
@@ -194,8 +201,8 @@ const memberAvatar = (member) => {
 			{/if}
 
 			<div class="row buttons">
-				{#if isContributor}
-					<p class="muted">Contributor access is add-only. Existing tasks are read-only.</p>
+				{#if !canEditTask}
+					<p class="muted">This task is owned by another member and is read-only for contributors.</p>
 				{:else}
 					<button class="primary" type="button" on:click={save}>Save</button>
 					{#if task.recurrence_id}

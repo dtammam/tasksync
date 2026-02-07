@@ -66,11 +66,11 @@ test('can sign in with token mode and restore session after reload', async ({ pa
 	await page.getByTestId('auth-space').fill('s1');
 	await page.getByTestId('auth-signin').click();
 	await expect(page.getByTestId('auth-user')).toContainText('admin@example.com');
-	await expect(page.getByRole('button', { name: 'Manage contributors' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Manage members' })).toBeVisible();
 
 	await page.reload();
 	await expect(page.getByTestId('auth-user')).toContainText('admin@example.com');
-	await expect(page.getByRole('button', { name: 'Manage contributors' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Manage members' })).toBeVisible();
 });
 
 test('can change password from account panel', async ({ page }) => {

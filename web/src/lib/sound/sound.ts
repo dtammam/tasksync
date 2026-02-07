@@ -44,11 +44,18 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 	switch (theme) {
 		case 'click_pop':
 			scheduleTone(ctx, {
-				frequency: 520,
-				type: 'square',
+				frequency: 640,
+				type: 'triangle',
 				startAt: start,
-				duration: 0.05,
-				peak: 0.22 * volume
+				duration: 0.09,
+				peak: 0.2 * volume
+			});
+			scheduleTone(ctx, {
+				frequency: 480,
+				type: 'sine',
+				startAt: start + 0.05,
+				duration: 0.08,
+				peak: 0.16 * volume
 			});
 			return;
 		case 'sparkle_short':
@@ -76,6 +83,56 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.2 * volume
 			});
 			return;
+		case 'bell_crisp':
+			scheduleTone(ctx, {
+				frequency: 784,
+				type: 'sine',
+				startAt: start,
+				duration: 0.12,
+				peak: 0.18 * volume
+			});
+			scheduleTone(ctx, {
+				frequency: 1175,
+				type: 'triangle',
+				startAt: start + 0.03,
+				duration: 0.15,
+				peak: 0.1 * volume
+			});
+			return;
+		case 'marimba_blip':
+			scheduleTone(ctx, {
+				frequency: 392,
+				type: 'triangle',
+				startAt: start,
+				duration: 0.08,
+				peak: 0.2 * volume
+			});
+			scheduleTone(ctx, {
+				frequency: 523,
+				type: 'triangle',
+				startAt: start + 0.05,
+				duration: 0.09,
+				peak: 0.13 * volume
+			});
+			return;
+		case 'pulse_soft':
+			scheduleTone(ctx, {
+				frequency: 294,
+				type: 'sine',
+				startAt: start,
+				duration: 0.1,
+				peak: 0.14 * volume
+			});
+			scheduleTone(ctx, {
+				frequency: 330,
+				type: 'sine',
+				startAt: start + 0.11,
+				duration: 0.1,
+				peak: 0.12 * volume
+			});
+			return;
+		case 'custom_file':
+			return;
 		case 'chime_soft':
 		default:
 			scheduleTone(ctx, {
@@ -95,10 +152,29 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 	}
 };
 
+const playCustomFile = async (settings: SoundSettings, volume: number) => {
+	const src = settings.customSoundDataUrl?.trim();
+	if (!src) return false;
+	if (typeof Audio === 'undefined') return false;
+	try {
+		const audio = new Audio(src);
+		audio.preload = 'auto';
+		audio.volume = volume;
+		await audio.play();
+		return true;
+	} catch {
+		return false;
+	}
+};
+
 export const playCompletion = async (settings: SoundSettings) => {
 	if (!settings.enabled) return;
 	const volume = clampVolume(settings.volume);
 	if (volume <= 0) return;
+	if (settings.theme === 'custom_file') {
+		const playedCustom = await playCustomFile(settings, volume);
+		if (playedCustom) return;
+	}
 	const ctx = getAudioContext();
 	if (!ctx) return;
 	if (ctx.state === 'suspended') {

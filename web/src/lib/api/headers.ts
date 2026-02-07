@@ -13,9 +13,9 @@ export const getAuthToken = () => {
 };
 
 export const getAuthMode = (): AuthMode => {
-	if (typeof localStorage === 'undefined') return 'legacy';
+	if (typeof localStorage === 'undefined') return 'token';
 	const mode = localStorage.getItem(authModeKey);
-	return mode === 'token' ? 'token' : 'legacy';
+	return mode === 'legacy' ? 'legacy' : 'token';
 };
 
 export const setAuthToken = (token: string | null) => {

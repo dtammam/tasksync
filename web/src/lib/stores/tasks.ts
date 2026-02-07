@@ -30,12 +30,27 @@ const addDays = (dateStr: string, days: number) => {
 	return toLocalIsoDate(d);
 };
 
+const addWeekdays = (dateStr: string, weekdays: number) => {
+	const d = parseIsoDate(dateStr);
+	let remaining = weekdays;
+	while (remaining > 0) {
+		d.setDate(d.getDate() + 1);
+		const day = d.getDay();
+		if (day !== 0 && day !== 6) {
+			remaining -= 1;
+		}
+	}
+	return toLocalIsoDate(d);
+};
+
 const nextDue = (current: string | undefined, recur?: string) => {
 	if (!recur) return undefined;
 	const today = toLocalIsoDate(new Date());
 	switch (recur) {
 		case 'daily':
 			return addDays(current ?? today, 1);
+		case 'weekdays':
+			return addWeekdays(current ?? today, 1);
 		case 'weekly':
 			return addDays(current ?? today, 7);
 		case 'biweekly':
@@ -86,6 +101,7 @@ const makeLocalTask = (
 		assignee_user_id: opts?.assignee_user_id ?? currentUserId,
 		created_by_user_id: currentUserId,
 		occurrences_completed: 0,
+		completed_ts: undefined,
 		created_ts: nowTs,
 		updated_ts: nowTs,
 		dirty: true,
@@ -103,6 +119,7 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.url !== sent.url ||
 	current.recurrence_id !== sent.recurrence_id ||
 	current.due_date !== sent.due_date ||
+	(current.completed_ts ?? 0) !== (sent.completed_ts ?? 0) ||
 	current.notes !== sent.notes ||
 	current.assignee_user_id !== sent.assignee_user_id ||
 	(current.occurrences_completed ?? 0) !== (sent.occurrences_completed ?? 0) ||
@@ -164,14 +181,15 @@ export const tasks = {
 							if (task.recurrence_id && task.status !== 'done') {
 								shouldPlayCompletion = true;
 								const next = nextDue(task.due_date, task.recurrence_id);
-								return {
-									...task,
-									status: 'pending',
-									due_date: next,
-									occurrences_completed: (task.occurrences_completed ?? 0) + 1,
-									updated_ts: now,
-									dirty: true
-								};
+							return {
+								...task,
+								status: 'pending',
+								due_date: next,
+								occurrences_completed: (task.occurrences_completed ?? 0) + 1,
+								completed_ts: undefined,
+								updated_ts: now,
+								dirty: true
+							};
 							}
 							const nextStatus = task.status === 'done' ? 'pending' : 'done';
 							if (nextStatus === 'done') {
@@ -180,6 +198,7 @@ export const tasks = {
 							return {
 								...task,
 								status: nextStatus,
+								completed_ts: nextStatus === 'done' ? now : undefined,
 								updated_ts: now,
 								dirty: true
 							};
@@ -335,6 +354,7 @@ export const tasks = {
 			due_date?: string;
 			notes?: string;
 			occurrences_completed?: number;
+			completed_ts?: number;
 		}
 	) {
 		tasksStore.update((list) =>
@@ -349,6 +369,7 @@ export const tasks = {
 							notes: details.notes ?? t.notes,
 							occurrences_completed:
 								details.occurrences_completed ?? t.occurrences_completed ?? 0,
+							completed_ts: details.completed_ts ?? t.completed_ts,
 							updated_ts: Date.now(),
 							dirty: true
 						}
@@ -388,6 +409,8 @@ export const pendingCount = derived(tasksStore, ($tasks) =>
 
 const todayIso = () => toLocalIsoDate(new Date());
 const isToday = (date?: string) => date && date === todayIso();
+const isTodayTs = (ts?: number) =>
+	typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayIso();
 const canSeeTask = (task: Task, userId?: string | null, role?: string | null) => {
 	void task;
 	void userId;
@@ -398,6 +421,11 @@ const canSeeTask = (task: Task, userId?: string | null, role?: string | null) =>
 const inMyDay = (task: Task) => {
 	if (task.my_day) return true;
 	return isToday(task.due_date);
+};
+
+const wasCompletedToday = (task: Task) => {
+	if (task.status !== 'done') return false;
+	return isTodayTs(task.completed_ts ?? task.updated_ts);
 };
 
 export const myDayPending = derived([tasksStore, auth], ([$tasks, $auth]) =>
@@ -414,7 +442,7 @@ export const myDayCompleted = derived([tasksStore, auth], ([$tasks, $auth]) =>
 		(task) =>
 			canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
 			inMyDay(task) &&
-			task.status === 'done'
+			wasCompletedToday(task)
 	)
 );
 
