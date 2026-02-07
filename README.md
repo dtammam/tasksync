@@ -1,44 +1,77 @@
 # tasksync
 
-Local‑first task manager with SvelteKit client and Rust (Axum + SQLite) server.
+A fast, self-hosted task app focused on everyday flow: open it, capture quickly, stay synced across desktop + phone, and keep working offline when your network is flaky.
 
-## Getting Started
-- `npm install` inside `web/` then `npm run dev` to start the client.
-- (Rust) Install toolchain and run the server (default port 3000):
-  - `cd server; set DATABASE_URL=sqlite://../data/tasksync.db; set RUST_LOG=info; "%USERPROFILE%\.cargo\bin\cargo.exe" run`
-- Copy `.env.example` to `.env` in repo root and adjust client identity:
-  - `VITE_SPACE_ID` (default `s1`), `VITE_USER_ID` (`admin` or `contrib`), `VITE_ROLE` (`admin|contributor`), `VITE_API_URL` pointing to the server.
-- See `docs/ARCHITECTURE.md` and `docs/AGENTS.md` for constraints and workflow.
-- Seed server data (space, users, lists) once: `cd server; set DATABASE_URL=sqlite://../data/tasksync.db; "%USERPROFILE%\\.cargo\\bin\\cargo.exe" run --bin seed` (client now starts empty; no legacy seed tasks are created locally)
-- Full test/pre-push suite from PowerShell: `scripts/4-prepush.ps1` (use `-SkipPlaywright` to omit browser run)
-- Migrations: apply new schema (`sqlx migrate run` or `scripts/1-seed.ps1`) to get task due dates/recurrence/notes/attachments columns before running the app.
-- List manager (sidebar) hits create/rename/delete list APIs; run as `VITE_ROLE=admin` to use it and re-sync after schema changes.
+<table>
+    <tr>
+        <td align="center">
+            <img src="assets/images/desktop_example.png" alt="tasksync desktop view" width="620">
+        </td>
+        <td align="center">
+            <img src="assets/images/iphone_example.png" alt="tasksync iPhone view" width="280">
+        </td>
+    </tr>
+</table>
 
-## Docker Self-Hosting
-- Start containers (build + run): `scripts/8-docker-up.ps1`
-- Seed default users/lists in Docker volume: `scripts/9-docker-seed.ps1`
-- Stop containers: `scripts/10-docker-down.ps1`
-- Web URL: `http://<host-ip>:5173` and API URL: `http://<host-ip>:3000`
-- Default seeded accounts: `admin@example.com` / `tasksync`, `contrib@example.com` / `tasksync` (change passwords for real deployment).
+This project was inspired by one very specific frustration: opening Microsoft To Do on phone and waiting 5-7 seconds each time made my soul sad. tasksync is the "open now, move now" version of that workflow, with local-first behavior and simple self-hosting.
 
-## Offline Behavior
-- Each signed-in user gets a scoped local IndexedDB cache on each device.
-- If the server is temporarily unreachable, existing signed-in sessions stay available locally and unsynced edits remain queued.
-- Devices re-converge once connectivity returns and background sync succeeds.
+## Highlights
 
-## Project Layout
-- `web/` — SvelteKit PWA, IndexedDB/OPFS first; tests via Vitest + Playwright.
-- `server/` — Axum server with SQLite via SQLx (WAL), role-enforced routes.
-- `shared/` — cross‑cutting types for client/server.
-- `docs/` — architecture and agent instructions.
+- Local-first PWA with per-user device cache (IndexedDB) and background sync.
+- Shared lists with roles: admin + contributor.
+- Quick My Day flow with due dates, recurrence, notes, list moves, and task details.
+- Team management in sidebar (member creation, password reset, list grants).
+- Self-host ready: Rust + SQLite backend, SvelteKit frontend, Docker images published.
 
-## Tooling
-- TypeScript strict, ESLint + Prettier; `npm run lint` / `npm run format`.
-- Vitest (`npm run test`), Playwright e2e scaffold, `svelte-check`.
-- Rust: fmt + clippy + tests (once toolchain installed).
+## Quick Start (Dev)
 
-## Git Hooks
-Hooks live in `hooks/` and are auto-enabled (`core.hooksPath` set):
-- `pre-commit`: web lint/check/test, server fmt + clippy.
-- `pre-push`: web unit tests + Playwright smoke (set `SKIP_PLAYWRIGHT=1` to skip), server tests.
-Ensure deps are installed (`npm install` in `web/`, Rust toolchain) before committing.
+- Server: `cd server` then `cargo run`.
+- Web: `cd web` then `npm install` and `npm run dev`.
+- Optional seed data: `cd server` then `cargo run --bin seed`.
+- Full local checks: `scripts/4-prepush.ps1`.
+
+Default seed users:
+- `admin@example.com` / `tasksync`
+- `contrib@example.com` / `tasksync`
+
+## Self-Hosting (Docker Hub Latest)
+
+Published images:
+- `deantammam/tasksync-server:latest`
+- `deantammam/tasksync-web:latest`
+
+`docker-compose.yml` already references these `latest` tags.
+
+Typical flow:
+1. Set env vars (`DATABASE_URL`, `JWT_SECRET`, seed passwords).
+2. Run `docker compose up -d`.
+3. Seed once: `docker compose --profile setup run --rm seed`.
+4. Log in with seeded admin/contributor accounts and change passwords.
+
+Reverse proxy setup (recommended):
+- Set `VITE_API_URL=/api` for the web container.
+- Set `VITE_ALLOWED_HOSTS` to your hostnames (example: `tasksync.example.com`).
+- Route `/api/*` to the server container and `/` to the web container.
+
+## Offline and Sync Behavior
+
+- Signed-in users keep a local cache on each device.
+- If server connectivity drops, edits stay local and queued.
+- When the app regains focus/connectivity, background sync reconciles changes.
+- Manual `Refresh` is available in the header for a full page reload.
+
+## Repository Layout
+
+- `web/`: SvelteKit app, Vitest + Playwright tests.
+- `server/`: Axum + SQLx + SQLite API server.
+- `shared/`: shared TypeScript types.
+- `docs/`: architecture and workflow docs.
+- `assets/images/`: screenshots used in this README.
+
+## Project History
+
+- See `PROGRESS.md` for release-style milestones in human/goal context.
+
+## License
+
+[MIT](LICENSE)

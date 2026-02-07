@@ -81,6 +81,11 @@ const resetDrafts = () => {
 	listError = '';
 };
 
+const sortByOrder = (items) =>
+	[...items].sort((a, b) => (a.order ?? '').localeCompare(b.order ?? ''));
+
+const manualOrderValue = (index) => `m-${String(index).padStart(4, '0')}`;
+
 $: adminMode = $auth.status === 'authenticated' && $auth.user?.role === 'admin';
 
 const togglePin = () => {
@@ -121,6 +126,38 @@ const renameList = async (id) => {
 		});
 		renameDraft = { ...renameDraft, [id]: '' };
 		iconDraft = { ...iconDraft, [id]: '' };
+	} catch (err) {
+		listError = err instanceof Error ? err.message : String(err);
+	} finally {
+		busy = false;
+	}
+};
+
+const moveList = async (id, direction) => {
+	if (!adminMode || busy) return;
+	const ordered = sortByOrder(($lists ?? []).filter((list) => list.id !== 'my-day'));
+	const currentIndex = ordered.findIndex((list) => list.id === id);
+	if (currentIndex < 0) return;
+	const nextIndex = currentIndex + direction;
+	if (nextIndex < 0 || nextIndex >= ordered.length) return;
+
+	const reordered = [...ordered];
+	const [moving] = reordered.splice(currentIndex, 1);
+	reordered.splice(nextIndex, 0, moving);
+
+	const updates = [];
+	reordered.forEach((list, index) => {
+		const nextOrder = manualOrderValue(index);
+		if ((list.order ?? '') !== nextOrder) {
+			updates.push(lists.updateRemote(list.id, { order: nextOrder }));
+		}
+	});
+	if (!updates.length) return;
+
+	busy = true;
+	listError = '';
+	try {
+		await Promise.all(updates);
 	} catch (err) {
 		listError = err instanceof Error ? err.message : String(err);
 	} finally {
@@ -361,6 +398,7 @@ $: if (!adminScope && loadedAdminScope) {
 
 $: contributorMembers = ($members ?? []).filter((member) => member.role === 'contributor');
 $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
+$: managedListsManual = sortByOrder($lists ?? []).filter((list) => list.id !== 'my-day');
 $: if (typeof localStorage !== 'undefined' && !listSortLoaded) {
 	const saved = localStorage.getItem(LIST_SORT_KEY);
 	if (saved === 'manual' || saved === 'alpha') {
@@ -463,28 +501,53 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 					{#if listError}
 						<p class="error">{listError}</p>
 					{/if}
+					<p class="muted-note">Manual order: use ↑ and ↓, then keep list sort set to Manual.</p>
 					<div class="existing">
-						{#each $lists.filter((l) => l.id !== 'my-day') as list}
+						{#each managedListsManual as list, index}
 							<div class="row">
 								<input
+									class="name-input"
 									type="text"
 									placeholder={list.name}
 									bind:value={renameDraft[list.id]}
 									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 								/>
 								<input
+									class="icon-input"
 									type="text"
 									placeholder={list.icon ?? 'emoji'}
 									maxlength="4"
 									bind:value={iconDraft[list.id]}
 									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 								/>
-								<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
-									Save
-								</button>
-								<button type="button" class="ghost" on:click={() => deleteList(list.id)} disabled={busy}>
-									Delete
-								</button>
+								<div class="row-actions">
+									<button
+										type="button"
+										class="ghost tiny"
+										aria-label={`Move ${list.name} up`}
+										title="Move up"
+										on:click={() => moveList(list.id, -1)}
+										disabled={busy || index === 0}
+									>
+										↑
+									</button>
+									<button
+										type="button"
+										class="ghost tiny"
+										aria-label={`Move ${list.name} down`}
+										title="Move down"
+										on:click={() => moveList(list.id, 1)}
+										disabled={busy || index === managedListsManual.length - 1}
+									>
+										↓
+									</button>
+									<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
+										Save
+									</button>
+									<button type="button" class="ghost" on:click={() => deleteList(list.id)} disabled={busy}>
+										Delete
+									</button>
+								</div>
 							</div>
 						{/each}
 					</div>
@@ -998,9 +1061,34 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	.manager .row {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(56px, 70px) auto auto;
+		grid-template-columns: minmax(0, 1fr) minmax(74px, 86px);
 		gap: 6px;
-		align-items: center;
+		align-items: start;
+	}
+
+	.manager .row .name-input {
+		grid-column: 1 / -1;
+	}
+
+	.manager .row .icon-input {
+		width: 100%;
+	}
+
+	.manager .row .row-actions {
+		grid-column: 1 / -1;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 6px;
+	}
+
+	.manager .row .row-actions button {
+		min-width: 0;
+		padding: 7px 8px;
+	}
+
+	.manager .row .row-actions .tiny {
+		width: 28px;
+		padding: 6px 0;
 	}
 
 	.manager .existing {

@@ -23,7 +23,6 @@
 	let syncCoordinator = null;
 	let syncLeader = true;
 	let syncStatusUnsub = null;
-	let manualRefreshBusy = false;
 	let lastFollowerReplayTs = 0;
 	let lastFollowerHydrateAt = 0;
 	const toggleNav = () => {
@@ -84,21 +83,9 @@
 		return runSync();
 	};
 
-	const refreshNow = async () => {
-		if (manualRefreshBusy) return;
-		manualRefreshBusy = true;
-		try {
-			if (auth.isAuthenticated()) {
-				await requestSync('manual');
-				if (syncCoordinator && !syncLeader) {
-					await new Promise((resolve) => setTimeout(resolve, 350));
-				}
-			}
-			await hydrateScopedStores();
-			await members.hydrateFromServer();
-		} finally {
-			manualRefreshBusy = false;
-		}
+	const refreshNow = () => {
+		if (typeof window === 'undefined') return;
+		window.location.reload();
 	};
 
 	const publishSyncStatus = () => {
@@ -107,6 +94,7 @@
 	};
 
 	let retryTimer = null;
+	let visibilityListener = null;
 	let lastScopeKey = '';
 
 	const storageScopeFromAuth = (state) => {
@@ -181,10 +169,19 @@
 				requestSync('retry');
 			}
 		}, 15000);
+		visibilityListener = () => {
+			if (document.visibilityState === 'visible' && auth.isAuthenticated()) {
+				requestSync('focus');
+			}
+		};
+		document.addEventListener('visibilitychange', visibilityListener);
 	});
 
 	onDestroy(() => {
 		if (retryTimer) clearInterval(retryTimer);
+		if (visibilityListener) {
+			document.removeEventListener('visibilitychange', visibilityListener);
+		}
 		if (syncStatusUnsub) syncStatusUnsub();
 		if (syncCoordinator) syncCoordinator.destroy();
 	});
@@ -209,6 +206,13 @@
 		resetSyncCursor();
 		syncStatus.setSnapshot({ pull: 'idle', push: 'idle' });
 	}
+	$: showSyncBadge =
+		$auth.status === 'loading' ||
+		$auth.status !== 'authenticated' ||
+		$syncStatus.pull === 'running' ||
+		$syncStatus.push === 'running' ||
+		$syncStatus.pull === 'error' ||
+		$syncStatus.push === 'error';
 </script>
 
 <svelte:head>
@@ -238,46 +242,31 @@
 				<span>tasksync</span>
 			</div>
 			<div class="sync">
-				<span
-					class={`badge ${
-						$syncStatus.pull === 'error' || $syncStatus.push === 'error'
-							? 'error'
-							: $syncStatus.pull === 'running' || $syncStatus.push === 'running'
-								? 'busy'
-								: ''
-					}`}
-				>
-					<button
-						class="link"
-						on:click={refreshNow}
-						disabled={manualRefreshBusy}
-						title={
-							syncLeader
-								? 'Auto-sync runs every 15s; click to sync and refresh now'
-								: 'Auto-sync is managed by another open tab; click to refresh local view'
-						}
+				{#if showSyncBadge}
+					<span
+						class={`badge ${
+							$syncStatus.pull === 'error' || $syncStatus.push === 'error'
+								? 'error'
+								: $syncStatus.pull === 'running' || $syncStatus.push === 'running'
+									? 'busy'
+									: ''
+						}`}
 					>
 						{#if $auth.status === 'loading'}
-							Checking auth...
+							Checking auth…
 						{:else if $auth.status !== 'authenticated'}
-							Sign in to sync
-						{:else if !syncLeader}
-							Auto-sync linked
-						{:else if $syncStatus.pull === 'running' || $syncStatus.push === 'running'}
-							Auto-syncing…
+							Offline
 						{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
-							Sync error (auto-retrying)
-						{:else if manualRefreshBusy}
-							Refreshing…
+							Sync issue
 						{:else}
-							Auto-sync ready
+							Syncing…
 						{/if}
-					</button>
-				</span>
-				<button class="refresh-btn" type="button" on:click={refreshNow} disabled={manualRefreshBusy}>
-					{manualRefreshBusy ? 'Refreshing…' : 'Refresh'}
+					</span>
+				{/if}
+				<button class="refresh-btn" type="button" on:click={refreshNow}>
+					Refresh
 				</button>
-				{#if $syncStatus.lastError}
+				{#if ($syncStatus.pull === 'error' || $syncStatus.push === 'error') && $syncStatus.lastError}
 					<span class="err-msg">{$syncStatus.lastError}</span>
 				{/if}
 			</div>
@@ -409,11 +398,6 @@
 		font-size: 12px;
 	}
 
-	.link {
-		all: unset;
-		cursor: pointer;
-	}
-
 	.refresh-btn {
 		background: #0f172a;
 		border: 1px solid #1f2937;
@@ -422,11 +406,6 @@
 		padding: 6px 10px;
 		font-size: 12px;
 		cursor: pointer;
-	}
-
-	.refresh-btn:disabled {
-		opacity: 0.65;
-		cursor: progress;
 	}
 
 	.drawer-backdrop {
