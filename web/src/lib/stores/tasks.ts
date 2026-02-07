@@ -140,15 +140,15 @@ export const tasks = {
 	},
 	mergeRemote(remote: Task[]) {
 		tasksStore.update((current) => {
+			// Sync pull is incremental, so start with local cache and layer remote deltas on top.
 			const merged = new Map<string, Task>();
-			for (const task of remote) {
+			for (const task of current) {
 				merged.set(task.id, task);
 			}
-			for (const task of current) {
-				if (task.dirty) {
-					// Keep local unsynced mutations as source-of-truth until push succeeds.
-					merged.set(task.id, task);
-				}
+			for (const task of remote) {
+				const existing = merged.get(task.id);
+				if (existing?.dirty) continue;
+				merged.set(task.id, task);
 			}
 			return Array.from(merged.values());
 		});

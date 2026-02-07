@@ -19,6 +19,30 @@ vi.mock('$lib/api/client', () => {
 import { api } from '$lib/api/client';
 const mockedApi = vi.mocked(api);
 
+const remoteTask = (
+	overrides: Partial<{
+		id: string;
+		space_id: string;
+		title: string;
+		status: string;
+		list_id: string;
+		my_day: number;
+		order: string;
+		created_ts: number;
+		updated_ts: number;
+	}>
+) => ({
+	id: overrides.id ?? 'srv-1',
+	space_id: overrides.space_id ?? 's1',
+	title: overrides.title ?? 'task',
+	status: overrides.status ?? 'pending',
+	list_id: overrides.list_id ?? 'goal-management',
+	my_day: overrides.my_day ?? 0,
+	order: overrides.order ?? 'a',
+	created_ts: overrides.created_ts ?? 1,
+	updated_ts: overrides.updated_ts ?? 1
+});
+
 const readStatus = () => {
 	let current: SyncStatus | undefined;
 	const unsub = (syncStatus as unknown as Writable<SyncStatus>).subscribe((v) => (current = v));
@@ -55,6 +79,85 @@ describe('syncFromServer', () => {
 
 		const all = tasks.getAll();
 		expect(all.some((t: Task) => t.local)).toBe(true);
+	});
+
+	it('keeps existing clean tasks when incremental pull has no task deltas', async () => {
+		const existing: Task = {
+			id: 'srv-existing',
+			title: 'existing task',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: false,
+			priority: 0,
+			tags: [],
+			checklist: [],
+			order: 'a',
+			attachments: [],
+			created_ts: 1,
+			updated_ts: 1,
+			dirty: false,
+			local: false
+		};
+		tasks.setAll([existing]);
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 12,
+			lists: [],
+			tasks: []
+		});
+
+		await syncFromServer();
+
+		expect(tasks.getAll().find((task) => task.id === 'srv-existing')).toBeTruthy();
+	});
+
+	it('applies incremental remote changes without dropping unrelated clean tasks', async () => {
+		const first: Task = {
+			id: 'srv-1',
+			title: 'first',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: false,
+			priority: 0,
+			tags: [],
+			checklist: [],
+			order: 'a',
+			attachments: [],
+			created_ts: 1,
+			updated_ts: 1,
+			dirty: false,
+			local: false
+		};
+		const second: Task = {
+			id: 'srv-2',
+			title: 'second',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: false,
+			priority: 0,
+			tags: [],
+			checklist: [],
+			order: 'b',
+			attachments: [],
+			created_ts: 1,
+			updated_ts: 1,
+			dirty: false,
+			local: false
+		};
+		tasks.setAll([first, second]);
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 13,
+			lists: [],
+			tasks: [remoteTask({ id: 'srv-1', title: 'first updated', updated_ts: 13 })]
+		});
+
+		await syncFromServer();
+
+		const all = tasks.getAll();
+		expect(all).toHaveLength(2);
+		expect(all.find((task) => task.id === 'srv-1')?.title).toBe('first updated');
+		expect(all.find((task) => task.id === 'srv-2')?.title).toBe('second');
 	});
 
 	it('keeps local dirty status instead of remote pending copy', async () => {
