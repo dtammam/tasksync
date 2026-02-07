@@ -125,4 +125,10 @@ describe('tasks store helpers', () => {
 		expect(tasks.getAll()).toEqual([]);
 		loadSpy.mockRestore();
 	});
+
+	it('deletes unsynced local tasks without remote API calls', async () => {
+		tasks.setAll([baseTask({ id: 'local-temp', local: true, dirty: true })]);
+		await tasks.deleteRemote('local-temp');
+		expect(tasks.getAll()).toEqual([]);
+	});
 });

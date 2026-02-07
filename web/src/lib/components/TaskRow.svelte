@@ -13,6 +13,8 @@ let editing = false;
 let titleDraft = task.title;
 let showActions = false;
 let pressTimer = null;
+let deleting = false;
+let actionError = '';
 
 /** @param {Event & { target: HTMLSelectElement }} event */
 const updateList = (event) => {
@@ -80,6 +82,21 @@ const endPress = () => {
 };
 
 const closeActions = () => (showActions = false);
+
+const deleteTask = async () => {
+	if (isContributor || deleting) return;
+	if (!confirm('Delete this task?')) return;
+	deleting = true;
+	actionError = '';
+	try {
+		await tasks.deleteRemote(task.id);
+		showActions = false;
+	} catch (err) {
+		actionError = err instanceof Error ? err.message : String(err);
+	} finally {
+		deleting = false;
+	}
+};
 
 $: assigneeMember = task.assignee_user_id ? members.find(task.assignee_user_id) : null;
 $: assigneeDisplay = assigneeMember?.display ?? task.assignee_user_id;
@@ -173,15 +190,21 @@ $: isContributor = $auth.user?.role === 'contributor';
 			{/if}
 		</div>
 	</div>
-	{#if showActions}
-		<div class="quick">
-			<button type="button" on:click={addTomorrow}>Tomorrow</button>
-			<button type="button" on:click={addNextWeek}>Next week</button>
-			<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
-			<button class="ghost" type="button" on:click={closeActions}>Close</button>
-		</div>
-	{/if}
-</div>
+		{#if showActions}
+			<div class="quick">
+				<button type="button" on:click={addTomorrow}>Tomorrow</button>
+				<button type="button" on:click={addNextWeek}>Next week</button>
+				<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
+				<button class="danger" type="button" on:click={deleteTask} disabled={deleting}>
+					{deleting ? 'Deleting...' : 'Delete'}
+				</button>
+				<button class="ghost" type="button" on:click={closeActions}>Close</button>
+			</div>
+			{#if actionError}
+				<p class="error">{actionError}</p>
+			{/if}
+		{/if}
+	</div>
 
 <style>
 	.task {
@@ -345,6 +368,11 @@ $: isContributor = $auth.user?.role === 'contributor';
 		border-color: #334155;
 	}
 
+	.quick button.danger {
+		border-color: #7f1d1d;
+		color: #fecaca;
+	}
+
 	.icon-btn {
 		background: none;
 		border: none;
@@ -373,6 +401,13 @@ $: isContributor = $auth.user?.role === 'contributor';
 	.title-text.link {
 		color: #60a5fa;
 		text-decoration: underline;
+	}
+
+	.error {
+		grid-column: 1 / -1;
+		margin: 0;
+		color: #fda4af;
+		font-size: 12px;
 	}
 
 	@media (max-width: 900px) {

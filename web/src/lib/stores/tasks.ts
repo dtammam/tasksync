@@ -4,8 +4,11 @@ import { repo } from '$lib/data/repo';
 import { playCompletion } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
 import { auth } from '$lib/stores/auth';
+import { api } from '$lib/api/client';
 
 const tasksStore = writable<Task[]>([]);
+const isServerId = (id: string) =>
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 const addDays = (dateStr: string, days: number) => {
 	const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
@@ -186,6 +189,16 @@ export const tasks = {
 	remove(id: string) {
 		tasksStore.update((list) => list.filter((t) => t.id !== id));
 		void repo.saveTasks(get(tasksStore));
+	},
+	async deleteRemote(id: string) {
+		const existing = tasks.getAll().find((task) => task.id === id);
+		if (!existing) return;
+		if (existing.local || !isServerId(existing.id)) {
+			tasks.remove(id);
+			return;
+		}
+		await api.deleteTask(existing.id);
+		tasks.remove(id);
 	},
 	moveToList(id: string, list_id: string) {
 		tasksStore.update((list) =>

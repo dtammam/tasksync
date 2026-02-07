@@ -17,8 +17,12 @@ let showManager = false;
 let newListName = '';
 let newListIcon = '';
 let renameDraft = {};
+let iconDraft = {};
 let listError = '';
 let busy = false;
+let listSortMode = 'manual';
+let listSortLoaded = false;
+const LIST_SORT_KEY = 'tasksync:sort:sidebar-lists';
 
 let authBusy = false;
 let loginEmail = 'admin@example.com';
@@ -71,6 +75,7 @@ const passwordIsValid = (value) => value.trim().length >= 8;
 
 const resetDrafts = () => {
 	renameDraft = {};
+	iconDraft = {};
 	newListName = '';
 	newListIcon = '';
 	listError = '';
@@ -101,12 +106,21 @@ const createList = async () => {
 const renameList = async (id) => {
 	if (!adminMode) return;
 	const name = (renameDraft[id] ?? '').trim();
-	if (!name) return;
+	const iconInput = iconDraft[id];
+	const icon =
+		typeof iconInput === 'string'
+			? iconInput.trim()
+			: undefined;
+	if (!name && typeof iconInput !== 'string') return;
 	busy = true;
 	listError = '';
 	try {
-		await lists.updateRemote(id, { name });
+		await lists.updateRemote(id, {
+			name: name || undefined,
+			icon: typeof iconInput === 'string' ? icon || '' : undefined
+		});
 		renameDraft = { ...renameDraft, [id]: '' };
+		iconDraft = { ...iconDraft, [id]: '' };
 	} catch (err) {
 		listError = err instanceof Error ? err.message : String(err);
 	} finally {
@@ -347,6 +361,27 @@ $: if (!adminScope && loadedAdminScope) {
 
 $: contributorMembers = ($members ?? []).filter((member) => member.role === 'contributor');
 $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
+$: if (typeof localStorage !== 'undefined' && !listSortLoaded) {
+	const saved = localStorage.getItem(LIST_SORT_KEY);
+	if (saved === 'manual' || saved === 'alpha') {
+		listSortMode = saved;
+	}
+	listSortLoaded = true;
+}
+$: if (typeof localStorage !== 'undefined' && listSortLoaded) {
+	localStorage.setItem(LIST_SORT_KEY, listSortMode);
+}
+$: sidebarLists = [...($lists ?? [])].sort((a, b) => {
+	if (a.id === 'my-day') return -1;
+	if (b.id === 'my-day') return 1;
+	if (listSortMode === 'alpha') {
+		return (a.name ?? '').localeCompare(b.name ?? '', undefined, {
+			sensitivity: 'base',
+			numeric: true
+		});
+	}
+	return (a.order ?? '').localeCompare(b.order ?? '');
+});
 </script>
 
 <nav class="sidebar">
@@ -366,8 +401,15 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 		</div>
 
 		<div class="section-label">Today</div>
-		{#if $lists}
-			{#each [...$lists].sort((a, b) => (a.id === 'my-day' ? -1 : b.id === 'my-day' ? 1 : (a.order ?? '').localeCompare(b.order ?? ''))) as list}
+		<label class="list-sort">
+			Sort lists
+			<select bind:value={listSortMode} aria-label="Sort lists">
+				<option value="manual">Manual</option>
+				<option value="alpha">Alphabetical</option>
+			</select>
+		</label>
+		{#if sidebarLists}
+			{#each sidebarLists as list}
 				{#if list.id === 'my-day'}
 					<a class:selected={$page.url.pathname === '/'} href="/">
 						<span class="icon">🌅</span>
@@ -430,8 +472,15 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 									bind:value={renameDraft[list.id]}
 									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 								/>
+								<input
+									type="text"
+									placeholder={list.icon ?? 'emoji'}
+									maxlength="4"
+									bind:value={iconDraft[list.id]}
+									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+								/>
 								<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
-									Rename
+									Save
 								</button>
 								<button type="button" class="ghost" on:click={() => deleteList(list.id)} disabled={busy}>
 									Delete
@@ -842,6 +891,24 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 		color: #f1f5f9;
 	}
 
+	.list-sort {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: 0 6px 6px;
+		font-size: 11px;
+		color: #93a4bf;
+	}
+
+	.list-sort select {
+		background: #0f172a;
+		border: 1px solid #243148;
+		color: #d4e2f3;
+		border-radius: 999px;
+		padding: 3px 8px;
+		font-size: 11px;
+	}
+
 	.icon {
 		font-size: 15px;
 	}
@@ -931,7 +998,7 @@ $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 
 	.manager .row {
 		display: grid;
-		grid-template-columns: 1fr auto auto;
+		grid-template-columns: minmax(0, 1fr) minmax(56px, 70px) auto auto;
 		gap: 6px;
 		align-items: center;
 	}

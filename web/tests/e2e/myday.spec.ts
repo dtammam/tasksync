@@ -101,6 +101,29 @@ test.describe('My Day', () => {
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 	});
 
+	test('keeps alphabetical sort mode after reload', async ({ page }) => {
+		await resetClientState(page);
+		const marker = makeTitle('Sort marker');
+		const titleB = `${marker} B`;
+		const titleA = `${marker} A`;
+
+		await page.getByTestId('new-task-input').fill(titleB);
+		await page.getByTestId('new-task-submit').click();
+		await page.getByTestId('new-task-input').fill(titleA);
+		await page.getByTestId('new-task-submit').click();
+
+		await page.getByLabel('Sort tasks').selectOption('alpha');
+		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
+		const plannedRows = page.locator('section.block').first().getByTestId('task-row');
+		const sortedRows = plannedRows.filter({ hasText: marker });
+		await expect(sortedRows).toHaveCount(2);
+		await expect(sortedRows.nth(0)).toContainText(titleA);
+
+		await page.reload();
+		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
+		await expect(page.locator('section.block').first().getByTestId('task-row').filter({ hasText: marker }).nth(0)).toContainText(titleA);
+	});
+
 	test('persists sound settings changes across reload', async ({ page }) => {
 		await resetClientState(page);
 		await expect(page.getByTestId('sound-enabled')).toBeChecked();
@@ -163,7 +186,9 @@ test.describe('Navigation', () => {
 		await page.getByRole('button', { name: 'Toggle navigation' }).click();
 		await expect(drawer).toHaveClass(/open/);
 
-		await page.getByTestId('nav-pin').click();
+		const navPin = page.getByTestId('nav-pin');
+		await navPin.scrollIntoViewIfNeeded();
+		await navPin.click();
 		await page.getByRole('link', { name: /Goal Management/ }).click();
 		await expect(page).toHaveURL(/\/list\/goal-management/);
 		await expect(drawer).toHaveClass(/open/);
@@ -172,7 +197,9 @@ test.describe('Navigation', () => {
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 		await expect(drawer).toHaveClass(/open/);
 
-		await page.getByTestId('nav-pin').click();
+		const navPinAfterReload = page.getByTestId('nav-pin');
+		await navPinAfterReload.scrollIntoViewIfNeeded();
+		await navPinAfterReload.click();
 		await page.getByRole('link', { name: /My Day/ }).click();
 		await expect(page).toHaveURL('/');
 		await expect(drawer).not.toHaveClass(/open/);

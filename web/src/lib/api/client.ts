@@ -154,6 +154,10 @@ export const api = {
 			method: 'PATCH',
 			body: JSON.stringify(body)
 		}),
+	deleteTask: (id: string) =>
+		fetchJson<void>(`/tasks/${id}`, {
+			method: 'DELETE'
+		}),
 	updateTaskStatus: (id: string, status: string) =>
 		fetchJson<ApiTask>(`/tasks/${id}/status`, {
 			method: 'POST',
