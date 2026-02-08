@@ -70,3 +70,4 @@
 - 2026-02-07 20:50 - Improved My Day trust by adding explicit missed-task surfacing after rollover, including direct recovery actions (skip recurring, mark done, delete) and quick completion-tap acknowledgment feedback.
 - 2026-02-07 20:50 - Reduced completion-sound variance on mobile/WebKit by routing custom audio through Web Audio gain control with improved browser-level volume mapping.
 - 2026-02-07 20:50 - Started server-backed profile media persistence by introducing per-user sound/media schema and `/auth/sound` read/update APIs, then wiring client settings hydration and best-effort sync to that endpoint.
+- 2026-02-07 21:43 - Tuned My Day completion confidence by extending the tap acknowledgment delay, hiding empty Missed UI noise, and ensuring recurring completions remain visible under Completed for the current day while next due is already scheduled.

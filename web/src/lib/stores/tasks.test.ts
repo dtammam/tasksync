@@ -83,6 +83,22 @@ describe('tasks store helpers', () => {
 		expect(updated?.occurrences_completed).toBe(1);
 		expect(updated?.due_date).toBe('2026-02-03');
 		expect(updated?.status).toBe('pending');
+		expect(typeof updated?.completed_ts).toBe('number');
+	});
+
+	it('shows recurring tasks completed today in My Day completed after next due is scheduled', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'rec-complete',
+				recurrence_id: 'daily',
+				due_date: '2026-02-02',
+				status: 'pending'
+			})
+		]);
+
+		tasks.toggle('rec-complete');
+
+		expect(get(myDayCompleted).map((t) => t.id)).toEqual(['rec-complete']);
 	});
 
 	it('rolls weekday recurrence to next business day', () => {
