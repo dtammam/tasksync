@@ -70,12 +70,14 @@ package "tasksync Server" {
 - **Search:** MiniSearch (in‑memory) for MVP; upgrade to SQLite WASM + FTS5 in V1 if needed.
 - **Attachments:** Saved in OPFS/Cache API by SHA‑256 path; ≤10 MB enforced client‑side.
 - **Audio:** Web Audio API with pre‑decoded buffers and custom-file buffer playback (gain-controlled for mobile/WebKit consistency); user settings control theme, volume, enable.
+- **UI preferences:** per-user preferences (app theme + sidebar panel collapse state) are cached locally and synced via authenticated profile endpoints.
 
 ## Server Architecture
 - **Axum** web server; **SQLx** to SQLite (WAL). Pragmas: `journal_mode=WAL`, `synchronous=NORMAL`.
 - **Files:** `data/obj/xx/<sha256>` content‑addressed; MIME allow‑list; 10 MB limit.
 - **Auth:** JWT (HS256) per user; device `client_id` per installation; all endpoints behind TLS.
 - **User media/settings:** `/auth/sound` persists per-user sound + profile media metadata server-side for cross-device consistency.
+- **User UI preferences:** `/auth/preferences` persists per-user app theme and sidebar panel-collapse state for cross-device consistency.
 - **Backup/restore:** admin-only `/auth/backup` export/import provides versioned space snapshots (space, users, memberships, lists, grants, tasks) for disaster recovery.
 
 ## Data Model (abridged)

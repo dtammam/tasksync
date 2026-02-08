@@ -160,6 +160,7 @@ pub fn auth_routes(pool: &SqlitePool) -> Router {
         .route("/login", post(login))
         .route("/me", get(auth_me).patch(auth_update_me))
         .route("/sound", get(auth_get_sound).patch(auth_update_sound))
+        .route("/preferences", get(auth_get_preferences).patch(auth_update_preferences))
         .route("/backup", get(auth_export_backup).post(auth_restore_backup))
         .route("/password", patch(auth_change_password))
         .route("/members", get(auth_members).post(auth_create_member))
@@ -189,6 +190,8 @@ const SOUND_THEMES: [&str; 8] = [
     "pulse_soft",
     "custom_file",
 ];
+
+const UI_THEMES: [&str; 3] = ["default", "dark", "light"];
 
 const BACKUP_SCHEMA_V1: &str = "tasksync-space-backup-v1";
 
@@ -249,6 +252,46 @@ fn normalize_profile_attachments(raw: Option<String>) -> Result<Option<String>, 
         return Err(StatusCode::BAD_REQUEST);
     }
     serde_json::from_str::<serde_json::Value>(trimmed).map_err(|_| StatusCode::BAD_REQUEST)?;
+    Ok(Some(trimmed.to_string()))
+}
+
+fn normalize_ui_theme(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if UI_THEMES.contains(&trimmed) {
+        return Ok(Some(trimmed.to_string()));
+    }
+    Err(StatusCode::BAD_REQUEST)
+}
+
+fn normalize_ui_sidebar_panels(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > 2_000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let parsed =
+        serde_json::from_str::<serde_json::Value>(trimmed).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let Some(obj) = parsed.as_object() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    for key in ["lists", "members", "sound", "backups", "account"] {
+        if let Some(value) = obj.get(key) {
+            if !value.is_boolean() {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+    }
     Ok(Some(trimmed.to_string()))
 }
 
@@ -329,6 +372,13 @@ struct SoundSettingsResponse {
     profile_attachments_json: Option<String>,
 }
 
+#[derive(Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+struct UiPreferencesResponse {
+    theme: String,
+    sidebar_panels_json: Option<String>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdateSoundSettingsBody {
@@ -340,6 +390,13 @@ struct UpdateSoundSettingsBody {
     custom_sound_data_url: Option<String>,
     profile_attachments_json: Option<String>,
     clear_custom_sound: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateUiPreferencesBody {
+    theme: Option<String>,
+    sidebar_panels_json: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -362,6 +419,8 @@ struct BackupUserRow {
     custom_sound_file_name: Option<String>,
     custom_sound_data_url: Option<String>,
     profile_attachments: Option<String>,
+    ui_theme: Option<String>,
+    ui_sidebar_panels: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -671,6 +730,56 @@ async fn auth_update_sound(
     Ok(Json(updated))
 }
 
+async fn load_ui_preferences_for_user(
+    pool: &SqlitePool,
+    user_id: &str,
+) -> Result<UiPreferencesResponse, StatusCode> {
+    sqlx::query_as::<_, UiPreferencesResponse>(
+        "select coalesce(ui_theme, 'default') as theme, ui_sidebar_panels as sidebar_panels_json from user where id = ?1 limit 1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::UNAUTHORIZED)
+}
+
+async fn auth_get_preferences(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<UiPreferencesResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let preferences = load_ui_preferences_for_user(&state.pool, &ctx.user_id).await?;
+    Ok(Json(preferences))
+}
+
+async fn auth_update_preferences(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<UpdateUiPreferencesBody>,
+) -> Result<Json<UiPreferencesResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let current = load_ui_preferences_for_user(&state.pool, &ctx.user_id).await?;
+
+    let next_theme = normalize_ui_theme(body.theme)?.unwrap_or_else(|| current.theme.clone());
+    let next_sidebar_panels_json = if body.sidebar_panels_json.is_some() {
+        normalize_ui_sidebar_panels(body.sidebar_panels_json)?
+    } else {
+        current.sidebar_panels_json
+    };
+
+    sqlx::query("update user set ui_theme = ?1, ui_sidebar_panels = ?2 where id = ?3")
+        .bind(&next_theme)
+        .bind(&next_sidebar_panels_json)
+        .bind(&ctx.user_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let updated = load_ui_preferences_for_user(&state.pool, &ctx.user_id).await?;
+    Ok(Json(updated))
+}
+
 async fn load_space_backup(
     pool: &SqlitePool,
     space_id: &str,
@@ -684,7 +793,7 @@ async fn load_space_backup(
             .ok_or(StatusCode::NOT_FOUND)?;
 
     let users = sqlx::query_as::<_, BackupUserRow>(
-        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.profile_attachments from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
+        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -779,6 +888,8 @@ async fn auth_restore_backup(
             || user.sound_volume < 0
             || user.sound_volume > 100
             || !SOUND_THEMES.contains(&user.sound_theme.as_str())
+            || normalize_ui_theme(user.ui_theme.clone()).is_err()
+            || normalize_ui_sidebar_panels(user.ui_sidebar_panels.clone()).is_err()
         {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -828,8 +939,13 @@ async fn auth_restore_backup(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     for user in &body.users {
+        let next_ui_theme = normalize_ui_theme(user.ui_theme.clone())
+            .map_err(|_| StatusCode::BAD_REQUEST)?
+            .unwrap_or_else(|| "default".to_string());
+        let next_ui_sidebar_panels = normalize_ui_sidebar_panels(user.ui_sidebar_panels.clone())
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
         sqlx::query(
-            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, profile_attachments) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, profile_attachments = excluded.profile_attachments",
+            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, profile_attachments, ui_theme, ui_sidebar_panels) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels",
         )
         .bind(&user.id)
         .bind(&user.email)
@@ -843,6 +959,8 @@ async fn auth_restore_backup(
         .bind(&user.custom_sound_file_name)
         .bind(&user.custom_sound_data_url)
         .bind(&user.profile_attachments)
+        .bind(&next_ui_theme)
+        .bind(&next_ui_sidebar_panels)
         .execute(&mut *tx)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2148,6 +2266,43 @@ mod tests {
         assert_eq!(cleared.custom_sound_file_name, None);
         assert_eq!(cleared.custom_sound_data_url, None);
         assert_eq!(cleared.profile_attachments_json.as_deref(), Some("[{\"id\":\"att-1\"}]"));
+    }
+
+    #[tokio::test]
+    async fn user_can_update_ui_preferences() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let defaults = auth_get_preferences(State(state.clone()), headers.clone())
+            .await
+            .expect("preferences defaults should load")
+            .0;
+        assert_eq!(defaults.theme, "default");
+        assert_eq!(defaults.sidebar_panels_json, None);
+
+        let updated = auth_update_preferences(
+            State(state.clone()),
+            headers.clone(),
+            Json(UpdateUiPreferencesBody {
+                theme: Some("dark".to_string()),
+                sidebar_panels_json: Some(
+                    "{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}"
+                        .to_string(),
+                ),
+            }),
+        )
+        .await
+        .expect("update preferences should work")
+        .0;
+
+        assert_eq!(updated.theme, "dark");
+        assert_eq!(
+            updated.sidebar_panels_json.as_deref(),
+            Some("{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}")
+        );
     }
 
     #[tokio::test]

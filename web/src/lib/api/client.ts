@@ -17,7 +17,7 @@ import type {
 	SyncPushRequest,
 	SyncPushResponse
 } from '$shared/types/sync';
-import type { SoundSettings } from '$shared/types/settings';
+import type { SoundSettings, UiPreferencesWire } from '$shared/types/settings';
 import type { SpaceBackupBundle, SpaceBackupRestoreResponse } from '$shared/types/backup';
 
 const defaultApiUrl = () => {
@@ -93,6 +93,9 @@ export const api = {
 			clearCustomSound?: boolean;
 		}
 	) => fetchJson<SoundSettings>('/auth/sound', { method: 'PATCH', body: JSON.stringify(body) }),
+	getUiPreferences: () => fetchJson<UiPreferencesWire>('/auth/preferences'),
+	updateUiPreferences: (body: Partial<UiPreferencesWire>) =>
+		fetchJson<UiPreferencesWire>('/auth/preferences', { method: 'PATCH', body: JSON.stringify(body) }),
 	getSpaceBackup: () => fetchJson<SpaceBackupBundle>('/auth/backup'),
 	restoreSpaceBackup: (body: SpaceBackupBundle) =>
 		fetchJson<SpaceBackupRestoreResponse>('/auth/backup', {

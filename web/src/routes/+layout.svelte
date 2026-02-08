@@ -9,6 +9,7 @@
 	import { members } from '$lib/stores/members';
 	import { tasks } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
+	import { uiPreferences } from '$lib/stores/preferences';
 	import { setDbScope } from '$lib/data/idb';
 	import { auth } from '$lib/stores/auth';
 	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
@@ -107,7 +108,12 @@
 	const hydrateScopedStores = async () => {
 		const scope = storageScopeFromAuth(auth.get());
 		setDbScope(scope);
-		await Promise.all([lists.hydrateFromDb(), tasks.hydrateFromDb(), soundSettings.hydrateFromDb()]);
+		await Promise.all([
+			lists.hydrateFromDb(),
+			tasks.hydrateFromDb(),
+			soundSettings.hydrateFromDb(),
+			uiPreferences.hydrateFromLocal()
+		]);
 	};
 
 	onMount(async () => {
@@ -157,6 +163,7 @@
 		syncCoordinator.setAuthenticated(auth.isAuthenticated());
 		await hydrateScopedStores();
 		await soundSettings.hydrateFromServer();
+		await uiPreferences.hydrateFromServer();
 		await members.hydrateFromServer();
 		lastScopeKey = storageScopeFromAuth(auth.get());
 		appReady = true;
@@ -194,6 +201,7 @@
 			resetSyncCursor();
 			await hydrateScopedStores();
 			await soundSettings.hydrateFromServer();
+			await uiPreferences.hydrateFromServer();
 			await members.hydrateFromServer();
 			if (auth.isAuthenticated()) {
 				requestSync('scope-change');
@@ -278,10 +286,55 @@
 </div>
 
 <style>
+	:global(:root) {
+		--app-bg: radial-gradient(circle at 10% 20%, #0f172a, #0b1221 40%, #050a1a);
+		--app-bg-mobile: #0b1221;
+		--app-text: #e2e8f0;
+		--app-muted: #cbd5e1;
+		--surface-1: #0f172a;
+		--surface-2: #0b1221;
+		--surface-3: #11192b;
+		--surface-accent: #1d4ed8;
+		--border-1: #1f2937;
+		--border-2: #27344f;
+		--error: #ef4444;
+		--focus: #60a5fa;
+	}
+
+	:global(html[data-ui-theme='dark']) {
+		--app-bg: radial-gradient(circle at 15% 18%, #111111, #090909 45%, #040404);
+		--app-bg-mobile: #080808;
+		--app-text: #f1f5f9;
+		--app-muted: #d4d4d8;
+		--surface-1: #0d0d0d;
+		--surface-2: #070707;
+		--surface-3: #111111;
+		--surface-accent: #3b82f6;
+		--border-1: #1f1f1f;
+		--border-2: #2c2c2c;
+		--error: #fb7185;
+		--focus: #93c5fd;
+	}
+
+	:global(html[data-ui-theme='light']) {
+		--app-bg: linear-gradient(180deg, #f6f9ff, #ecf3ff 36%, #f8fbff);
+		--app-bg-mobile: #f8fbff;
+		--app-text: #0f172a;
+		--app-muted: #334155;
+		--surface-1: #ffffff;
+		--surface-2: #f8fbff;
+		--surface-3: #eef4ff;
+		--surface-accent: #2563eb;
+		--border-1: #cbd5e1;
+		--border-2: #94a3b8;
+		--error: #b91c1c;
+		--focus: #1d4ed8;
+	}
+
 	:global(body) {
 		margin: 0;
-		background: radial-gradient(circle at 10% 20%, #0f172a, #0b1221 40%, #050a1a);
-		color: #e2e8f0;
+		background: var(--app-bg);
+		color: var(--app-text);
 		font-family: 'Segoe UI Variable Text', 'Segoe UI', 'SF Pro Text', system-ui, sans-serif;
 		overflow: hidden;
 		overflow-x: hidden;
@@ -305,7 +358,7 @@
 	:global(input:focus-visible),
 	:global(select:focus-visible),
 	:global(textarea:focus-visible) {
-		outline: 2px solid #60a5fa;
+		outline: 2px solid var(--focus);
 		outline-offset: 2px;
 	}
 
@@ -360,9 +413,9 @@
 	.nav-toggle {
 		display: none;
 		margin-right: 8px;
-		background: #0f172a;
-		border: 1px solid #1f2937;
-		color: #e2e8f0;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		border-radius: 8px;
 		padding: 6px 8px;
 		cursor: pointer;
@@ -377,9 +430,9 @@
 	.badge {
 		padding: 6px 10px;
 		border-radius: 999px;
-		background: #0f172a;
-		border: 1px solid #1f2937;
-		color: #cbd5e1;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
+		color: var(--app-muted);
 		font-size: 12px;
 	}
 
@@ -401,9 +454,9 @@
 	}
 
 	.refresh-btn {
-		background: #0f172a;
-		border: 1px solid #1f2937;
-		color: #cbd5e1;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
+		color: var(--app-muted);
 		border-radius: 999px;
 		padding: 6px 10px;
 		font-size: 12px;
@@ -421,7 +474,7 @@
 
 	@media (max-width: 900px) {
 		:global(body) {
-			background: #0b1221;
+			background: var(--app-bg-mobile);
 		}
 
 		.app-shell {
@@ -500,5 +553,18 @@
 		.err-msg {
 			display: none;
 		}
+	}
+
+	:global(.card),
+	:global(.task),
+	:global(.mobile-add .bar),
+	:global(.empty),
+	:global(.sorter select),
+	:global(.list-sort select),
+	:global(.mobile-add input),
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		color: var(--app-text);
 	}
 </style>

@@ -17,3 +17,23 @@ export interface SoundSettings {
 	customSoundFileName?: string;
 	profileAttachmentsJson?: string;
 }
+
+export type UiTheme = 'default' | 'dark' | 'light';
+
+export interface SidebarPanelState {
+	lists: boolean;
+	members: boolean;
+	sound: boolean;
+	backups: boolean;
+	account: boolean;
+}
+
+export interface UiPreferences {
+	theme: UiTheme;
+	sidebarPanels: SidebarPanelState;
+}
+
+export interface UiPreferencesWire {
+	theme: UiTheme;
+	sidebarPanelsJson?: string;
+}
