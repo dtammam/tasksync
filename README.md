@@ -20,7 +20,7 @@ tasksync is a cross-platform, self-hosted task management system built for speed
 This project was inspired by one very specific frustration: opening Microsoft To Do on phone and waiting 5-7 seconds each time made my soul sad. tasksync is the "open now, move now" version of that workflow, with local-first behavior and simple self-hosting.
 
 I personally use this in two ways:
-1. As a PWA app on my iPhone (Launched it in Safari, saved to home screen as a web ap)
+1. As a PWA app on my iPhone (Launched it in Safari, saved to home screen as a web app)
 2. As a PWA in Windows (launched in Edge, installed as a Progressive Web app)
 
 It works well in a web browser, but that "app" experience is pretty nifty.
@@ -55,14 +55,32 @@ Published images:
 
 `docker-compose.yml` already references these `latest` tags.
 
+By default it persists SQLite data in the Docker named volume `tasksync_data`, so users do not need to pre-create `/srv/tasksync/data`.
+
+Create a `.env` file in this folder (same level as `docker-compose.yml`):
+
+```env
+DATABASE_URL=sqlite:///data/tasksync.db
+JWT_SECRET=super-long-randomsecret
+DEV_LOGIN_PASSWORD=tasksync
+RUST_LOG=info
+PORT=3000
+SEED_ADMIN_PASSWORD=Replacethis
+SEED_CONTRIB_PASSWORD=Replacethistoo
+```
+
+Optional web/reverse-proxy variables:
+- `VITE_ALLOWED_HOSTS=tasksync.example.com` (comma-separated hostnames)
+- `VITE_API_URL=/api` when building your own web image with that build arg
+
 Typical flow:
-1. Set env vars (`DATABASE_URL`, `JWT_SECRET`, seed passwords).
-2. Run `docker compose up -d`.
-3. Seed once: `docker compose --profile setup run --rm seed`.
-4. Log in with seeded admin/contributor accounts and change passwords.
+1. Fill out `.env` values (`JWT_SECRET` and seed passwords should be replaced).
+2. Run `docker compose pull`.
+3. Run `docker compose up -d`.
+4. Seed once: `docker compose --profile setup run --rm seed`.
+5. Log in with seeded admin/contributor accounts and change passwords.
 
 Reverse proxy setup (recommended):
-- Set `VITE_API_URL=/api` for the web container.
 - Set `VITE_ALLOWED_HOSTS` to your hostnames (example: `tasksync.example.com`).
 - Route `/api/*` to the server container and `/` to the web container.
 
