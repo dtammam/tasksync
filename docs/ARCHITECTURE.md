@@ -71,6 +71,7 @@ package "tasksync Server" {
 - **Attachments:** Saved in OPFS/Cache API by SHA‑256 path; ≤10 MB enforced client‑side.
 - **Audio:** Web Audio API with pre‑decoded buffers and custom-file buffer playback (gain-controlled for mobile/WebKit consistency); user settings control theme, volume, enable.
 - **UI preferences:** per-user preferences (app theme + sidebar panel collapse state) are cached locally and synced via authenticated profile endpoints.
+- **PWA install metadata:** static `manifest.webmanifest` + `apple-touch-icon`/PNG icon set in `web/static` so installed shortcuts use branded artwork on iOS/Android.
 
 ## Server Architecture
 - **Axum** web server; **SQLx** to SQLite (WAL). Pragmas: `journal_mode=WAL`, `synchronous=NORMAL`.

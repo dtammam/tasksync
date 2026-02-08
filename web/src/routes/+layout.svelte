@@ -226,7 +226,16 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+	<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+	<link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon.png" />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#0b1221" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<meta name="apple-mobile-web-app-title" content="tasksync" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 	<title>tasksync</title>
 </svelte:head>

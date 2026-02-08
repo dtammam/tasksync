@@ -76,3 +76,4 @@
 - 2026-02-08 01:13 - Started QoL polish by renaming sidebar sections for clarity, making sound/backup/account panels collapsible with per-user synced panel-state preferences, adding app themes (default/dark/light), fixing list-icon emoji input handling, and reducing completion acknowledgement delay to 300ms.
 - 2026-02-07 23:02 - Hardened recurring My Day completion integrity by preserving explicit completion timestamps during pending roll-forward sync updates, preventing completed-today acknowledgments from disappearing after sync.
 - 2026-02-07 23:02 - Improved sound reliability by adding WebAudio context recovery/rebuild logic for stale suspended/closed mobile states and excluding recurring tasks from My Day suggestions to reduce duplicate next-day noise.
+- 2026-02-08 01:39 - Fixed PWA install icon metadata/assets by adding dedicated Apple touch icon + manifest PNG set so iOS home-screen shortcuts use branded app artwork instead of fallback glyph tiles.
