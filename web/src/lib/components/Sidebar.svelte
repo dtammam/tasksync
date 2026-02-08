@@ -5,6 +5,7 @@ import { createEventDispatcher } from 'svelte';
 import { lists } from '$lib/stores/lists';
 import { listCounts, myDayPending } from '$lib/stores/tasks';
 import { soundSettings, soundThemes } from '$lib/stores/settings';
+import { uiPreferences } from '$lib/stores/preferences';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
 import { api } from '$lib/api/client';
@@ -48,6 +49,9 @@ let passwordMessage = '';
 let passwordError = '';
 
 let showTeam = false;
+let showSoundPanel = false;
+let showBackupPanel = false;
+let showAccountPanel = true;
 let teamBusy = false;
 let teamError = '';
 let teamMessage = '';
@@ -66,6 +70,11 @@ let soundMessage = '';
 let backupBusy = false;
 let backupError = '';
 let backupMessage = '';
+const appThemes = [
+	{ value: 'default', label: 'Default blue' },
+	{ value: 'dark', label: 'Dark' },
+	{ value: 'light', label: 'Light' }
+];
 
 const iconFromIdentity = (display, email) => {
 	const source = (display ?? email ?? '').trim();
@@ -138,6 +147,24 @@ const clearCustomSound = () => {
 
 const previewSound = async () => {
 	await playCompletion(soundSettings.get());
+};
+
+const normalizeListIcon = (raw) => {
+	const trimmed = String(raw ?? '').trim();
+	if (!trimmed) return undefined;
+	if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+		const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+		const first = Array.from(segmenter.segment(trimmed), (entry) => entry.segment)
+			.slice(0, 2)
+			.join('');
+		return first || undefined;
+	}
+	return Array.from(trimmed).slice(0, 4).join('') || undefined;
+};
+
+const togglePanel = (panel) => {
+	const current = $uiPreferences.sidebarPanels?.[panel] ?? false;
+	uiPreferences.setPanel(panel, !current);
 };
 
 const backupFileName = (spaceId, exportedAtTs) => {
@@ -241,7 +268,7 @@ const createList = async () => {
 	busy = true;
 	listError = '';
 	try {
-		await lists.createRemote(name, newListIcon || undefined, newListColor || undefined);
+		await lists.createRemote(name, normalizeListIcon(newListIcon), newListColor || undefined);
 		resetDrafts();
 	} catch (err) {
 		listError = err instanceof Error ? err.message : String(err);
@@ -255,10 +282,7 @@ const renameList = async (id) => {
 	const name = (renameDraft[id] ?? '').trim();
 	const iconInput = iconDraft[id];
 	const colorInput = colorDraft[id];
-	const icon =
-		typeof iconInput === 'string'
-			? iconInput.trim()
-			: undefined;
+	const icon = typeof iconInput === 'string' ? normalizeListIcon(iconInput) : undefined;
 	const color =
 		typeof colorInput === 'string'
 			? colorInput.trim()
@@ -564,9 +588,14 @@ $: if (adminScope && adminScope !== loadedAdminScope) {
 $: if (!adminScope && loadedAdminScope) {
 	loadedAdminScope = '';
 	grants = [];
-	showTeam = false;
 	teamMessage = '';
 }
+
+$: showManager = !!$uiPreferences.sidebarPanels?.lists;
+$: showTeam = !!$uiPreferences.sidebarPanels?.members;
+$: showSoundPanel = !!$uiPreferences.sidebarPanels?.sound;
+$: showBackupPanel = !!$uiPreferences.sidebarPanels?.backups;
+$: showAccountPanel = !!$uiPreferences.sidebarPanels?.account;
 
 $: teamMembers = ($members ?? []).filter((member) => member.user_id !== $auth.user?.user_id);
 $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
@@ -637,9 +666,9 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		{/if}
 
 		{#if adminMode}
-			<div class="section-label muted">Collections</div>
-			<button class="section-toggle" type="button" on:click={() => (showManager = !showManager)}>
-				{showManager ? 'Close list manager' : '+ New list'}
+			<div class="section-label muted">Lists</div>
+			<button class="section-toggle" type="button" on:click={() => togglePanel('lists')}>
+				{showManager ? 'Close list manager' : 'Manage lists'}
 			</button>
 			{#if showManager}
 				<div class="card manager">
@@ -657,7 +686,9 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 						<input
 							type="text"
 							placeholder="emoji"
-							maxlength="4"
+							maxlength="24"
+							autocapitalize="off"
+							spellcheck="false"
 							bind:value={newListIcon}
 							on:keydown={(e) => e.key === 'Enter' && createList()}
 						/>
@@ -692,7 +723,9 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 									class="icon-input"
 									type="text"
 									placeholder={list.icon ?? 'emoji'}
-									maxlength="4"
+									maxlength="24"
+									autocapitalize="off"
+									spellcheck="false"
 									bind:value={iconDraft[list.id]}
 									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 								/>
@@ -736,9 +769,9 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 				</div>
 			{/if}
 
-			<div class="section-label muted">Team</div>
-			<button class="section-toggle" type="button" on:click={() => (showTeam = !showTeam)}>
-				{showTeam ? 'Close team manager' : 'Manage members'}
+			<div class="section-label muted">Members</div>
+			<button class="section-toggle" type="button" on:click={() => togglePanel('members')}>
+				{showTeam ? 'Close member manager' : 'Manage members'}
 			</button>
 			{#if showTeam}
 				<div class="card team">
@@ -863,101 +896,132 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	<div class="sidebar-bottom">
 		<div class="section-label muted">Sound</div>
-		<div class="card sound">
-			<label class="toggle" for="sound-enabled">
-				<input
-					id="sound-enabled"
-					data-testid="sound-enabled"
-					type="checkbox"
-					checked={$soundSettings.enabled}
-					on:change={(e) => soundSettings.setEnabled(e.target.checked)}
-				/>
-				Completion sound
-			</label>
-			<label>
-				Theme
-				<select
-					data-testid="sound-theme"
-					value={$soundSettings.theme}
-					on:change={(e) => soundSettings.setTheme(e.target.value)}
-				>
-					{#each soundThemes as theme}
-						<option value={theme}>{theme.replace('_', ' ')}</option>
-					{/each}
-				</select>
-			</label>
-			<label>
-				Custom sound (mp3/wav)
-				<input type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" on:change={uploadCustomSound} disabled={soundBusy} />
-			</label>
-			<div class="sound-actions">
-				<button type="button" class="ghost tiny" on:click={previewSound}>
-					Test sound
-				</button>
-				<button
-					type="button"
-					class="ghost tiny"
-					on:click={clearCustomSound}
-					disabled={!$soundSettings.customSoundDataUrl}
-				>
-					Clear custom
-				</button>
-			</div>
-			{#if $soundSettings.customSoundFileName}
-				<p class="muted-note">Loaded: {$soundSettings.customSoundFileName}</p>
-			{/if}
-			{#if soundMessage}
-				<p class="ok">{soundMessage}</p>
-			{/if}
-			{#if soundError}
-				<p class="error">{soundError}</p>
-			{/if}
-			<label>
-				Volume
-				<div class="volume">
+		<button class="section-toggle" type="button" on:click={() => togglePanel('sound')}>
+			{showSoundPanel ? 'Close sound settings' : 'Manage sound'}
+		</button>
+		{#if showSoundPanel}
+			<div class="card sound">
+				<label class="toggle" for="sound-enabled">
 					<input
-						data-testid="sound-volume"
-						type="range"
-						min="0"
-						max="100"
-						step="1"
-						value={$soundSettings.volume}
-						on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+						id="sound-enabled"
+						data-testid="sound-enabled"
+						type="checkbox"
+						checked={$soundSettings.enabled}
+						on:change={(e) => soundSettings.setEnabled(e.target.checked)}
 					/>
-					<span>{$soundSettings.volume}%</span>
-				</div>
-			</label>
-		</div>
-
-		{#if adminMode && $auth.status === 'authenticated'}
-			<div class="section-label muted">Backup</div>
-			<div class="card backup" data-testid="backup-panel">
-				<p class="muted-note">Download a full JSON snapshot of this space, then restore it if needed.</p>
-				<div class="backup-actions">
-					<button type="button" class="ghost" on:click={downloadBackup} disabled={backupBusy}>
-						{backupBusy ? 'Working…' : 'Download backup'}
+					Completion sound
+				</label>
+				<label>
+					Theme
+					<select
+						data-testid="sound-theme"
+						value={$soundSettings.theme}
+						on:change={(e) => soundSettings.setTheme(e.target.value)}
+					>
+						{#each soundThemes as theme}
+							<option value={theme}>{theme.replace('_', ' ')}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					Custom sound (mp3/wav)
+					<input
+						type="file"
+						accept=".mp3,.wav,audio/mpeg,audio/wav"
+						on:change={uploadCustomSound}
+						disabled={soundBusy}
+					/>
+				</label>
+				<div class="sound-actions">
+					<button type="button" class="ghost tiny" on:click={previewSound}>
+						Test sound
 					</button>
-					<label class="file-btn">
-						<span>{backupBusy ? 'Working…' : 'Restore backup JSON'}</span>
-						<input
-							type="file"
-							accept=".json,application/json"
-							on:change={restoreBackup}
-							disabled={backupBusy}
-						/>
-					</label>
+					<button
+						type="button"
+						class="ghost tiny"
+						on:click={clearCustomSound}
+						disabled={!$soundSettings.customSoundDataUrl}
+					>
+						Clear custom
+					</button>
 				</div>
-				{#if backupMessage}
-					<p class="ok">{backupMessage}</p>
+				{#if $soundSettings.customSoundFileName}
+					<p class="muted-note">Loaded: {$soundSettings.customSoundFileName}</p>
 				{/if}
-				{#if backupError}
-					<p class="error">{backupError}</p>
+				{#if soundMessage}
+					<p class="ok">{soundMessage}</p>
 				{/if}
+				{#if soundError}
+					<p class="error">{soundError}</p>
+				{/if}
+				<label>
+					Volume
+					<div class="volume">
+						<input
+							data-testid="sound-volume"
+							type="range"
+							min="0"
+							max="100"
+							step="1"
+							value={$soundSettings.volume}
+							on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+						/>
+						<span>{$soundSettings.volume}%</span>
+					</div>
+				</label>
 			</div>
 		{/if}
 
+		{#if adminMode && $auth.status === 'authenticated'}
+			<div class="section-label muted">Backup</div>
+			<button class="section-toggle" type="button" on:click={() => togglePanel('backups')}>
+				{showBackupPanel ? 'Close backup settings' : 'Manage backups'}
+			</button>
+			{#if showBackupPanel}
+				<div class="card backup" data-testid="backup-panel">
+					<p class="muted-note">Download a full JSON snapshot of this space, then restore it if needed.</p>
+					<div class="backup-actions">
+						<button type="button" class="ghost" on:click={downloadBackup} disabled={backupBusy}>
+							{backupBusy ? 'Working…' : 'Download backup'}
+						</button>
+						<label class="file-btn">
+							<span>{backupBusy ? 'Working…' : 'Restore backup JSON'}</span>
+							<input
+								type="file"
+								accept=".json,application/json"
+								on:change={restoreBackup}
+								disabled={backupBusy}
+							/>
+						</label>
+					</div>
+					{#if backupMessage}
+						<p class="ok">{backupMessage}</p>
+					{/if}
+					{#if backupError}
+						<p class="error">{backupError}</p>
+					{/if}
+				</div>
+			{/if}
+		{/if}
+
 		<div class="section-label muted">Account</div>
-		<div class="card account" data-testid="auth-panel">
+		<button class="section-toggle" type="button" on:click={() => togglePanel('account')}>
+			{showAccountPanel ? 'Close account settings' : 'Manage account'}
+		</button>
+		{#if showAccountPanel}
+			<div class="card account" data-testid="auth-panel">
+				<label>
+					App theme
+					<select
+						data-testid="ui-theme"
+						value={$uiPreferences.theme}
+						on:change={(e) => uiPreferences.setTheme(e.target.value)}
+					>
+						{#each appThemes as option}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+				</label>
 			{#if $auth.status === 'loading'}
 				<p class="muted-note">Checking session...</p>
 			{:else if $auth.status === 'authenticated' && $auth.user}
@@ -1096,7 +1160,8 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 					<p class="error">{$auth.error}</p>
 				{/if}
 			{/if}
-		</div>
+			</div>
+		{/if}
 	</div>
 </nav>
 
@@ -1628,6 +1693,70 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		color: #86efac;
 		font-size: 12px;
 		margin: 0;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar {
+		background:
+			radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.08), transparent 48%),
+			linear-gradient(180deg, #f5f9ff 0%, #edf3ff 100%);
+		border-right-color: #bfd0ec;
+		color: #0f172a;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .section-label {
+		color: #475569;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .section-label.muted {
+		color: #64748b;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar a {
+		color: #1e293b;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar a:hover {
+		background: #e2ebff;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar a.selected {
+		background: linear-gradient(90deg, rgba(37, 99, 235, 0.2), rgba(219, 234, 254, 0.85));
+		color: #0f172a;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .card {
+		background: linear-gradient(180deg, #ffffff, #f8fbff);
+		border-color: #c4d3ee;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar input,
+	:global(html[data-ui-theme='light']) .sidebar select,
+	:global(html[data-ui-theme='light']) .sidebar .pin,
+	:global(html[data-ui-theme='light']) .sidebar .section-toggle,
+	:global(html[data-ui-theme='light']) .sidebar button.ghost,
+	:global(html[data-ui-theme='light']) .sidebar .backup .file-btn {
+		background: #ffffff;
+		border-color: #9fb2d1;
+		color: #0f172a;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .muted-note,
+	:global(html[data-ui-theme='light']) .sidebar .count,
+	:global(html[data-ui-theme='light']) .sidebar .account .who span,
+	:global(html[data-ui-theme='light']) .sidebar .team-helper {
+		color: #475569;
+	}
+
+	:global(html[data-ui-theme='dark']) .sidebar {
+		background:
+			radial-gradient(circle at 8% 8%, rgba(37, 99, 235, 0.08), transparent 48%),
+			linear-gradient(180deg, #090909 0%, #070707 100%);
+		border-right-color: #1f1f1f;
+	}
+
+	:global(html[data-ui-theme='dark']) .sidebar .card {
+		background: linear-gradient(180deg, #0f0f0f, #090909);
+		border-color: #2a2a2a;
 	}
 
 	@media (max-width: 900px) {

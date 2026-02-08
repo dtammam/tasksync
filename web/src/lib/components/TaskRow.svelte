@@ -162,7 +162,7 @@ const handleToggleStatus = () => {
 		statusAck = false;
 		toggleTimer = null;
 		tasks.toggle(task.id);
-	}, 500);
+	}, 300);
 };
 
 onDestroy(() => {
@@ -552,6 +552,41 @@ $: isRecurringCompletedToday =
 		margin: 0;
 		color: #fda4af;
 		font-size: 12px;
+	}
+
+	:global(html[data-ui-theme='light']) .task {
+		background: linear-gradient(180deg, #ffffff, #f8fbff);
+		border-color: #bfd0ec;
+		box-shadow: inset 3px 0 0 var(--list-accent, #3b82f6);
+	}
+
+	:global(html[data-ui-theme='light']) .task .title-text,
+	:global(html[data-ui-theme='light']) .task .meta .title {
+		color: #0f172a;
+	}
+
+	:global(html[data-ui-theme='light']) .task .chip {
+		background: #e6efff;
+		color: #1e293b;
+	}
+
+	:global(html[data-ui-theme='light']) .task .chip.subtle {
+		background: #f8fbff;
+		border-color: #cbd5e1;
+		color: #334155;
+	}
+
+	:global(html[data-ui-theme='light']) .task .status,
+	:global(html[data-ui-theme='light']) .task .quick button,
+	:global(html[data-ui-theme='light']) .task .title-input {
+		background: #ffffff;
+		border-color: #94a3b8;
+		color: #0f172a;
+	}
+
+	:global(html[data-ui-theme='dark']) .task {
+		background: linear-gradient(180deg, #0f0f0f, #090909);
+		border-color: var(--list-accent, #334155);
 	}
 
 	@media (max-width: 900px) {

@@ -57,6 +57,28 @@ const waitForTaskInIdb = async (page: Page, title: string) => {
 		.toBe(true);
 };
 
+const ensureSoundPanelOpen = async (page: Page) => {
+	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+	const soundEnabled = page.getByTestId('sound-enabled');
+	if (await soundEnabled.count()) {
+		return;
+	}
+	const manageSound = page.getByRole('button', { name: 'Manage sound' });
+	await expect
+		.poll(
+			async () => (await soundEnabled.count()) + (await manageSound.count()),
+			{ timeout: 10_000 }
+		)
+		.toBeGreaterThan(0);
+	if (await soundEnabled.count()) {
+		return;
+	}
+	await expect(manageSound.first()).toBeVisible();
+	await manageSound.first().scrollIntoViewIfNeeded();
+	await manageSound.first().click();
+	await expect(soundEnabled).toHaveCount(1);
+};
+
 const resetClientState = async (page: Page) => {
 	await page.addInitScript(() => {
 		// Keep e2e deterministic: signed-out token mode disables live server sync for this suite.
@@ -131,6 +153,7 @@ test.describe('My Day', () => {
 
 	test('persists sound settings changes across reload', async ({ page }) => {
 		await resetClientState(page);
+		await ensureSoundPanelOpen(page);
 		await expect(page.getByTestId('sound-enabled')).toBeChecked();
 
 		await page.getByTestId('sound-enabled').uncheck();
@@ -142,12 +165,9 @@ test.describe('My Day', () => {
 		});
 		await page.waitForTimeout(300);
 		await page.reload();
+		await ensureSoundPanelOpen(page);
 
-		await expect.poll(async () =>
-			page.evaluate(
-				() => (document.querySelector('[data-testid="sound-enabled"]') as HTMLInputElement).checked
-			)
-		).toBe(false);
+		await expect(page.getByTestId('sound-enabled')).not.toBeChecked();
 		await expect(page.getByTestId('sound-theme')).toHaveValue('wood_tick');
 		await expect(page.getByTestId('sound-volume')).toHaveValue('25');
 	});
