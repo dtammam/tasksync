@@ -146,11 +146,13 @@ create table if not exists change (
 - Score: priority weight + overdue bucket + pins; order with fractional keys.
 - Rollover behavior: overdue pending items are surfaced in a dedicated **Missed** bucket with direct resolve actions (skip next recurrence, mark done, delete).
 - Recurring completion behavior: when a recurring task is completed, it can appear in **Completed** for the current day while the next due instance is already materialized.
+- Recurring sync behavior: explicit completion timestamps are preserved even when the rolled-forward task remains `pending`, so same-day completion acknowledgment survives sync and naturally clears at day rollover.
 
 ## Completion Sound
 - Built‑ins: `chime_soft`, `click_pop`, `sparkle_short`, `wood_tick` (≤150KB each).
 - User settings: enable/mute, volume, theme, optional custom upload.
 - Performance: **<20 ms** input→audio onset (pre‑decoded buffers).
+- Reliability: playback path rebuilds stale/suspended WebAudio contexts when resume fails (notably mobile/WebKit PWA lifecycle interruptions).
 
 ## Performance Budgets
 - Startup (cold PWA): **<800 ms** TTI; first list render **<300 ms** (1k tasks).

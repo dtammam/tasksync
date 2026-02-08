@@ -1895,26 +1895,26 @@ async fn update_task_meta(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-		"update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), url = coalesce(?5, url), recur_rule = coalesce(?6, recur_rule), attachments = coalesce(?7, attachments), due_date = coalesce(?8, due_date), occurrences_completed = coalesce(?9, occurrences_completed), completed_ts = case when ?2 is null then coalesce(?10, completed_ts) when ?2 = 'done' then coalesce(?10, completed_ts, ?13) else null end, notes = coalesce(?11, notes), assignee_user_id = coalesce(?12, assignee_user_id), updated_ts = ?13 where id = ?14 and space_id = ?15 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
-	)
-	.bind(&body.title)
-	.bind(&body.status)
-	.bind(&body.list_id)
-	.bind(my_day)
-	.bind(&body.url)
-	.bind(&body.recur_rule)
-	.bind(&body.attachments)
-	.bind(&body.due_date)
-	.bind(body.occurrences_completed)
-	.bind(body.completed_ts)
-	.bind(&body.notes)
+        "update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), url = coalesce(?5, url), recur_rule = coalesce(?6, recur_rule), attachments = coalesce(?7, attachments), due_date = coalesce(?8, due_date), occurrences_completed = coalesce(?9, occurrences_completed), completed_ts = case when ?10 is not null then ?10 when ?2 is null then completed_ts when ?2 = 'done' then coalesce(completed_ts, ?13) else null end, notes = coalesce(?11, notes), assignee_user_id = coalesce(?12, assignee_user_id), updated_ts = ?13 where id = ?14 and space_id = ?15 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+    )
+    .bind(&body.title)
+    .bind(&body.status)
+    .bind(&body.list_id)
+    .bind(my_day)
+    .bind(&body.url)
+    .bind(&body.recur_rule)
+    .bind(&body.attachments)
+    .bind(&body.due_date)
+    .bind(body.occurrences_completed)
+    .bind(body.completed_ts)
+    .bind(&body.notes)
     .bind(&assignee_user_id)
     .bind(now)
     .bind(&id)
     .bind(&ctx.space_id)
-	.fetch_one(&state.pool)
-	.await
-	.map_err(|_| StatusCode::NOT_FOUND)?;
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(Json(rec))
 }
@@ -2719,6 +2719,51 @@ mod tests {
         .expect("update should work")
         .0;
         assert_eq!(updated.my_day, 0);
+    }
+
+    #[tokio::test]
+    async fn admin_can_preserve_completed_ts_when_recurring_instance_rolls_forward() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, due_date, recur_rule, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-recurring', 's1', 'Stretch', 'pending', 'goal-management', 0, 'a', 1, 1, '2026-02-05', 'daily', 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert recurring task");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let completed_ts = chrono::Utc::now().timestamp_millis();
+
+        let updated = update_task_meta(
+            State(state),
+            headers,
+            Path("t-recurring".to_string()),
+            Json(UpdateTaskMeta {
+                title: None,
+                status: Some("pending".to_string()),
+                list_id: None,
+                my_day: None,
+                url: None,
+                recur_rule: None,
+                attachments: None,
+                due_date: Some("2026-02-06".to_string()),
+                notes: None,
+                occurrences_completed: Some(1),
+                completed_ts: Some(completed_ts),
+                assignee_user_id: None,
+            }),
+        )
+        .await
+        .expect("recurring roll-forward should keep completion timestamp")
+        .0;
+
+        assert_eq!(updated.status, "pending");
+        assert_eq!(updated.occurrences_completed, 1);
+        assert_eq!(updated.due_date.as_deref(), Some("2026-02-06"));
+        assert_eq!(updated.completed_ts, Some(completed_ts));
     }
 
     #[tokio::test]

@@ -3,6 +3,9 @@ import type { SoundSettings, SoundTheme } from '$shared/types/settings';
 let audioContext: AudioContext | null = null;
 let customBufferCache: { src: string; buffer: AudioBuffer } | null = null;
 
+const contextState = (ctx: AudioContext | null) =>
+	ctx ? String((ctx as AudioContext & { state?: string }).state ?? '') : 'closed';
+
 const clampVolume = (volume: number) => {
 	if (!Number.isFinite(volume)) return 0;
 	return Math.max(0, Math.min(100, volume)) / 100;
@@ -12,11 +15,52 @@ const toPerceptualGain = (linearVolume: number) => Math.pow(linearVolume, 1.35);
 
 const getAudioContext = () => {
 	if (typeof window === 'undefined') return null;
-	if (audioContext) return audioContext;
+	if (audioContext && contextState(audioContext) !== 'closed') return audioContext;
+	audioContext = null;
 	const Ctor = window.AudioContext;
 	if (!Ctor) return null;
 	audioContext = new Ctor({ latencyHint: 'interactive' });
 	return audioContext;
+};
+
+const dropAudioContext = async () => {
+	const stale = audioContext;
+	audioContext = null;
+	if (!stale) return;
+	if (contextState(stale) === 'closed') return;
+	try {
+		await stale.close();
+	} catch {
+		// Ignore close errors and rebuild on next playback request.
+	}
+};
+
+const ensureRunningContext = async () => {
+	let ctx = getAudioContext();
+	if (!ctx) return null;
+
+	if (contextState(ctx) === 'running') {
+		return ctx;
+	}
+	try {
+		await ctx.resume();
+	} catch {
+		// Continue into rebuild path below.
+	}
+	if (contextState(ctx) === 'running') {
+		return ctx;
+	}
+
+	// WebKit can leave a context suspended/interrupted until fully rebuilt.
+	await dropAudioContext();
+	ctx = getAudioContext();
+	if (!ctx) return null;
+	try {
+		await ctx.resume();
+	} catch {
+		return null;
+	}
+	return contextState(ctx) === 'running' ? ctx : null;
 };
 
 const scheduleTone = (
@@ -230,14 +274,7 @@ export const playCompletion = async (settings: SoundSettings) => {
 	if (!settings.enabled) return;
 	const volume = toPerceptualGain(clampVolume(settings.volume));
 	if (volume <= 0.0001) return;
-	const ctx = getAudioContext();
-	if (ctx?.state === 'suspended') {
-		try {
-			await ctx.resume();
-		} catch {
-			return;
-		}
-	}
+	const ctx = await ensureRunningContext();
 	if (settings.theme === 'custom_file') {
 		const playedWithContext = ctx ? await playCustomFileWithWebAudio(ctx, settings, volume) : false;
 		if (playedWithContext) return;
