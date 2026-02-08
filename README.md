@@ -55,7 +55,7 @@ Published images:
 
 `docker-compose.yml` already references these `latest` tags.
 
-By default it persists SQLite data in the Docker named volume `tasksync_data`, so users do not need to pre-create `/srv/tasksync/data`.
+By default it persists SQLite data in the a folder named `/srv/tasksync/data`, create it manually.
 
 Create a `.env` file in this folder (same level as `docker-compose.yml`):
 
