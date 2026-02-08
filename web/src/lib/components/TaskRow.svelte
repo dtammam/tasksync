@@ -7,6 +7,7 @@ import { members } from '$lib/stores/members';
 import { auth } from '$lib/stores/auth';
 
 export let task;
+export let completedContext = false;
 
 const dispatch = createEventDispatcher();
 let editing = false;
@@ -74,6 +75,17 @@ const parseIsoDate = (value) => {
 	return new Date(year, month - 1, day);
 };
 
+const isTodayTs = (ts) => {
+	if (typeof ts !== 'number' || !Number.isFinite(ts)) return false;
+	const now = new Date();
+	const value = new Date(ts);
+	return (
+		now.getFullYear() === value.getFullYear() &&
+		now.getMonth() === value.getMonth() &&
+		now.getDate() === value.getDate()
+	);
+};
+
 const toIsoDate = (date) => {
 	const year = date.getFullYear();
 	const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -137,6 +149,10 @@ const recurrencePreview = (taskValue, count = 2) => {
 
 const handleToggleStatus = () => {
 	if (!canToggleStatus || toggleTimer) return;
+	if (isRecurringCompletedToday) {
+		tasks.undoRecurringCompletion(task.id);
+		return;
+	}
 	if (task.status === 'done') {
 		tasks.toggle(task.id);
 		return;
@@ -216,6 +232,8 @@ $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 $: recurPreview = recurrencePreview(task);
+$: isRecurringCompletedToday =
+	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
 </script>
 
 <div
@@ -234,7 +252,7 @@ $: recurPreview = recurrencePreview(task);
 			data-acknowledged={statusAck ? 'true' : 'false'}
 			disabled={!canToggleStatus}
 		>
-			{statusAck ? '✓' : task.status === 'done' ? '✔' : '○'}
+			{statusAck ? '✓' : task.status === 'done' || isRecurringCompletedToday ? '✔' : '○'}
 		</button>
 	</div>
 	<div class="meta">

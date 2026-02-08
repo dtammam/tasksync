@@ -43,6 +43,19 @@ const addWeekdays = (dateStr: string, weekdays: number) => {
 	return toLocalIsoDate(d);
 };
 
+const subtractWeekdays = (dateStr: string, weekdays: number) => {
+	const d = parseIsoDate(dateStr);
+	let remaining = weekdays;
+	while (remaining > 0) {
+		d.setDate(d.getDate() - 1);
+		const day = d.getDay();
+		if (day !== 0 && day !== 6) {
+			remaining -= 1;
+		}
+	}
+	return toLocalIsoDate(d);
+};
+
 const nextDue = (current: string | undefined, recur?: string) => {
 	if (!recur) return undefined;
 	const today = toLocalIsoDate(new Date());
@@ -62,6 +75,27 @@ const nextDue = (current: string | undefined, recur?: string) => {
 		}
 		default:
 			return undefined;
+	}
+};
+
+const prevDue = (current: string | undefined, recur?: string) => {
+	if (!current || !recur) return current;
+	switch (recur) {
+		case 'daily':
+			return addDays(current, -1);
+		case 'weekdays':
+			return subtractWeekdays(current, 1);
+		case 'weekly':
+			return addDays(current, -7);
+		case 'biweekly':
+			return addDays(current, -14);
+		case 'monthly': {
+			const d = parseIsoDate(current);
+			d.setMonth(d.getMonth() - 1);
+			return toLocalIsoDate(d);
+		}
+		default:
+			return current;
 	}
 };
 
@@ -338,6 +372,29 @@ export const tasks = {
 							...t,
 							due_date: nextDue(t.due_date, t.recurrence_id),
 							updated_ts: Date.now(),
+							dirty: true
+						}
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	undoRecurringCompletion(id: string) {
+		const now = Date.now();
+		const isCompletionFromToday = (ts?: number) =>
+			typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayIso();
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id &&
+				!!t.recurrence_id &&
+				t.status === 'pending' &&
+				isCompletionFromToday(t.completed_ts)
+					? {
+							...t,
+							due_date: prevDue(t.due_date, t.recurrence_id),
+							occurrences_completed: Math.max(0, (t.occurrences_completed ?? 0) - 1),
+							completed_ts: undefined,
+							updated_ts: now,
 							dirty: true
 						}
 					: t

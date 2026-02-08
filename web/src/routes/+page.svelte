@@ -214,7 +214,7 @@
 	<div class="stack" data-testid="completed-section">
 			{#if sortedCompleted.length}
 			{#each sortedCompleted as task (task.id)}
-				<TaskRow {task} on:openDetail={openDetail} />
+				<TaskRow {task} completedContext={true} on:openDetail={openDetail} />
 			{/each}
 		{:else}
 			<p class="empty subtle">No completed tasks yet.</p>
