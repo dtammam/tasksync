@@ -101,6 +101,33 @@ describe('tasks store helpers', () => {
 		expect(get(myDayCompleted).map((t) => t.id)).toEqual(['rec-complete']);
 	});
 
+	it('can undo a same-day recurring completion back to the original due date', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'rec-undo',
+				recurrence_id: 'daily',
+				due_date: '2026-02-02',
+				status: 'pending',
+				occurrences_completed: 0
+			})
+		]);
+
+		tasks.toggle('rec-undo');
+		let updated = tasks.getAll().find((t) => t.id === 'rec-undo');
+		expect(updated?.due_date).toBe('2026-02-03');
+		expect(updated?.occurrences_completed).toBe(1);
+		expect(typeof updated?.completed_ts).toBe('number');
+		expect(get(myDayCompleted).map((t) => t.id)).toEqual(['rec-undo']);
+
+		tasks.undoRecurringCompletion('rec-undo');
+		updated = tasks.getAll().find((t) => t.id === 'rec-undo');
+		expect(updated?.due_date).toBe('2026-02-02');
+		expect(updated?.occurrences_completed).toBe(0);
+		expect(updated?.completed_ts).toBeUndefined();
+		expect(get(myDayCompleted)).toEqual([]);
+		expect(get(myDayPending).map((t) => t.id)).toEqual(['rec-undo']);
+	});
+
 	it('rolls weekday recurrence to next business day', () => {
 		vi.setSystemTime(new Date('2026-02-06T12:00:00Z'));
 		const rec = baseTask({
