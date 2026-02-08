@@ -1,6 +1,6 @@
 # tasksync
 
-A fast, self-hosted task app focused on everyday flow: open it, capture quickly, stay synced across desktop + phone, and keep working offline when your network is flaky.
+tasksync is a cross-platform, self-hostable task management platform with recurrence, lists and attachments.
 
 <table>
     <tr>
