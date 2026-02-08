@@ -501,6 +501,7 @@ export const myDaySuggestions = derived(
 				(t) =>
 					canSeeTask(t, $auth.user?.user_id, $auth.user?.role) &&
 					t.status === 'pending' &&
+					!t.recurrence_id &&
 					!inMyDay(t) &&
 					(t.due_date === today || t.due_date === tomorrow || (!t.due_date && t.priority > 0))
 			)

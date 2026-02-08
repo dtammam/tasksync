@@ -149,6 +149,12 @@ describe('tasks store helpers', () => {
 		tasks.setAll([
 			baseTask({ id: 'due-today', due_date: '2026-02-02', status: 'pending' }),
 			baseTask({ id: 'due-tomorrow', due_date: '2026-02-03', status: 'pending' }),
+			baseTask({
+				id: 'due-tomorrow-recurring',
+				due_date: '2026-02-03',
+				status: 'pending',
+				recurrence_id: 'daily'
+			}),
 			baseTask({ id: 'already-myday', my_day: true, due_date: '2026-02-02' }),
 			baseTask({ id: 'done-task', due_date: '2026-02-02', status: 'done' }),
 			baseTask({ id: 'no-due', priority: 1 })
