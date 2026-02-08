@@ -5,99 +5,15 @@ import { playCompletion } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
 import { auth } from '$lib/stores/auth';
 import { api } from '$lib/api/client';
+import {
+	nextDueForRecurrence,
+	prevDueForRecurrence,
+	toLocalIsoDate
+} from '$lib/tasks/recurrence';
 
 const tasksStore = writable<Task[]>([]);
 const isServerId = (id: string) =>
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-const toLocalIsoDate = (date: Date) => {
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, '0');
-	const day = String(date.getDate()).padStart(2, '0');
-	return `${year}-${month}-${day}`;
-};
-
-const parseIsoDate = (value?: string) => {
-	if (!value) return new Date();
-	const [year, month, day] = value.split('-').map(Number);
-	if (!year || !month || !day) return new Date(value);
-	return new Date(year, month - 1, day);
-};
-
-const addDays = (dateStr: string, days: number) => {
-	const d = parseIsoDate(dateStr);
-	d.setDate(d.getDate() + days);
-	return toLocalIsoDate(d);
-};
-
-const addWeekdays = (dateStr: string, weekdays: number) => {
-	const d = parseIsoDate(dateStr);
-	let remaining = weekdays;
-	while (remaining > 0) {
-		d.setDate(d.getDate() + 1);
-		const day = d.getDay();
-		if (day !== 0 && day !== 6) {
-			remaining -= 1;
-		}
-	}
-	return toLocalIsoDate(d);
-};
-
-const subtractWeekdays = (dateStr: string, weekdays: number) => {
-	const d = parseIsoDate(dateStr);
-	let remaining = weekdays;
-	while (remaining > 0) {
-		d.setDate(d.getDate() - 1);
-		const day = d.getDay();
-		if (day !== 0 && day !== 6) {
-			remaining -= 1;
-		}
-	}
-	return toLocalIsoDate(d);
-};
-
-const nextDue = (current: string | undefined, recur?: string) => {
-	if (!recur) return undefined;
-	const today = toLocalIsoDate(new Date());
-	switch (recur) {
-		case 'daily':
-			return addDays(current ?? today, 1);
-		case 'weekdays':
-			return addWeekdays(current ?? today, 1);
-		case 'weekly':
-			return addDays(current ?? today, 7);
-		case 'biweekly':
-			return addDays(current ?? today, 14);
-		case 'monthly': {
-			const d = parseIsoDate(current);
-			d.setMonth(d.getMonth() + 1);
-			return toLocalIsoDate(d);
-		}
-		default:
-			return undefined;
-	}
-};
-
-const prevDue = (current: string | undefined, recur?: string) => {
-	if (!current || !recur) return current;
-	switch (recur) {
-		case 'daily':
-			return addDays(current, -1);
-		case 'weekdays':
-			return subtractWeekdays(current, 1);
-		case 'weekly':
-			return addDays(current, -7);
-		case 'biweekly':
-			return addDays(current, -14);
-		case 'monthly': {
-			const d = parseIsoDate(current);
-			d.setMonth(d.getMonth() - 1);
-			return toLocalIsoDate(d);
-		}
-		default:
-			return current;
-	}
-};
 
 const makeLocalTask = (
 	title: string,
@@ -214,7 +130,7 @@ export const tasks = {
 							const now = Date.now();
 							if (task.recurrence_id && task.status !== 'done') {
 								shouldPlayCompletion = true;
-								const next = nextDue(task.due_date, task.recurrence_id);
+								const next = nextDueForRecurrence(task.due_date, task.recurrence_id);
 								return {
 									...task,
 									status: 'pending',
@@ -370,7 +286,7 @@ export const tasks = {
 				t.id === id
 					? {
 							...t,
-							due_date: nextDue(t.due_date, t.recurrence_id),
+							due_date: nextDueForRecurrence(t.due_date, t.recurrence_id),
 							updated_ts: Date.now(),
 							dirty: true
 						}
@@ -391,7 +307,7 @@ export const tasks = {
 				isCompletionFromToday(t.completed_ts)
 					? {
 							...t,
-							due_date: prevDue(t.due_date, t.recurrence_id),
+							due_date: prevDueForRecurrence(t.due_date, t.recurrence_id),
 							occurrences_completed: Math.max(0, (t.occurrences_completed ?? 0) - 1),
 							completed_ts: undefined,
 							updated_ts: now,
@@ -552,7 +468,7 @@ export const myDaySuggestions = derived(
 	([$tasks, $auth, _myDayDateKey]) => {
 		void _myDayDateKey;
 		const today = todayIso();
-		const tomorrow = addDays(today, 1);
+		const tomorrow = nextDueForRecurrence(today, 'daily') ?? today;
 		return $tasks
 			.filter(
 				(t) =>

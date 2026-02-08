@@ -15,6 +15,7 @@ export interface SoundSettings {
 	customSoundFileId?: string;
 	customSoundDataUrl?: string;
 	customSoundFileName?: string;
+	customSoundFilesJson?: string;
 	profileAttachmentsJson?: string;
 }
 

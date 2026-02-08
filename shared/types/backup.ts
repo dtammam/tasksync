@@ -17,6 +17,7 @@ export interface SpaceBackupUser {
 	custom_sound_file_id?: string;
 	custom_sound_file_name?: string;
 	custom_sound_data_url?: string;
+	custom_sound_files_json?: string;
 	profile_attachments?: string;
 	ui_theme?: string;
 	ui_sidebar_panels?: string;

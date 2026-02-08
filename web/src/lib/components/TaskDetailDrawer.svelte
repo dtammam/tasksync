@@ -5,6 +5,7 @@ import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
+import { recurrenceRuleLabels, recurrenceRules } from '$lib/tasks/recurrence';
 
 export let task = null;
 export let open = false;
@@ -20,6 +21,10 @@ let attachments = [];
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
+const recurrenceOptions = recurrenceRules.map((rule) => ({
+	value: rule,
+	label: recurrenceRuleLabels[rule]
+}));
 
 onMount(() => {
 	if (open && task) hydrate(task);
@@ -141,11 +146,9 @@ const memberAvatar = (member) => {
 					Recurrence
 					<select bind:value={recur} disabled={!canEditTask}>
 						<option value=''>None</option>
-						<option value='daily'>Daily</option>
-						<option value='weekdays'>Weekdays</option>
-						<option value='weekly'>Weekly</option>
-						<option value='biweekly'>Every 2 weeks</option>
-						<option value='monthly'>Monthly</option>
+						{#each recurrenceOptions as option}
+							<option value={option.value}>{option.label}</option>
+						{/each}
 					</select>
 				</label>
 			</div>
@@ -230,8 +233,8 @@ const memberAvatar = (member) => {
 		right: 0;
 		height: 100vh;
 		width: min(420px, 92vw);
-		background: #0b1221;
-		border-left: 1px solid #1f2937;
+		background: var(--surface-2);
+		border-left: 1px solid var(--border-1);
 		box-shadow: -10px 0 30px rgba(0, 0, 0, 0.35);
 		padding: 16px;
 		z-index: 99;
@@ -248,7 +251,7 @@ const memberAvatar = (member) => {
 
 	.eyebrow {
 		text-transform: uppercase;
-		color: #94a3b8;
+		color: var(--app-muted);
 		font-size: 11px;
 		letter-spacing: 0.06em;
 		margin: 0 0 2px;
@@ -260,7 +263,7 @@ const memberAvatar = (member) => {
 	}
 
 	.muted {
-		color: #94a3b8;
+		color: var(--app-muted);
 		margin: 4px 0 0;
 		font-size: 13px;
 	}
@@ -277,16 +280,16 @@ const memberAvatar = (member) => {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		color: #cbd5e1;
+		color: var(--app-text);
 		font-size: 13px;
 	}
 
 	input,
 	select,
 	textarea {
-		background: #0f172a;
-		border: 1px solid #1f2937;
-		color: #e2e8f0;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		border-radius: 8px;
 		padding: 8px 10px;
 	}
@@ -320,9 +323,9 @@ const memberAvatar = (member) => {
 	}
 
 	button.ghost {
-		background: #0f172a;
-		border: 1px solid #1f2937;
-		color: #e2e8f0;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		padding: 8px 10px;
 		border-radius: 8px;
 		cursor: pointer;
@@ -348,6 +351,6 @@ const memberAvatar = (member) => {
 	.attachments {
 		margin: 0;
 		padding-left: 16px;
-		color: #e2e8f0;
+		color: var(--app-text);
 	}
 </style>

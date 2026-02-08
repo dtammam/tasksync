@@ -144,6 +144,38 @@ describe('tasks store helpers', () => {
 		expect(updated?.due_date).toBe('2026-02-09');
 	});
 
+	it('rolls quarterly, biannual, and annual recurrences forward correctly', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'rec-quarterly',
+				recurrence_id: 'quarterly',
+				due_date: '2026-02-02',
+				status: 'pending'
+			}),
+			baseTask({
+				id: 'rec-biannual',
+				recurrence_id: 'biannual',
+				due_date: '2026-02-02',
+				status: 'pending'
+			}),
+			baseTask({
+				id: 'rec-annual',
+				recurrence_id: 'annual',
+				due_date: '2026-02-02',
+				status: 'pending'
+			})
+		]);
+
+		tasks.toggle('rec-quarterly');
+		tasks.toggle('rec-biannual');
+		tasks.toggle('rec-annual');
+
+		const nextDueById = new Map(tasks.getAll().map((task) => [task.id, task.due_date]));
+		expect(nextDueById.get('rec-quarterly')).toBe('2026-05-02');
+		expect(nextDueById.get('rec-biannual')).toBe('2026-08-02');
+		expect(nextDueById.get('rec-annual')).toBe('2027-02-02');
+	});
+
 	it('clears a missed recurring task from missed when skipping to next occurrence', () => {
 		tasks.setAll([
 			baseTask({

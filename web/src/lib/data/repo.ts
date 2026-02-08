@@ -26,6 +26,10 @@ const readSoundSettingsFromLocalStorage = (): SoundSettings | null => {
 			customSoundFileId: parsed.customSoundFileId,
 			customSoundDataUrl: parsed.customSoundDataUrl,
 			customSoundFileName: parsed.customSoundFileName,
+			customSoundFilesJson:
+				typeof parsed.customSoundFilesJson === 'string'
+					? parsed.customSoundFilesJson
+					: undefined,
 			profileAttachmentsJson:
 				typeof parsed.profileAttachmentsJson === 'string'
 					? parsed.profileAttachmentsJson
@@ -82,6 +86,10 @@ export const repo = {
 			customSoundFileId: stored.customSoundFileId,
 			customSoundDataUrl: stored.customSoundDataUrl,
 			customSoundFileName: stored.customSoundFileName,
+			customSoundFilesJson:
+				typeof stored.customSoundFilesJson === 'string'
+					? stored.customSoundFilesJson
+					: undefined,
 			profileAttachmentsJson:
 				typeof stored.profileAttachmentsJson === 'string'
 					? stored.profileAttachmentsJson

@@ -142,6 +142,7 @@ create table if not exists change (
 
 ## Recurrence (RRULE subset)
 - Support: `FREQ`, `BYDAY`, `BYMONTHDAY`, `BYSETPOS`, `INTERVAL`, `UNTIL`, `COUNT` + helpers (nth weekday, last weekday, business days).
+- UI presets currently include `daily`, `weekdays`, `weekly`, `biweekly`, `monthly`, `quarterly`, `biannual`, and `annual`.
 - **Materialize on demand** within [today‑Δ, today+Δ] (Δ≈14 days) and update `recur_state`.
 
 ## My Day (materialization + scoring)
@@ -154,7 +155,7 @@ create table if not exists change (
 
 ## Completion Sound
 - Built‑ins: `chime_soft`, `click_pop`, `sparkle_short`, `wood_tick` (≤150KB each).
-- User settings: enable/mute, volume, theme, optional custom upload.
+- User settings: enable/mute, volume, theme, optional custom upload (single or multi-file playlist with randomized playback when using `custom_file`).
 - Performance: **<20 ms** input→audio onset (pre‑decoded buffers).
 - Reliability: playback path rebuilds stale/suspended WebAudio contexts when resume fails (notably mobile/WebKit PWA lifecycle interruptions).
 

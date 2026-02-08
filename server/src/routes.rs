@@ -195,6 +195,14 @@ const UI_THEMES: [&str; 3] = ["default", "dark", "light"];
 
 const BACKUP_SCHEMA_V1: &str = "tasksync-space-backup-v1";
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SoundPlaylistEntry {
+    id: Option<String>,
+    name: Option<String>,
+    data_url: String,
+}
+
 fn normalize_sound_theme(raw: Option<String>) -> Result<Option<String>, StatusCode> {
     let Some(value) = raw else {
         return Ok(None);
@@ -238,6 +246,40 @@ fn normalize_sound_data_url(raw: Option<String>) -> Result<Option<String>, Statu
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(Some(trimmed.to_string()))
+}
+
+fn normalize_custom_sound_files_json(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > 12_000_000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let parsed = serde_json::from_str::<Vec<SoundPlaylistEntry>>(trimmed)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    if parsed.is_empty() {
+        return Ok(None);
+    }
+    if parsed.len() > 8 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let mut normalized: Vec<SoundPlaylistEntry> = Vec::with_capacity(parsed.len());
+    for entry in parsed {
+        let data_url =
+            normalize_sound_data_url(Some(entry.data_url))?.ok_or(StatusCode::BAD_REQUEST)?;
+        let id = normalize_sound_file_name(entry.id)?;
+        let name = normalize_sound_file_name(entry.name)?;
+        normalized.push(SoundPlaylistEntry { id, name, data_url });
+    }
+    serde_json::to_string(&normalized).map(Some).map_err(|_| StatusCode::BAD_REQUEST)
+}
+
+fn parse_custom_sound_files_json(raw: &str) -> Option<Vec<SoundPlaylistEntry>> {
+    serde_json::from_str::<Vec<SoundPlaylistEntry>>(raw).ok()
 }
 
 fn normalize_profile_attachments(raw: Option<String>) -> Result<Option<String>, StatusCode> {
@@ -369,6 +411,7 @@ struct SoundSettingsResponse {
     custom_sound_file_id: Option<String>,
     custom_sound_file_name: Option<String>,
     custom_sound_data_url: Option<String>,
+    custom_sound_files_json: Option<String>,
     profile_attachments_json: Option<String>,
 }
 
@@ -388,6 +431,7 @@ struct UpdateSoundSettingsBody {
     custom_sound_file_id: Option<String>,
     custom_sound_file_name: Option<String>,
     custom_sound_data_url: Option<String>,
+    custom_sound_files_json: Option<String>,
     profile_attachments_json: Option<String>,
     clear_custom_sound: Option<bool>,
 }
@@ -418,6 +462,7 @@ struct BackupUserRow {
     custom_sound_file_id: Option<String>,
     custom_sound_file_name: Option<String>,
     custom_sound_data_url: Option<String>,
+    custom_sound_files_json: Option<String>,
     profile_attachments: Option<String>,
     ui_theme: Option<String>,
     ui_sidebar_panels: Option<String>,
@@ -652,7 +697,7 @@ async fn load_sound_settings_for_user(
     user_id: &str,
 ) -> Result<SoundSettingsResponse, StatusCode> {
     sqlx::query_as::<_, SoundSettingsResponse>(
-        "select coalesce(sound_enabled, 1) as enabled, coalesce(sound_volume, 60) as volume, coalesce(sound_theme, 'chime_soft') as theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, profile_attachments as profile_attachments_json from user where id = ?1 limit 1",
+        "select coalesce(sound_enabled, 1) as enabled, coalesce(sound_volume, 60) as volume, coalesce(sound_theme, 'chime_soft') as theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments as profile_attachments_json from user where id = ?1 limit 1",
     )
     .bind(user_id)
     .fetch_optional(pool)
@@ -679,6 +724,11 @@ async fn auth_update_sound(
     let current = load_sound_settings_for_user(&state.pool, &ctx.user_id).await?;
 
     let clear_custom_sound = body.clear_custom_sound.unwrap_or(false);
+    let has_custom_sound_file_id = body.custom_sound_file_id.is_some();
+    let has_custom_sound_file_name = body.custom_sound_file_name.is_some();
+    let has_custom_sound_data_url = body.custom_sound_data_url.is_some();
+    let has_custom_sound_files_json = body.custom_sound_files_json.is_some();
+    let has_profile_attachments_json = body.profile_attachments_json.is_some();
     let next_enabled = body.enabled.unwrap_or(current.enabled);
     let next_volume =
         body.volume.map(|value| value.clamp(0, 100)).unwrap_or(current.volume.clamp(0, 100));
@@ -686,33 +736,68 @@ async fn auth_update_sound(
 
     let next_custom_sound_file_id = if clear_custom_sound {
         None
-    } else if body.custom_sound_file_id.is_some() {
+    } else if has_custom_sound_file_id {
         normalize_sound_file_name(body.custom_sound_file_id)?
     } else {
         current.custom_sound_file_id
     };
     let next_custom_sound_file_name = if clear_custom_sound {
         None
-    } else if body.custom_sound_file_name.is_some() {
+    } else if has_custom_sound_file_name {
         normalize_sound_file_name(body.custom_sound_file_name)?
     } else {
         current.custom_sound_file_name
     };
     let next_custom_sound_data_url = if clear_custom_sound {
         None
-    } else if body.custom_sound_data_url.is_some() {
+    } else if has_custom_sound_data_url {
         normalize_sound_data_url(body.custom_sound_data_url)?
     } else {
         current.custom_sound_data_url
     };
-    let next_profile_attachments_json = if body.profile_attachments_json.is_some() {
+    let next_custom_sound_files_json = if clear_custom_sound {
+        None
+    } else if has_custom_sound_files_json {
+        normalize_custom_sound_files_json(body.custom_sound_files_json)?
+    } else {
+        current.custom_sound_files_json
+    };
+    let first_playlist_sound = next_custom_sound_files_json
+        .as_ref()
+        .and_then(|raw| parse_custom_sound_files_json(raw))
+        .and_then(|entries| entries.into_iter().next());
+    let next_custom_sound_data_url = if has_custom_sound_data_url || clear_custom_sound {
+        next_custom_sound_data_url
+    } else {
+        first_playlist_sound
+            .as_ref()
+            .map(|entry| entry.data_url.clone())
+            .or(next_custom_sound_data_url)
+    };
+    let next_custom_sound_file_name = if has_custom_sound_file_name || clear_custom_sound {
+        next_custom_sound_file_name
+    } else {
+        first_playlist_sound
+            .as_ref()
+            .and_then(|entry| entry.name.clone())
+            .or(next_custom_sound_file_name)
+    };
+    let next_custom_sound_file_id = if has_custom_sound_file_id || clear_custom_sound {
+        next_custom_sound_file_id
+    } else {
+        first_playlist_sound
+            .as_ref()
+            .and_then(|entry| entry.id.clone())
+            .or(next_custom_sound_file_id)
+    };
+    let next_profile_attachments_json = if has_profile_attachments_json {
         normalize_profile_attachments(body.profile_attachments_json)?
     } else {
         current.profile_attachments_json
     };
 
     sqlx::query(
-        "update user set sound_enabled = ?1, sound_volume = ?2, sound_theme = ?3, custom_sound_file_id = ?4, custom_sound_file_name = ?5, custom_sound_data_url = ?6, profile_attachments = ?7 where id = ?8",
+        "update user set sound_enabled = ?1, sound_volume = ?2, sound_theme = ?3, custom_sound_file_id = ?4, custom_sound_file_name = ?5, custom_sound_data_url = ?6, custom_sound_files_json = ?7, profile_attachments = ?8 where id = ?9",
     )
     .bind(next_enabled)
     .bind(next_volume)
@@ -720,6 +805,7 @@ async fn auth_update_sound(
     .bind(&next_custom_sound_file_id)
     .bind(&next_custom_sound_file_name)
     .bind(&next_custom_sound_data_url)
+    .bind(&next_custom_sound_files_json)
     .bind(&next_profile_attachments_json)
     .bind(&ctx.user_id)
     .execute(&state.pool)
@@ -793,7 +879,7 @@ async fn load_space_backup(
             .ok_or(StatusCode::NOT_FOUND)?;
 
     let users = sqlx::query_as::<_, BackupUserRow>(
-        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
+        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.custom_sound_files_json, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -888,6 +974,7 @@ async fn auth_restore_backup(
             || user.sound_volume < 0
             || user.sound_volume > 100
             || !SOUND_THEMES.contains(&user.sound_theme.as_str())
+            || normalize_custom_sound_files_json(user.custom_sound_files_json.clone()).is_err()
             || normalize_ui_theme(user.ui_theme.clone()).is_err()
             || normalize_ui_sidebar_panels(user.ui_sidebar_panels.clone()).is_err()
         {
@@ -944,8 +1031,11 @@ async fn auth_restore_backup(
             .unwrap_or_else(|| "default".to_string());
         let next_ui_sidebar_panels = normalize_ui_sidebar_panels(user.ui_sidebar_panels.clone())
             .map_err(|_| StatusCode::BAD_REQUEST)?;
+        let next_custom_sound_files_json =
+            normalize_custom_sound_files_json(user.custom_sound_files_json.clone())
+                .map_err(|_| StatusCode::BAD_REQUEST)?;
         sqlx::query(
-            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, profile_attachments, ui_theme, ui_sidebar_panels) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels",
+            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments, ui_theme, ui_sidebar_panels) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, custom_sound_files_json = excluded.custom_sound_files_json, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels",
         )
         .bind(&user.id)
         .bind(&user.email)
@@ -958,6 +1048,7 @@ async fn auth_restore_backup(
         .bind(&user.custom_sound_file_id)
         .bind(&user.custom_sound_file_name)
         .bind(&user.custom_sound_data_url)
+        .bind(&next_custom_sound_files_json)
         .bind(&user.profile_attachments)
         .bind(&next_ui_theme)
         .bind(&next_ui_sidebar_panels)
@@ -2229,6 +2320,10 @@ mod tests {
                 custom_sound_file_id: Some("snd-1".to_string()),
                 custom_sound_file_name: Some("ding.wav".to_string()),
                 custom_sound_data_url: Some("data:audio/wav;base64,AAAA".to_string()),
+                custom_sound_files_json: Some(
+                    "[{\"id\":\"snd-1\",\"name\":\"ding.wav\",\"dataUrl\":\"data:audio/wav;base64,AAAA\"}]"
+                        .to_string(),
+                ),
                 profile_attachments_json: Some("[{\"id\":\"att-1\"}]".to_string()),
                 clear_custom_sound: Some(false),
             }),
@@ -2242,6 +2337,10 @@ mod tests {
         assert_eq!(updated.theme, "wood_tick");
         assert_eq!(updated.custom_sound_file_name.as_deref(), Some("ding.wav"));
         assert_eq!(updated.custom_sound_data_url.as_deref(), Some("data:audio/wav;base64,AAAA"));
+        assert_eq!(
+            updated.custom_sound_files_json.as_deref(),
+            Some("[{\"id\":\"snd-1\",\"name\":\"ding.wav\",\"dataUrl\":\"data:audio/wav;base64,AAAA\"}]")
+        );
         assert_eq!(updated.profile_attachments_json.as_deref(), Some("[{\"id\":\"att-1\"}]"));
 
         let cleared = auth_update_sound(
@@ -2254,6 +2353,7 @@ mod tests {
                 custom_sound_file_id: None,
                 custom_sound_file_name: None,
                 custom_sound_data_url: None,
+                custom_sound_files_json: None,
                 profile_attachments_json: None,
                 clear_custom_sound: Some(true),
             }),
@@ -2265,6 +2365,7 @@ mod tests {
         assert_eq!(cleared.custom_sound_file_id, None);
         assert_eq!(cleared.custom_sound_file_name, None);
         assert_eq!(cleared.custom_sound_data_url, None);
+        assert_eq!(cleared.custom_sound_files_json, None);
         assert_eq!(cleared.profile_attachments_json.as_deref(), Some("[{\"id\":\"att-1\"}]"));
     }
 

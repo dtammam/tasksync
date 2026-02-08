@@ -110,27 +110,43 @@ const readAsText = (file) =>
 
 const uploadCustomSound = async (event) => {
 	const input = event.currentTarget;
-	const file = input?.files?.[0];
-	if (!file) return;
-	if (!/\.(mp3|wav)$/i.test(file.name)) {
-		soundError = 'Please upload an MP3 or WAV file.';
+	const files = Array.from(input?.files ?? []);
+	if (!files.length) return;
+	if (files.length > 8) {
+		soundError = 'Please upload up to 8 sounds at a time.';
 		soundMessage = '';
 		input.value = '';
 		return;
 	}
-	if (file.size > 2 * 1024 * 1024) {
-		soundError = 'Sound file is too large (max 2MB).';
-		soundMessage = '';
-		input.value = '';
-		return;
+	for (const file of files) {
+		if (!/\.(mp3|wav)$/i.test(file.name)) {
+			soundError = 'Please upload MP3 or WAV files only.';
+			soundMessage = '';
+			input.value = '';
+			return;
+		}
+		if (file.size > 2 * 1024 * 1024) {
+			soundError = 'Sound file is too large (max 2MB each).';
+			soundMessage = '';
+			input.value = '';
+			return;
+		}
 	}
 	soundBusy = true;
 	soundError = '';
 	soundMessage = '';
 	try {
-		const dataUrl = await readAsDataUrl(file);
-		soundSettings.setCustomSound(dataUrl, file.name);
-		soundMessage = `Custom sound loaded: ${file.name}`;
+		const payload = await Promise.all(
+			files.map(async (file) => ({
+				dataUrl: await readAsDataUrl(file),
+				fileName: file.name
+			}))
+		);
+		soundSettings.setCustomSounds(payload);
+		soundMessage =
+			payload.length === 1
+				? `Custom sound loaded: ${payload[0].fileName}`
+				: `${payload.length} custom sounds loaded. Playback will randomize.`;
 	} catch (err) {
 		soundError = err instanceof Error ? err.message : String(err);
 	} finally {
@@ -143,6 +159,24 @@ const clearCustomSound = () => {
 	soundSettings.clearCustomSound();
 	soundError = '';
 	soundMessage = 'Custom sound removed.';
+};
+
+const customSoundNames = (settings) => {
+	const raw = settings?.customSoundFilesJson;
+	if (typeof raw === 'string' && raw.trim()) {
+		try {
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed)) {
+				return parsed
+					.map((entry) => (entry && typeof entry === 'object' ? String(entry.name ?? '').trim() : ''))
+					.filter((name) => !!name)
+					.slice(0, 8);
+			}
+		} catch {
+			// Fall back to legacy single-file naming below.
+		}
+	}
+	return settings?.customSoundFileName ? [settings.customSoundFileName] : [];
 };
 
 const previewSound = async () => {
@@ -596,6 +630,11 @@ $: showTeam = !!$uiPreferences.sidebarPanels?.members;
 $: showSoundPanel = !!$uiPreferences.sidebarPanels?.sound;
 $: showBackupPanel = !!$uiPreferences.sidebarPanels?.backups;
 $: showAccountPanel = !!$uiPreferences.sidebarPanels?.account;
+$: loadedCustomSoundNames = customSoundNames($soundSettings);
+$: hasCustomSounds =
+	loadedCustomSoundNames.length > 0 ||
+	!!$soundSettings.customSoundDataUrl ||
+	!!$soundSettings.customSoundFilesJson;
 
 $: teamMembers = ($members ?? []).filter((member) => member.user_id !== $auth.user?.user_id);
 $: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
@@ -924,10 +963,11 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 					</select>
 				</label>
 				<label>
-					Custom sound (mp3/wav)
+					Custom sounds (mp3/wav)
 					<input
 						type="file"
 						accept=".mp3,.wav,audio/mpeg,audio/wav"
+						multiple
 						on:change={uploadCustomSound}
 						disabled={soundBusy}
 					/>
@@ -940,13 +980,16 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 						type="button"
 						class="ghost tiny"
 						on:click={clearCustomSound}
-						disabled={!$soundSettings.customSoundDataUrl}
+						disabled={!hasCustomSounds}
 					>
 						Clear custom
 					</button>
 				</div>
-				{#if $soundSettings.customSoundFileName}
-					<p class="muted-note">Loaded: {$soundSettings.customSoundFileName}</p>
+				{#if loadedCustomSoundNames.length}
+					<p class="muted-note">
+						Loaded:
+						{loadedCustomSoundNames.join(', ')}
+					</p>
 				{/if}
 				{#if soundMessage}
 					<p class="ok">{soundMessage}</p>
@@ -964,6 +1007,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 							max="100"
 							step="1"
 							value={$soundSettings.volume}
+							style={`--range-pct:${$soundSettings.volume}%`}
 							on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
 						/>
 						<span>{$soundSettings.volume}%</span>
@@ -1639,6 +1683,43 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		align-items: center;
 	}
 
+	.sound .volume input[type='range'] {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 100%;
+		height: 8px;
+		border-radius: 999px;
+		border: 1px solid #334155;
+		background: linear-gradient(
+			to right,
+			#60a5fa 0,
+			#60a5fa var(--range-pct, 0%),
+			#1f2937 var(--range-pct, 0%),
+			#1f2937 100%
+		);
+		padding: 0;
+	}
+
+	.sound .volume input[type='range']::-webkit-slider-thumb {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 15px;
+		height: 15px;
+		border-radius: 50%;
+		background: #f8fafc;
+		border: 1px solid #1d4ed8;
+		cursor: pointer;
+	}
+
+	.sound .volume input[type='range']::-moz-range-thumb {
+		width: 15px;
+		height: 15px;
+		border-radius: 50%;
+		background: #f8fafc;
+		border: 1px solid #1d4ed8;
+		cursor: pointer;
+	}
+
 	.sound .volume span {
 		color: #94a3b8;
 		font-size: 12px;
@@ -1729,6 +1810,20 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		border-color: #c4d3ee;
 	}
 
+	:global(html[data-ui-theme='light']) .sidebar .team .create-member,
+	:global(html[data-ui-theme='light']) .sidebar .member-row,
+	:global(html[data-ui-theme='light']) .sidebar .grant-row {
+		background: #ffffff;
+		border-color: #c4d3ee;
+		color: #1e293b;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .grant-row.on {
+		border-color: #2563eb;
+		background: rgba(37, 99, 235, 0.16);
+		color: #0f172a;
+	}
+
 	:global(html[data-ui-theme='light']) .sidebar input,
 	:global(html[data-ui-theme='light']) .sidebar select,
 	:global(html[data-ui-theme='light']) .sidebar .pin,
@@ -1743,8 +1838,31 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	:global(html[data-ui-theme='light']) .sidebar .muted-note,
 	:global(html[data-ui-theme='light']) .sidebar .count,
 	:global(html[data-ui-theme='light']) .sidebar .account .who span,
-	:global(html[data-ui-theme='light']) .sidebar .team-helper {
+	:global(html[data-ui-theme='light']) .sidebar .team-helper,
+	:global(html[data-ui-theme='light']) .sidebar .grant-state,
+	:global(html[data-ui-theme='light']) .sidebar .member-head span {
 		color: #475569;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range'] {
+		border-color: #94a3b8;
+		background: linear-gradient(
+			to right,
+			#2563eb 0,
+			#2563eb var(--range-pct, 0%),
+			#cbd5e1 var(--range-pct, 0%),
+			#cbd5e1 100%
+		);
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range']::-webkit-slider-thumb {
+		background: #ffffff;
+		border-color: #2563eb;
+	}
+
+	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range']::-moz-range-thumb {
+		background: #ffffff;
+		border-color: #2563eb;
 	}
 
 	:global(html[data-ui-theme='dark']) .sidebar {
