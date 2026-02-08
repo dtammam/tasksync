@@ -26,6 +26,7 @@
 - Respect `.editorconfig`, ESLint/Prettier, rustfmt; no unchecked formatting diffs.
 
 ## Git & Hooks
+- Before any implementation or documentation change, verify the current branch is not `main`. If it is `main`, create and switch to an appropriately named branch first (for example: `feat/<scope>`, `fix/<scope>`, `chore/<scope>`, or `docs/<scope>`).
 - `core.hooksPath=hooks` is set. Hooks must pass before committing/pushing:
   - `pre-commit`: web lint/check/test; server fmt + clippy.
   - `pre-push`: web unit + Playwright smoke (skip only with `SKIP_PLAYWRIGHT=1` and note why); server tests.
