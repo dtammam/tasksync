@@ -144,6 +144,7 @@ create table if not exists change (
 - Include: overdue, due today, scheduled today, and instances from recurring templates.
 - Score: priority weight + overdue bucket + pins; order with fractional keys.
 - Rollover behavior: overdue pending items are surfaced in a dedicated **Missed** bucket with direct resolve actions (skip next recurrence, mark done, delete).
+- Recurring completion behavior: when a recurring task is completed, it can appear in **Completed** for the current day while the next due instance is already materialized.
 
 ## Completion Sound
 - Built‑ins: `chime_soft`, `click_pop`, `sparkle_short`, `wood_tick` (≤150KB each).

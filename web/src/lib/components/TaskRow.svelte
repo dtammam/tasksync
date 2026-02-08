@@ -146,7 +146,7 @@ const handleToggleStatus = () => {
 		statusAck = false;
 		toggleTimer = null;
 		tasks.toggle(task.id);
-	}, 180);
+	}, 500);
 };
 
 onDestroy(() => {

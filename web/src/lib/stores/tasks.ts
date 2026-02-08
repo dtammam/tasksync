@@ -181,15 +181,15 @@ export const tasks = {
 							if (task.recurrence_id && task.status !== 'done') {
 								shouldPlayCompletion = true;
 								const next = nextDue(task.due_date, task.recurrence_id);
-							return {
-								...task,
-								status: 'pending',
-								due_date: next,
-								occurrences_completed: (task.occurrences_completed ?? 0) + 1,
-								completed_ts: undefined,
-								updated_ts: now,
-								dirty: true
-							};
+								return {
+									...task,
+									status: 'pending',
+									due_date: next,
+									occurrences_completed: (task.occurrences_completed ?? 0) + 1,
+									completed_ts: now,
+									updated_ts: now,
+									dirty: true
+								};
 							}
 							const nextStatus = task.status === 'done' ? 'pending' : 'done';
 							if (nextStatus === 'done') {
@@ -439,6 +439,8 @@ const inMyDay = (task: Task) => {
 };
 
 const isMissedTask = (task: Task) => task.status === 'pending' && isBeforeToday(task.due_date);
+const wasRecurringCompletedToday = (task: Task) =>
+	!!task.recurrence_id && task.status === 'pending' && isTodayTs(task.completed_ts);
 
 const wasCompletedToday = (task: Task) => {
 	if (task.status !== 'done') return false;
@@ -483,8 +485,7 @@ export const myDayCompleted = derived(
 		return $tasks.filter(
 			(task) =>
 				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
-				inMyDay(task) &&
-				wasCompletedToday(task)
+				((inMyDay(task) && wasCompletedToday(task)) || wasRecurringCompletedToday(task))
 		);
 	}
 );

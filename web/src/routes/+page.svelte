@@ -157,10 +157,10 @@
 	</div>
 </header>
 
-<section class="block missed-block">
-	<div class="section-title">Missed ({sortedMissed.length})</div>
-	<div class="stack" data-testid="missed-section">
-		{#if sortedMissed.length}
+{#if sortedMissed.length}
+	<section class="block missed-block">
+		<div class="section-title">Missed ({sortedMissed.length})</div>
+		<div class="stack" data-testid="missed-section">
 			{#each sortedMissed as task (task.id)}
 				<div class="missed-item">
 					<TaskRow {task} on:openDetail={openDetail} />
@@ -192,11 +192,9 @@
 			{#if missedActionError}
 				<p class="missed-error">{missedActionError}</p>
 			{/if}
-		{:else}
-			<p class="empty subtle">No missed tasks from previous days.</p>
-		{/if}
-	</div>
-</section>
+		</div>
+	</section>
+{/if}
 
 <section class="block">
 	<div class="section-title">Planned</div>
