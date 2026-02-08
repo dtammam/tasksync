@@ -18,6 +18,7 @@ import type {
 	SyncPushResponse
 } from '$shared/types/sync';
 import type { SoundSettings } from '$shared/types/settings';
+import type { SpaceBackupBundle, SpaceBackupRestoreResponse } from '$shared/types/backup';
 
 const defaultApiUrl = () => {
 	if (typeof window === 'undefined') return 'http://localhost:3000';
@@ -92,6 +93,12 @@ export const api = {
 			clearCustomSound?: boolean;
 		}
 	) => fetchJson<SoundSettings>('/auth/sound', { method: 'PATCH', body: JSON.stringify(body) }),
+	getSpaceBackup: () => fetchJson<SpaceBackupBundle>('/auth/backup'),
+	restoreSpaceBackup: (body: SpaceBackupBundle) =>
+		fetchJson<SpaceBackupRestoreResponse>('/auth/backup', {
+			method: 'POST',
+			body: JSON.stringify(body)
+		}),
 	changePassword: (body: AuthChangePasswordRequest) =>
 		fetchJson<void>('/auth/password', { method: 'PATCH', body: JSON.stringify(body) }),
 	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),

@@ -76,6 +76,7 @@ package "tasksync Server" {
 - **Files:** `data/obj/xx/<sha256>` content‑addressed; MIME allow‑list; 10 MB limit.
 - **Auth:** JWT (HS256) per user; device `client_id` per installation; all endpoints behind TLS.
 - **User media/settings:** `/auth/sound` persists per-user sound + profile media metadata server-side for cross-device consistency.
+- **Backup/restore:** admin-only `/auth/backup` export/import provides versioned space snapshots (space, users, memberships, lists, grants, tasks) for disaster recovery.
 
 ## Data Model (abridged)
 ```
@@ -156,6 +157,11 @@ create table if not exists change (
 - Interaction paint: **<50 ms**; open task detail **<80 ms**.
 - Search: **<100 ms** for 10k local tasks.
 - Sync ack: **<500 ms** WAN typical (background).
+
+## Backup and Restore
+- Backup format: versioned JSON snapshot (`tasksync-space-backup-v1`) with explicit schema + export timestamp.
+- Scope: full space data (including memberships and per-user sound/profile media metadata), intended for admin-controlled operational recovery.
+- Restore semantics: replace space-scoped list/task/grant/membership data from snapshot while preserving referential integrity through transactional apply.
 
 ## Roadmap
 - **MVP**: PWA shell, local stores + IndexedDB/OPFS, CRUD, recurrence, My Day, single‑binary server, sync, role model (admin/contributor create‑only), completion sounds.

@@ -9,6 +9,7 @@ import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
 import { api } from '$lib/api/client';
 import { playCompletion } from '$lib/sound/sound';
+import { BACKUP_SCHEMA_V1 } from '$shared/types/backup';
 
 export let navPinned = false;
 
@@ -62,6 +63,9 @@ let adminMode = false;
 let soundBusy = false;
 let soundError = '';
 let soundMessage = '';
+let backupBusy = false;
+let backupError = '';
+let backupMessage = '';
 
 const iconFromIdentity = (display, email) => {
 	const source = (display ?? email ?? '').trim();
@@ -85,6 +89,14 @@ const readAsDataUrl = (file) =>
 		reader.onload = () => resolve(String(reader.result ?? ''));
 		reader.onerror = () => reject(new Error('Could not read sound file.'));
 		reader.readAsDataURL(file);
+	});
+
+const readAsText = (file) =>
+	new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result ?? ''));
+		reader.onerror = () => reject(new Error('Could not read backup file.'));
+		reader.readAsText(file);
 	});
 
 const uploadCustomSound = async (event) => {
@@ -126,6 +138,79 @@ const clearCustomSound = () => {
 
 const previewSound = async () => {
 	await playCompletion(soundSettings.get());
+};
+
+const backupFileName = (spaceId, exportedAtTs) => {
+	const date = new Date(exportedAtTs * 1000);
+	const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(
+		date.getDate()
+	).padStart(2, '0')}-${String(date.getHours()).padStart(2, '0')}${String(
+		date.getMinutes()
+	).padStart(2, '0')}${String(date.getSeconds()).padStart(2, '0')}`;
+	return `tasksync-backup-${spaceId}-${stamp}.json`;
+};
+
+const downloadBackup = async () => {
+	if (!adminMode || $auth.status !== 'authenticated') return;
+	backupBusy = true;
+	backupError = '';
+	backupMessage = '';
+	try {
+		const backup = await api.getSpaceBackup();
+		const blob = new Blob([JSON.stringify(backup, null, 2)], {
+			type: 'application/json'
+		});
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+		anchor.href = url;
+		anchor.download = backupFileName(backup.space.id, backup.exported_at_ts);
+		document.body.append(anchor);
+		anchor.click();
+		anchor.remove();
+		URL.revokeObjectURL(url);
+		backupMessage = `Backup downloaded (${backup.lists.length} lists, ${backup.tasks.length} tasks).`;
+	} catch (err) {
+		backupError = err instanceof Error ? err.message : String(err);
+	} finally {
+		backupBusy = false;
+	}
+};
+
+const restoreBackup = async (event) => {
+	if (!adminMode || $auth.status !== 'authenticated') return;
+	const input = event.currentTarget;
+	const file = input?.files?.[0];
+	if (!file) return;
+
+	backupBusy = true;
+	backupError = '';
+	backupMessage = '';
+	try {
+		const raw = await readAsText(file);
+		const parsed = JSON.parse(raw);
+		if (!parsed || parsed.schema !== BACKUP_SCHEMA_V1) {
+			throw new Error('Invalid backup file schema.');
+		}
+		if (!parsed.space?.id || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.lists)) {
+			throw new Error('Backup file is missing required fields.');
+		}
+		const confirmRestore = confirm(
+			`Restore backup for space "${parsed.space.id}"? This will replace current space data.`
+		);
+		if (!confirmRestore) {
+			return;
+		}
+		const result = await api.restoreSpaceBackup(parsed);
+		backupMessage = `Restore complete: ${result.lists} lists, ${result.tasks} tasks. Reloading…`;
+		if (typeof window !== 'undefined') {
+			window.setTimeout(() => window.location.reload(), 300);
+		}
+	} catch (err) {
+		backupError = err instanceof Error ? err.message : String(err);
+	} finally {
+		backupBusy = false;
+		input.value = '';
+	}
 };
 
 const resetDrafts = () => {
@@ -844,6 +929,33 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 			</label>
 		</div>
 
+		{#if adminMode && $auth.status === 'authenticated'}
+			<div class="section-label muted">Backup</div>
+			<div class="card backup" data-testid="backup-panel">
+				<p class="muted-note">Download a full JSON snapshot of this space, then restore it if needed.</p>
+				<div class="backup-actions">
+					<button type="button" class="ghost" on:click={downloadBackup} disabled={backupBusy}>
+						{backupBusy ? 'Working…' : 'Download backup'}
+					</button>
+					<label class="file-btn">
+						<span>{backupBusy ? 'Working…' : 'Restore backup JSON'}</span>
+						<input
+							type="file"
+							accept=".json,application/json"
+							on:change={restoreBackup}
+							disabled={backupBusy}
+						/>
+					</label>
+				</div>
+				{#if backupMessage}
+					<p class="ok">{backupMessage}</p>
+				{/if}
+				{#if backupError}
+					<p class="error">{backupError}</p>
+				{/if}
+			</div>
+		{/if}
+
 		<div class="section-label muted">Account</div>
 		<div class="card account" data-testid="auth-panel">
 			{#if $auth.status === 'loading'}
@@ -1467,6 +1579,37 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		font-size: 12px;
 		min-width: 38px;
 		text-align: right;
+	}
+
+	.backup .backup-actions {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 8px;
+	}
+
+	.backup .file-btn {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: #0b1221;
+		border: 1px solid #27344f;
+		color: #cbd5e1;
+		padding: 8px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+		font-size: 13px;
+	}
+
+	.backup .file-btn input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		cursor: pointer;
+	}
+
+	.backup .file-btn input:disabled {
+		cursor: not-allowed;
 	}
 
 	.muted-note {

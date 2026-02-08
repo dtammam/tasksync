@@ -160,6 +160,7 @@ pub fn auth_routes(pool: &SqlitePool) -> Router {
         .route("/login", post(login))
         .route("/me", get(auth_me).patch(auth_update_me))
         .route("/sound", get(auth_get_sound).patch(auth_update_sound))
+        .route("/backup", get(auth_export_backup).post(auth_restore_backup))
         .route("/password", patch(auth_change_password))
         .route("/members", get(auth_members).post(auth_create_member))
         .route("/members/:user_id", delete(auth_delete_member))
@@ -188,6 +189,8 @@ const SOUND_THEMES: [&str; 8] = [
     "pulse_soft",
     "custom_file",
 ];
+
+const BACKUP_SCHEMA_V1: &str = "tasksync-space-backup-v1";
 
 fn normalize_sound_theme(raw: Option<String>) -> Result<Option<String>, StatusCode> {
     let Some(value) = raw else {
@@ -337,6 +340,99 @@ struct UpdateSoundSettingsBody {
     custom_sound_data_url: Option<String>,
     profile_attachments_json: Option<String>,
     clear_custom_sound: Option<bool>,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+struct BackupSpaceRow {
+    id: String,
+    name: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+struct BackupUserRow {
+    id: String,
+    email: String,
+    display: String,
+    avatar_icon: Option<String>,
+    password_hash: Option<String>,
+    sound_enabled: bool,
+    sound_volume: i64,
+    sound_theme: String,
+    custom_sound_file_id: Option<String>,
+    custom_sound_file_name: Option<String>,
+    custom_sound_data_url: Option<String>,
+    profile_attachments: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+struct BackupMembershipRow {
+    id: String,
+    space_id: String,
+    user_id: String,
+    role: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+struct BackupListRow {
+    id: String,
+    space_id: String,
+    name: String,
+    icon: Option<String>,
+    color: Option<String>,
+    list_order: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+struct BackupListGrantRow {
+    id: String,
+    space_id: String,
+    list_id: String,
+    user_id: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+struct BackupTaskRow {
+    id: String,
+    space_id: String,
+    title: String,
+    status: String,
+    list_id: String,
+    my_day: i64,
+    task_order: String,
+    updated_ts: i64,
+    created_ts: i64,
+    url: Option<String>,
+    recur_rule: Option<String>,
+    attachments: Option<String>,
+    due_date: Option<String>,
+    occurrences_completed: i64,
+    completed_ts: Option<i64>,
+    notes: Option<String>,
+    assignee_user_id: Option<String>,
+    created_by_user_id: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct SpaceBackupBundle {
+    schema: String,
+    exported_at_ts: i64,
+    space: BackupSpaceRow,
+    users: Vec<BackupUserRow>,
+    memberships: Vec<BackupMembershipRow>,
+    lists: Vec<BackupListRow>,
+    list_grants: Vec<BackupListGrantRow>,
+    tasks: Vec<BackupTaskRow>,
+}
+
+#[derive(Serialize)]
+struct RestoreBackupResponse {
+    restored_at_ts: i64,
+    space_id: String,
+    users: i64,
+    memberships: i64,
+    lists: i64,
+    list_grants: i64,
+    tasks: i64,
 }
 
 #[derive(Deserialize)]
@@ -573,6 +669,283 @@ async fn auth_update_sound(
 
     let updated = load_sound_settings_for_user(&state.pool, &ctx.user_id).await?;
     Ok(Json(updated))
+}
+
+async fn load_space_backup(
+    pool: &SqlitePool,
+    space_id: &str,
+) -> Result<SpaceBackupBundle, StatusCode> {
+    let space =
+        sqlx::query_as::<_, BackupSpaceRow>("select id, name from space where id = ?1 limit 1")
+            .bind(space_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::NOT_FOUND)?;
+
+    let users = sqlx::query_as::<_, BackupUserRow>(
+        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.profile_attachments from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
+    )
+    .bind(space_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let memberships = sqlx::query_as::<_, BackupMembershipRow>(
+        "select id, space_id, user_id, role from membership where space_id = ?1 order by id asc",
+    )
+    .bind(space_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let lists = sqlx::query_as::<_, BackupListRow>(
+        "select id, space_id, name, icon, color, list_order from list where space_id = ?1 order by list_order asc",
+    )
+    .bind(space_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let list_grants = sqlx::query_as::<_, BackupListGrantRow>(
+        "select id, space_id, list_id, user_id from list_grant where space_id = ?1 order by id asc",
+    )
+    .bind(space_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let tasks = sqlx::query_as::<_, BackupTaskRow>(
+        "select id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+    )
+    .bind(space_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(SpaceBackupBundle {
+        schema: BACKUP_SCHEMA_V1.to_string(),
+        exported_at_ts: unix_now_secs() as i64,
+        space,
+        users,
+        memberships,
+        lists,
+        list_grants,
+        tasks,
+    })
+}
+
+async fn auth_export_backup(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<SpaceBackupBundle>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    if ctx.role != Role::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let backup = load_space_backup(&state.pool, &ctx.space_id).await?;
+    Ok(Json(backup))
+}
+
+async fn auth_restore_backup(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<SpaceBackupBundle>,
+) -> Result<Json<RestoreBackupResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    if ctx.role != Role::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if body.schema != BACKUP_SCHEMA_V1 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if body.space.id.trim().is_empty() || body.space.id != ctx.space_id {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let has_admin_actor = body.memberships.iter().any(|membership| {
+        membership.space_id == ctx.space_id
+            && membership.user_id == ctx.user_id
+            && membership.role == "admin"
+    });
+    if !has_admin_actor {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    for user in &body.users {
+        if user.id.trim().is_empty()
+            || user.email.trim().is_empty()
+            || user.display.trim().is_empty()
+            || user.sound_volume < 0
+            || user.sound_volume > 100
+            || !SOUND_THEMES.contains(&user.sound_theme.as_str())
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    for membership in &body.memberships {
+        if membership.space_id != ctx.space_id
+            || membership.user_id.trim().is_empty()
+            || membership.id.trim().is_empty()
+            || !(membership.role == "admin" || membership.role == "contributor")
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    for list in &body.lists {
+        if list.space_id != ctx.space_id || list.id.trim().is_empty() || list.name.trim().is_empty()
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    for grant in &body.list_grants {
+        if grant.space_id != ctx.space_id
+            || grant.id.trim().is_empty()
+            || grant.list_id.trim().is_empty()
+            || grant.user_id.trim().is_empty()
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    for task in &body.tasks {
+        if task.space_id != ctx.space_id
+            || task.id.trim().is_empty()
+            || task.list_id.trim().is_empty()
+            || task.title.trim().is_empty()
+            || !is_valid_task_status(&task.status)
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    let mut tx = state.pool.begin().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    sqlx::query("insert into space (id, name) values (?1, ?2) on conflict(id) do update set name = excluded.name")
+        .bind(&body.space.id)
+        .bind(&body.space.name)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    for user in &body.users {
+        sqlx::query(
+            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, profile_attachments) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, profile_attachments = excluded.profile_attachments",
+        )
+        .bind(&user.id)
+        .bind(&user.email)
+        .bind(&user.display)
+        .bind(&user.avatar_icon)
+        .bind(&user.password_hash)
+        .bind(user.sound_enabled)
+        .bind(user.sound_volume)
+        .bind(&user.sound_theme)
+        .bind(&user.custom_sound_file_id)
+        .bind(&user.custom_sound_file_name)
+        .bind(&user.custom_sound_data_url)
+        .bind(&user.profile_attachments)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    sqlx::query("delete from task where space_id = ?1")
+        .bind(&ctx.space_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query("delete from list_grant where space_id = ?1")
+        .bind(&ctx.space_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query("delete from list where space_id = ?1")
+        .bind(&ctx.space_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query("delete from membership where space_id = ?1")
+        .bind(&ctx.space_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    for membership in &body.memberships {
+        sqlx::query("insert into membership (id, space_id, user_id, role) values (?1, ?2, ?3, ?4)")
+            .bind(&membership.id)
+            .bind(&membership.space_id)
+            .bind(&membership.user_id)
+            .bind(&membership.role)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    for list in &body.lists {
+        sqlx::query(
+            "insert into list (id, space_id, name, icon, color, list_order) values (?1, ?2, ?3, ?4, ?5, ?6)",
+        )
+        .bind(&list.id)
+        .bind(&list.space_id)
+        .bind(&list.name)
+        .bind(&list.icon)
+        .bind(&list.color)
+        .bind(&list.list_order)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    for grant in &body.list_grants {
+        sqlx::query(
+            "insert into list_grant (id, space_id, list_id, user_id) values (?1, ?2, ?3, ?4)",
+        )
+        .bind(&grant.id)
+        .bind(&grant.space_id)
+        .bind(&grant.list_id)
+        .bind(&grant.user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    for task in &body.tasks {
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+        )
+        .bind(&task.id)
+        .bind(&task.space_id)
+        .bind(&task.title)
+        .bind(&task.status)
+        .bind(&task.list_id)
+        .bind(task.my_day)
+        .bind(&task.task_order)
+        .bind(task.updated_ts)
+        .bind(task.created_ts)
+        .bind(&task.url)
+        .bind(&task.recur_rule)
+        .bind(&task.attachments)
+        .bind(&task.due_date)
+        .bind(task.occurrences_completed)
+        .bind(task.completed_ts)
+        .bind(&task.notes)
+        .bind(&task.assignee_user_id)
+        .bind(&task.created_by_user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    tx.commit().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(RestoreBackupResponse {
+        restored_at_ts: unix_now_secs() as i64,
+        space_id: ctx.space_id,
+        users: body.users.len() as i64,
+        memberships: body.memberships.len() as i64,
+        lists: body.lists.len() as i64,
+        list_grants: body.list_grants.len() as i64,
+        tasks: body.tasks.len() as i64,
+    }))
 }
 
 async fn auth_change_password(
@@ -1775,6 +2148,94 @@ mod tests {
         assert_eq!(cleared.custom_sound_file_name, None);
         assert_eq!(cleared.custom_sound_data_url, None);
         assert_eq!(cleared.profile_attachments_json.as_deref(), Some("[{\"id\":\"att-1\"}]"));
+    }
+
+    #[tokio::test]
+    async fn admin_can_export_space_backup_snapshot() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, created_by_user_id, assignee_user_id) values ('t-backup', 's1', 'Backup seed task', 'pending', 'goal-management', 0, 'a', 1, 1, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert seed task");
+
+        let backup =
+            auth_export_backup(State(state), headers).await.expect("export backup should work").0;
+
+        assert_eq!(backup.schema, BACKUP_SCHEMA_V1);
+        assert_eq!(backup.space.id, "s1");
+        assert!(backup.users.iter().any(|user| user.id == "u-admin"));
+        assert!(backup.memberships.iter().any(|membership| membership.user_id == "u-admin"));
+        assert!(backup.lists.iter().any(|list| list.id == "goal-management"));
+        assert!(backup.tasks.iter().any(|task| task.id == "t-backup"));
+    }
+
+    #[tokio::test]
+    async fn admin_can_restore_space_backup_snapshot() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, created_by_user_id, assignee_user_id) values ('t-restore', 's1', 'Restore seed task', 'pending', 'goal-management', 0, 'a', 1, 1, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert seed task");
+
+        let backup = auth_export_backup(State(state.clone()), headers.clone())
+            .await
+            .expect("export backup should work")
+            .0;
+
+        sqlx::query("update space set name = 'Broken' where id = 's1'")
+            .execute(&pool)
+            .await
+            .expect("mutate space");
+        sqlx::query("delete from task where space_id = 's1'")
+            .execute(&pool)
+            .await
+            .expect("clear tasks");
+        sqlx::query("delete from list_grant where space_id = 's1'")
+            .execute(&pool)
+            .await
+            .expect("clear grants");
+        sqlx::query("delete from list where id = 'goal-management' and space_id = 's1'")
+            .execute(&pool)
+            .await
+            .expect("remove managed list");
+
+        let restored = auth_restore_backup(State(state), headers, Json(backup))
+            .await
+            .expect("restore backup should work")
+            .0;
+
+        assert_eq!(restored.space_id, "s1");
+        assert!(restored.tasks >= 1);
+        assert!(restored.lists >= 1);
+
+        let space_name: Option<String> =
+            sqlx::query_scalar("select name from space where id = 's1' limit 1")
+                .fetch_optional(&pool)
+                .await
+                .expect("load space name");
+        assert_eq!(space_name.as_deref(), Some("Default"));
+
+        let restored_task_title: Option<String> = sqlx::query_scalar(
+            "select title from task where id = 't-restore' and space_id = 's1' limit 1",
+        )
+        .fetch_optional(&pool)
+        .await
+        .expect("load restored task");
+        assert_eq!(restored_task_title.as_deref(), Some("Restore seed task"));
     }
 
     #[tokio::test]
