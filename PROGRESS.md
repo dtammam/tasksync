@@ -1,80 +1,84 @@
-- 2026-31-01 19:13 - Established the shared web/server/types foundation so the product could evolve as a single local-first system instead of disconnected prototypes.
-- 2026-31-01 19:13 - Audited dependencies and environment readiness early to reduce avoidable security and setup risk before feature work.
-- 2026-31-01 19:14 - Enabled the Rust toolchain and validated server quality gates so backend work could move forward with confidence.
-- 2026-31-01 19:19 - Added CI coverage across web and server to protect speed and reliability as the codebase grows.
-- 2026-31-01 19:25 - Cleaned repository noise so contributors can focus on meaningful changes and test signals.
-- 2026-31-01 19:29 - Introduced commit/push guardrails to catch regressions before they reach shared branches.
-- 2026-31-01 19:33 - Added governance and security baseline docs so the project can scale beyond solo development safely.
-- 2026-31-01 19:35 - Clarified AI assistant operating rules to keep implementation consistent with product principles.
-- 2026-31-01 19:39 - Enforced a test-first expectation for new modules to prevent silent regressions as scope expands.
-- 2026-31-01 20:34 - Delivered the first usable My Day + List experience, proving the core workflow feels fast and coherent.
-- 2026-31-01 23:22 - Made task/list state durable across reloads and offline periods, reinforcing local-first behavior.
-- 2026-31-01 23:50 - Documented reliable run commands so daily development and troubleshooting are faster.
-- 2026-31-01 23:55 - Brought the server to a functional baseline with SQLite-backed task/list APIs, enabling real sync progress.
-- 2026-02-01 00:32 - Connected client hydration to server data, moving from demo-only behavior toward shared state.
-- 2026-01-02 00:49 - Enabled pushing local task updates upstream so device-side edits can converge to a canonical backend state.
-- 2026-01-02 09:31 - Enabled offline task creation that survives reconnect, protecting user flow when connectivity is poor.
-- 2026-01-02 15:13 - Added repeatable startup scripts to reduce setup friction and improve team velocity.
-- 2026-01-02 15:25 - Hardened scripts for path and DB reliability so local environments start consistently.
-- 2026-02-01 13:16 - Removed legacy-ID sync noise to prevent false errors and improve trust in sync behavior.
-- 2026-02-01 14:05 - Stopped accidental reseeding on hydrate, eliminating duplicate task confusion.
-- 2026-02-01 14:09 - Reordered sync stages so pushed items resolve to stable server identity sooner.
-- 2026-02-01 14:18 - Closed a persistence race window that could re-trigger duplicate pushes after fast refreshes.
+# PROGRESS
+
+Outcome-first project milestones in plain language.
+
+- 2026-01-31 19:13 - Set up shared web/server/types foundations so the app could evolve as one cohesive product.
+- 2026-01-31 19:13 - Audited dependencies and environment readiness early to reduce setup and security surprises.
+- 2026-01-31 19:14 - Validated Rust toolchain and backend quality gates so server work could move faster.
+- 2026-01-31 19:19 - Added CI coverage across web and server to catch regressions early.
+- 2026-01-31 19:25 - Cleaned repository noise so day-to-day work stayed focused.
+- 2026-01-31 19:29 - Added commit/push guardrails to catch issues before they reached shared branches.
+- 2026-01-31 19:33 - Published governance and security baseline docs so the project could scale safely.
+- 2026-01-31 19:35 - Clarified AI assistant operating rules for more consistent implementation.
+- 2026-01-31 19:39 - Enforced test expectations for new modules to reduce silent regressions.
+- 2026-01-31 20:34 - Shipped the first usable My Day + List experience, proving the core flow felt fast.
+- 2026-01-31 23:22 - Made task/list state durable across reloads and offline periods to strengthen local-first behavior.
+- 2026-01-31 23:50 - Documented reliable run commands to speed up daily setup and troubleshooting.
+- 2026-01-31 23:55 - Delivered a functional SQLite-backed server baseline so real sync progress could start.
+- 2026-02-01 00:32 - Connected client hydration to server data, moving beyond demo-only behavior.
+- 2026-02-01 00:49 - Enabled pushing local edits upstream so devices could converge on shared backend state.
+- 2026-02-01 09:31 - Enabled offline task creation that safely syncs after reconnect.
+- 2026-02-01 15:13 - Added repeatable startup scripts to reduce setup friction and improve team velocity.
+- 2026-02-01 15:25 - Hardened scripts for path/DB reliability so local environments start consistently.
+- 2026-02-01 13:16 - Removed legacy sync ID noise that caused false errors and confusion.
+- 2026-02-01 14:05 - Stopped accidental reseeding on hydrate to prevent duplicate task confusion.
+- 2026-02-01 14:09 - Reordered sync stages so pushed items resolved to stable server identity sooner.
+- 2026-02-01 14:18 - Closed a persistence race that could re-trigger duplicate pushes after fast refreshes.
 - 2026-02-01 14:56 - Cleared stale local records during saves to avoid ghost data and inconsistent sync outcomes.
 - 2026-02-01 14:59 - Prioritized unsynced local edits over remote snapshots to preserve user intent.
-- 2026-02-01 15:02 - Confirmed sync stability after duplicate/status regressions, improving confidence to continue feature work.
+- 2026-02-01 15:02 - Revalidated sync stability after duplicate/status regressions.
 - 2026-02-01 15:06 - Removed legacy seed content so environments begin from real data, not demo artifacts.
-- 2026-02-01 15:07 - Completed seed-code cleanup to reduce maintenance drag and accidental reintroduction of old behavior.
-- 2026-02-01 15:28 - Stabilized e2e behavior around real runtime data, improving release confidence.
-- 2026-02-01 15:54 - Added a single pre-push verification path to standardize quality checks before sharing code.
-- 2026-02-02 19:34 - Expanded task planning depth (due dates, recurrence, notes, attachments, sorting), making the app practical for real workflows.
-- 2026-02-02 20:22 - Added richer list and task-detail management so users can organize and edit without leaving core flow.
-- 2026-02-02 21:10 - Improved management ergonomics in sidebar/detail views to reduce friction in day-to-day task editing.
-- 2026-02-02 23:40 - Restored local auth/dev continuity after a 401 interruption so feature work could continue without drift.
-- 2026-02-02 23:58 - Fixed list-view add behavior and improved mobile navigation, raising confidence in phone-first usage.
+- 2026-02-01 15:07 - Completed seed cleanup to reduce maintenance drag and accidental reintroduction of old behavior.
+- 2026-02-01 15:28 - Stabilized E2E behavior around real runtime data.
+- 2026-02-01 15:54 - Added a single pre-push verification path to standardize quality checks.
+- 2026-02-02 19:34 - Expanded task planning depth with due dates, recurrence, notes, attachments, and sorting.
+- 2026-02-02 20:22 - Added richer list and task-detail management so users can organize without leaving flow.
+- 2026-02-02 21:10 - Improved sidebar/detail ergonomics to reduce friction in daily task editing.
+- 2026-02-02 23:40 - Restored local auth/dev continuity after a 401 interruption.
+- 2026-02-02 23:58 - Fixed list-view add behavior and improved mobile navigation.
 - 2026-02-02 00:08 - Tightened mobile viewport behavior and quick-add ergonomics for cleaner one-handed interaction.
-- 2026-02-02 00:14 - Removed unintended horizontal movement on mobile to make the UI feel stable and intentional.
-- 2026-02-02 00:23 - Added My Day suggestions to reduce planning effort and speed up daily prioritization.
-- 2026-02-02 00:27 - Added quick actions for common scheduling intents, reducing taps for frequent operations.
-- 2026-02-02 08:00 - Simplified task-entry to one consistent quick-add path, lowering cognitive load.
-- 2026-02-05 15:02 - Added completion sound personalization with persisted settings, improving delight without sacrificing reliability.
+- 2026-02-02 00:14 - Removed unintended horizontal movement on mobile to make the UI feel stable.
+- 2026-02-02 00:23 - Added My Day suggestions to reduce daily planning effort.
+- 2026-02-02 00:27 - Added quick actions for common scheduling intents to reduce taps.
+- 2026-02-02 08:00 - Simplified task entry to one consistent quick-add path, lowering cognitive load.
+- 2026-02-05 15:02 - Added completion sound personalization with persisted settings.
 - 2026-02-05 16:42 - Added sidebar pin behavior so navigation state follows user preference across sessions.
-- 2026-02-05 16:49 - Updated agent command policy to script-first and copy/paste-safe formatting, reducing execution errors.
-- 2026-02-05 17:48 - Tuned mobile pinned-sidebar layout to avoid overlap and align closer with the target product feel.
+- 2026-02-05 16:49 - Updated agent command policy to script-first and copy/paste-safe formatting.
+- 2026-02-05 17:48 - Tuned mobile pinned-sidebar layout to avoid overlap and improve usability.
 - 2026-02-05 18:09 - Marked UI slice as sufficient for MVP and redirected effort toward auth and sync durability.
-- 2026-02-06 20:15 - Introduced JWT-based authentication groundwork so sync can be identity-aware across devices.
-- 2026-02-06 21:45 - Added client session UX and auth-gated sync to prevent unauthorized or ambiguous background updates.
-- 2026-02-06 22:25 - Implemented task ownership semantics so multi-user collaboration has clear responsibility boundaries.
-- 2026-02-06 22:38 - Added ownership verification script to make role-behavior QA repeatable.
-- 2026-02-06 22:47 - Scoped local persistence by authenticated identity to prevent cross-user data bleed on shared devices.
-- 2026-02-06 23:12 - Shifted contributor visibility to explicit list grants, enabling safer shared workflows.
-- 2026-02-06 23:34 - Delivered cleaner account/team controls and user icon support, improving admin usability and clarity.
+- 2026-02-06 20:15 - Introduced JWT-based auth groundwork so sync can be identity-aware across devices.
+- 2026-02-06 21:45 - Added client session UX and auth-gated sync to prevent unauthorized background updates.
+- 2026-02-06 22:25 - Implemented task ownership semantics so collaboration has clear responsibility boundaries.
+- 2026-02-06 22:38 - Added an ownership verification script to make role-behavior QA repeatable.
+- 2026-02-06 22:47 - Scoped local persistence by authenticated identity to prevent cross-user data bleed.
+- 2026-02-06 23:12 - Shifted contributor visibility to explicit list grants for safer shared workflows.
+- 2026-02-06 23:34 - Delivered cleaner account/team controls and user icon support for better admin clarity.
 - 2026-02-06 23:45 - Simplified mobile assignment UI to preserve capability while reducing visual overload.
-- 2026-02-06 23:52 - Added admin flow verification script and fixed grant-update CORS path, improving operational reliability.
+- 2026-02-06 23:52 - Added admin flow verification script and fixed grant-update CORS path.
 - 2026-02-07 00:08 - Fixed admin-control visibility logic so privileged tooling is reliably discoverable.
-- 2026-02-07 00:39 - Moved to per-user password storage with upgrade path, strengthening account security posture.
-- 2026-02-07 08:15 - Added practical password lifecycle flows (self-change + admin reset) to support real account management.
-- 2026-02-06 09:45 - Introduced SharedWorker leader coordination so only one tab drives periodic sync, reducing duplicate work.
-- 2026-02-06 10:05 - Hardened sync safety with idempotent create semantics and cross-tab status mirroring for consistent feedback.
-- 2026-02-06 10:17 - Reduced pre-push test flakiness by tuning browser concurrency/timeouts, improving delivery cadence.
-- 2026-02-06 11:04 - Added queue/replay telemetry across sync status paths so tabs report richer sync health, not just binary states.
-- 2026-02-06 11:07 - Updated progress logging standards to be outcome-first and goal-aligned, keeping project tracking useful beyond git history.
-- 2026-02-06 11:37 - Hardened pre-push reliability by running browser smoke checks with lower contention and retry tolerance, reducing false push blocks from intermittent Firefox startup flake.
-- 2026-02-06 11:57 - Improved release confidence by making My Day cross-browser smoke checks consistently reliable, so push gates now fail on real product issues instead of environment noise.
-- 2026-02-06 12:56 - Advanced the app toward dependable multi-device sync by introducing the first delta-sync foundation, enabling more deterministic state convergence across tabs, users, and devices.
-- 2026-02-06 13:14 - Corrected process: progress logging is now enforced as append-only in agent policy to prevent history churn; future adjustments should be logged as explicit correction entries instead of rewriting earlier milestones.
-- 2026-02-06 13:42 - Completed delta push integration so unsynced work now batches through one sync path with explicit server rejection handling, making cross-device task convergence more reliable and reducing duplicate-write risk.
-- 2026-02-06 13:49 - Removed legacy sync fallback behavior so the app now fails fast on unsupported server versions, reducing hidden drift paths and making sync reliability issues easier to detect and fix.
-- 2026-02-06 14:31 - Prepared self-hosting baseline by adding Docker/Compose packaging and seed workflow, while improving offline continuity so signed-in users keep working locally during temporary server outages.
-- 2026-02-06 14:58 - Unblocked reverse-proxy hosting by adding configurable Vite allowed-host support and Docker build args, so production domains can be permitted without hardcoding environment-specific hostnames.
-- 2026-02-07 20:50 - Improved My Day trust by adding explicit missed-task surfacing after rollover, including direct recovery actions (skip recurring, mark done, delete) and quick completion-tap acknowledgment feedback.
-- 2026-02-07 20:50 - Reduced completion-sound variance on mobile/WebKit by routing custom audio through Web Audio gain control with improved browser-level volume mapping.
-- 2026-02-07 20:50 - Started server-backed profile media persistence by introducing per-user sound/media schema and `/auth/sound` read/update APIs, then wiring client settings hydration and best-effort sync to that endpoint.
-- 2026-02-07 21:43 - Tuned My Day completion confidence by extending the tap acknowledgment delay, hiding empty Missed UI noise, and ensuring recurring completions remain visible under Completed for the current day while next due is already scheduled.
-- 2026-02-07 22:29 - Added meaningful space-level backup/restore with admin-gated server export/import endpoints and sidebar-driven JSON download/restore flow, enabling recoverable snapshots for production continuity.
-- 2026-02-08 00:40 - Added a recurring-completion undo path in My Day Completed so tapping a same-day recurring completion reverts that day’s completion marker and due-date roll-forward instead of advancing recurrence again.
-- 2026-02-08 01:13 - Started QoL polish by renaming sidebar sections for clarity, making sound/backup/account panels collapsible with per-user synced panel-state preferences, adding app themes (default/dark/light), fixing list-icon emoji input handling, and reducing completion acknowledgement delay to 300ms.
-- 2026-02-07 23:02 - Hardened recurring My Day completion integrity by preserving explicit completion timestamps during pending roll-forward sync updates, preventing completed-today acknowledgments from disappearing after sync.
-- 2026-02-07 23:02 - Improved sound reliability by adding WebAudio context recovery/rebuild logic for stale suspended/closed mobile states and excluding recurring tasks from My Day suggestions to reduce duplicate next-day noise.
-- 2026-02-08 01:39 - Fixed PWA install icon metadata/assets by adding dedicated Apple touch icon + manifest PNG set so iOS home-screen shortcuts use branded app artwork instead of fallback glyph tiles.
-- 2026-02-08 02:23 - Expanded recurrence presets (quarterly/biannual/annual), fixed My Day bottom-space overlap for Completed visibility, added randomized multi-file custom sound playlists with server/backup persistence, corrected volume slider visual fill at 100%, and normalized remaining dark-locked UI surfaces to honor active theme tokens.
+- 2026-02-07 00:39 - Moved to per-user password storage with an upgrade path to strengthen security posture.
+- 2026-02-07 08:15 - Added practical password lifecycle flows: self-change and admin reset.
+- 2026-02-06 09:45 - Introduced SharedWorker leader coordination so only one tab drives periodic sync.
+- 2026-02-06 10:05 - Hardened sync safety with idempotent create semantics and cross-tab status mirroring.
+- 2026-02-06 10:17 - Reduced pre-push test flakiness by tuning browser concurrency/timeouts.
+- 2026-02-06 11:04 - Added queue/replay telemetry so tabs report richer sync health.
+- 2026-02-06 11:07 - Updated progress logging standards to stay outcome-first and goal-aligned.
+- 2026-02-06 11:37 - Hardened pre-push reliability with lower-contention browser smoke checks and retries.
+- 2026-02-06 11:57 - Improved cross-browser smoke reliability so push gates fail on real product issues.
+- 2026-02-06 12:56 - Advanced toward dependable multi-device sync by introducing the first delta-sync foundation.
+- 2026-02-06 13:14 - Corrected process: progress logging is append-only; corrections should be new entries.
+- 2026-02-06 13:42 - Completed delta push integration with explicit server rejection handling.
+- 2026-02-06 13:49 - Removed legacy sync fallback behavior so unsupported server versions fail fast.
+- 2026-02-06 14:31 - Added Docker/Compose self-host packaging and improved offline continuity.
+- 2026-02-06 14:58 - Added configurable Vite allowed-host support and Docker build args for reverse-proxy deployments.
+- 2026-02-07 20:50 - Improved My Day trust with missed-task surfacing and direct recovery actions.
+- 2026-02-07 20:50 - Reduced completion-sound variance on mobile/WebKit with better browser volume mapping.
+- 2026-02-07 20:50 - Started server-backed profile media persistence with schema and `/auth/sound` APIs, then wired client hydration/sync.
+- 2026-02-07 21:43 - Tuned My Day completion confidence by refining delay/visibility behavior for recurring completions.
+- 2026-02-07 22:29 - Added meaningful space-level backup/restore with admin-gated server export/import and sidebar UI flow.
+- 2026-02-08 00:40 - Added a recurring-completion undo path in My Day Completed for same-day corrections.
+- 2026-02-08 01:13 - Delivered QoL polish: clearer sidebar labels, collapsible panels, theme options, improved icon input handling, and faster completion acknowledgment.
+- 2026-02-07 23:02 - Hardened recurring My Day completion integrity by preserving explicit completion timestamps during sync.
+- 2026-02-07 23:02 - Improved sound reliability by adding WebAudio context recovery logic and excluding recurring tasks from My Day suggestions.
+- 2026-02-08 01:39 - Fixed PWA icon metadata/assets so iOS home-screen installs use branded app icons.
+- 2026-02-08 02:23 - Expanded recurrence presets, fixed My Day bottom spacing, added randomized multi-file custom sound playlists with persistence, corrected volume slider fill behavior, and normalized themed UI surfaces.

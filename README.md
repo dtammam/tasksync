@@ -55,7 +55,20 @@ Published images:
 
 `docker-compose.yml` already references these `latest` tags.
 
-By default it persists SQLite data in the a folder named `/srv/tasksync/data`, create it manually.
+Portainer-first context (current revision):
+- This compose file intentionally uses a hard-coded host bind mount: `/srv/tasksync/data:/data`.
+- It expects `/srv/tasksync/data` to already exist on the Docker host before stack deploy.
+- This was chosen so the first self-hosting pass stays explicit and predictable for data location.
+
+Create the host folder manually over SSH before deploying:
+
+```bash
+ssh <user>@<docker-host>
+sudo mkdir -p /srv/tasksync/data
+sudo chmod 775 /srv/tasksync
+sudo chmod 775 /srv/tasksync/data
+ls -ld /srv/tasksync /srv/tasksync/data
+```
 
 Create a `.env` file in this folder (same level as `docker-compose.yml`):
 
@@ -102,7 +115,8 @@ Reverse proxy setup (recommended):
 ## Project History
 
 - This started on 2026-01-31 and by god, with Codex, Cursor, a framework of linting and testing in real-time, by 2026-02-08 I had a fully functional system with Docker images published and fully transitioned off of Microsoft To-Do. The future is now and it is amazing!
-- See `PROGRESS.md` for release-style milestones in human/goal context.
+- See [PROGRESS.md](PROGRESS.md) for release-style milestones in human/goal context.
+- See [ROADMAP.md](ROADMAP.md) for what's next.
 
 ## License
 
