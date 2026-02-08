@@ -3,15 +3,15 @@ services:
     image: deantammam/tasksync-server:latest
     pull_policy: always
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite:///data/tasksync.db}
       JWT_SECRET: ${JWT_SECRET:-change-me}
       DEV_LOGIN_PASSWORD: ${DEV_LOGIN_PASSWORD:-tasksync}
       RUST_LOG: ${RUST_LOG:-info}
-      PORT: 3000
+      PORT: ${PORT:-3000}
     volumes:
-      - /srv/tasksync/data:/data
+      - tasksync_data:/data
     restart: unless-stopped
 
   web:
@@ -34,7 +34,7 @@ services:
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-tasksync}
       SEED_CONTRIB_PASSWORD: ${SEED_CONTRIB_PASSWORD:-tasksync}
     volumes:
-      - /srv/tasksync/data:/data
+      - tasksync_data:/data
     restart: "no"
 
 volumes:
