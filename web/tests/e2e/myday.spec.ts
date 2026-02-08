@@ -81,7 +81,9 @@ test.describe('My Day', () => {
 		const seedRow = page.getByTestId('task-row').filter({ hasText: title });
 		await expect(seedRow).toHaveCount(1);
 
-		await seedRow.getByTestId('task-toggle').click();
+		const toggle = seedRow.getByTestId('task-toggle');
+		await toggle.click();
+		await expect(toggle).toHaveAttribute('data-acknowledged', 'true');
 		const completedRows = page
 			.locator('[data-testid="completed-section"] [data-testid="task-row"]')
 			.filter({ hasText: title });
@@ -114,14 +116,17 @@ test.describe('My Day', () => {
 
 		await page.getByLabel('Sort tasks').selectOption('alpha');
 		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
-		const plannedRows = page.locator('section.block').first().getByTestId('task-row');
+		const plannedSection = page.locator('section.block', {
+			has: page.locator('.section-title', { hasText: 'Planned' })
+		});
+		const plannedRows = plannedSection.getByTestId('task-row');
 		const sortedRows = plannedRows.filter({ hasText: marker });
 		await expect(sortedRows).toHaveCount(2);
 		await expect(sortedRows.nth(0)).toContainText(titleA);
 
 		await page.reload();
 		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
-		await expect(page.locator('section.block').first().getByTestId('task-row').filter({ hasText: marker }).nth(0)).toContainText(titleA);
+		await expect(plannedSection.getByTestId('task-row').filter({ hasText: marker }).nth(0)).toContainText(titleA);
 	});
 
 	test('persists sound settings changes across reload', async ({ page }) => {

@@ -2,7 +2,7 @@
 	// @ts-nocheck
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import { auth } from '$lib/stores/auth';
-	import { myDayCompleted, myDayPending, tasks } from '$lib/stores/tasks';
+	import { myDayCompleted, myDayMissed, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
 	import { getTask } from '$lib/stores/tasks';
@@ -15,6 +15,8 @@
 	let sortLoaded = false;
 	let detailId = null;
 	let showSuggestions = false;
+	let missedActionError = '';
+	let deletingMissedId = '';
 	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
 	const compareAlpha = (left, right) => {
 		const a = (left ?? '').trim().toLowerCase();
@@ -47,6 +49,7 @@
 	};
 
 	$: sortedPending = sortTasks($myDayPending ?? [], sortMode);
+	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode);
 	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode);
 
 	$: if (typeof window !== 'undefined' && !sortLoaded) {
@@ -100,6 +103,36 @@
 		showSuggestions = false;
 	};
 
+	const canResolveMissed = (task) => {
+		if ($auth.user?.role !== 'contributor') return true;
+		return !!$auth.user?.user_id && task.created_by_user_id === $auth.user.user_id;
+	};
+
+	const markMissedDone = (task) => {
+		if (!canResolveMissed(task)) return;
+		missedActionError = '';
+		tasks.toggle(task.id);
+	};
+
+	const skipMissed = (task) => {
+		if (!canResolveMissed(task) || !task.recurrence_id) return;
+		missedActionError = '';
+		tasks.skip(task.id);
+	};
+
+	const deleteMissed = async (task) => {
+		if (!canResolveMissed(task) || deletingMissedId) return;
+		deletingMissedId = task.id;
+		missedActionError = '';
+		try {
+			await tasks.deleteRemote(task.id);
+		} catch (err) {
+			missedActionError = err instanceof Error ? err.message : String(err);
+		} finally {
+			deletingMissedId = '';
+		}
+	};
+
 	$: if (!$myDaySuggestions?.length) {
 		showSuggestions = false;
 	}
@@ -123,6 +156,47 @@
 		</div>
 	</div>
 </header>
+
+<section class="block missed-block">
+	<div class="section-title">Missed ({sortedMissed.length})</div>
+	<div class="stack" data-testid="missed-section">
+		{#if sortedMissed.length}
+			{#each sortedMissed as task (task.id)}
+				<div class="missed-item">
+					<TaskRow {task} on:openDetail={openDetail} />
+					<div class="missed-actions">
+						{#if task.recurrence_id}
+							<button
+								type="button"
+								class="ghost"
+								on:click={() => skipMissed(task)}
+								disabled={!canResolveMissed(task)}
+							>
+								Skip next
+							</button>
+						{/if}
+						<button type="button" on:click={() => markMissedDone(task)} disabled={!canResolveMissed(task)}>
+							Mark done
+						</button>
+						<button
+							type="button"
+							class="danger"
+							on:click={() => deleteMissed(task)}
+							disabled={!canResolveMissed(task) || deletingMissedId === task.id}
+						>
+							{deletingMissedId === task.id ? 'Deleting…' : 'Delete'}
+						</button>
+					</div>
+				</div>
+			{/each}
+			{#if missedActionError}
+				<p class="missed-error">{missedActionError}</p>
+			{/if}
+		{:else}
+			<p class="empty subtle">No missed tasks from previous days.</p>
+		{/if}
+	</div>
+</section>
 
 <section class="block">
 	<div class="section-title">Planned</div>
@@ -261,6 +335,10 @@
 		margin-top: 14px;
 	}
 
+	.missed-block .section-title {
+		color: #f59e0b;
+	}
+
 	.section-title {
 		color: #94a3b8;
 		font-size: 13px;
@@ -270,6 +348,48 @@
 	.stack {
 		display: grid;
 		gap: 10px;
+	}
+
+	.missed-item {
+		display: grid;
+		gap: 6px;
+	}
+
+	.missed-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		justify-content: flex-end;
+	}
+
+	.missed-actions button {
+		background: #0f172a;
+		border: 1px solid #334155;
+		color: #e2e8f0;
+		border-radius: 999px;
+		padding: 5px 10px;
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.missed-actions button.ghost {
+		color: #cbd5e1;
+	}
+
+	.missed-actions button.danger {
+		border-color: #7f1d1d;
+		color: #fecaca;
+	}
+
+	.missed-actions button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.missed-error {
+		margin: 0;
+		color: #fda4af;
+		font-size: 12px;
 	}
 
 	.suggestions {

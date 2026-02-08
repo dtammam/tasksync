@@ -159,6 +159,7 @@ pub fn auth_routes(pool: &SqlitePool) -> Router {
     Router::new()
         .route("/login", post(login))
         .route("/me", get(auth_me).patch(auth_update_me))
+        .route("/sound", get(auth_get_sound).patch(auth_update_sound))
         .route("/password", patch(auth_change_password))
         .route("/members", get(auth_members).post(auth_create_member))
         .route("/members/:user_id", delete(auth_delete_member))
@@ -175,6 +176,77 @@ fn normalize_avatar_icon(raw: Option<String>) -> Option<String> {
         }
         Some(trimmed.chars().take(4).collect())
     })
+}
+
+const SOUND_THEMES: [&str; 8] = [
+    "chime_soft",
+    "click_pop",
+    "sparkle_short",
+    "wood_tick",
+    "bell_crisp",
+    "marimba_blip",
+    "pulse_soft",
+    "custom_file",
+];
+
+fn normalize_sound_theme(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if SOUND_THEMES.contains(&trimmed) {
+        return Ok(Some(trimmed.to_string()));
+    }
+    Err(StatusCode::BAD_REQUEST)
+}
+
+fn normalize_sound_file_name(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.chars().count() > 180 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(Some(trimmed.to_string()))
+}
+
+fn normalize_sound_data_url(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if !trimmed.starts_with("data:audio/") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if trimmed.len() > 3_000_000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(Some(trimmed.to_string()))
+}
+
+fn normalize_profile_attachments(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > 120_000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    serde_json::from_str::<serde_json::Value>(trimmed).map_err(|_| StatusCode::BAD_REQUEST)?;
+    Ok(Some(trimmed.to_string()))
 }
 
 fn is_unique_violation(err: &sqlx::Error) -> bool {
@@ -240,6 +312,31 @@ struct AuthMemberResponse {
 struct UpdateProfileBody {
     display: Option<String>,
     avatar_icon: Option<String>,
+}
+
+#[derive(Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+struct SoundSettingsResponse {
+    enabled: bool,
+    volume: i64,
+    theme: String,
+    custom_sound_file_id: Option<String>,
+    custom_sound_file_name: Option<String>,
+    custom_sound_data_url: Option<String>,
+    profile_attachments_json: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateSoundSettingsBody {
+    enabled: Option<bool>,
+    volume: Option<i64>,
+    theme: Option<String>,
+    custom_sound_file_id: Option<String>,
+    custom_sound_file_name: Option<String>,
+    custom_sound_data_url: Option<String>,
+    profile_attachments_json: Option<String>,
+    clear_custom_sound: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -393,6 +490,89 @@ async fn auth_update_me(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     auth_me(State(state), headers).await
+}
+
+async fn load_sound_settings_for_user(
+    pool: &SqlitePool,
+    user_id: &str,
+) -> Result<SoundSettingsResponse, StatusCode> {
+    sqlx::query_as::<_, SoundSettingsResponse>(
+        "select coalesce(sound_enabled, 1) as enabled, coalesce(sound_volume, 60) as volume, coalesce(sound_theme, 'chime_soft') as theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, profile_attachments as profile_attachments_json from user where id = ?1 limit 1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::UNAUTHORIZED)
+}
+
+async fn auth_get_sound(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<SoundSettingsResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let settings = load_sound_settings_for_user(&state.pool, &ctx.user_id).await?;
+    Ok(Json(settings))
+}
+
+async fn auth_update_sound(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<UpdateSoundSettingsBody>,
+) -> Result<Json<SoundSettingsResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let current = load_sound_settings_for_user(&state.pool, &ctx.user_id).await?;
+
+    let clear_custom_sound = body.clear_custom_sound.unwrap_or(false);
+    let next_enabled = body.enabled.unwrap_or(current.enabled);
+    let next_volume =
+        body.volume.map(|value| value.clamp(0, 100)).unwrap_or(current.volume.clamp(0, 100));
+    let next_theme = normalize_sound_theme(body.theme)?.unwrap_or(current.theme);
+
+    let next_custom_sound_file_id = if clear_custom_sound {
+        None
+    } else if body.custom_sound_file_id.is_some() {
+        normalize_sound_file_name(body.custom_sound_file_id)?
+    } else {
+        current.custom_sound_file_id
+    };
+    let next_custom_sound_file_name = if clear_custom_sound {
+        None
+    } else if body.custom_sound_file_name.is_some() {
+        normalize_sound_file_name(body.custom_sound_file_name)?
+    } else {
+        current.custom_sound_file_name
+    };
+    let next_custom_sound_data_url = if clear_custom_sound {
+        None
+    } else if body.custom_sound_data_url.is_some() {
+        normalize_sound_data_url(body.custom_sound_data_url)?
+    } else {
+        current.custom_sound_data_url
+    };
+    let next_profile_attachments_json = if body.profile_attachments_json.is_some() {
+        normalize_profile_attachments(body.profile_attachments_json)?
+    } else {
+        current.profile_attachments_json
+    };
+
+    sqlx::query(
+        "update user set sound_enabled = ?1, sound_volume = ?2, sound_theme = ?3, custom_sound_file_id = ?4, custom_sound_file_name = ?5, custom_sound_data_url = ?6, profile_attachments = ?7 where id = ?8",
+    )
+    .bind(next_enabled)
+    .bind(next_volume)
+    .bind(&next_theme)
+    .bind(&next_custom_sound_file_id)
+    .bind(&next_custom_sound_file_name)
+    .bind(&next_custom_sound_data_url)
+    .bind(&next_profile_attachments_json)
+    .bind(&ctx.user_id)
+    .execute(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let updated = load_sound_settings_for_user(&state.pool, &ctx.user_id).await?;
+    Ok(Json(updated))
 }
 
 async fn auth_change_password(
@@ -1530,6 +1710,71 @@ mod tests {
 
         assert_eq!(updated.display, "Admin Prime");
         assert_eq!(updated.avatar_icon.as_deref(), Some("⭐"));
+    }
+
+    #[tokio::test]
+    async fn user_can_update_and_clear_sound_settings() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let defaults = auth_get_sound(State(state.clone()), headers.clone())
+            .await
+            .expect("sound defaults should load")
+            .0;
+        assert_eq!(defaults.theme, "chime_soft");
+        assert_eq!(defaults.volume, 60);
+        assert!(defaults.enabled);
+
+        let updated = auth_update_sound(
+            State(state.clone()),
+            headers.clone(),
+            Json(UpdateSoundSettingsBody {
+                enabled: Some(false),
+                volume: Some(23),
+                theme: Some("wood_tick".to_string()),
+                custom_sound_file_id: Some("snd-1".to_string()),
+                custom_sound_file_name: Some("ding.wav".to_string()),
+                custom_sound_data_url: Some("data:audio/wav;base64,AAAA".to_string()),
+                profile_attachments_json: Some("[{\"id\":\"att-1\"}]".to_string()),
+                clear_custom_sound: Some(false),
+            }),
+        )
+        .await
+        .expect("update sound should work")
+        .0;
+
+        assert!(!updated.enabled);
+        assert_eq!(updated.volume, 23);
+        assert_eq!(updated.theme, "wood_tick");
+        assert_eq!(updated.custom_sound_file_name.as_deref(), Some("ding.wav"));
+        assert_eq!(updated.custom_sound_data_url.as_deref(), Some("data:audio/wav;base64,AAAA"));
+        assert_eq!(updated.profile_attachments_json.as_deref(), Some("[{\"id\":\"att-1\"}]"));
+
+        let cleared = auth_update_sound(
+            State(state),
+            headers,
+            Json(UpdateSoundSettingsBody {
+                enabled: None,
+                volume: None,
+                theme: None,
+                custom_sound_file_id: None,
+                custom_sound_file_name: None,
+                custom_sound_data_url: None,
+                profile_attachments_json: None,
+                clear_custom_sound: Some(true),
+            }),
+        )
+        .await
+        .expect("clear custom sound should work")
+        .0;
+
+        assert_eq!(cleared.custom_sound_file_id, None);
+        assert_eq!(cleared.custom_sound_file_name, None);
+        assert_eq!(cleared.custom_sound_data_url, None);
+        assert_eq!(cleared.profile_attachments_json.as_deref(), Some("[{\"id\":\"att-1\"}]"));
     }
 
     #[tokio::test]

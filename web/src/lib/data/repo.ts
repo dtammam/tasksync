@@ -25,7 +25,11 @@ const readSoundSettingsFromLocalStorage = (): SoundSettings | null => {
 			theme: parsed.theme,
 			customSoundFileId: parsed.customSoundFileId,
 			customSoundDataUrl: parsed.customSoundDataUrl,
-			customSoundFileName: parsed.customSoundFileName
+			customSoundFileName: parsed.customSoundFileName,
+			profileAttachmentsJson:
+				typeof parsed.profileAttachmentsJson === 'string'
+					? parsed.profileAttachmentsJson
+					: undefined
 		};
 	} catch {
 		return null;
@@ -77,7 +81,11 @@ export const repo = {
 			theme: stored.theme,
 			customSoundFileId: stored.customSoundFileId,
 			customSoundDataUrl: stored.customSoundDataUrl,
-			customSoundFileName: stored.customSoundFileName
+			customSoundFileName: stored.customSoundFileName,
+			profileAttachmentsJson:
+				typeof stored.profileAttachmentsJson === 'string'
+					? stored.profileAttachmentsJson
+					: undefined
 		};
 		writeSoundSettingsToLocalStorage(parsed);
 		return parsed;

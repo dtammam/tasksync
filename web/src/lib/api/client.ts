@@ -17,6 +17,7 @@ import type {
 	SyncPushRequest,
 	SyncPushResponse
 } from '$shared/types/sync';
+import type { SoundSettings } from '$shared/types/settings';
 
 const defaultApiUrl = () => {
 	if (typeof window === 'undefined') return 'http://localhost:3000';
@@ -85,6 +86,12 @@ export const api = {
 	me: () => fetchJson<AuthUser>('/auth/me'),
 	updateMe: (body: AuthUpdateProfileRequest) =>
 		fetchJson<AuthUser>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
+	getSoundSettings: () => fetchJson<SoundSettings>('/auth/sound'),
+	updateSoundSettings: (
+		body: Partial<SoundSettings> & {
+			clearCustomSound?: boolean;
+		}
+	) => fetchJson<SoundSettings>('/auth/sound', { method: 'PATCH', body: JSON.stringify(body) }),
 	changePassword: (body: AuthChangePasswordRequest) =>
 		fetchJson<void>('/auth/password', { method: 'PATCH', body: JSON.stringify(body) }),
 	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),

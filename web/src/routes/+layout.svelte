@@ -156,6 +156,7 @@
 		await auth.hydrate();
 		syncCoordinator.setAuthenticated(auth.isAuthenticated());
 		await hydrateScopedStores();
+		await soundSettings.hydrateFromServer();
 		await members.hydrateFromServer();
 		lastScopeKey = storageScopeFromAuth(auth.get());
 		appReady = true;
@@ -192,6 +193,7 @@
 		void (async () => {
 			resetSyncCursor();
 			await hydrateScopedStores();
+			await soundSettings.hydrateFromServer();
 			await members.hydrateFromServer();
 			if (auth.isAuthenticated()) {
 				requestSync('scope-change');

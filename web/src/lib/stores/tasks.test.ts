@@ -6,7 +6,7 @@ vi.mock('$lib/sound/sound', () => ({
 	playCompletion: vi.fn()
 }));
 
-import { myDayCompleted, myDayPending, myDaySuggestions, tasks } from './tasks';
+import { myDayCompleted, myDayMissed, myDayPending, myDaySuggestions, tasks } from './tasks';
 import { playCompletion } from '$lib/sound/sound';
 import type { Task } from '$shared/types/task';
 
@@ -57,6 +57,17 @@ describe('tasks store helpers', () => {
 		expect(today.find((t) => t.id === 'future')).toBeUndefined();
 	});
 
+	it('surfaces overdue pending tasks in the missed bucket', () => {
+		tasks.setAll([
+			baseTask({ id: 'overdue', due_date: '2026-02-01', status: 'pending' }),
+			baseTask({ id: 'today', due_date: '2026-02-02', status: 'pending' }),
+			baseTask({ id: 'done-overdue', due_date: '2026-02-01', status: 'done' })
+		]);
+
+		expect(get(myDayPending).map((t) => t.id)).toEqual(['today']);
+		expect(get(myDayMissed).map((t) => t.id)).toEqual(['overdue']);
+	});
+
 	it('rolls forward recurring tasks when toggled complete', () => {
 		const rec = baseTask({
 			id: 'rec-1',
@@ -88,6 +99,24 @@ describe('tasks store helpers', () => {
 		tasks.toggle('rec-weekdays');
 		const updated = tasks.getAll().find((t) => t.id === 'rec-weekdays');
 		expect(updated?.due_date).toBe('2026-02-09');
+	});
+
+	it('clears a missed recurring task from missed when skipping to next occurrence', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'missed-recurring',
+				recurrence_id: 'daily',
+				due_date: '2026-02-01',
+				status: 'pending'
+			})
+		]);
+
+		expect(get(myDayMissed).map((t) => t.id)).toEqual(['missed-recurring']);
+
+		tasks.skip('missed-recurring');
+
+		expect(get(myDayMissed)).toEqual([]);
+		expect(get(myDayPending).map((t) => t.id)).toEqual(['missed-recurring']);
 	});
 
 	it('renames a task and marks it dirty', () => {
