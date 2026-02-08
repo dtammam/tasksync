@@ -138,89 +138,91 @@
 	}
 </script>
 
-<header class="page-header">
-	<div>
-		<p class="eyebrow">{dateLabel}</p>
-		<h1>My Day</h1>
-		<p class="sub">Tasks you’ve chosen for today.</p>
-	</div>
-	<div class="actions">
-		<div class="sorter">
-			<label>
-				<span>Sort</span>
-				<select bind:value={sortMode} aria-label="Sort tasks">
-					<option value="created">Creation</option>
-					<option value="alpha">Alphabetical</option>
-				</select>
-			</label>
+<div class="page-content">
+	<header class="page-header">
+		<div>
+			<p class="eyebrow">{dateLabel}</p>
+			<h1>My Day</h1>
+			<p class="sub">Tasks you’ve chosen for today.</p>
 		</div>
-	</div>
-</header>
+		<div class="actions">
+			<div class="sorter">
+				<label>
+					<span>Sort</span>
+					<select bind:value={sortMode} aria-label="Sort tasks">
+						<option value="created">Creation</option>
+						<option value="alpha">Alphabetical</option>
+					</select>
+				</label>
+			</div>
+		</div>
+	</header>
 
-{#if sortedMissed.length}
-	<section class="block missed-block">
-		<div class="section-title">Missed ({sortedMissed.length})</div>
-		<div class="stack" data-testid="missed-section">
-			{#each sortedMissed as task (task.id)}
-				<div class="missed-item">
-					<TaskRow {task} on:openDetail={openDetail} />
-					<div class="missed-actions">
-						{#if task.recurrence_id}
+	{#if sortedMissed.length}
+		<section class="block missed-block">
+			<div class="section-title">Missed ({sortedMissed.length})</div>
+			<div class="stack" data-testid="missed-section">
+				{#each sortedMissed as task (task.id)}
+					<div class="missed-item">
+						<TaskRow {task} on:openDetail={openDetail} />
+						<div class="missed-actions">
+							{#if task.recurrence_id}
+								<button
+									type="button"
+									class="ghost"
+									on:click={() => skipMissed(task)}
+									disabled={!canResolveMissed(task)}
+								>
+									Skip next
+								</button>
+							{/if}
+							<button type="button" on:click={() => markMissedDone(task)} disabled={!canResolveMissed(task)}>
+								Mark done
+							</button>
 							<button
 								type="button"
-								class="ghost"
-								on:click={() => skipMissed(task)}
-								disabled={!canResolveMissed(task)}
+								class="danger"
+								on:click={() => deleteMissed(task)}
+								disabled={!canResolveMissed(task) || deletingMissedId === task.id}
 							>
-								Skip next
+								{deletingMissedId === task.id ? 'Deleting…' : 'Delete'}
 							</button>
-						{/if}
-						<button type="button" on:click={() => markMissedDone(task)} disabled={!canResolveMissed(task)}>
-							Mark done
-						</button>
-						<button
-							type="button"
-							class="danger"
-							on:click={() => deleteMissed(task)}
-							disabled={!canResolveMissed(task) || deletingMissedId === task.id}
-						>
-							{deletingMissedId === task.id ? 'Deleting…' : 'Delete'}
-						</button>
+						</div>
 					</div>
-				</div>
-			{/each}
-			{#if missedActionError}
-				<p class="missed-error">{missedActionError}</p>
+				{/each}
+				{#if missedActionError}
+					<p class="missed-error">{missedActionError}</p>
+				{/if}
+			</div>
+		</section>
+	{/if}
+
+	<section class="block">
+		<div class="section-title">Planned</div>
+		<div class="stack">
+				{#if sortedPending.length}
+				{#each sortedPending as task (task.id)}
+					<TaskRow {task} on:openDetail={openDetail} />
+				{/each}
+			{:else}
+				<p class="empty">Nothing scheduled. Add a task to My Day.</p>
 			{/if}
 		</div>
 	</section>
-{/if}
 
-<section class="block">
-	<div class="section-title">Planned</div>
-	<div class="stack">
-			{#if sortedPending.length}
-			{#each sortedPending as task (task.id)}
-				<TaskRow {task} on:openDetail={openDetail} />
-			{/each}
-		{:else}
-			<p class="empty">Nothing scheduled. Add a task to My Day.</p>
-		{/if}
-	</div>
-</section>
-
-<section class="block">
-	<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
-	<div class="stack" data-testid="completed-section">
-			{#if sortedCompleted.length}
-			{#each sortedCompleted as task (task.id)}
-				<TaskRow {task} completedContext={true} on:openDetail={openDetail} />
-			{/each}
-		{:else}
-			<p class="empty subtle">No completed tasks yet.</p>
-		{/if}
-	</div>
-</section>
+	<section class="block">
+		<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
+		<div class="stack" data-testid="completed-section">
+				{#if sortedCompleted.length}
+				{#each sortedCompleted as task (task.id)}
+					<TaskRow {task} completedContext={true} on:openDetail={openDetail} />
+				{/each}
+			{:else}
+				<p class="empty subtle">No completed tasks yet.</p>
+			{/if}
+		</div>
+	</section>
+</div>
 
 {#if $myDaySuggestions?.length}
 	<div class="suggestions-flyout">
@@ -281,6 +283,10 @@
 </div>
 
 <style>
+	.page-content {
+		padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px);
+	}
+
 	.page-header {
 		display: flex;
 		justify-content: space-between;
@@ -293,7 +299,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		font-size: 11px;
-		color: #94a3b8;
+		color: var(--app-muted);
 		margin: 0;
 	}
 
@@ -305,7 +311,7 @@
 
 	.sub {
 		margin: 0;
-		color: #94a3b8;
+		color: var(--app-muted);
 	}
 
 	.actions {
@@ -338,7 +344,7 @@
 	}
 
 	.section-title {
-		color: #94a3b8;
+		color: var(--app-muted);
 		font-size: 13px;
 		margin-bottom: 6px;
 	}
@@ -361,9 +367,9 @@
 	}
 
 	.missed-actions button {
-		background: #0f172a;
-		border: 1px solid #334155;
-		color: #e2e8f0;
+		background: var(--surface-1);
+		border: 1px solid var(--border-2);
+		color: var(--app-text);
 		border-radius: 999px;
 		padding: 5px 10px;
 		font-size: 12px;
@@ -399,8 +405,8 @@
 		display: grid;
 		grid-template-columns: 1fr auto;
 		align-items: center;
-		background: #0f172a;
-		border: 1px solid #1f2937;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
 		border-radius: 12px;
 		padding: 10px 12px;
 	}
@@ -416,9 +422,9 @@
 	}
 
 	.suggestions-toggle {
-		background: rgba(15, 23, 42, 0.96);
-		color: #dbeafe;
-		border: 1px solid #334155;
+		background: var(--surface-1);
+		color: var(--app-text);
+		border: 1px solid var(--border-2);
 		border-radius: 999px;
 		padding: 8px 14px;
 		font-size: 12px;
@@ -430,8 +436,8 @@
 		width: min(420px, calc(100vw - 28px));
 		max-height: min(50vh, 420px);
 		overflow: auto;
-		background: rgba(11, 18, 33, 0.97);
-		border: 1px solid #334155;
+		background: var(--surface-2);
+		border: 1px solid var(--border-2);
 		border-radius: 14px;
 		padding: 12px;
 		box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
@@ -442,13 +448,13 @@
 		align-items: center;
 		justify-content: space-between;
 		margin-bottom: 10px;
-		color: #e2e8f0;
+		color: var(--app-text);
 	}
 
 	.panel-head .ghost.tiny {
-		background: #0f172a;
-		color: #cbd5e1;
-		border: 1px solid #334155;
+		background: var(--surface-1);
+		color: var(--app-text);
+		border: 1px solid var(--border-2);
 		border-radius: 999px;
 		padding: 5px 10px;
 		font-size: 12px;
@@ -462,7 +468,7 @@
 
 	.suggestion .meta {
 		margin: 2px 0 0;
-		color: #94a3b8;
+		color: var(--app-muted);
 		font-size: 13px;
 	}
 
@@ -476,11 +482,11 @@
 	}
 
 	.empty {
-		color: #94a3b8;
+		color: var(--app-muted);
 		margin: 0;
 		padding: 12px;
-		background: #0b1221;
-		border: 1px dashed #1f2937;
+		background: var(--surface-2);
+		border: 1px dashed var(--border-1);
 		border-radius: 10px;
 	}
 
@@ -492,13 +498,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		color: #cbd5e1;
+		color: var(--app-text);
 	}
 
 	.sorter select {
-		background: #0f172a;
-		color: #e2e8f0;
-		border: 1px solid #1f2937;
+		background: var(--surface-1);
+		color: var(--app-text);
+		border: 1px solid var(--border-1);
 		border-radius: 999px;
 		padding: 6px 10px;
 		min-height: 32px;
@@ -508,7 +514,7 @@
 
 	.sorter span {
 		font-size: 11px;
-		color: #94a3b8;
+		color: var(--app-muted);
 	}
 
 	.mobile-add {
@@ -523,8 +529,8 @@
 	}
 
 	.mobile-add .bar {
-		background: rgba(15, 23, 42, 0.96);
-		border: 1px solid #1f2937;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
 		border-radius: 16px;
 		padding: 7px;
 		display: grid;
@@ -538,9 +544,9 @@
 
 	.mobile-add input {
 		width: 100%;
-		background: #0b1221;
-		border: 1px solid #1f2937;
-		color: #e2e8f0;
+		background: var(--surface-2);
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		border-radius: 10px;
 		padding: 10px 12px;
 	}
@@ -555,6 +561,10 @@
 	}
 
 	@media (max-width: 900px) {
+		.page-content {
+			padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 108px);
+		}
+
 		.page-header {
 			flex-direction: row;
 			align-items: center;
@@ -563,10 +573,6 @@
 
 		.actions {
 			margin-left: 0;
-		}
-
-		.stack {
-			padding-bottom: 88px;
 		}
 
 		.suggestion {

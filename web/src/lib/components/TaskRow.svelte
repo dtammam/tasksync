@@ -5,6 +5,11 @@ import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { members } from '$lib/stores/members';
 import { auth } from '$lib/stores/auth';
+import {
+	isRecurrenceRule,
+	nextDueForRecurrence,
+	recurrenceRuleLabels
+} from '$lib/tasks/recurrence';
 
 export let task;
 export let completedContext = false;
@@ -68,13 +73,6 @@ const addNextWeek = () => {
 	tasks.setDueDate(task.id, nextWeekIso());
 };
 
-const parseIsoDate = (value) => {
-	if (!value) return new Date();
-	const [year, month, day] = String(value).split('-').map(Number);
-	if (!year || !month || !day) return new Date(value);
-	return new Date(year, month - 1, day);
-};
-
 const isTodayTs = (ts) => {
 	if (typeof ts !== 'number' || !Number.isFinite(ts)) return false;
 	const now = new Date();
@@ -86,59 +84,12 @@ const isTodayTs = (ts) => {
 	);
 };
 
-const toIsoDate = (date) => {
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, '0');
-	const day = String(date.getDate()).padStart(2, '0');
-	return `${year}-${month}-${day}`;
-};
-
-const addDays = (dateIso, days) => {
-	const d = parseIsoDate(dateIso);
-	d.setDate(d.getDate() + days);
-	return toIsoDate(d);
-};
-
-const addWeekdays = (dateIso, weekdays) => {
-	const d = parseIsoDate(dateIso);
-	let remaining = weekdays;
-	while (remaining > 0) {
-		d.setDate(d.getDate() + 1);
-		const day = d.getDay();
-		if (day !== 0 && day !== 6) {
-			remaining -= 1;
-		}
-	}
-	return toIsoDate(d);
-};
-
-const nextDueForRule = (dateIso, recurRule) => {
-	if (!dateIso || !recurRule) return undefined;
-	switch (recurRule) {
-		case 'daily':
-			return addDays(dateIso, 1);
-		case 'weekdays':
-			return addWeekdays(dateIso, 1);
-		case 'weekly':
-			return addDays(dateIso, 7);
-		case 'biweekly':
-			return addDays(dateIso, 14);
-		case 'monthly': {
-			const d = parseIsoDate(dateIso);
-			d.setMonth(d.getMonth() + 1);
-			return toIsoDate(d);
-		}
-		default:
-			return undefined;
-	}
-};
-
 const recurrencePreview = (taskValue, count = 2) => {
 	if (!taskValue?.recurrence_id || !taskValue?.due_date) return '';
 	const nextDates = [];
 	let cursor = taskValue.due_date;
 	for (let index = 0; index < count; index += 1) {
-		const next = nextDueForRule(cursor, taskValue.recurrence_id);
+		const next = nextDueForRecurrence(cursor, taskValue.recurrence_id);
 		if (!next) break;
 		nextDates.push(next);
 		cursor = next;
@@ -234,6 +185,10 @@ $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 $: recurPreview = recurrencePreview(task);
 $: isRecurringCompletedToday =
 	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
+$: recurLabel =
+	typeof task.recurrence_id === 'string' && isRecurrenceRule(task.recurrence_id)
+		? recurrenceRuleLabels[task.recurrence_id]
+		: task.recurrence_id;
 </script>
 
 <div
@@ -286,7 +241,7 @@ $: isRecurringCompletedToday =
 				<span class="chip subtle due-chip">Due {task.due_date}</span>
 			{/if}
 			{#if task.recurrence_id}
-				<span class="chip subtle recur-chip">{task.recurrence_id}</span>
+				<span class="chip subtle recur-chip">{recurLabel}</span>
 			{/if}
 			{#if recurPreview}
 				<span class="chip subtle recur-next-chip">{recurPreview}</span>

@@ -60,11 +60,28 @@ describe('sound settings store', () => {
 			customSoundFileName: 'ding.wav',
 			customSoundDataUrl: 'data:audio/wav;base64,AAAA'
 		});
+		expect(get(soundSettings).customSoundFilesJson).toContain('data:audio/wav;base64,AAAA');
 
 		soundSettings.clearCustomSound();
 		await waitForWrites();
 
 		expect(get(soundSettings).theme).toBe(defaultSoundSettings.theme);
 		expect(get(soundSettings).customSoundDataUrl).toBeUndefined();
+		expect(get(soundSettings).customSoundFilesJson).toBeUndefined();
+	});
+
+	it('stores multiple custom sounds and keeps first entry as legacy-compatible default', async () => {
+		soundSettings.setCustomSounds([
+			{ dataUrl: 'data:audio/wav;base64,AAAA', fileName: 'ding.wav', fileId: 'snd-1' },
+			{ dataUrl: 'data:audio/wav;base64,BBBB', fileName: 'tap.wav', fileId: 'snd-2' }
+		]);
+		await waitForWrites();
+
+		const current = get(soundSettings);
+		expect(current.theme).toBe('custom_file');
+		expect(current.customSoundFileId).toBe('snd-1');
+		expect(current.customSoundFileName).toBe('ding.wav');
+		expect(current.customSoundDataUrl).toBe('data:audio/wav;base64,AAAA');
+		expect(current.customSoundFilesJson).toContain('tap.wav');
 	});
 });

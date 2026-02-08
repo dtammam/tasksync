@@ -1,7 +1,13 @@
 import type { SoundSettings, SoundTheme } from '$shared/types/settings';
 
 let audioContext: AudioContext | null = null;
-let customBufferCache: { src: string; buffer: AudioBuffer } | null = null;
+const customBufferCache = new Map<string, AudioBuffer>();
+
+interface CustomSoundFileEntry {
+	id?: string;
+	name?: string;
+	dataUrl: string;
+}
 
 const contextState = (ctx: AudioContext | null) =>
 	ctx ? String((ctx as AudioContext & { state?: string }).state ?? '') : 'closed';
@@ -12,6 +18,54 @@ const clampVolume = (volume: number) => {
 };
 
 const toPerceptualGain = (linearVolume: number) => Math.pow(linearVolume, 1.35);
+
+const normalizeCustomSoundEntry = (entry: Partial<CustomSoundFileEntry>): CustomSoundFileEntry | null => {
+	const dataUrl = typeof entry.dataUrl === 'string' ? entry.dataUrl.trim() : '';
+	if (!dataUrl.startsWith('data:audio/')) return null;
+	const id =
+		typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim().slice(0, 180) : undefined;
+	const name =
+		typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 180) : undefined;
+	return { id, name, dataUrl };
+};
+
+const parseCustomSoundEntries = (settings: SoundSettings) => {
+	const raw = settings.customSoundFilesJson;
+	if (typeof raw === 'string' && raw.trim()) {
+		try {
+			const parsed = JSON.parse(raw) as unknown;
+			if (Array.isArray(parsed)) {
+				const normalized = parsed
+					.map((entry) => {
+						if (!entry || typeof entry !== 'object') return null;
+						return normalizeCustomSoundEntry(entry as Partial<CustomSoundFileEntry>);
+					})
+					.filter((entry): entry is CustomSoundFileEntry => !!entry)
+					.slice(0, 8);
+				if (normalized.length) return normalized;
+			}
+		} catch {
+			// Fall through to legacy single-field path.
+		}
+	}
+	if (typeof settings.customSoundDataUrl === 'string') {
+		const legacy = normalizeCustomSoundEntry({
+			id: settings.customSoundFileId,
+			name: settings.customSoundFileName,
+			dataUrl: settings.customSoundDataUrl
+		});
+		return legacy ? [legacy] : [];
+	}
+	return [];
+};
+
+const pickRandomCustomSoundEntry = (settings: SoundSettings): CustomSoundFileEntry | null => {
+	const entries = parseCustomSoundEntries(settings);
+	if (!entries.length) return null;
+	if (entries.length === 1) return entries[0];
+	const index = Math.floor(Math.random() * entries.length);
+	return entries[index] ?? entries[0];
+};
 
 const getAudioContext = () => {
 	if (typeof window === 'undefined') return null;
@@ -225,21 +279,26 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 };
 
 const decodeCustomBuffer = async (ctx: AudioContext, src: string) => {
-	if (customBufferCache?.src === src) return customBufferCache.buffer;
+	const cached = customBufferCache.get(src);
+	if (cached) return cached;
 	const response = await fetch(src);
 	const arrayBuffer = await response.arrayBuffer();
 	const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
-	customBufferCache = { src, buffer: decoded };
+	customBufferCache.set(src, decoded);
+	if (customBufferCache.size > 12) {
+		const oldest = customBufferCache.keys().next().value;
+		if (oldest) {
+			customBufferCache.delete(oldest);
+		}
+	}
 	return decoded;
 };
 
 const playCustomFileWithWebAudio = async (
 	ctx: AudioContext,
-	settings: SoundSettings,
+	src: string,
 	volume: number
 ) => {
-	const src = settings.customSoundDataUrl?.trim();
-	if (!src || !src.startsWith('data:audio/')) return false;
 	try {
 		const buffer = await decodeCustomBuffer(ctx, src);
 		const source = ctx.createBufferSource();
@@ -255,9 +314,7 @@ const playCustomFileWithWebAudio = async (
 	}
 };
 
-const playCustomFileWithHtmlAudio = async (settings: SoundSettings, volume: number) => {
-	const src = settings.customSoundDataUrl?.trim();
-	if (!src) return false;
+const playCustomFileWithHtmlAudio = async (src: string, volume: number) => {
 	if (typeof Audio === 'undefined') return false;
 	try {
 		const audio = new Audio(src);
@@ -275,10 +332,15 @@ export const playCompletion = async (settings: SoundSettings) => {
 	const volume = toPerceptualGain(clampVolume(settings.volume));
 	if (volume <= 0.0001) return;
 	const ctx = await ensureRunningContext();
+	const customSound = settings.theme === 'custom_file' ? pickRandomCustomSoundEntry(settings) : null;
 	if (settings.theme === 'custom_file') {
-		const playedWithContext = ctx ? await playCustomFileWithWebAudio(ctx, settings, volume) : false;
+		const playedWithContext =
+			ctx && customSound
+				? await playCustomFileWithWebAudio(ctx, customSound.dataUrl, volume)
+				: false;
 		if (playedWithContext) return;
-		const playedWithHtmlAudio = await playCustomFileWithHtmlAudio(settings, volume);
+		const playedWithHtmlAudio =
+			customSound ? await playCustomFileWithHtmlAudio(customSound.dataUrl, volume) : false;
 		if (playedWithHtmlAudio) return;
 	}
 	if (!ctx) return;

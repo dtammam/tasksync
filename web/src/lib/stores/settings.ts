@@ -21,6 +21,12 @@ export const defaultSoundSettings: SoundSettings = {
 	theme: 'chime_soft'
 };
 
+interface CustomSoundFileEntry {
+	id?: string;
+	name?: string;
+	dataUrl: string;
+}
+
 const normalizeVolume = (volume: number) => {
 	if (!Number.isFinite(volume)) return defaultSoundSettings.volume;
 	return Math.max(0, Math.min(100, Math.round(volume)));
@@ -29,20 +35,64 @@ const normalizeVolume = (volume: number) => {
 const normalizeTheme = (theme?: string): SoundTheme =>
 	theme && soundThemes.includes(theme as SoundTheme) ? (theme as SoundTheme) : defaultSoundSettings.theme;
 
-const normalizeSettings = (settings: Partial<SoundSettings>): SoundSettings => ({
-	enabled: settings.enabled ?? defaultSoundSettings.enabled,
-	volume: normalizeVolume(settings.volume ?? defaultSoundSettings.volume),
-	theme: normalizeTheme(settings.theme),
-	customSoundFileId: settings.customSoundFileId,
-	customSoundDataUrl:
-		typeof settings.customSoundDataUrl === 'string' ? settings.customSoundDataUrl : undefined,
-	customSoundFileName:
-		typeof settings.customSoundFileName === 'string' ? settings.customSoundFileName : undefined,
-	profileAttachmentsJson:
-		typeof settings.profileAttachmentsJson === 'string'
-			? settings.profileAttachmentsJson
-			: undefined
-});
+const normalizeCustomSoundEntry = (entry: Partial<CustomSoundFileEntry>): CustomSoundFileEntry | null => {
+	const dataUrl = typeof entry.dataUrl === 'string' ? entry.dataUrl.trim() : '';
+	if (!dataUrl.startsWith('data:audio/')) return null;
+	const id =
+		typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim().slice(0, 180) : undefined;
+	const name =
+		typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 180) : undefined;
+	return { id, name, dataUrl };
+};
+
+const parseCustomSoundEntries = (raw?: string): CustomSoundFileEntry[] => {
+	if (!raw || typeof raw !== 'string') return [];
+	try {
+		const parsed = JSON.parse(raw) as unknown;
+		if (!Array.isArray(parsed)) return [];
+		return parsed
+			.map((entry) => {
+				if (!entry || typeof entry !== 'object') return null;
+				return normalizeCustomSoundEntry(entry as Partial<CustomSoundFileEntry>);
+			})
+			.filter((entry): entry is CustomSoundFileEntry => !!entry)
+			.slice(0, 8);
+	} catch {
+		return [];
+	}
+};
+
+const stringifyCustomSoundEntries = (entries: CustomSoundFileEntry[]) =>
+	entries.length ? JSON.stringify(entries) : undefined;
+
+const normalizeSettings = (settings: Partial<SoundSettings>): SoundSettings => {
+	const parsedEntries = parseCustomSoundEntries(settings.customSoundFilesJson);
+	const legacySingle =
+		typeof settings.customSoundDataUrl === 'string' &&
+		settings.customSoundDataUrl.trim().startsWith('data:audio/')
+			? normalizeCustomSoundEntry({
+					id: settings.customSoundFileId,
+					name: settings.customSoundFileName,
+					dataUrl: settings.customSoundDataUrl
+				})
+			: null;
+	const customSoundEntries =
+		parsedEntries.length > 0 ? parsedEntries : legacySingle ? [legacySingle] : [];
+	const firstCustomSound = customSoundEntries[0];
+	return {
+		enabled: settings.enabled ?? defaultSoundSettings.enabled,
+		volume: normalizeVolume(settings.volume ?? defaultSoundSettings.volume),
+		theme: normalizeTheme(settings.theme),
+		customSoundFileId: firstCustomSound?.id ?? settings.customSoundFileId,
+		customSoundDataUrl: firstCustomSound?.dataUrl,
+		customSoundFileName: firstCustomSound?.name ?? settings.customSoundFileName,
+		customSoundFilesJson: stringifyCustomSoundEntries(customSoundEntries),
+		profileAttachmentsJson:
+			typeof settings.profileAttachmentsJson === 'string'
+				? settings.profileAttachmentsJson
+				: undefined
+	};
+};
 
 const soundSettingsStore = writable<SoundSettings>(defaultSoundSettings);
 let settingsMutationVersion = 0;
@@ -65,6 +115,7 @@ const pushRemote = async (settings: SoundSettings, clearCustomSound: boolean) =>
 			customSoundFileId: settings.customSoundFileId,
 			customSoundDataUrl: settings.customSoundDataUrl,
 			customSoundFileName: settings.customSoundFileName,
+			customSoundFilesJson: settings.customSoundFilesJson,
 			profileAttachmentsJson: settings.profileAttachmentsJson,
 			clearCustomSound
 		});
@@ -129,14 +180,31 @@ export const soundSettings = {
 		});
 	},
 	setCustomSound(dataUrl: string, fileName?: string) {
+		soundSettings.setCustomSounds([{ dataUrl, fileName }]);
+	},
+	setCustomSounds(files: { dataUrl: string; fileName?: string; fileId?: string }[]) {
+		const entries = files
+			.map((file) =>
+				normalizeCustomSoundEntry({
+					id: file.fileId,
+					name: file.fileName,
+					dataUrl: file.dataUrl
+				})
+			)
+			.filter((entry): entry is CustomSoundFileEntry => !!entry)
+			.slice(0, 8);
+		if (!entries.length) return;
+		const serialized = stringifyCustomSoundEntries(entries);
+		const firstEntry = entries[0];
 		settingsMutationVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = {
 				...current,
 				theme: 'custom_file' as SoundTheme,
-				customSoundDataUrl: dataUrl,
-				customSoundFileName: fileName?.trim() || current.customSoundFileName,
-				customSoundFileId: undefined
+				customSoundDataUrl: firstEntry.dataUrl,
+				customSoundFileName: firstEntry.name ?? current.customSoundFileName,
+				customSoundFileId: firstEntry.id,
+				customSoundFilesJson: serialized
 			};
 			saveLocal(next);
 			queueRemoteSave(next);
@@ -153,7 +221,8 @@ export const soundSettings = {
 				theme: nextTheme,
 				customSoundDataUrl: undefined,
 				customSoundFileName: undefined,
-				customSoundFileId: undefined
+				customSoundFileId: undefined,
+				customSoundFilesJson: undefined
 			};
 			saveLocal(next);
 			queueRemoteSave(next, { clearCustomSound: true });
