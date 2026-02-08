@@ -69,12 +69,13 @@ package "tasksync Server" {
 - **State:** Svelte writable/derived stores; repository layer persists to IndexedDB; background SharedWorker handles sync + indexing.
 - **Search:** MiniSearch (in‑memory) for MVP; upgrade to SQLite WASM + FTS5 in V1 if needed.
 - **Attachments:** Saved in OPFS/Cache API by SHA‑256 path; ≤10 MB enforced client‑side.
-- **Audio:** Web Audio API with pre‑decoded buffers; user settings control theme, volume, enable.
+- **Audio:** Web Audio API with pre‑decoded buffers and custom-file buffer playback (gain-controlled for mobile/WebKit consistency); user settings control theme, volume, enable.
 
 ## Server Architecture
 - **Axum** web server; **SQLx** to SQLite (WAL). Pragmas: `journal_mode=WAL`, `synchronous=NORMAL`.
 - **Files:** `data/obj/xx/<sha256>` content‑addressed; MIME allow‑list; 10 MB limit.
 - **Auth:** JWT (HS256) per user; device `client_id` per installation; all endpoints behind TLS.
+- **User media/settings:** `/auth/sound` persists per-user sound + profile media metadata server-side for cross-device consistency.
 
 ## Data Model (abridged)
 ```
@@ -93,7 +94,7 @@ User { id, email, display, password_hash }
 Space { id, name }
 Membership { id, space_id, user_id, role:('admin'|'contributor') }
 ListGrant { id, space_id, list_id, user_id }
-UserSettings { user_id PK, sound_enabled bool, sound_volume 0..100, sound_theme, custom_sound_file_id? }
+UserSettings { user_id PK, sound_enabled bool, sound_volume 0..100, sound_theme, custom_sound_file_id?, custom_sound_file_name?, custom_sound_data_url?, profile_attachments_json? }
 ```
 
 ### Key Tables (SQL snippets)
@@ -142,6 +143,7 @@ create table if not exists change (
 ## My Day (materialization + scoring)
 - Include: overdue, due today, scheduled today, and instances from recurring templates.
 - Score: priority weight + overdue bucket + pins; order with fractional keys.
+- Rollover behavior: overdue pending items are surfaced in a dedicated **Missed** bucket with direct resolve actions (skip next recurrence, mark done, delete).
 
 ## Completion Sound
 - Built‑ins: `chime_soft`, `click_pop`, `sparkle_short`, `wood_tick` (≤150KB each).

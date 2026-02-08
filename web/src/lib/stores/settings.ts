@@ -1,6 +1,8 @@
 import { get, writable } from 'svelte/store';
 import { repo } from '$lib/data/repo';
 import type { SoundSettings, SoundTheme } from '$shared/types/settings';
+import { api } from '$lib/api/client';
+import { auth } from '$lib/stores/auth';
 
 export const soundThemes: SoundTheme[] = [
 	'chime_soft',
@@ -35,11 +37,62 @@ const normalizeSettings = (settings: Partial<SoundSettings>): SoundSettings => (
 	customSoundDataUrl:
 		typeof settings.customSoundDataUrl === 'string' ? settings.customSoundDataUrl : undefined,
 	customSoundFileName:
-		typeof settings.customSoundFileName === 'string' ? settings.customSoundFileName : undefined
+		typeof settings.customSoundFileName === 'string' ? settings.customSoundFileName : undefined,
+	profileAttachmentsJson:
+		typeof settings.profileAttachmentsJson === 'string'
+			? settings.profileAttachmentsJson
+			: undefined
 });
 
 const soundSettingsStore = writable<SoundSettings>(defaultSoundSettings);
 let settingsMutationVersion = 0;
+let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingRemotePayload: { settings: SoundSettings; clearCustomSound: boolean } | null = null;
+
+const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;
+
+const saveLocal = (settings: SoundSettings) => {
+	void repo.saveSoundSettings(settings);
+};
+
+const pushRemote = async (settings: SoundSettings, clearCustomSound: boolean) => {
+	if (!canSyncRemote()) return;
+	try {
+		const remote = await api.updateSoundSettings({
+			enabled: settings.enabled,
+			volume: settings.volume,
+			theme: settings.theme,
+			customSoundFileId: settings.customSoundFileId,
+			customSoundDataUrl: settings.customSoundDataUrl,
+			customSoundFileName: settings.customSoundFileName,
+			profileAttachmentsJson: settings.profileAttachmentsJson,
+			clearCustomSound
+		});
+		const normalized = normalizeSettings(remote);
+		soundSettingsStore.set(normalized);
+		saveLocal(normalized);
+	} catch {
+		// Keep local settings as source of truth while server sync is best-effort.
+	}
+};
+
+const queueRemoteSave = (settings: SoundSettings, options?: { clearCustomSound?: boolean }) => {
+	if (!canSyncRemote() || typeof window === 'undefined') return;
+	pendingRemotePayload = {
+		settings,
+		clearCustomSound: options?.clearCustomSound ?? false
+	};
+	if (remoteSaveTimer) {
+		window.clearTimeout(remoteSaveTimer);
+	}
+	remoteSaveTimer = window.setTimeout(() => {
+		remoteSaveTimer = null;
+		const payload = pendingRemotePayload;
+		pendingRemotePayload = null;
+		if (!payload) return;
+		void pushRemote(payload.settings, payload.clearCustomSound);
+	}, 250);
+};
 
 export const soundSettings = {
 	subscribe: soundSettingsStore.subscribe,
@@ -50,7 +103,8 @@ export const soundSettings = {
 		settingsMutationVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = { ...current, enabled };
-			void repo.saveSoundSettings(next);
+			saveLocal(next);
+			queueRemoteSave(next);
 			return next;
 		});
 	},
@@ -59,7 +113,8 @@ export const soundSettings = {
 		settingsMutationVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = { ...current, volume: nextVolume };
-			void repo.saveSoundSettings(next);
+			saveLocal(next);
+			queueRemoteSave(next);
 			return next;
 		});
 	},
@@ -68,7 +123,8 @@ export const soundSettings = {
 		settingsMutationVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = { ...current, theme: nextTheme };
-			void repo.saveSoundSettings(next);
+			saveLocal(next);
+			queueRemoteSave(next);
 			return next;
 		});
 	},
@@ -82,7 +138,8 @@ export const soundSettings = {
 				customSoundFileName: fileName?.trim() || current.customSoundFileName,
 				customSoundFileId: undefined
 			};
-			void repo.saveSoundSettings(next);
+			saveLocal(next);
+			queueRemoteSave(next);
 			return next;
 		});
 	},
@@ -98,7 +155,8 @@ export const soundSettings = {
 				customSoundFileName: undefined,
 				customSoundFileId: undefined
 			};
-			void repo.saveSoundSettings(next);
+			saveLocal(next);
+			queueRemoteSave(next, { clearCustomSound: true });
 			return next;
 		});
 	},
@@ -106,7 +164,8 @@ export const soundSettings = {
 		const normalized = normalizeSettings(settings);
 		settingsMutationVersion += 1;
 		soundSettingsStore.set(normalized);
-		void repo.saveSoundSettings(normalized);
+		saveLocal(normalized);
+		queueRemoteSave(normalized);
 	},
 	async hydrateFromDb() {
 		const hydrateStartVersion = settingsMutationVersion;
@@ -119,5 +178,17 @@ export const soundSettings = {
 			return;
 		}
 		soundSettingsStore.set(normalizeSettings(stored));
+	},
+	async hydrateFromServer() {
+		if (!canSyncRemote()) return;
+		try {
+			const remote = await api.getSoundSettings();
+			const normalized = normalizeSettings(remote);
+			settingsMutationVersion += 1;
+			soundSettingsStore.set(normalized);
+			saveLocal(normalized);
+		} catch {
+			// Keep local settings when server is unavailable.
+		}
 	}
 };

@@ -1,6 +1,6 @@
 <script lang="ts">
 	// @ts-nocheck
-import { createEventDispatcher } from 'svelte';
+import { createEventDispatcher, onDestroy } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { members } from '$lib/stores/members';
@@ -14,6 +14,8 @@ let titleDraft = task.title;
 let showActions = false;
 let deleting = false;
 let actionError = '';
+let statusAck = false;
+let toggleTimer = null;
 
 /** @param {Event & { target: HTMLSelectElement }} event */
 const updateList = (event) => {
@@ -64,6 +66,96 @@ const addNextWeek = () => {
 	if (!canEditTask) return;
 	tasks.setDueDate(task.id, nextWeekIso());
 };
+
+const parseIsoDate = (value) => {
+	if (!value) return new Date();
+	const [year, month, day] = String(value).split('-').map(Number);
+	if (!year || !month || !day) return new Date(value);
+	return new Date(year, month - 1, day);
+};
+
+const toIsoDate = (date) => {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+};
+
+const addDays = (dateIso, days) => {
+	const d = parseIsoDate(dateIso);
+	d.setDate(d.getDate() + days);
+	return toIsoDate(d);
+};
+
+const addWeekdays = (dateIso, weekdays) => {
+	const d = parseIsoDate(dateIso);
+	let remaining = weekdays;
+	while (remaining > 0) {
+		d.setDate(d.getDate() + 1);
+		const day = d.getDay();
+		if (day !== 0 && day !== 6) {
+			remaining -= 1;
+		}
+	}
+	return toIsoDate(d);
+};
+
+const nextDueForRule = (dateIso, recurRule) => {
+	if (!dateIso || !recurRule) return undefined;
+	switch (recurRule) {
+		case 'daily':
+			return addDays(dateIso, 1);
+		case 'weekdays':
+			return addWeekdays(dateIso, 1);
+		case 'weekly':
+			return addDays(dateIso, 7);
+		case 'biweekly':
+			return addDays(dateIso, 14);
+		case 'monthly': {
+			const d = parseIsoDate(dateIso);
+			d.setMonth(d.getMonth() + 1);
+			return toIsoDate(d);
+		}
+		default:
+			return undefined;
+	}
+};
+
+const recurrencePreview = (taskValue, count = 2) => {
+	if (!taskValue?.recurrence_id || !taskValue?.due_date) return '';
+	const nextDates = [];
+	let cursor = taskValue.due_date;
+	for (let index = 0; index < count; index += 1) {
+		const next = nextDueForRule(cursor, taskValue.recurrence_id);
+		if (!next) break;
+		nextDates.push(next);
+		cursor = next;
+	}
+	if (!nextDates.length) return '';
+	return `Next: ${nextDates.join(', ')}`;
+};
+
+const handleToggleStatus = () => {
+	if (!canToggleStatus || toggleTimer) return;
+	if (task.status === 'done') {
+		tasks.toggle(task.id);
+		return;
+	}
+	statusAck = true;
+	toggleTimer = window.setTimeout(() => {
+		statusAck = false;
+		toggleTimer = null;
+		tasks.toggle(task.id);
+	}, 180);
+};
+
+onDestroy(() => {
+	if (toggleTimer) {
+		window.clearTimeout(toggleTimer);
+		toggleTimer = null;
+	}
+});
+
 const toggleStar = () => {
 	if (!canEditTask) return;
 	tasks.setPriority(task.id, task.priority > 0 ? 0 : 1);
@@ -123,6 +215,7 @@ $: canToggleStatus = canEditTask;
 $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
+$: recurPreview = recurrencePreview(task);
 </script>
 
 <div
@@ -134,13 +227,14 @@ $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 >
 	<div class="left">
 		<button
-			class="status"
+			class={`status ${statusAck ? 'ack' : ''}`}
 			aria-label="toggle task"
-			on:click={() => canToggleStatus && tasks.toggle(task.id)}
+			on:click={handleToggleStatus}
 			data-testid="task-toggle"
+			data-acknowledged={statusAck ? 'true' : 'false'}
 			disabled={!canToggleStatus}
 		>
-			{task.status === 'done' ? '✔' : '○'}
+			{statusAck ? '✓' : task.status === 'done' ? '✔' : '○'}
 		</button>
 	</div>
 	<div class="meta">
@@ -175,6 +269,9 @@ $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 			{/if}
 			{#if task.recurrence_id}
 				<span class="chip subtle recur-chip">{task.recurrence_id}</span>
+			{/if}
+			{#if recurPreview}
+				<span class="chip subtle recur-next-chip">{recurPreview}</span>
 			{/if}
 			{#if assigneeDisplay}
 				<span class="chip subtle assignee-chip">To: {assigneeIcon} {assigneeDisplay}</span>
@@ -252,6 +349,14 @@ $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 		cursor: pointer;
 		font-size: 16px;
 		line-height: 1;
+		transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+	}
+
+	.status.ack {
+		color: #22c55e;
+		border-color: #22c55e;
+		box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+		transform: scale(1.06);
 	}
 
 	.status:disabled {

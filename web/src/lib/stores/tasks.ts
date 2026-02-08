@@ -409,6 +409,7 @@ export const pendingCount = derived(tasksStore, ($tasks) =>
 
 const todayIso = () => toLocalIsoDate(new Date());
 const isToday = (date?: string) => date && date === todayIso();
+const isBeforeToday = (date?: string) => !!date && date < todayIso();
 const isTodayTs = (ts?: number) =>
 	typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayIso();
 const myDayDateKey = readable(todayIso(), (set) => {
@@ -437,6 +438,8 @@ const inMyDay = (task: Task) => {
 	return isToday(task.due_date);
 };
 
+const isMissedTask = (task: Task) => task.status === 'pending' && isBeforeToday(task.due_date);
+
 const wasCompletedToday = (task: Task) => {
 	if (task.status !== 'done') return false;
 	return isTodayTs(task.completed_ts ?? task.updated_ts);
@@ -450,10 +453,28 @@ export const myDayPending = derived(
 			(task) =>
 				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
 				inMyDay(task) &&
+				!isMissedTask(task) &&
 				task.status === 'pending'
 		);
 	}
 );
+
+export const myDayMissed = derived([tasksStore, auth, myDayDateKey], ([$tasks, $auth, _myDayDateKey]) => {
+	void _myDayDateKey;
+	return $tasks
+		.filter(
+			(task) =>
+				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+				isMissedTask(task)
+		)
+		.sort((a, b) => {
+			const dueA = a.due_date ?? '';
+			const dueB = b.due_date ?? '';
+			if (dueA !== dueB) return dueA < dueB ? -1 : 1;
+			if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+			return a.created_ts - b.created_ts;
+		});
+});
 
 export const myDayCompleted = derived(
 	[tasksStore, auth, myDayDateKey],

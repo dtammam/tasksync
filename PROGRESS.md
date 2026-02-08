@@ -67,3 +67,6 @@
 - 2026-02-06 13:49 - Removed legacy sync fallback behavior so the app now fails fast on unsupported server versions, reducing hidden drift paths and making sync reliability issues easier to detect and fix.
 - 2026-02-06 14:31 - Prepared self-hosting baseline by adding Docker/Compose packaging and seed workflow, while improving offline continuity so signed-in users keep working locally during temporary server outages.
 - 2026-02-06 14:58 - Unblocked reverse-proxy hosting by adding configurable Vite allowed-host support and Docker build args, so production domains can be permitted without hardcoding environment-specific hostnames.
+- 2026-02-07 20:50 - Improved My Day trust by adding explicit missed-task surfacing after rollover, including direct recovery actions (skip recurring, mark done, delete) and quick completion-tap acknowledgment feedback.
+- 2026-02-07 20:50 - Reduced completion-sound variance on mobile/WebKit by routing custom audio through Web Audio gain control with improved browser-level volume mapping.
+- 2026-02-07 20:50 - Started server-backed profile media persistence by introducing per-user sound/media schema and `/auth/sound` read/update APIs, then wiring client settings hydration and best-effort sync to that endpoint.
