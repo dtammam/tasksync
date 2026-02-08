@@ -25,13 +25,21 @@
 - Lint/test discipline: run `npm run lint && npm run check && npm run test` after each commit; run `cargo fmt -- --check && cargo clippy -D warnings && cargo test` on server changes. Do not skip.
 - Respect `.editorconfig`, ESLint/Prettier, rustfmt; no unchecked formatting diffs.
 
+## Communication Style
+- Default to plain language and practical outcomes over deep technical detail.
+- Keep responses concise unless the user asks for deep dives.
+- Avoid over-engineering proposals; favor the smallest reliable next step.
+- When the user is under pressure, prioritize calm, direct recovery guidance first.
+
 ## Git & Hooks
 - Before any implementation or documentation change, verify the current branch is not `main`. If it is `main`, create and switch to an appropriately named branch first (for example: `feat/<scope>`, `fix/<scope>`, `chore/<scope>`, or `docs/<scope>`).
 - `core.hooksPath=hooks` is set. Hooks must pass before committing/pushing:
   - `pre-commit`: web lint/check/test; server fmt + clippy.
   - `pre-push`: web unit + Playwright smoke (skip only with `SKIP_PLAYWRIGHT=1` and note why); server tests.
 - Prefer conventional-ish commits (`feat:`, `fix:`, `chore:`) to keep history tidy.
-- Keep `PROGRESS.md` updated when you finish a meaningful chunk.
+- Keep planning and delivery logs current:
+  - add newly requested future features/cleanup items to `ROADMAP.md` under `Planned`
+  - when a planned item is solved, remove it from `ROADMAP.md` and capture the implementation outcome in `PROGRESS.md`
 
 ## Progress Log Standard
 - Write `PROGRESS.md` entries as product progress, not git/activity logs.
@@ -40,6 +48,12 @@
 - Keep implementation detail brief and only include it when needed to explain impact.
 - Treat `PROGRESS.md` as append-only by default: do not rewrite, reorder, or remove prior entries unless the user explicitly asks for a historical rewrite.
 - If a correction is needed, append a new correction entry instead of silently editing old history lines.
+
+## Roadmap Log Standard
+- `ROADMAP.md` is the source of truth for scheduled and not-yet-implemented work.
+- When the user asks to track a new feature/cleanup goal, add it to `ROADMAP.md` under `Planned`.
+- Do not move roadmap items into `PROGRESS.md` during planning only.
+- Move an item from `ROADMAP.md` to `PROGRESS.md` only once implementation is actually underway or delivered, and record the outcome in product terms.
 
 ## Security & Compliance
 - Follow `SECURITY.md` for disclosures; avoid logging secrets.
@@ -66,8 +80,9 @@
 6. Prefer sharing runnable `.ps1` scripts from `scripts/` for local testing/setup. If a needed script does not exist and the command is reusable, create the script and share that path.
 7. If a one-liner is still needed, provide a strict copy/paste-safe command with no leading spaces and no extra separator spacing (for example `...;$env:FOO='x';& ...`, not `...; $env:FOO='x'; & ...`).
 8. When outputting runnable commands, never prefix with bullets/dashes/numbers and never wrap a single command onto multiple lines; place each command on its own plain line or in a fenced code block.
-9. After each interaction with the user, briefly state overall percent completion for the project/feature.
-10. In substantial status/update responses, include `Suggested commit message:` immediately before the `Overall completion estimate:` line. Keep the suggested message concise and conventional (for example `feat: ...`, `fix: ...`, `chore: ...`).
+9. Keep `ROADMAP.md` current for planned work and move solved items from `ROADMAP.md` to `PROGRESS.md` when implementation actually starts or lands.
+10. After each interaction with the user, briefly state overall percent completion for the project/feature.
+11. In substantial status/update responses, include `Suggested commit message:` immediately before the `Overall completion estimate:` line. Keep the suggested message concise and conventional (for example `feat: ...`, `fix: ...`, `chore: ...`).
 
 **Prompt**
 ```
@@ -141,11 +156,4 @@ Return JSON with explicit errors per change on sync push. Update shared types.
   - Values to update if needed: `-ApiUrl`, `-Password`, `-SpaceId`, `-AdminEmail`, `-ListId`, optional `-NewMemberEmail`, optional `-NewMemberDisplay`, optional `-NewMemberPassword`.
   - One-liner fallback: `cd C:\Repositories\tasksync;scripts\7-admin-check.ps1`
 - **Web lint/check/unit fallback:** `cd C:\Repositories\tasksync\web;npm run lint;npm run check;npm run test`
-
-## Backlog Starters
-- Sound settings panel
-- My Day scoring refinements
-- Natural‑language quick add
-- CSV/JSON importers
-- E2EE key management (V1 option)
 
