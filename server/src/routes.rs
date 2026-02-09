@@ -337,6 +337,38 @@ fn normalize_ui_sidebar_panels(raw: Option<String>) -> Result<Option<String>, St
     Ok(Some(trimmed.to_string()))
 }
 
+fn normalize_ui_list_sort(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let parsed =
+        serde_json::from_str::<serde_json::Value>(trimmed).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let Some(obj) = parsed.as_object() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    let mode = obj.get("mode").and_then(|value| value.as_str()).unwrap_or("created");
+    let direction = obj.get("direction").and_then(|value| value.as_str()).unwrap_or("asc");
+    if !matches!(mode, "created" | "alpha" | "due_date") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !matches!(direction, "asc" | "desc") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    serde_json::to_string(&serde_json::json!({
+        "mode": mode,
+        "direction": direction,
+    }))
+    .map(Some)
+    .map_err(|_| StatusCode::BAD_REQUEST)
+}
+
 fn is_unique_violation(err: &sqlx::Error) -> bool {
     match err {
         sqlx::Error::Database(db_err) => db_err.message().contains("UNIQUE constraint failed"),
@@ -420,6 +452,7 @@ struct SoundSettingsResponse {
 struct UiPreferencesResponse {
     theme: String,
     sidebar_panels_json: Option<String>,
+    list_sort_json: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -441,6 +474,7 @@ struct UpdateSoundSettingsBody {
 struct UpdateUiPreferencesBody {
     theme: Option<String>,
     sidebar_panels_json: Option<String>,
+    list_sort_json: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -466,6 +500,7 @@ struct BackupUserRow {
     profile_attachments: Option<String>,
     ui_theme: Option<String>,
     ui_sidebar_panels: Option<String>,
+    ui_list_sort: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -821,7 +856,7 @@ async fn load_ui_preferences_for_user(
     user_id: &str,
 ) -> Result<UiPreferencesResponse, StatusCode> {
     sqlx::query_as::<_, UiPreferencesResponse>(
-        "select coalesce(ui_theme, 'default') as theme, ui_sidebar_panels as sidebar_panels_json from user where id = ?1 limit 1",
+        "select coalesce(ui_theme, 'default') as theme, ui_sidebar_panels as sidebar_panels_json, ui_list_sort as list_sort_json from user where id = ?1 limit 1",
     )
     .bind(user_id)
     .fetch_optional(pool)
@@ -853,14 +888,22 @@ async fn auth_update_preferences(
     } else {
         current.sidebar_panels_json
     };
+    let next_list_sort_json = if body.list_sort_json.is_some() {
+        normalize_ui_list_sort(body.list_sort_json)?
+    } else {
+        current.list_sort_json
+    };
 
-    sqlx::query("update user set ui_theme = ?1, ui_sidebar_panels = ?2 where id = ?3")
-        .bind(&next_theme)
-        .bind(&next_sidebar_panels_json)
-        .bind(&ctx.user_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query(
+        "update user set ui_theme = ?1, ui_sidebar_panels = ?2, ui_list_sort = ?3 where id = ?4",
+    )
+    .bind(&next_theme)
+    .bind(&next_sidebar_panels_json)
+    .bind(&next_list_sort_json)
+    .bind(&ctx.user_id)
+    .execute(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let updated = load_ui_preferences_for_user(&state.pool, &ctx.user_id).await?;
     Ok(Json(updated))
@@ -879,7 +922,7 @@ async fn load_space_backup(
             .ok_or(StatusCode::NOT_FOUND)?;
 
     let users = sqlx::query_as::<_, BackupUserRow>(
-        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.custom_sound_files_json, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
+        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.custom_sound_files_json, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels, u.ui_list_sort from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -977,6 +1020,7 @@ async fn auth_restore_backup(
             || normalize_custom_sound_files_json(user.custom_sound_files_json.clone()).is_err()
             || normalize_ui_theme(user.ui_theme.clone()).is_err()
             || normalize_ui_sidebar_panels(user.ui_sidebar_panels.clone()).is_err()
+            || normalize_ui_list_sort(user.ui_list_sort.clone()).is_err()
         {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -1031,11 +1075,13 @@ async fn auth_restore_backup(
             .unwrap_or_else(|| "default".to_string());
         let next_ui_sidebar_panels = normalize_ui_sidebar_panels(user.ui_sidebar_panels.clone())
             .map_err(|_| StatusCode::BAD_REQUEST)?;
+        let next_ui_list_sort = normalize_ui_list_sort(user.ui_list_sort.clone())
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
         let next_custom_sound_files_json =
             normalize_custom_sound_files_json(user.custom_sound_files_json.clone())
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
         sqlx::query(
-            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments, ui_theme, ui_sidebar_panels) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, custom_sound_files_json = excluded.custom_sound_files_json, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels",
+            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments, ui_theme, ui_sidebar_panels, ui_list_sort) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, custom_sound_files_json = excluded.custom_sound_files_json, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels, ui_list_sort = excluded.ui_list_sort",
         )
         .bind(&user.id)
         .bind(&user.email)
@@ -1052,6 +1098,7 @@ async fn auth_restore_backup(
         .bind(&user.profile_attachments)
         .bind(&next_ui_theme)
         .bind(&next_ui_sidebar_panels)
+        .bind(&next_ui_list_sort)
         .execute(&mut *tx)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2383,6 +2430,7 @@ mod tests {
             .0;
         assert_eq!(defaults.theme, "default");
         assert_eq!(defaults.sidebar_panels_json, None);
+        assert_eq!(defaults.list_sort_json, None);
 
         let updated = auth_update_preferences(
             State(state.clone()),
@@ -2393,6 +2441,7 @@ mod tests {
                     "{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}"
                         .to_string(),
                 ),
+                list_sort_json: Some("{\"mode\":\"due_date\",\"direction\":\"desc\"}".to_string()),
             }),
         )
         .await
@@ -2403,6 +2452,10 @@ mod tests {
         assert_eq!(
             updated.sidebar_panels_json.as_deref(),
             Some("{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}")
+        );
+        assert_eq!(
+            updated.list_sort_json.as_deref(),
+            Some("{\"direction\":\"desc\",\"mode\":\"due_date\"}")
         );
     }
 

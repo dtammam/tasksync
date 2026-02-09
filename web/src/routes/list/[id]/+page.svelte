@@ -1,22 +1,20 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { page } from '$app/stores';
-import TaskRow from '$lib/components/TaskRow.svelte';
+	import TaskRow from '$lib/components/TaskRow.svelte';
 import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
 import { findListName } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
+import { uiPreferences } from '$lib/stores/preferences';
 
 let quickTitle = '';
 let detailId = null;
-let sortMode = 'created';
-let sortLoaded = false;
 $: listId = $page.params.id;
 let listTasks = tasksByList(listId);
 $: listTasks = tasksByList(listId);
 $: listName = findListName(listId);
-const LIST_SORT_KEY = 'tasksync:sort:list';
 const compareAlpha = (left, right) => {
 	const a = (left ?? '').trim().toLowerCase();
 	const b = (right ?? '').trim().toLowerCase();
@@ -55,32 +53,47 @@ const openDetail = (event) => (detailId = event.detail.id);
 const closeDetail = () => (detailId = null);
 $: detailTask = detailId ? getTask(detailId) : null;
 
-const sortTasks = (arr, mode = sortMode) => {
+const sortTasks = (arr, mode = 'created', direction = 'asc') => {
 	const copy = [...arr];
-	if (mode === 'alpha') {
+	const isAscending = direction !== 'desc';
+	if (mode === 'due_date') {
+		copy.sort((a, b) => {
+			const dueA = typeof a.due_date === 'string' ? a.due_date : '';
+			const dueB = typeof b.due_date === 'string' ? b.due_date : '';
+			const hasDueA = !!dueA;
+			const hasDueB = !!dueB;
+			if (hasDueA && hasDueB && dueA !== dueB) {
+				return isAscending ? (dueA < dueB ? -1 : 1) : dueA > dueB ? -1 : 1;
+			}
+			if (hasDueA !== hasDueB) {
+				// Keep undated tasks at the bottom for both ascending and descending due-date sort.
+				return hasDueA ? -1 : 1;
+			}
+			return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+		});
+	} else if (mode === 'alpha') {
 		copy.sort((a, b) => {
 			const byTitle = compareAlpha(a.title, b.title);
-			return byTitle === 0 ? a.created_ts - b.created_ts : byTitle;
+			if (byTitle === 0) {
+				return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+			}
+			return isAscending ? byTitle : byTitle * -1;
 		});
 	} else {
-		copy.sort((a, b) => a.created_ts - b.created_ts);
+		copy.sort((a, b) => (isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts));
 	}
 	return copy;
 };
-$: pendingTasks = sortTasks(($listTasks ?? []).filter((t) => t.status === 'pending'), sortMode);
-$: completedTasks = sortTasks(($listTasks ?? []).filter((t) => t.status === 'done'), sortMode);
-
-$: if (typeof window !== 'undefined' && !sortLoaded) {
-	const saved = localStorage.getItem(LIST_SORT_KEY);
-	if (saved === 'alpha' || saved === 'created') {
-		sortMode = saved;
-	}
-	sortLoaded = true;
-}
-
-$: if (typeof window !== 'undefined' && sortLoaded) {
-	localStorage.setItem(LIST_SORT_KEY, sortMode);
-}
+$: pendingTasks = sortTasks(
+	($listTasks ?? []).filter((t) => t.status === 'pending'),
+	$uiPreferences.listSort.mode,
+	$uiPreferences.listSort.direction
+);
+$: completedTasks = sortTasks(
+	($listTasks ?? []).filter((t) => t.status === 'done'),
+	$uiPreferences.listSort.mode,
+	$uiPreferences.listSort.direction
+);
 </script>
 
 <header class="page-header">
@@ -92,10 +105,28 @@ $: if (typeof window !== 'undefined' && sortLoaded) {
 	<div class="actions">
 		<div class="sorter">
 			<label>
-				<span>Sort</span>
-				<select bind:value={sortMode} aria-label="Sort tasks">
+				<span>Sort by</span>
+				<select
+					value={$uiPreferences.listSort.mode}
+					data-testid="list-sort-mode"
+					aria-label="Sort tasks"
+					on:change={(e) => uiPreferences.setListSort({ mode: e.target.value })}
+				>
 					<option value="created">Creation</option>
 					<option value="alpha">Alphabetical</option>
+					<option value="due_date">Due date</option>
+				</select>
+			</label>
+			<label>
+				<span>Order</span>
+				<select
+					value={$uiPreferences.listSort.direction}
+					data-testid="list-sort-direction"
+					aria-label="Sort direction"
+					on:change={(e) => uiPreferences.setListSort({ direction: e.target.value })}
+				>
+					<option value="asc">Ascending</option>
+					<option value="desc">Descending</option>
 				</select>
 			</label>
 		</div>

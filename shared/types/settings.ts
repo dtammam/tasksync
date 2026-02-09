@@ -20,6 +20,13 @@ export interface SoundSettings {
 }
 
 export type UiTheme = 'default' | 'dark' | 'light';
+export type ListSortMode = 'created' | 'alpha' | 'due_date';
+export type ListSortDirection = 'asc' | 'desc';
+
+export interface ListSortPreference {
+	mode: ListSortMode;
+	direction: ListSortDirection;
+}
 
 export interface SidebarPanelState {
 	lists: boolean;
@@ -32,9 +39,11 @@ export interface SidebarPanelState {
 export interface UiPreferences {
 	theme: UiTheme;
 	sidebarPanels: SidebarPanelState;
+	listSort: ListSortPreference;
 }
 
 export interface UiPreferencesWire {
 	theme: UiTheme;
 	sidebarPanelsJson?: string;
+	listSortJson?: string;
 }

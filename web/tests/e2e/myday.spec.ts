@@ -198,6 +198,63 @@ test.describe('List view', () => {
 		await expect(page.getByTestId('new-task-input')).toHaveValue('');
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 	});
+
+	test('supports due-date sort with asc/desc order and keeps preference after reload', async ({ page }) => {
+		await resetClientState(page);
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const marker = makeTitle('List due sort');
+		const noDueTitle = `${marker} No due`;
+		const dueSoonTitle = `${marker} Due soon`;
+		const dueLaterTitle = `${marker} Due later`;
+
+		await page.getByTestId('new-task-input').fill(noDueTitle);
+		await page.getByTestId('new-task-submit').click();
+		await page.getByTestId('new-task-input').fill(dueSoonTitle);
+		await page.getByTestId('new-task-submit').click();
+		await page.getByTestId('new-task-input').fill(dueLaterTitle);
+		await page.getByTestId('new-task-submit').click();
+
+		const openTaskMenu = async (title: string) => {
+			const row = page.getByTestId('task-row').filter({ hasText: title });
+			await expect(row).toHaveCount(1);
+			await row.getByRole('button', { name: '⋯' }).click();
+			return row;
+		};
+
+		const dueSoonRow = await openTaskMenu(dueSoonTitle);
+		await page.getByRole('button', { name: 'Tomorrow' }).click();
+		await dueSoonRow.getByRole('button', { name: 'Close', exact: true }).click();
+
+		const dueLaterRow = await openTaskMenu(dueLaterTitle);
+		await page.getByRole('button', { name: 'Next week' }).click();
+		await dueLaterRow.getByRole('button', { name: 'Close', exact: true }).click();
+
+		await page.getByTestId('list-sort-mode').selectOption('due_date');
+		await page.getByTestId('list-sort-direction').selectOption('asc');
+
+		const pendingSection = page.locator('section.block', {
+			has: page.locator('.section-title', { hasText: 'Pending' })
+		});
+		const pendingRows = pendingSection.getByTestId('task-row').filter({ hasText: marker });
+		await expect(pendingRows).toHaveCount(3);
+		await expect(pendingRows.nth(0)).toContainText(dueSoonTitle);
+		await expect(pendingRows.nth(1)).toContainText(dueLaterTitle);
+		await expect(pendingRows.nth(2)).toContainText(noDueTitle);
+
+		await page.getByTestId('list-sort-direction').selectOption('desc');
+		await expect(pendingRows.nth(0)).toContainText(dueLaterTitle);
+		await expect(pendingRows.nth(1)).toContainText(dueSoonTitle);
+		await expect(pendingRows.nth(2)).toContainText(noDueTitle);
+
+		await page.reload();
+		await expect(page.getByTestId('list-sort-mode')).toHaveValue('due_date');
+		await expect(page.getByTestId('list-sort-direction')).toHaveValue('desc');
+		await expect(pendingRows.nth(0)).toContainText(dueLaterTitle);
+		await expect(pendingRows.nth(1)).toContainText(dueSoonTitle);
+		await expect(pendingRows.nth(2)).toContainText(noDueTitle);
+	});
 });
 
 test.describe('Navigation', () => {

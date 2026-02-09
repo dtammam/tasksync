@@ -2,6 +2,9 @@ import { get, writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { auth } from '$lib/stores/auth';
 import type {
+	ListSortDirection,
+	ListSortMode,
+	ListSortPreference,
 	SidebarPanelState,
 	UiPreferences,
 	UiPreferencesWire,
@@ -16,13 +19,23 @@ const defaultPanels = (): SidebarPanelState => ({
 	account: true
 });
 
+const defaultListSort = (): ListSortPreference => ({
+	mode: 'created',
+	direction: 'asc'
+});
+
 const defaultPreferences = (): UiPreferences => ({
 	theme: 'default',
-	sidebarPanels: defaultPanels()
+	sidebarPanels: defaultPanels(),
+	listSort: defaultListSort()
 });
 
 const normalizeTheme = (theme?: string): UiTheme =>
 	theme === 'dark' || theme === 'light' || theme === 'default' ? theme : 'default';
+const normalizeListSortMode = (mode?: string): ListSortMode =>
+	mode === 'alpha' || mode === 'due_date' || mode === 'created' ? mode : 'created';
+const normalizeListSortDirection = (direction?: string): ListSortDirection =>
+	direction === 'desc' || direction === 'asc' ? direction : 'asc';
 
 const normalizePanels = (candidate?: Partial<SidebarPanelState>): SidebarPanelState => {
 	const defaults = defaultPanels();
@@ -35,6 +48,11 @@ const normalizePanels = (candidate?: Partial<SidebarPanelState>): SidebarPanelSt
 	};
 };
 
+const normalizeListSort = (candidate?: Partial<ListSortPreference>): ListSortPreference => ({
+	mode: normalizeListSortMode(candidate?.mode),
+	direction: normalizeListSortDirection(candidate?.direction)
+});
+
 const parsePanelsJson = (raw?: string): SidebarPanelState => {
 	if (!raw) return defaultPanels();
 	try {
@@ -45,16 +63,28 @@ const parsePanelsJson = (raw?: string): SidebarPanelState => {
 	}
 };
 
+const parseListSortJson = (raw?: string): ListSortPreference => {
+	if (!raw) return defaultListSort();
+	try {
+		const parsed = JSON.parse(raw) as Partial<ListSortPreference>;
+		return normalizeListSort(parsed);
+	} catch {
+		return defaultListSort();
+	}
+};
+
 const toWire = (prefs: UiPreferences): UiPreferencesWire => ({
 	theme: prefs.theme,
-	sidebarPanelsJson: JSON.stringify(prefs.sidebarPanels)
+	sidebarPanelsJson: JSON.stringify(prefs.sidebarPanels),
+	listSortJson: JSON.stringify(prefs.listSort)
 });
 
 const fromWire = (wire: Partial<UiPreferencesWire>): UiPreferences => ({
 	theme: normalizeTheme(wire.theme),
 	sidebarPanels: parsePanelsJson(
 		typeof wire.sidebarPanelsJson === 'string' ? wire.sidebarPanelsJson : undefined
-	)
+	),
+	listSort: parseListSortJson(typeof wire.listSortJson === 'string' ? wire.listSortJson : undefined)
 });
 
 const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;
@@ -75,7 +105,8 @@ const readLocal = (): UiPreferences | null => {
 		const parsed = JSON.parse(raw) as Partial<UiPreferences>;
 		return {
 			theme: normalizeTheme(parsed.theme as string | undefined),
-			sidebarPanels: normalizePanels(parsed.sidebarPanels)
+			sidebarPanels: normalizePanels(parsed.sidebarPanels),
+			listSort: normalizeListSort(parsed.listSort as Partial<ListSortPreference> | undefined)
 		};
 	} catch {
 		return null;
@@ -163,10 +194,26 @@ export const uiPreferences = {
 			return next;
 		});
 	},
+	setListSort(nextSort: Partial<ListSortPreference>) {
+		prefsMutationVersion += 1;
+		preferencesStore.update((current) => {
+			const next = {
+				...current,
+				listSort: normalizeListSort({
+					mode: nextSort.mode ?? current.listSort.mode,
+					direction: nextSort.direction ?? current.listSort.direction
+				})
+			};
+			persist(next);
+			queueRemoteSave(next);
+			return next;
+		});
+	},
 	setAll(next: Partial<UiPreferences>, options?: { queueRemote?: boolean }) {
 		const normalized = {
 			theme: normalizeTheme(next.theme as string | undefined),
-			sidebarPanels: normalizePanels(next.sidebarPanels)
+			sidebarPanels: normalizePanels(next.sidebarPanels),
+			listSort: normalizeListSort(next.listSort)
 		};
 		prefsMutationVersion += 1;
 		preferencesStore.set(normalized);
