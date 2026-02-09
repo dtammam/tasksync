@@ -83,3 +83,4 @@ Outcome-first project milestones in plain language.
 - 2026-02-08 01:39 - Fixed PWA icon metadata/assets so iOS home-screen installs use branded app icons.
 - 2026-02-08 02:23 - Expanded recurrence presets, fixed My Day bottom spacing, added randomized multi-file custom sound playlists with persistence, corrected volume slider fill behavior, and normalized themed UI surfaces.
 - 2026-02-09 14:59 - Eliminated iPhone PWA long-session sound dropouts by rebuilding stale WebAudio contexts on app lifecycle transitions and periodically rotating standalone iOS contexts to keep completion feedback reliable.
+- 2026-02-09 15:28 - Added list-view due-date sorting with ascending/descending controls and persisted the list sort preference through local profile storage plus `/auth/preferences` sync for consistent behavior across reloads and signed-in devices.

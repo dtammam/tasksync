@@ -21,6 +21,7 @@ export interface SpaceBackupUser {
 	profile_attachments?: string;
 	ui_theme?: string;
 	ui_sidebar_panels?: string;
+	ui_list_sort?: string;
 }
 
 export interface SpaceBackupMembership {
