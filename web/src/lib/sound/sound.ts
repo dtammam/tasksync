@@ -1,7 +1,11 @@
 import type { SoundSettings, SoundTheme } from '$shared/types/settings';
 
 let audioContext: AudioContext | null = null;
+let audioContextCreatedAt = 0;
+let needsContextReset = false;
+let lifecycleWatchersBound = false;
 const customBufferCache = new Map<string, AudioBuffer>();
+const IOS_STANDALONE_CONTEXT_MAX_AGE_MS = 120000;
 
 interface CustomSoundFileEntry {
 	id?: string;
@@ -11,6 +15,55 @@ interface CustomSoundFileEntry {
 
 const contextState = (ctx: AudioContext | null) =>
 	ctx ? String((ctx as AudioContext & { state?: string }).state ?? '') : 'closed';
+
+const isIosDevice = () => {
+	if (typeof window === 'undefined') return false;
+	const nav = window.navigator;
+	const ua = nav.userAgent ?? '';
+	if (/\b(iPad|iPhone|iPod)\b/i.test(ua)) return true;
+	return nav.platform === 'MacIntel' && nav.maxTouchPoints > 1;
+};
+
+const isStandaloneDisplayMode = () => {
+	if (typeof window === 'undefined') return false;
+	const nav = window.navigator as Navigator & { standalone?: boolean };
+	if (typeof nav.standalone === 'boolean') return nav.standalone;
+	if (typeof window.matchMedia !== 'function') return false;
+	try {
+		return window.matchMedia('(display-mode: standalone)').matches;
+	} catch {
+		return false;
+	}
+};
+
+const shouldAggressivelyRecycleContext = () => {
+	if (typeof window === 'undefined') return false;
+	const nav = window.navigator as Navigator & { standalone?: boolean };
+	if (typeof nav.standalone === 'boolean') return nav.standalone;
+	return isIosDevice() && isStandaloneDisplayMode();
+};
+
+const markContextStale = () => {
+	needsContextReset = true;
+};
+
+const bindLifecycleWatchers = () => {
+	if (lifecycleWatchersBound || typeof window === 'undefined' || typeof document === 'undefined') return;
+	lifecycleWatchersBound = true;
+	document.addEventListener('visibilitychange', () => {
+		if (document.visibilityState !== 'visible') {
+			markContextStale();
+		}
+	});
+	window.addEventListener('pagehide', markContextStale);
+	window.addEventListener('pageshow', markContextStale);
+};
+
+const shouldRecycleLiveContext = () => {
+	if (needsContextReset) return true;
+	if (!audioContextCreatedAt || !shouldAggressivelyRecycleContext()) return false;
+	return Date.now() - audioContextCreatedAt >= IOS_STANDALONE_CONTEXT_MAX_AGE_MS;
+};
 
 const clampVolume = (volume: number) => {
 	if (!Number.isFinite(volume)) return 0;
@@ -74,12 +127,20 @@ const getAudioContext = () => {
 	const Ctor = window.AudioContext;
 	if (!Ctor) return null;
 	audioContext = new Ctor({ latencyHint: 'interactive' });
+	audioContextCreatedAt = Date.now();
+	audioContext.onstatechange = () => {
+		if (audioContext && contextState(audioContext) !== 'running') {
+			needsContextReset = true;
+		}
+	};
 	return audioContext;
 };
 
 const dropAudioContext = async () => {
 	const stale = audioContext;
 	audioContext = null;
+	audioContextCreatedAt = 0;
+	customBufferCache.clear();
 	if (!stale) return;
 	if (contextState(stale) === 'closed') return;
 	try {
@@ -90,10 +151,18 @@ const dropAudioContext = async () => {
 };
 
 const ensureRunningContext = async () => {
+	bindLifecycleWatchers();
 	let ctx = getAudioContext();
 	if (!ctx) return null;
 
+	if (shouldRecycleLiveContext()) {
+		await dropAudioContext();
+		ctx = getAudioContext();
+		if (!ctx) return null;
+	}
+
 	if (contextState(ctx) === 'running') {
+		needsContextReset = false;
 		return ctx;
 	}
 	try {
@@ -102,6 +171,7 @@ const ensureRunningContext = async () => {
 		// Continue into rebuild path below.
 	}
 	if (contextState(ctx) === 'running') {
+		needsContextReset = false;
 		return ctx;
 	}
 
@@ -114,7 +184,9 @@ const ensureRunningContext = async () => {
 	} catch {
 		return null;
 	}
-	return contextState(ctx) === 'running' ? ctx : null;
+	if (contextState(ctx) !== 'running') return null;
+	needsContextReset = false;
+	return ctx;
 };
 
 const scheduleTone = (
