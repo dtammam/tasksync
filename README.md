@@ -47,11 +47,17 @@ Default seed users:
 - `admin@example.com` / `tasksync`
 - `contrib@example.com` / `tasksync`
 
-## Self-Hosting (Docker Hub Latest)
+## Self-Hosting (Docker Hub Channels)
 
 Published images:
 - `deantammam/tasksync-server:latest`
 - `deantammam/tasksync-web:latest`
+- `deantammam/tasksync-server:beta`
+- `deantammam/tasksync-web:beta`
+
+Tag policy:
+- `main` branch pushes publish `:latest` (stable channel).
+- `feat/**` and `beta/**` branch pushes publish `:beta` (working channel).
 
 `docker-compose.yml` already references these `latest` tags.
 
@@ -84,7 +90,7 @@ SEED_CONTRIB_PASSWORD=Replacethistoo
 
 Optional web/reverse-proxy variables:
 - `VITE_ALLOWED_HOSTS=tasksync.example.com` (comma-separated hostnames)
-- `VITE_API_URL=/api` when building your own web image with that build arg
+- `VITE_API_URL=/api` (runtime env, can be set directly in Portainer stack env vars)
 
 Typical flow:
 1. Fill out `.env` values (`JWT_SECRET` and seed passwords should be replaced).
@@ -96,6 +102,10 @@ Typical flow:
 Reverse proxy setup (recommended):
 - Set `VITE_ALLOWED_HOSTS` to your hostnames (example: `tasksync.example.com`).
 - Route `/api/*` to the server container and `/` to the web container.
+
+## CI Docker Publishing Setup
+
+The repository now publishes Docker images directly from GitHub Actions (`.github/workflows/docker-publish.yml`).
 
 ## Offline and Sync Behavior
 

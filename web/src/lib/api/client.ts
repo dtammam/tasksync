@@ -20,6 +20,14 @@ import type {
 import type { SoundSettings, UiPreferencesWire } from '$shared/types/settings';
 import type { SpaceBackupBundle, SpaceBackupRestoreResponse } from '$shared/types/backup';
 
+declare global {
+	interface Window {
+		__TASKSYNC_RUNTIME_CONFIG__?: {
+			apiUrl?: string;
+		};
+	}
+}
+
 const defaultApiUrl = () => {
 	if (typeof window === 'undefined') return 'http://localhost:3000';
 	const apiOrigin = new URL(window.location.origin);
@@ -27,7 +35,13 @@ const defaultApiUrl = () => {
 	return apiOrigin.origin;
 };
 
-const baseUrl = import.meta.env.VITE_API_URL ?? defaultApiUrl();
+const runtimeApiUrl = () => {
+	if (typeof window === 'undefined') return undefined;
+	const configured = window.__TASKSYNC_RUNTIME_CONFIG__?.apiUrl?.trim();
+	return configured ? configured : undefined;
+};
+
+const baseUrl = runtimeApiUrl() ?? import.meta.env.VITE_API_URL ?? defaultApiUrl();
 
 export interface ApiList {
 	id: string;

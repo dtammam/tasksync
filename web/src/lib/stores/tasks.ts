@@ -405,6 +405,10 @@ const canSeeTask = (task: Task, userId?: string | null, role?: string | null) =>
 	void role;
 	return true;
 };
+const isAssignedToUser = (task: Task, userId?: string | null) => {
+	if (!userId) return true;
+	return (task.assignee_user_id ?? task.created_by_user_id) === userId;
+};
 
 const inMyDay = (task: Task) => {
 	if (task.my_day) return true;
@@ -427,6 +431,7 @@ export const myDayPending = derived(
 		return $tasks.filter(
 			(task) =>
 				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+				isAssignedToUser(task, $auth.user?.user_id) &&
 				inMyDay(task) &&
 				!isMissedTask(task) &&
 				task.status === 'pending'
@@ -440,6 +445,7 @@ export const myDayMissed = derived([tasksStore, auth, myDayDateKey], ([$tasks, $
 		.filter(
 			(task) =>
 				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+				isAssignedToUser(task, $auth.user?.user_id) &&
 				isMissedTask(task)
 		)
 		.sort((a, b) => {
@@ -458,6 +464,7 @@ export const myDayCompleted = derived(
 		return $tasks.filter(
 			(task) =>
 				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
+				isAssignedToUser(task, $auth.user?.user_id) &&
 				((inMyDay(task) && wasCompletedToday(task)) || wasRecurringCompletedToday(task))
 		);
 	}
@@ -473,6 +480,7 @@ export const myDaySuggestions = derived(
 			.filter(
 				(t) =>
 					canSeeTask(t, $auth.user?.user_id, $auth.user?.role) &&
+					isAssignedToUser(t, $auth.user?.user_id) &&
 					t.status === 'pending' &&
 					!t.recurrence_id &&
 					!inMyDay(t) &&

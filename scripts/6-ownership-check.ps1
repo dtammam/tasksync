@@ -44,14 +44,6 @@ function Assert {
 	}
 }
 
-function StatusFromException {
-	param($Exception)
-	if ($Exception -and $Exception.Exception -and $Exception.Exception.Response -and $Exception.Exception.Response.StatusCode) {
-		return [int]$Exception.Exception.Response.StatusCode
-	}
-	return -1
-}
-
 Write-Host "Logging in admin and contributor..."
 $resolvedAssigneePassword = if ($AssigneePassword.Trim()) { $AssigneePassword } else { $Password }
 $resolvedCreatorPassword = if ($CreatorPassword.Trim()) { $CreatorPassword } else { $Password }
@@ -85,23 +77,13 @@ $createPayload = @{
 
 Write-Host "Creating contributor-assigned task..."
 $created = Invoke-RestMethod -Method Post -Uri "$ApiUrl/tasks" -Headers (JsonHeaders -Token $contrib.token) -Body $createPayload
-Assert ($created.assignee_user_id -eq $assignee.user_id) "Task assignee_user_id mismatch"
+Assert ($created.assignee_user_id -eq $contrib.user_id) "Task assignee_user_id should be creator user id"
 Assert ($created.created_by_user_id -eq $contrib.user_id) "Task created_by_user_id mismatch"
 
-Write-Host "Verifying contributor cannot edit task..."
+Write-Host "Verifying contributor can edit owned task..."
 $patchPayload = @{ title = "$taskTitle edited" } | ConvertTo-Json
-$editBlocked = $false
-try {
-	$null = Invoke-RestMethod -Method Patch -Uri "$ApiUrl/tasks/$($created.id)" -Headers (JsonHeaders -Token $contrib.token) -Body $patchPayload
-} catch {
-	$status = StatusFromException -Exception $_
-	if ($status -eq 403) {
-		$editBlocked = $true
-	} else {
-		throw
-	}
-}
-Assert $editBlocked "Contributor edit was not blocked with 403"
+$edited = Invoke-RestMethod -Method Patch -Uri "$ApiUrl/tasks/$($created.id)" -Headers (JsonHeaders -Token $contrib.token) -Body $patchPayload
+Assert ($edited.title -eq "$taskTitle edited") "Contributor owned-task edit did not persist"
 
 Write-Host "Verifying task visibility..."
 $adminTasks = Invoke-RestMethod -Method Get -Uri "$ApiUrl/tasks" -Headers (JsonHeaders -Token $admin.token)

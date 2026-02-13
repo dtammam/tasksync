@@ -84,3 +84,6 @@ Outcome-first project milestones in plain language.
 - 2026-02-08 02:23 - Expanded recurrence presets, fixed My Day bottom spacing, added randomized multi-file custom sound playlists with persistence, corrected volume slider fill behavior, and normalized themed UI surfaces.
 - 2026-02-09 14:59 - Eliminated iPhone PWA long-session sound dropouts by rebuilding stale WebAudio contexts on app lifecycle transitions and periodically rotating standalone iOS contexts to keep completion feedback reliable.
 - 2026-02-09 15:28 - Added list-view due-date sorting with ascending/descending controls and persisted the list sort preference through local profile storage plus `/auth/preferences` sync for consistent behavior across reloads and signed-in devices.
+- 2026-02-13 09:00 - Shifted Docker publishing to branch-aware GitHub automation so `main` continuously ships stable `latest` images and feature/beta branches continuously ship `beta` images without manual host-side push steps.
+- 2026-02-13 09:00 - Moved web API endpoint configuration to runtime environment injection so Portainer stack variables can control deployment targets without rebuilding images.
+- 2026-02-13 09:00 - Tightened ownership behavior by assigning newly created tasks to their creator and filtering My Day to tasks assigned to the signed-in user.
