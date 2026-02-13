@@ -1667,6 +1667,7 @@ struct CreateTask {
     attachments: Option<String>,
     due_date: Option<String>,
     notes: Option<String>,
+    #[allow(dead_code)]
     assignee_user_id: Option<String>,
 }
 
@@ -1730,17 +1731,7 @@ async fn create_task(
         }
     }
 
-    let assignee_user_id = body.assignee_user_id.clone().unwrap_or_else(|| ctx.user_id.clone());
-    let assignee_exists: Option<i64> =
-        sqlx::query_scalar("select 1 from membership where space_id = ?1 and user_id = ?2")
-            .bind(&ctx.space_id)
-            .bind(&assignee_user_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if assignee_exists.is_none() {
-        return Err(StatusCode::NOT_FOUND);
-    }
+    let assignee_user_id = ctx.user_id.clone();
 
     let id = body
         .id
@@ -2848,7 +2839,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn contributor_can_create_task_assigned_to_admin() {
+    async fn contributor_task_creation_assigns_creator_even_if_other_assignee_requested() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
         let mut headers = HeaderMap::new();
@@ -2877,7 +2868,7 @@ mod tests {
         .1
          .0;
 
-        assert_eq!(created.assignee_user_id.as_deref(), Some("u-admin"));
+        assert_eq!(created.assignee_user_id.as_deref(), Some("u-contrib"));
         assert_eq!(created.created_by_user_id.as_deref(), Some("u-contrib"));
         assert_eq!(created.my_day, 0);
     }

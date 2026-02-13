@@ -47,28 +47,26 @@ Default seed users:
 - `admin@example.com` / `tasksync`
 - `contrib@example.com` / `tasksync`
 
-## Self-Hosting (Docker Hub Latest)
+## Self-Hosting (Docker Hub Channels)
 
 Published images:
 - `deantammam/tasksync-server:latest`
 - `deantammam/tasksync-web:latest`
 
-`docker-compose.yml` already references these `latest` tags.
+- `deantammam/tasksync-server:beta`
+- `deantammam/tasksync-web:beta`
+
+Tag policy:
+- `main` branch pushes publish `:latest` (stable channel).
+- any non-`main` branch push publishes `:beta` (working channel).
+
+`docker-compose.yml` defaults to `latest` and can switch channels with `TASKSYNC_IMAGE_TAG`.
 
 Portainer-first context (current revision):
-- This compose file intentionally uses a hard-coded host bind mount: `/srv/tasksync/data:/data`.
-- It expects `/srv/tasksync/data` to already exist on the Docker host before stack deploy.
-- This was chosen so the first self-hosting pass stays explicit and predictable for data location.
-
-Create the host folder manually over SSH before deploying:
-
-```bash
-ssh <user>@<docker-host>
-sudo mkdir -p /srv/tasksync/data
-sudo chmod 775 /srv/tasksync
-sudo chmod 775 /srv/tasksync/data
-ls -ld /srv/tasksync /srv/tasksync/data
-```
+- This compose file uses a declared volume alias (`tasksync_data`) mounted at `/data`.
+- `TASKSYNC_DATA_SOURCE` controls the actual Docker volume name used by that alias.
+- Default is `tasksync_data`.
+- In Portainer, give each stack its own value (for example `tasksync_prod_data` and `tasksync_beta_data`) so prod/beta stay isolated.
 
 Create a `.env` file in this folder (same level as `docker-compose.yml`):
 
@@ -77,25 +75,57 @@ DATABASE_URL=sqlite:///data/tasksync.db
 JWT_SECRET=super-long-randomsecret
 DEV_LOGIN_PASSWORD=tasksync
 RUST_LOG=info
-PORT=3000
+TASKSYNC_IMAGE_TAG=latest
+SERVER_HOST_PORT=3000
+TASKSYNC_DATA_SOURCE=tasksync_data
+WEB_HOST_PORT=5173
 SEED_ADMIN_PASSWORD=Replacethis
 SEED_CONTRIB_PASSWORD=Replacethistoo
+# Remove post-first seed:
+COMPOSE_PROFILES=setup
 ```
 
 Optional web/reverse-proxy variables:
 - `VITE_ALLOWED_HOSTS=tasksync.example.com` (comma-separated hostnames)
-- `VITE_API_URL=/api` when building your own web image with that build arg
+- `VITE_API_URL=/api` (runtime env, can be set directly in Portainer stack env vars)
+
+### Stack Variable Reference
+
+- `DATABASE_URL`: SQLite DSN used by server and seed job. Keep as `sqlite:///data/tasksync.db` for default container path.
+- `JWT_SECRET`: Required signing secret for auth tokens.
+- `DEV_LOGIN_PASSWORD`: Legacy/dev fallback password for rows that do not yet have a password hash.
+- `RUST_LOG`: Server log verbosity (for example `info`).
+- `TASKSYNC_IMAGE_TAG`: Optional Docker image tag channel used by server/web/seed services (`latest` or `beta`), uses `latest` if undefined.
+- `SERVER_HOST_PORT`: Host port mapped to server container port `3000` (for example `3000` prod, `3001` beta).
+- `WEB_HOST_PORT`: Host port mapped to web container port `5173` (for example `5173` prod, `5174` beta).
+- `TASKSYNC_DATA_SOURCE`: Docker volume name used for persistent `/data` storage (for example `tasksync_prod_data` or `tasksync_beta_data`).
+- `SEED_ADMIN_PASSWORD`: Password used by one-time seed flow for `admin@example.com`.
+- `SEED_CONTRIB_PASSWORD`: Password used by one-time seed flow for `contrib@example.com`.
+- `VITE_API_URL`: Runtime API base URL injected into web container startup config (for example `https://api-beta.example.com` or `/api`).
+- `VITE_ALLOWED_HOSTS`: Comma-separated host allow-list for Vite preview server (for example `tasksync.example.com,tasksync-beta.example.com`).
+- `COMPOSE_PROFILES`: One-time profile selector for seeding. Set to `setup` for first deploy, then remove (or clear) it for normal deploys.
+
+Example split for parallel stacks on one host:
+- prod: `TASKSYNC_IMAGE_TAG=latest`, `SERVER_HOST_PORT=3000`, `WEB_HOST_PORT=5173`, `TASKSYNC_DATA_SOURCE=tasksync_prod_data`
+- beta: `TASKSYNC_IMAGE_TAG=beta`, `SERVER_HOST_PORT=3001`, `WEB_HOST_PORT=5174`, `TASKSYNC_DATA_SOURCE=tasksync_beta_data`
 
 Typical flow:
 1. Fill out `.env` values (`JWT_SECRET` and seed passwords should be replaced).
 2. Run `docker compose pull`.
 3. Run `docker compose up -d`.
-4. Seed once: `docker compose --profile setup run --rm seed`.
-5. Log in with seeded admin/contributor accounts and change passwords.
+4. First deploy only: set `COMPOSE_PROFILES=setup` so seed runs automatically as part of the stack deploy.
+5. After initial successful seed, remove `COMPOSE_PROFILES` (or set it empty) for normal deploys.
+6. Manual fallback seed once (if needed): `docker compose --profile setup run --rm seed`.
+7. Log in with seeded admin/contributor accounts and change passwords.
 
 Reverse proxy setup (recommended):
 - Set `VITE_ALLOWED_HOSTS` to your hostnames (example: `tasksync.example.com`).
 - Route `/api/*` to the server container and `/` to the web container.
+
+## CI Docker Publishing Setup
+
+The repository now publishes Docker images directly from GitHub Actions (`.github/workflows/ci.yml` publish job).
+Publishing only runs after the web/server CI jobs pass.
 
 ## Offline and Sync Behavior
 

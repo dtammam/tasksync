@@ -5,8 +5,6 @@
 import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
 import { findListName } from '$lib/stores/lists';
-import { auth } from '$lib/stores/auth';
-import { members } from '$lib/stores/members';
 import { uiPreferences } from '$lib/stores/preferences';
 
 let quickTitle = '';
@@ -26,26 +24,16 @@ const quickAdd = () => {
 	if (!quickTitle.trim()) return;
 	const activeList = listId || (typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : '');
 	if (!activeList) return;
-	tasks.createLocal(quickTitle, activeList, { assignee_user_id: resolvedAssignee || $auth.user?.user_id });
+	tasks.createLocal(quickTitle, activeList);
 	quickTitle = '';
 };
-
-$: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
-const defaultAssignee = (currentUser, availableMembers) => {
-	if (!currentUser) return '';
-	if (currentUser.role === 'contributor') {
-		return availableMembers.find((m) => m.role === 'admin')?.user_id ?? currentUser.user_id;
-	}
-	return currentUser.user_id;
-};
-$: resolvedAssignee = defaultAssignee($auth.user, quickAddMembers);
 
 if (typeof window !== 'undefined') {
 	Reflect.set(window, '__addTaskList', () => quickAdd());
 	Reflect.set(window, '__addTaskListWithTitle', (title) => {
 		const activeList = listId || window.location.pathname.split('/').pop();
 		if (!activeList) return;
-		tasks.createLocal(title, activeList, { assignee_user_id: resolvedAssignee || $auth.user?.user_id });
+		tasks.createLocal(title, activeList);
 	});
 }
 

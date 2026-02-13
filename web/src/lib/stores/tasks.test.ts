@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { repo } from '$lib/data/repo';
+import { auth } from '$lib/stores/auth';
+import { api } from '$lib/api/client';
 
 vi.mock('$lib/sound/sound', () => ({
 	playCompletion: vi.fn()
@@ -31,13 +33,17 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	recurrence_id: overrides.recurrence_id,
 	notes: overrides.notes,
 	url: overrides.url,
-	completed_ts: overrides.completed_ts
+	completed_ts: overrides.completed_ts,
+	assignee_user_id: overrides.assignee_user_id,
+	created_by_user_id: overrides.created_by_user_id
 });
 
 describe('tasks store helpers', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-02-02T12:00:00Z'));
+		localStorage.clear();
+		auth.logout();
 		tasks.setAll([]);
 		mockedPlayCompletion.mockClear();
 	});
@@ -66,6 +72,56 @@ describe('tasks store helpers', () => {
 
 		expect(get(myDayPending).map((t) => t.id)).toEqual(['today']);
 		expect(get(myDayMissed).map((t) => t.id)).toEqual(['overdue']);
+	});
+
+	it('shows only tasks assigned to the signed-in user in My Day buckets', async () => {
+		const meSpy = vi.spyOn(api, 'me').mockResolvedValueOnce({
+			user_id: 'u-me',
+			email: 'me@example.com',
+			display: 'Me',
+			space_id: 's1',
+			role: 'admin'
+		});
+		localStorage.setItem('tasksync:auth-token', 'test-token');
+		localStorage.setItem('tasksync:auth-mode', 'token');
+		await auth.hydrate();
+		meSpy.mockRestore();
+
+		tasks.setAll([
+			baseTask({
+				id: 'mine-pending',
+				my_day: true,
+				status: 'pending',
+				assignee_user_id: 'u-me',
+				created_by_user_id: 'u-me'
+			}),
+			baseTask({
+				id: 'mine-missed',
+				due_date: '2026-02-01',
+				status: 'pending',
+				assignee_user_id: 'u-me',
+				created_by_user_id: 'u-me'
+			}),
+			baseTask({
+				id: 'mine-done',
+				my_day: true,
+				status: 'done',
+				completed_ts: new Date('2026-02-02T10:00:00Z').getTime(),
+				assignee_user_id: 'u-me',
+				created_by_user_id: 'u-me'
+			}),
+			baseTask({
+				id: 'theirs',
+				my_day: true,
+				status: 'pending',
+				assignee_user_id: 'u-other',
+				created_by_user_id: 'u-other'
+			})
+		]);
+
+		expect(get(myDayPending).map((t) => t.id)).toEqual(['mine-pending']);
+		expect(get(myDayMissed).map((t) => t.id)).toEqual(['mine-missed']);
+		expect(get(myDayCompleted).map((t) => t.id)).toEqual(['mine-done']);
 	});
 
 	it('rolls forward recurring tasks when toggled complete', () => {

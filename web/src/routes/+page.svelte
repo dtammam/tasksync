@@ -4,7 +4,6 @@
 	import { auth } from '$lib/stores/auth';
 	import { myDayCompleted, myDayMissed, myDayPending, tasks } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
-	import { members } from '$lib/stores/members';
 	import { getTask } from '$lib/stores/tasks';
 	import { myDaySuggestions } from '$lib/stores/tasks';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
@@ -76,23 +75,11 @@
 		detailId = null;
 	};
 
-	$: quickAddMembers = $members?.length ? $members : $auth.user ? [$auth.user] : [];
-
-	const defaultAssignee = (currentUser, availableMembers) => {
-		if (!currentUser) return '';
-		if (currentUser.role === 'contributor') {
-			return availableMembers.find((m) => m.role === 'admin')?.user_id ?? currentUser.user_id;
-		}
-		return currentUser.user_id;
-	};
-	$: resolvedAssignee = defaultAssignee($auth.user, quickAddMembers);
-
 	const quickAdd = () => {
 		if ($auth.user?.role === 'contributor') return;
 		if (!quickTitle.trim()) return;
 		tasks.createLocal(quickTitle, defaultListId, {
-			my_day: true,
-			assignee_user_id: resolvedAssignee || $auth.user?.user_id
+			my_day: true
 		});
 		quickTitle = '';
 	};

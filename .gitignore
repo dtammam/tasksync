@@ -23,8 +23,10 @@ server/data/
 
 # env
 .env
+.env.*
 .env.local
 .envrc
+!.env.example
 
 # editors
 .DS_Store
