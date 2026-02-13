@@ -86,5 +86,8 @@ Outcome-first project milestones in plain language.
 - 2026-02-09 15:28 - Added list-view due-date sorting with ascending/descending controls and persisted the list sort preference through local profile storage plus `/auth/preferences` sync for consistent behavior across reloads and signed-in devices.
 - 2026-02-13 09:00 - Shifted Docker publishing to branch-aware GitHub automation so `main` continuously ships stable `latest` images and any non-`main` branch continuously ships `beta` images without manual host-side push steps.
 - 2026-02-13 09:05 - Tightened CI/CD safety by running Docker publish only after web/server CI jobs pass, so failing branches cannot publish `beta` or `latest`.
+- 2026-02-13 09:10 - Replaced hard-coded data bind mounts with configurable `TASKSYNC_DATA_SOURCE` so multiple Portainer stacks (for example prod + beta) can run side-by-side without sharing SQLite data.
+- 2026-02-13 09:12 - Added configurable web host port mapping (`WEB_HOST_PORT`) so multiple stacks can expose web on different host ports without editing compose.
+- 2026-02-13 09:14 - Added configurable server host port mapping (`SERVER_HOST_PORT`) so parallel stacks can expose separate API ports while keeping container-internal port defaults stable.
 - 2026-02-13 09:00 - Moved web API endpoint configuration to runtime environment injection so Portainer stack variables can control deployment targets without rebuilding images.
 - 2026-02-13 09:00 - Tightened ownership behavior by assigning newly created tasks to their creator and filtering My Day to tasks assigned to the signed-in user.
