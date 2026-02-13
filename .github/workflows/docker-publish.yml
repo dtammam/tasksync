@@ -1,9 +1,8 @@
 name: Docker Publish
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -11,25 +10,12 @@ permissions:
 
 jobs:
   publish:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
-        (
-          github.event.workflow_run.head_branch == 'main' ||
-          startsWith(github.event.workflow_run.head_branch, 'feat/') ||
-          startsWith(github.event.workflow_run.head_branch, 'beta/')
-        )
-      )
     runs-on: ubuntu-latest
     concurrency:
-      group: docker-publish-${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.workflow_run.head_branch }}
+      group: docker-publish-${{ github.ref_name }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -43,10 +29,8 @@ jobs:
       - name: Resolve release tag
         id: release_tag
         shell: bash
-        env:
-          BRANCH_NAME: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.workflow_run.head_branch }}
         run: |
-          if [[ "${BRANCH_NAME}" == "main" ]]; then
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           else
             echo "tag=beta" >> "$GITHUB_OUTPUT"

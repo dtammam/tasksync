@@ -57,7 +57,7 @@ Published images:
 
 Tag policy:
 - `main` branch pushes publish `:latest` (stable channel).
-- `feat/**` and `beta/**` branch pushes publish `:beta` (working channel).
+- any non-`main` branch push publishes `:beta` (working channel).
 
 `docker-compose.yml` already references these `latest` tags.
 

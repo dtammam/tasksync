@@ -37,7 +37,7 @@
   - Do not manually build/push Docker Hub images for normal releases.
   - GitHub Actions workflow `.github/workflows/docker-publish.yml` is the source of truth for Docker publishing.
   - `main` branch publishes `deantammam/tasksync-web:latest` and `deantammam/tasksync-server:latest`.
-  - `feat/**` and `beta/**` branches publish `deantammam/tasksync-web:beta` and `deantammam/tasksync-server:beta`.
+  - Any non-`main` branch push publishes `deantammam/tasksync-web:beta` and `deantammam/tasksync-server:beta`.
   - Feature/beta branches are temporary working branches; once verified stable, merge into `main`, then delete the temporary branch.
   - Repository secrets required for publish workflow: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
   - Runtime deployment configuration for web must come from environment variables (for example Portainer stack env vars), especially `VITE_API_URL` and `VITE_ALLOWED_HOSTS`.
