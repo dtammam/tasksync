@@ -92,3 +92,4 @@ Outcome-first project milestones in plain language.
 - 2026-02-13 09:16 - Added configurable image channel selection (`TASKSYNC_IMAGE_TAG`) in compose so Portainer stacks can switch between `latest` and `beta` without editing compose files.
 - 2026-02-13 09:00 - Moved web API endpoint configuration to runtime environment injection so Portainer stack variables can control deployment targets without rebuilding images.
 - 2026-02-13 09:00 - Tightened ownership behavior by assigning newly created tasks to their creator and filtering My Day to tasks assigned to the signed-in user.
+- 2026-02-13 10:00 - Clarified self-host setup documentation with explicit stack variable guidance and first-deploy seed profile steps, reducing Portainer setup errors and recovery friction. Made the data store variable.
