@@ -67,6 +67,7 @@ Portainer-first context (current revision):
 - `TASKSYNC_DATA_SOURCE` controls the actual Docker volume name used by that alias.
 - Default is `tasksync_data`.
 - In Portainer, give each stack its own value (for example `tasksync_prod_data` and `tasksync_beta_data`) so prod/beta stay isolated.
+- Server listens on internal port `3000` by default; only change `SERVER_HOST_PORT` for stack-level port mapping.
 
 Create a `.env` file in this folder (same level as `docker-compose.yml`):
 
@@ -96,7 +97,7 @@ Optional web/reverse-proxy variables:
 - `DEV_LOGIN_PASSWORD`: Legacy/dev fallback password for rows that do not yet have a password hash.
 - `RUST_LOG`: Server log verbosity (for example `info`).
 - `TASKSYNC_IMAGE_TAG`: Optional Docker image tag channel used by server/web/seed services (`latest` or `beta`), uses `latest` if undefined.
-- `SERVER_HOST_PORT`: Host port mapped to server container port `3000` (for example `3000` prod, `3001` beta).
+- `SERVER_HOST_PORT`: Host port mapped to server container port `3000` (for example `3000` prod, `3001` beta). This is the only server port setting you should change per stack.
 - `WEB_HOST_PORT`: Host port mapped to web container port `5173` (for example `5173` prod, `5174` beta).
 - `TASKSYNC_DATA_SOURCE`: Docker volume name used for persistent `/data` storage (for example `tasksync_prod_data` or `tasksync_beta_data`).
 - `SEED_ADMIN_PASSWORD`: Password used by one-time seed flow for `admin@example.com`.

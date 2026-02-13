@@ -9,7 +9,6 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me}
       DEV_LOGIN_PASSWORD: ${DEV_LOGIN_PASSWORD:-tasksync}
       RUST_LOG: ${RUST_LOG:-info}
-      PORT: 3000
     volumes:
       - tasksync_data:/data
     restart: unless-stopped

@@ -45,6 +45,7 @@
 - Portainer deploy safety rules:
   - First deploy only: set `COMPOSE_PROFILES=setup` so seed runs once, then remove/clear it for normal redeploys.
   - Use unique stack isolation values for each deployment: `TASKSYNC_DATA_SOURCE`, `SERVER_HOST_PORT`, `WEB_HOST_PORT`.
+  - Server port mapping policy: keep server internal port fixed at `3000`; change only `SERVER_HOST_PORT` per stack.
   - Select image channel explicitly with `TASKSYNC_IMAGE_TAG` (`latest` stable default, `beta` for test stacks).
 - `core.hooksPath=hooks` is set. Hooks must pass before committing/pushing:
   - `pre-commit`: web lint/check/test; server fmt + clippy.
