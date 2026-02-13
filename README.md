@@ -105,7 +105,8 @@ Reverse proxy setup (recommended):
 
 ## CI Docker Publishing Setup
 
-The repository now publishes Docker images directly from GitHub Actions (`.github/workflows/docker-publish.yml`).
+The repository now publishes Docker images directly from GitHub Actions (`.github/workflows/ci.yml` publish job).
+Publishing only runs after the web/server CI jobs pass.
 
 ## Offline and Sync Behavior
 

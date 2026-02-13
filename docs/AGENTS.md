@@ -35,7 +35,8 @@
 - Before any implementation or documentation change, verify the current branch is not `main`. If it is `main`, create and switch to an appropriately named branch first (for example: `feat/<scope>`, `fix/<scope>`, `chore/<scope>`, or `docs/<scope>`).
 - CI/CD image publishing policy (required moving forward):
   - Do not manually build/push Docker Hub images for normal releases.
-  - GitHub Actions workflow `.github/workflows/docker-publish.yml` is the source of truth for Docker publishing.
+  - GitHub Actions workflow `.github/workflows/ci.yml` is the source of truth for validation and Docker publishing.
+  - Docker publishing runs only after `web` + `server` CI jobs pass.
   - `main` branch publishes `deantammam/tasksync-web:latest` and `deantammam/tasksync-server:latest`.
   - Any non-`main` branch push publishes `deantammam/tasksync-web:beta` and `deantammam/tasksync-server:beta`.
   - Feature/beta branches are temporary working branches; once verified stable, merge into `main`, then delete the temporary branch.
