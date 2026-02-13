@@ -84,7 +84,7 @@
 		$uiPreferences.listSort.direction
 	);
 	$: copyLines = [...pendingTasks, ...completedTasks].map(
-		(task) => `[${task.status === 'done' ? 'x' : ' '}] ${task.title}`
+		(task) => `- [${task.status === 'done' ? 'x' : ' '}] ${task.title}`
 	);
 	const copyProvider = () => copyLines;
 	$: if (typeof window !== 'undefined') {
@@ -277,10 +277,10 @@
 		background: rgba(15, 23, 42, 0.96);
 		border: 1px solid #1f2937;
 		border-radius: 16px;
-		padding: 7px;
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 8px;
+		padding: 6px;
+		display: flex;
+		gap: 6px;
+		align-items: center;
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
 		margin: 0 auto;
@@ -288,22 +288,34 @@
 	}
 
 	.mobile-add input {
-		width: 100%;
+		flex: 1;
 		min-width: 0;
-		background: #0b1221;
-		border: 1px solid #1f2937;
+		background: transparent;
+		border: none;
 		color: #e2e8f0;
 		border-radius: 10px;
-		padding: 10px 12px;
+		padding: 0 12px;
+		height: 46px;
+	}
+
+	.mobile-add input:focus-visible {
+		outline: none;
+	}
+
+	.mobile-add .bar:focus-within {
+		border-color: var(--focus);
 	}
 
 	.mobile-add button {
 		background: #2563eb;
 		color: white;
 		border: none;
-		border-radius: 11px;
-		padding: 10px 14px;
+		border-radius: 12px;
+		padding: 0 16px;
 		white-space: nowrap;
+		min-width: 92px;
+		height: 46px;
+		font-weight: 600;
 		cursor: pointer;
 	}
 

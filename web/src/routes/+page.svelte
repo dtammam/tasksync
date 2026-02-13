@@ -52,9 +52,9 @@
 	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode);
 	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode);
 	$: copyLines = [
-		...sortedMissed.map((task) => `[ ] ${task.title}`),
-		...sortedPending.map((task) => `[ ] ${task.title}`),
-		...sortedCompleted.map((task) => `[x] ${task.title}`)
+		...sortedMissed.map((task) => `- [ ] ${task.title}`),
+		...sortedPending.map((task) => `- [ ] ${task.title}`),
+		...sortedCompleted.map((task) => `- [x] ${task.title}`)
 	];
 	const copyProvider = () => copyLines;
 
@@ -536,10 +536,10 @@
 		background: var(--surface-1);
 		border: 1px solid var(--border-1);
 		border-radius: 16px;
-		padding: 7px;
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 8px;
+		padding: 6px;
+		display: flex;
+		gap: 6px;
+		align-items: center;
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
 		margin: 0 auto;
@@ -547,22 +547,34 @@
 	}
 
 	.mobile-add input {
-		width: 100%;
+		flex: 1;
 		min-width: 0;
-		background: var(--surface-2);
-		border: 1px solid var(--border-1);
+		background: transparent;
+		border: none;
 		color: var(--app-text);
 		border-radius: 10px;
-		padding: 10px 12px;
+		padding: 0 12px;
+		height: 46px;
+	}
+
+	.mobile-add input:focus-visible {
+		outline: none;
+	}
+
+	.mobile-add .bar:focus-within {
+		border-color: var(--focus);
 	}
 
 	.mobile-add button {
 		background: #2563eb;
 		color: white;
 		border: none;
-		border-radius: 11px;
-		padding: 10px 14px;
+		border-radius: 12px;
+		padding: 0 16px;
 		white-space: nowrap;
+		min-width: 92px;
+		height: 46px;
+		font-weight: 600;
 		cursor: pointer;
 	}
 
