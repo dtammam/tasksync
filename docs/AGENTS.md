@@ -42,6 +42,10 @@
   - Feature/beta branches are temporary working branches; once verified stable, merge into `main`, then delete the temporary branch.
   - Repository secrets required for publish workflow: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
   - Runtime deployment configuration for web must come from environment variables (for example Portainer stack env vars), especially `VITE_API_URL` and `VITE_ALLOWED_HOSTS`.
+- Portainer deploy safety rules:
+  - First deploy only: set `COMPOSE_PROFILES=setup` so seed runs once, then remove/clear it for normal redeploys.
+  - Use unique stack isolation values for each deployment: `TASKSYNC_DATA_SOURCE`, `SERVER_HOST_PORT`, `WEB_HOST_PORT`.
+  - Select image channel explicitly with `TASKSYNC_IMAGE_TAG` (`latest` stable default, `beta` for test stacks).
 - `core.hooksPath=hooks` is set. Hooks must pass before committing/pushing:
   - `pre-commit`: web lint/check/test; server fmt + clippy.
   - `pre-push`: web unit + Playwright smoke (skip only with `SKIP_PLAYWRIGHT=1` and note why); server tests.
