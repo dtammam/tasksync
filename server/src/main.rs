@@ -58,9 +58,7 @@ async fn main() -> anyhow::Result<()> {
                 .allow_headers(Any),
         );
 
-    let port =
-        env::var("PORT").ok().and_then(|value| value.trim().parse::<u16>().ok()).unwrap_or(3000);
-    let addr: SocketAddr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr: SocketAddr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on {addr}");
     axum::serve(listener, app).await?;

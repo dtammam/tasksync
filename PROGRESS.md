@@ -95,3 +95,5 @@ Outcome-first project milestones in plain language.
 - 2026-02-13 10:00 - Clarified self-host setup documentation with explicit stack variable guidance and first-deploy seed profile steps, reducing Portainer setup errors and recovery friction.
 - 2026-02-13 10:05 - Added deploy safety guardrails to AGENTS guidance so future changes consistently preserve prod/beta isolation and one-shot seed behavior.
 - 2026-02-13 10:20 - Simplified self-host port control by documenting and enforcing a single server port knob (`SERVER_HOST_PORT`) while keeping container-internal server port fixed, reducing brittle deploy misconfiguration.
+- 2026-02-13 10:25 - Hardened Portainer runtime behavior by explicitly pinning server internal `PORT=3000` in compose while retaining `SERVER_HOST_PORT` as the only stack-level server port knob.
+- 2026-02-13 10:30 - Finalized single-knob server port behavior by pinning internal server bind to `3000` in code and removing compose `PORT` env wiring, matching the same fixed-internal/variable-host pattern used by web.
