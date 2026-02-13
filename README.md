@@ -85,6 +85,7 @@ JWT_SECRET=super-long-randomsecret
 DEV_LOGIN_PASSWORD=tasksync
 RUST_LOG=info
 PORT=3000
+TASKSYNC_IMAGE_TAG=latest
 SERVER_HOST_PORT=3000
 TASKSYNC_DATA_SOURCE=tasksync_data
 WEB_HOST_PORT=5173
@@ -103,6 +104,7 @@ Optional web/reverse-proxy variables:
 - `DEV_LOGIN_PASSWORD`: Legacy/dev fallback password for rows that do not yet have a password hash.
 - `RUST_LOG`: Server log verbosity (for example `info`).
 - `PORT`: Internal server listen port inside container (keep `3000` unless you also change compose internal mapping).
+- `TASKSYNC_IMAGE_TAG`: Docker image tag channel used by server/web/seed services (`latest` or `beta`).
 - `SERVER_HOST_PORT`: Host port mapped to server container port `3000` (for example `3000` prod, `3001` beta).
 - `WEB_HOST_PORT`: Host port mapped to web container port `5173` (for example `5173` prod, `5174` beta).
 - `TASKSYNC_DATA_SOURCE`: Persistent data source mounted at `/data` (named volume or bind source).
@@ -112,8 +114,8 @@ Optional web/reverse-proxy variables:
 - `VITE_ALLOWED_HOSTS`: Comma-separated host allow-list for Vite preview server (for example `tasksync.example.com,tasksync-beta.example.com`).
 
 Example split for parallel stacks on one host:
-- prod: `SERVER_HOST_PORT=3000`, `WEB_HOST_PORT=5173`, `TASKSYNC_DATA_SOURCE=tasksync_prod_data`
-- beta: `SERVER_HOST_PORT=3001`, `WEB_HOST_PORT=5174`, `TASKSYNC_DATA_SOURCE=tasksync_beta_data`
+- prod: `TASKSYNC_IMAGE_TAG=latest`, `SERVER_HOST_PORT=3000`, `WEB_HOST_PORT=5173`, `TASKSYNC_DATA_SOURCE=tasksync_prod_data`
+- beta: `TASKSYNC_IMAGE_TAG=beta`, `SERVER_HOST_PORT=3001`, `WEB_HOST_PORT=5174`, `TASKSYNC_DATA_SOURCE=tasksync_beta_data`
 
 Typical flow:
 1. Fill out `.env` values (`JWT_SECRET` and seed passwords should be replaced).

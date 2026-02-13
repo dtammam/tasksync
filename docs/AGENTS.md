@@ -147,7 +147,7 @@ Return JSON with explicit errors per change on sync push. Update shared types.
   - Values to update if needed: optional `-SkipPlaywright`.
   - One-liner fallback: `cd C:\Repositories\tasksync\web;npx playwright test --workers=2 --retries=1`
 - **Docker start (preferred script):** `scripts/8-docker-up.ps1`
-  - Values to update if needed: `.env` values like `JWT_SECRET`, `DATABASE_URL`, `TASKSYNC_DATA_SOURCE`, `SERVER_HOST_PORT`, `WEB_HOST_PORT`, optional `VITE_API_URL`.
+  - Values to update if needed: `.env` values like `TASKSYNC_IMAGE_TAG`, `JWT_SECRET`, `DATABASE_URL`, `TASKSYNC_DATA_SOURCE`, `SERVER_HOST_PORT`, `WEB_HOST_PORT`, optional `VITE_API_URL`.
   - One-liner fallback: `cd C:\Repositories\tasksync;docker compose up --build -d server web`
 - **Docker seed (preferred script):** `scripts/9-docker-seed.ps1`
   - Values to update if needed: `-AdminPassword`, `-ContributorPassword`.

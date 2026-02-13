@@ -1,6 +1,6 @@
 services:
   server:
-    image: deantammam/tasksync-server:latest
+    image: deantammam/tasksync-server:${TASKSYNC_IMAGE_TAG:-latest}
     pull_policy: always
     ports:
       - "${SERVER_HOST_PORT:-3000}:3000"
@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: deantammam/tasksync-web:latest
+    image: deantammam/tasksync-web:${TASKSYNC_IMAGE_TAG:-latest}
     pull_policy: always
     environment:
       VITE_API_URL: ${VITE_API_URL:-}
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   seed:
-    image: deantammam/tasksync-server:latest
+    image: deantammam/tasksync-server:${TASKSYNC_IMAGE_TAG:-latest}
     command: ["seed"]
     profiles: ["setup"]
     environment:
