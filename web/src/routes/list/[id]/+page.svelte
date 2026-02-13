@@ -326,13 +326,4 @@
 		}
 	}
 
-	@media (max-width: 520px) {
-		.mobile-add .bar {
-			grid-template-columns: 1fr;
-		}
-
-		.mobile-add button {
-			width: 100%;
-		}
-	}
 </style>

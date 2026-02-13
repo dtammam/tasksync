@@ -51,9 +51,11 @@
 	$: sortedPending = sortTasks($myDayPending ?? [], sortMode);
 	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode);
 	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode);
-	$: copyLines = [...sortedMissed, ...sortedPending, ...sortedCompleted].map(
-		(task) => `[${task.status === 'done' ? 'x' : ' '}] ${task.title}`
-	);
+	$: copyLines = [
+		...sortedMissed.map((task) => `[ ] ${task.title}`),
+		...sortedPending.map((task) => `[ ] ${task.title}`),
+		...sortedCompleted.map((task) => `[x] ${task.title}`)
+	];
 	const copyProvider = () => copyLines;
 
 	$: if (typeof window !== 'undefined' && !sortLoaded) {
@@ -595,13 +597,4 @@
 		}
 	}
 
-	@media (max-width: 520px) {
-		.mobile-add .bar {
-			grid-template-columns: 1fr;
-		}
-
-		.mobile-add button {
-			width: 100%;
-		}
-	}
 </style>
