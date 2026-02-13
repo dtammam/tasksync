@@ -2,86 +2,100 @@
 	// @ts-nocheck
 	import { page } from '$app/stores';
 	import TaskRow from '$lib/components/TaskRow.svelte';
-import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
-import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
-import { findListName } from '$lib/stores/lists';
-import { uiPreferences } from '$lib/stores/preferences';
+	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
+	import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
+	import { findListName } from '$lib/stores/lists';
+	import { uiPreferences } from '$lib/stores/preferences';
+	import { onDestroy } from 'svelte';
 
-let quickTitle = '';
-let detailId = null;
-$: listId = $page.params.id;
-let listTasks = tasksByList(listId);
-$: listTasks = tasksByList(listId);
-$: listName = findListName(listId);
-const compareAlpha = (left, right) => {
-	const a = (left ?? '').trim().toLowerCase();
-	const b = (right ?? '').trim().toLowerCase();
-	if (a === b) return 0;
-	return a < b ? -1 : 1;
-};
+	let quickTitle = '';
+	let detailId = null;
+	$: listId = $page.params.id;
+	let listTasks = tasksByList(listId);
+	$: listTasks = tasksByList(listId);
+	$: listName = findListName(listId);
+	const compareAlpha = (left, right) => {
+		const a = (left ?? '').trim().toLowerCase();
+		const b = (right ?? '').trim().toLowerCase();
+		if (a === b) return 0;
+		return a < b ? -1 : 1;
+	};
 
-const quickAdd = () => {
-	if (!quickTitle.trim()) return;
-	const activeList = listId || (typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : '');
-	if (!activeList) return;
-	tasks.createLocal(quickTitle, activeList);
-	quickTitle = '';
-};
-
-if (typeof window !== 'undefined') {
-	Reflect.set(window, '__addTaskList', () => quickAdd());
-	Reflect.set(window, '__addTaskListWithTitle', (title) => {
-		const activeList = listId || window.location.pathname.split('/').pop();
+	const quickAdd = () => {
+		if (!quickTitle.trim()) return;
+		const activeList = listId || (typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : '');
 		if (!activeList) return;
-		tasks.createLocal(title, activeList);
-	});
-}
+		tasks.createLocal(quickTitle, activeList);
+		quickTitle = '';
+	};
 
-const openDetail = (event) => (detailId = event.detail.id);
-const closeDetail = () => (detailId = null);
-$: detailTask = detailId ? getTask(detailId) : null;
-
-const sortTasks = (arr, mode = 'created', direction = 'asc') => {
-	const copy = [...arr];
-	const isAscending = direction !== 'desc';
-	if (mode === 'due_date') {
-		copy.sort((a, b) => {
-			const dueA = typeof a.due_date === 'string' ? a.due_date : '';
-			const dueB = typeof b.due_date === 'string' ? b.due_date : '';
-			const hasDueA = !!dueA;
-			const hasDueB = !!dueB;
-			if (hasDueA && hasDueB && dueA !== dueB) {
-				return isAscending ? (dueA < dueB ? -1 : 1) : dueA > dueB ? -1 : 1;
-			}
-			if (hasDueA !== hasDueB) {
-				// Keep undated tasks at the bottom for both ascending and descending due-date sort.
-				return hasDueA ? -1 : 1;
-			}
-			return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+	if (typeof window !== 'undefined') {
+		Reflect.set(window, '__addTaskList', () => quickAdd());
+		Reflect.set(window, '__addTaskListWithTitle', (title) => {
+			const activeList = listId || window.location.pathname.split('/').pop();
+			if (!activeList) return;
+			tasks.createLocal(title, activeList);
 		});
-	} else if (mode === 'alpha') {
-		copy.sort((a, b) => {
-			const byTitle = compareAlpha(a.title, b.title);
-			if (byTitle === 0) {
-				return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
-			}
-			return isAscending ? byTitle : byTitle * -1;
-		});
-	} else {
-		copy.sort((a, b) => (isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts));
 	}
-	return copy;
-};
-$: pendingTasks = sortTasks(
-	($listTasks ?? []).filter((t) => t.status === 'pending'),
-	$uiPreferences.listSort.mode,
-	$uiPreferences.listSort.direction
-);
-$: completedTasks = sortTasks(
-	($listTasks ?? []).filter((t) => t.status === 'done'),
-	$uiPreferences.listSort.mode,
-	$uiPreferences.listSort.direction
-);
+
+	const openDetail = (event) => (detailId = event.detail.id);
+	const closeDetail = () => (detailId = null);
+	$: detailTask = detailId ? getTask(detailId) : null;
+
+	const sortTasks = (arr, mode = 'created', direction = 'asc') => {
+		const copy = [...arr];
+		const isAscending = direction !== 'desc';
+		if (mode === 'due_date') {
+			copy.sort((a, b) => {
+				const dueA = typeof a.due_date === 'string' ? a.due_date : '';
+				const dueB = typeof b.due_date === 'string' ? b.due_date : '';
+				const hasDueA = !!dueA;
+				const hasDueB = !!dueB;
+				if (hasDueA && hasDueB && dueA !== dueB) {
+					return isAscending ? (dueA < dueB ? -1 : 1) : dueA > dueB ? -1 : 1;
+				}
+				if (hasDueA !== hasDueB) {
+					// Keep undated tasks at the bottom for both ascending and descending due-date sort.
+					return hasDueA ? -1 : 1;
+				}
+				return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+			});
+		} else if (mode === 'alpha') {
+			copy.sort((a, b) => {
+				const byTitle = compareAlpha(a.title, b.title);
+				if (byTitle === 0) {
+					return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+				}
+				return isAscending ? byTitle : byTitle * -1;
+			});
+		} else {
+			copy.sort((a, b) => (isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts));
+		}
+		return copy;
+	};
+	$: pendingTasks = sortTasks(
+		($listTasks ?? []).filter((t) => t.status === 'pending'),
+		$uiPreferences.listSort.mode,
+		$uiPreferences.listSort.direction
+	);
+	$: completedTasks = sortTasks(
+		($listTasks ?? []).filter((t) => t.status === 'done'),
+		$uiPreferences.listSort.mode,
+		$uiPreferences.listSort.direction
+	);
+	$: copyLines = [...pendingTasks, ...completedTasks].map(
+		(task) => `- [${task.status === 'done' ? 'x' : ' '}] ${task.title}`
+	);
+	const copyProvider = () => copyLines;
+	$: if (typeof window !== 'undefined') {
+		Reflect.set(window, '__copyTasksAsJoplin', copyProvider);
+	}
+
+	onDestroy(() => {
+		if (typeof window !== 'undefined' && Reflect.get(window, '__copyTasksAsJoplin') === copyProvider) {
+			Reflect.deleteProperty(window, '__copyTasksAsJoplin');
+		}
+	});
 </script>
 
 <header class="page-header">
@@ -263,10 +277,10 @@ $: completedTasks = sortTasks(
 		background: rgba(15, 23, 42, 0.96);
 		border: 1px solid #1f2937;
 		border-radius: 16px;
-		padding: 7px;
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 8px;
+		padding: 6px;
+		display: flex;
+		gap: 6px;
+		align-items: center;
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 		max-width: 720px;
 		margin: 0 auto;
@@ -274,20 +288,34 @@ $: completedTasks = sortTasks(
 	}
 
 	.mobile-add input {
-		width: 100%;
-		background: #0b1221;
-		border: 1px solid #1f2937;
+		flex: 1;
+		min-width: 0;
+		background: transparent;
+		border: none;
 		color: #e2e8f0;
 		border-radius: 10px;
-		padding: 10px 12px;
+		padding: 0 12px;
+		height: 46px;
+	}
+
+	.mobile-add input:focus-visible {
+		outline: none;
+	}
+
+	.mobile-add .bar:focus-within {
+		border-color: var(--focus);
 	}
 
 	.mobile-add button {
 		background: #2563eb;
 		color: white;
 		border: none;
-		border-radius: 11px;
-		padding: 10px 14px;
+		border-radius: 12px;
+		padding: 0 16px;
+		white-space: nowrap;
+		min-width: 92px;
+		height: 46px;
+		font-weight: 600;
 		cursor: pointer;
 	}
 
@@ -309,4 +337,5 @@ $: completedTasks = sortTasks(
 			font-size: 24px;
 		}
 	}
+
 </style>

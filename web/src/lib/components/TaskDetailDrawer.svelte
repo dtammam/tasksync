@@ -68,6 +68,7 @@ const save = () => {
 	if (canEditAssignee && assigneeUserId !== (task.assignee_user_id ?? '')) {
 		tasks.setAssignee(task.id, assigneeUserId || undefined);
 	}
+	close();
 };
 
 const toggleStatus = () => {
