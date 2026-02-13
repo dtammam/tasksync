@@ -62,20 +62,10 @@ Tag policy:
 `docker-compose.yml` already references these `latest` tags.
 
 Portainer-first context (current revision):
-- This compose file now uses `TASKSYNC_DATA_SOURCE` for persistent app data mounted at `/data`.
-- Default (`TASKSYNC_DATA_SOURCE=tasksync_data`) uses a named Docker volume.
+- This compose file uses a declared volume alias (`tasksync_data`) mounted at `/data`.
+- `TASKSYNC_DATA_SOURCE` controls the actual Docker volume name used by that alias.
+- Default is `tasksync_data`.
 - In Portainer, give each stack its own value (for example `tasksync_prod_data` and `tasksync_beta_data`) so prod/beta stay isolated.
-- You can also use a bind path source instead (for example `/srv/tasksync-beta/data`) if you prefer host-path storage.
-
-If you choose host-path bind mount storage, create the host folder manually over SSH before deploying:
-
-```bash
-ssh <user>@<docker-host>
-sudo mkdir -p /srv/tasksync/data
-sudo chmod 775 /srv/tasksync
-sudo chmod 775 /srv/tasksync/data
-ls -ld /srv/tasksync /srv/tasksync/data
-```
 
 Create a `.env` file in this folder (same level as `docker-compose.yml`):
 
@@ -107,7 +97,7 @@ Optional web/reverse-proxy variables:
 - `TASKSYNC_IMAGE_TAG`: Docker image tag channel used by server/web/seed services (`latest` or `beta`).
 - `SERVER_HOST_PORT`: Host port mapped to server container port `3000` (for example `3000` prod, `3001` beta).
 - `WEB_HOST_PORT`: Host port mapped to web container port `5173` (for example `5173` prod, `5174` beta).
-- `TASKSYNC_DATA_SOURCE`: Persistent data source mounted at `/data` (named volume or bind source).
+- `TASKSYNC_DATA_SOURCE`: Docker volume name used for persistent `/data` storage (for example `tasksync_prod_data` or `tasksync_beta_data`).
 - `SEED_ADMIN_PASSWORD`: Password used by one-time seed flow for `admin@example.com`.
 - `SEED_CONTRIB_PASSWORD`: Password used by one-time seed flow for `contrib@example.com`.
 - `VITE_API_URL`: Runtime API base URL injected into web container startup config (for example `https://api-beta.example.com` or `/api`).

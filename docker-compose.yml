@@ -11,7 +11,7 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
       PORT: 3000
     volumes:
-      - ${TASKSYNC_DATA_SOURCE:-tasksync_data}:/data
+      - tasksync_data:/data
     restart: unless-stopped
 
   web:
@@ -35,8 +35,9 @@ services:
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-tasksync}
       SEED_CONTRIB_PASSWORD: ${SEED_CONTRIB_PASSWORD:-tasksync}
     volumes:
-      - ${TASKSYNC_DATA_SOURCE:-tasksync_data}:/data
+      - tasksync_data:/data
     restart: "no"
 
 volumes:
   tasksync_data:
+    name: ${TASKSYNC_DATA_SOURCE:-tasksync_data}
