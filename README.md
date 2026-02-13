@@ -67,6 +67,7 @@ Portainer-first context (current revision):
 - `TASKSYNC_DATA_SOURCE` controls the actual Docker volume name used by that alias.
 - Default is `tasksync_data`.
 - In Portainer, give each stack its own value (for example `tasksync_prod_data` and `tasksync_beta_data`) so prod/beta stay isolated.
+- Server internal port is pinned to `3000` in server code; only change `SERVER_HOST_PORT` for stack-level port mapping.
 
 Create a `.env` file in this folder (same level as `docker-compose.yml`):
 
@@ -77,8 +78,8 @@ DEV_LOGIN_PASSWORD=tasksync
 RUST_LOG=info
 TASKSYNC_IMAGE_TAG=latest
 SERVER_HOST_PORT=3000
-TASKSYNC_DATA_SOURCE=tasksync_data
 WEB_HOST_PORT=5173
+TASKSYNC_DATA_SOURCE=tasksync_data
 SEED_ADMIN_PASSWORD=Replacethis
 SEED_CONTRIB_PASSWORD=Replacethistoo
 # Remove post-first seed:
