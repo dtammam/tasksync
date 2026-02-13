@@ -7,6 +7,7 @@
 	import { getTask } from '$lib/stores/tasks';
 	import { myDaySuggestions } from '$lib/stores/tasks';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
+	import { onDestroy } from 'svelte';
 
 	const listsStore = lists;
 	let quickTitle = '';
@@ -50,6 +51,10 @@
 	$: sortedPending = sortTasks($myDayPending ?? [], sortMode);
 	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode);
 	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode);
+	$: copyLines = [...sortedMissed, ...sortedPending, ...sortedCompleted].map(
+		(task) => `[${task.status === 'done' ? 'x' : ' '}] ${task.title}`
+	);
+	const copyProvider = () => copyLines;
 
 	$: if (typeof window !== 'undefined' && !sortLoaded) {
 		const saved = localStorage.getItem(MY_DAY_SORT_KEY);
@@ -123,6 +128,16 @@
 	$: if (!$myDaySuggestions?.length) {
 		showSuggestions = false;
 	}
+
+	$: if (typeof window !== 'undefined') {
+		Reflect.set(window, '__copyTasksAsJoplin', copyProvider);
+	}
+
+	onDestroy(() => {
+		if (typeof window !== 'undefined' && Reflect.get(window, '__copyTasksAsJoplin') === copyProvider) {
+			Reflect.deleteProperty(window, '__copyTasksAsJoplin');
+		}
+	});
 </script>
 
 <div class="page-content">
@@ -531,6 +546,7 @@
 
 	.mobile-add input {
 		width: 100%;
+		min-width: 0;
 		background: var(--surface-2);
 		border: 1px solid var(--border-1);
 		color: var(--app-text);
@@ -544,6 +560,7 @@
 		border: none;
 		border-radius: 11px;
 		padding: 10px 14px;
+		white-space: nowrap;
 		cursor: pointer;
 	}
 
@@ -575,6 +592,16 @@
 
 		h1 {
 			font-size: 24px;
+		}
+	}
+
+	@media (max-width: 520px) {
+		.mobile-add .bar {
+			grid-template-columns: 1fr;
+		}
+
+		.mobile-add button {
+			width: 100%;
 		}
 	}
 </style>

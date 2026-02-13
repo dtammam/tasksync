@@ -89,6 +89,68 @@
 		window.location.reload();
 	};
 
+	const fallbackCopyText = (text) => {
+		if (typeof document === 'undefined') return false;
+		const el = document.createElement('textarea');
+		el.value = text;
+		el.setAttribute('readonly', 'true');
+		el.style.position = 'fixed';
+		el.style.opacity = '0';
+		el.style.pointerEvents = 'none';
+		document.body.appendChild(el);
+		el.focus();
+		el.select();
+		let copied = false;
+		try {
+			copied = document.execCommand('copy');
+		} catch {
+			copied = false;
+		}
+		document.body.removeChild(el);
+		return copied;
+	};
+
+	const setCopyLabel = (label) => {
+		copyLabel = label;
+		if (copyResetTimer) {
+			clearTimeout(copyResetTimer);
+		}
+		if (label !== 'Copy') {
+			copyResetTimer = setTimeout(() => {
+				copyLabel = 'Copy';
+				copyResetTimer = null;
+			}, 1400);
+		}
+	};
+
+	const collectCopyLines = () => {
+		if (typeof window === 'undefined') return [];
+		const provider = Reflect.get(window, '__copyTasksAsJoplin');
+		if (typeof provider !== 'function') return [];
+		const lines = provider();
+		if (!Array.isArray(lines)) return [];
+		return lines.filter((line) => typeof line === 'string' && line.trim().length > 0);
+	};
+
+	const copyTasks = async () => {
+		const lines = collectCopyLines();
+		if (!lines.length) {
+			setCopyLabel('Nothing to copy');
+			return;
+		}
+		const payload = lines.join('\n');
+		try {
+			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(payload);
+			} else if (!fallbackCopyText(payload)) {
+				throw new Error('Clipboard not available');
+			}
+			setCopyLabel('Copied');
+		} catch {
+			setCopyLabel('Copy failed');
+		}
+	};
+
 	const publishSyncStatus = () => {
 		if (!syncCoordinator || !syncLeader || !auth.isAuthenticated()) return;
 		syncCoordinator.publishStatus(get(syncStatus));
@@ -96,6 +158,8 @@
 
 	let retryTimer = null;
 	let visibilityListener = null;
+	let copyResetTimer = null;
+	let copyLabel = 'Copy';
 	let lastScopeKey = '';
 
 	const storageScopeFromAuth = (state) => {
@@ -187,6 +251,7 @@
 
 	onDestroy(() => {
 		if (retryTimer) clearInterval(retryTimer);
+		if (copyResetTimer) clearTimeout(copyResetTimer);
 		if (visibilityListener) {
 			document.removeEventListener('visibilitychange', visibilityListener);
 		}
@@ -284,6 +349,9 @@
 				{/if}
 				<button class="refresh-btn" type="button" on:click={refreshNow}>
 					Refresh
+				</button>
+				<button class="refresh-btn" type="button" on:click={copyTasks}>
+					{copyLabel}
 				</button>
 				{#if ($syncStatus.pull === 'error' || $syncStatus.push === 'error') && $syncStatus.lastError}
 					<span class="err-msg">{$syncStatus.lastError}</span>
