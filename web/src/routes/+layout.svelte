@@ -364,20 +364,23 @@
 
 <style>
 	:global(:root) {
-		--app-bg: #0f141c;
-		--app-bg-mobile: #0f141c;
-		--app-text: #e7ecf3;
-		--app-muted: #9aabbe;
-		--surface-1: #161d27;
-		--surface-2: #111821;
-		--surface-3: #1b2531;
-		--surface-accent: #4f8cff;
-		--border-1: #283444;
-		--border-2: #35465c;
+		--app-bg:
+			radial-gradient(circle at 8% 6%, rgba(56, 189, 248, 0.11), transparent 30%),
+			radial-gradient(circle at 92% 0%, rgba(59, 130, 246, 0.1), transparent 28%),
+			linear-gradient(180deg, #04070f 0%, #060b16 52%, #050913 100%);
+		--app-bg-mobile: #0b1221;
+		--app-text: #e2e8f0;
+		--app-muted: #cbd5e1;
+		--surface-1: #0c1322;
+		--surface-2: #0a101d;
+		--surface-3: #161f31;
+		--surface-accent: #1d4ed8;
+		--border-1: #2b374f;
+		--border-2: #3a4a67;
 		--error: #ef4444;
-		--focus: #7aa7ff;
-		--ring-shadow: 0 0 0 1px rgba(148, 163, 184, 0.15), 0 8px 24px rgba(2, 6, 23, 0.45);
-		--soft-shadow: 0 18px 36px rgba(2, 6, 23, 0.38);
+		--focus: #60a5fa;
+		--ring-shadow: 0 0 0 1px rgba(148, 163, 184, 0.18), 0 8px 20px rgba(2, 6, 23, 0.34);
+		--soft-shadow: 0 16px 34px rgba(2, 6, 23, 0.34);
 	}
 
 	:global(html[data-ui-theme='dark']) {
@@ -410,11 +413,16 @@
 		margin: 0;
 		background: var(--app-bg);
 		color: var(--app-text);
-		font-family: 'Reddit Sans', 'IBM Plex Sans', 'Noto Sans', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-		font-size: 15px;
-		line-height: 1.45;
-		letter-spacing: -0.005em;
-		text-rendering: optimizeLegibility;
+		font-family:
+			-apple-system,
+			BlinkMacSystemFont,
+			'SF Pro Text',
+			'Segoe UI',
+			Roboto,
+			'Helvetica Neue',
+			Arial,
+			sans-serif;
+		text-rendering: geometricPrecision;
 		-webkit-font-smoothing: antialiased;
 		overflow: hidden;
 		width: 100%;
@@ -446,6 +454,19 @@
 	:global(select),
 	:global(textarea) {
 		font-size: 16px;
+	}
+
+	:global(button),
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		font-family: inherit;
+		transition:
+			border-color 120ms ease,
+			background-color 120ms ease,
+			color 120ms ease,
+			box-shadow 120ms ease,
+			transform 120ms ease;
 	}
 
 	:global(button:focus-visible),
@@ -505,6 +526,17 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		min-width: 0;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-2) transparent;
+	}
+
+	main::-webkit-scrollbar {
+		width: 10px;
+	}
+
+	main::-webkit-scrollbar-thumb {
+		background: linear-gradient(180deg, var(--border-2), var(--border-1));
+		border-radius: 999px;
 	}
 
 	.app-header {
@@ -518,8 +550,8 @@
 		display: flex;
 		gap: 10px;
 		align-items: center;
-		font-weight: 700;
-		letter-spacing: -0.01em;
+		font-weight: 620;
+		letter-spacing: 0.01em;
 	}
 
 	.brand img { width: 28px; height: 28px; }
@@ -549,15 +581,45 @@
 	.badge {
 		padding: 6px 10px;
 		border-radius: 999px;
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 92%, white 3%);
 		border: 1px solid var(--border-1);
 		color: var(--app-muted);
 		font-size: 12px;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 	}
 
-	.badge.busy { background: #1d4ed8; border-color: #1d4ed8; color: white; }
-	.badge.error { background: #7f1d1d; border-color: #ef4444; color: #fecdd3; }
-	.err-msg { color: #ef4444; font-size: 12px; }
+	.badge.busy {
+		background: #1d4ed8;
+		border-color: #1d4ed8;
+		color: white;
+	}
+
+	.badge.error {
+		background: #7f1d1d;
+		border-color: #ef4444;
+		color: #fecdd3;
+	}
+
+	.err-msg {
+		color: #ef4444;
+		font-size: 12px;
+	}
+
+	.refresh-btn {
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
+		color: var(--app-muted);
+		border-radius: 999px;
+		padding: 6px 10px;
+		font-size: 12px;
+		cursor: pointer;
+		box-shadow: var(--ring-shadow);
+	}
+
+	.refresh-btn:hover {
+		transform: translateY(-1px);
+		color: var(--app-text);
+	}
 
 	.drawer-backdrop {
 		position: fixed;

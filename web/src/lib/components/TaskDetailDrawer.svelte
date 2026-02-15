@@ -219,79 +219,33 @@ const memberAvatar = (member) => {
 {/if}
 
 <style>
-	.backdrop {
-		all: unset;
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.52);
-		backdrop-filter: blur(4px);
-		z-index: 90;
-	}
-
+	.backdrop { all: unset; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); z-index: 90; }
 	.drawer {
-		position: fixed;
-		top: 0;
-		right: 0;
-		height: 100vh;
-		width: min(430px, 92vw);
-		padding: 18px;
-		z-index: 99;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		border-left: 1px solid var(--border-1);
-		background: var(--surface-1);
-		box-shadow: -16px 0 44px rgba(0, 0, 0, 0.5);
+		position: fixed; top: 0; right: 0; height: 100vh; width: min(420px, 92vw);
+		background: color-mix(in oklab, var(--surface-2) 94%, white 6%);
+		border-left: 1px solid var(--border-2); box-shadow: -20px 0 46px rgba(0, 0, 0, 0.46);
+		padding: 16px; z-index: 99; display:flex; flex-direction:column; gap:12px;
 	}
-
-	header { display: flex; justify-content: space-between; align-items: flex-start; }
-	.eyebrow { text-transform: uppercase; color: var(--app-muted); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; margin: 0 0 2px; }
-	h2 { margin: 0; font-size: 21px; }
-	.muted { color: var(--app-muted); margin: 4px 0 0; font-size: 13px; }
-
-	.form { display: flex; flex-direction: column; gap: 10px; overflow: auto; padding-bottom: 12px; }
-	label { display: flex; flex-direction: column; gap: 4px; color: var(--app-text); font-size: 13px; }
+	header { display:flex; justify-content:space-between; align-items:flex-start; }
+	.eyebrow { text-transform:uppercase; color:var(--app-muted); font-size:11px; letter-spacing:0.06em; margin:0 0 2px; }
+	h2 { margin:0; font-size:20px; letter-spacing:-0.01em; }
+	.muted { color:var(--app-muted); margin:4px 0 0; font-size:13px; }
+	.form { display:flex; flex-direction:column; gap:10px; overflow:auto; padding-bottom:12px; }
+	label { display:flex; flex-direction:column; gap:4px; color:var(--app-text); font-size:13px; }
 	input, select, textarea {
-		background: var(--surface-1);
-		border: 1px solid var(--border-1);
-		color: var(--app-text);
-		border-radius: 10px;
-		padding: 8px 10px;
-		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+		background: linear-gradient(180deg, var(--surface-1), var(--surface-2)); border:1px solid var(--border-1);
+		color:var(--app-text); border-radius:9px; padding:8px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 	}
-
-	.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; align-items: center; }
+	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(120px, auto)); }
 	.row.attach { grid-template-columns: 1fr auto; }
-
-	button.primary,
-	.status {
-		background: #2563eb;
-		border: 1px solid rgba(147, 197, 253, 0.55);
-		color: #fff;
-		padding: 10px 12px;
-		border-radius: 10px;
-		cursor: pointer;
-		font-weight: 650;
-		box-shadow: 0 10px 24px rgba(29, 78, 216, 0.38);
+	button.primary, .status {
+		background: linear-gradient(180deg, #1d4ed8, #1e40af); border:1px solid rgba(147,197,253,0.4);
+		color:#fff; padding:10px 12px; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
 	}
-	button.ghost {
-		background: var(--surface-1);
-		border: 1px solid var(--border-1);
-		color: var(--app-text);
-		padding: 8px 10px;
-		border-radius: 10px;
-		cursor: pointer;
-	}
-	button.primary:hover,
-	.status:hover,
-	button.ghost:hover { transform: translateY(-1px); }
-
-	input:disabled,
-	select:disabled,
-	textarea:disabled,
-	button:disabled { opacity: 0.65; cursor: not-allowed; }
-
-	.attachments { margin: 0; padding-left: 16px; color: var(--app-text); }
+	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); padding:8px 10px; border-radius:9px; cursor:pointer; }
+	button.primary:hover, .status:hover, button.ghost:hover { transform: translateY(-1px); }
+	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
+	.attachments { margin:0; padding-left:16px; color:var(--app-text); }
 </style>
