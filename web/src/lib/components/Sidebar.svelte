@@ -71,9 +71,24 @@ let backupBusy = false;
 let backupError = '';
 let backupMessage = '';
 const appThemes = [
-	{ value: 'default', label: 'Default blue' },
+	{ value: 'default', label: 'Default Blue' },
+	{ value: 'light', label: 'Light' },
 	{ value: 'dark', label: 'Dark' },
-	{ value: 'light', label: 'Light' }
+	{ value: 'demo-theme', label: 'Demo Theme' },
+	{ value: 'shades-of-coffee', label: 'Shades of Coffee' },
+	{ value: 'miami-beach', label: 'Miami Beach' },
+	{ value: 'simple-dark', label: 'Simple Dark' },
+	{ value: 'matrix', label: 'Matrix' },
+	{ value: 'black-gold', label: 'Black Gold' },
+	{ value: 'okabe-ito', label: 'Okabe Ito' },
+	{ value: 'theme-from-1970', label: 'Theme from 1970' },
+	{ value: 'shades-of-gray-light', label: 'Shades of Gray (light)' },
+	{ value: 'catppuccin-latte', label: 'Catppuccin Latte' },
+	{ value: 'catppuccin-frappe', label: 'Catppuccin Frappé' },
+	{ value: 'catppuccin-macchiato', label: 'Catppuccin Macchiato' },
+	{ value: 'catppuccin-mocha', label: 'Catppuccin Mocha' },
+	{ value: 'you-need-a-dark-mode', label: 'You Need A Dark Mode' },
+	{ value: 'butterfly', label: 'Butterfly' }
 ];
 
 const iconFromIdentity = (display, email) => {
@@ -1213,12 +1228,9 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	.sidebar {
 		width: 100%;
 		max-width: 264px;
-		background:
-			radial-gradient(circle at 10% 10%, rgba(56, 189, 248, 0.16), transparent 48%),
-			radial-gradient(circle at 90% 0%, rgba(168, 85, 247, 0.1), transparent 32%),
-			linear-gradient(180deg, #0a1120 0%, #080e19 100%);
+		background: var(--surface-2);
 		border-right: 1px solid var(--border-1);
-		color: #cbd5e1;
+		color: var(--app-text);
 		padding: 14px 12px;
 		display: flex;
 		flex-direction: column;
@@ -1256,7 +1268,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	.app-title {
 		font-weight: 800;
 		letter-spacing: -0.03em;
-		color: #e2e8f0;
+		color: var(--app-text);
 		font-size: 24px;
 		line-height: 1.1;
 	}
@@ -1294,7 +1306,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		grid-template-columns: 26px 1fr auto;
 		align-items: center;
 		gap: 8px;
-		color: #cbd5e1;
+		color: var(--app-text);
 		text-decoration: none;
 		padding: 8px 10px;
 		border-radius: 10px;
@@ -1340,9 +1352,9 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	.section-toggle {
-		color: #e2e8f0;
-		background: #111a2d;
-		border: 1px solid #23314f;
+		color: var(--app-text);
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
 		border-radius: 10px;
 		padding: 8px 10px;
 		text-align: left;
@@ -1350,7 +1362,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	.card {
-		border: 1px solid #21314f;
+		border: 1px solid var(--border-1);
 		border-radius: 14px;
 		padding: 10px;
 		background: color-mix(in oklab, var(--surface-1) 93%, white 7%);
@@ -1377,14 +1389,14 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		flex-direction: column;
 		gap: 4px;
 		font-size: 12px;
-		color: #d0deef;
+		color: var(--app-text);
 	}
 
 	input,
 	select {
 		background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
-		border: 1px solid #243148;
-		color: #e2e8f0;
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		border-radius: 8px;
 		padding: 7px 9px;
 	}
@@ -1401,9 +1413,9 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	button.ghost {
-		background: #0b1221;
-		border: 1px solid #27344f;
-		color: #cbd5e1;
+		background: var(--surface-2);
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		padding: 8px 10px;
 		border-radius: 8px;
 		cursor: pointer;
@@ -1774,97 +1786,6 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		color: #86efac;
 		font-size: 12px;
 		margin: 0;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar {
-		background: #0f1622;
-		border-right-color: #bfd0ec;
-		color: #0f172a;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .section-label {
-		color: #475569;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .section-label.muted {
-		color: #64748b;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar a {
-		color: #1e293b;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar a:hover {
-		background: #e2ebff;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar a.selected {
-		background: #0f1622;
-		color: #0f172a;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .card {
-		background: #0f1622;
-		border-color: #c4d3ee;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .team .create-member,
-	:global(html[data-ui-theme='light']) .sidebar .member-row,
-	:global(html[data-ui-theme='light']) .sidebar .grant-row {
-		background: #ffffff;
-		border-color: #c4d3ee;
-		color: #1e293b;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .grant-row.on {
-		border-color: #2563eb;
-		background: rgba(37, 99, 235, 0.16);
-		color: #0f172a;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar input,
-	:global(html[data-ui-theme='light']) .sidebar select,
-	:global(html[data-ui-theme='light']) .sidebar .pin,
-	:global(html[data-ui-theme='light']) .sidebar .section-toggle,
-	:global(html[data-ui-theme='light']) .sidebar button.ghost,
-	:global(html[data-ui-theme='light']) .sidebar .backup .file-btn {
-		background: #ffffff;
-		border-color: #9fb2d1;
-		color: #0f172a;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .muted-note,
-	:global(html[data-ui-theme='light']) .sidebar .count,
-	:global(html[data-ui-theme='light']) .sidebar .account .who span,
-	:global(html[data-ui-theme='light']) .sidebar .team-helper,
-	:global(html[data-ui-theme='light']) .sidebar .grant-state,
-	:global(html[data-ui-theme='light']) .sidebar .member-head span {
-		color: #475569;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range'] {
-		border-color: #94a3b8;
-		background: #0f1622;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range']::-webkit-slider-thumb {
-		background: #ffffff;
-		border-color: #2563eb;
-	}
-
-	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range']::-moz-range-thumb {
-		background: #ffffff;
-		border-color: #2563eb;
-	}
-
-	:global(html[data-ui-theme='dark']) .sidebar {
-		background: #0f1622;
-		border-right-color: #1f1f1f;
-	}
-
-	:global(html[data-ui-theme='dark']) .sidebar .card {
-		background: #0f1622;
-		border-color: #2a2a2a;
 	}
 
 	@media (max-width: 900px) {

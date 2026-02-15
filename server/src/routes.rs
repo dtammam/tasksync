@@ -191,7 +191,26 @@ const SOUND_THEMES: [&str; 8] = [
     "custom_file",
 ];
 
-const UI_THEMES: [&str; 3] = ["default", "dark", "light"];
+const UI_THEMES: [&str; 18] = [
+    "default",
+    "dark",
+    "light",
+    "demo-theme",
+    "shades-of-coffee",
+    "miami-beach",
+    "simple-dark",
+    "matrix",
+    "black-gold",
+    "okabe-ito",
+    "theme-from-1970",
+    "shades-of-gray-light",
+    "catppuccin-latte",
+    "catppuccin-frappe",
+    "catppuccin-macchiato",
+    "catppuccin-mocha",
+    "you-need-a-dark-mode",
+    "butterfly",
+];
 
 const BACKUP_SCHEMA_V1: &str = "tasksync-space-backup-v1";
 
@@ -2172,6 +2191,7 @@ mod tests {
     use axum::extract::State;
     use axum::Json;
     use sqlx::SqlitePool;
+    use std::collections::BTreeSet;
 
     async fn setup_pool() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
@@ -2230,6 +2250,39 @@ mod tests {
             jwt_secret: "test-secret".to_string(),
             login_password: "test-pass".to_string(),
         }
+    }
+
+    fn shared_ui_themes_from_contract() -> Vec<String> {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("../shared/types/settings.ts");
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
+
+        let mut in_ui_theme_block = false;
+        let mut themes = Vec::new();
+        for line in source.lines() {
+            let trimmed = line.trim();
+            if !in_ui_theme_block {
+                if trimmed.starts_with("export type UiTheme") {
+                    in_ui_theme_block = true;
+                }
+                continue;
+            }
+
+            if let Some(start) = trimmed.find('\'') {
+                let rest = &trimmed[start + 1..];
+                if let Some(end) = rest.find('\'') {
+                    themes.push(rest[..end].to_string());
+                }
+            }
+
+            if trimmed.ends_with(';') {
+                break;
+            }
+        }
+
+        assert!(!themes.is_empty(), "no UiTheme entries parsed from {}", path.display());
+        themes
     }
 
     #[tokio::test]
@@ -2427,7 +2480,7 @@ mod tests {
             State(state.clone()),
             headers.clone(),
             Json(UpdateUiPreferencesBody {
-                theme: Some("dark".to_string()),
+                theme: Some("butterfly".to_string()),
                 sidebar_panels_json: Some(
                     "{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}"
                         .to_string(),
@@ -2439,7 +2492,7 @@ mod tests {
         .expect("update preferences should work")
         .0;
 
-        assert_eq!(updated.theme, "dark");
+        assert_eq!(updated.theme, "butterfly");
         assert_eq!(
             updated.sidebar_panels_json.as_deref(),
             Some("{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}")
@@ -2447,6 +2500,41 @@ mod tests {
         assert_eq!(
             updated.list_sort_json.as_deref(),
             Some("{\"direction\":\"desc\",\"mode\":\"due_date\"}")
+        );
+    }
+
+    #[tokio::test]
+    async fn user_preferences_reject_unknown_ui_theme() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let result = auth_update_preferences(
+            State(state),
+            headers,
+            Json(UpdateUiPreferencesBody {
+                theme: Some("unknown-theme".to_string()),
+                sidebar_panels_json: None,
+                list_sort_json: None,
+            }),
+        )
+        .await;
+
+        assert_eq!(result.err(), Some(StatusCode::BAD_REQUEST));
+    }
+
+    #[test]
+    fn server_ui_theme_allow_list_matches_shared_contract() {
+        let server_themes: BTreeSet<String> =
+            UI_THEMES.iter().map(|theme| (*theme).to_string()).collect();
+        let shared_themes: BTreeSet<String> =
+            shared_ui_themes_from_contract().into_iter().collect();
+
+        assert_eq!(
+            server_themes, shared_themes,
+            "ui theme mismatch: keep server UI_THEMES aligned with shared/types/settings.ts UiTheme"
         );
     }
 
