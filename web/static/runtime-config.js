@@ -1,0 +1,1 @@
+window.__TASKSYNC_RUNTIME_CONFIG__ = window.__TASKSYNC_RUNTIME_CONFIG__ || {};

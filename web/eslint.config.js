@@ -5,10 +5,13 @@ import globals from 'globals';
 
 const ignores = [
 	'build',
+	'coverage',
+	'coverage/**',
 	'.svelte-kit',
 	'dist',
 	'node_modules',
 	'playwright-report',
+	'static/runtime-config.js',
 	'eslint.config.js',
 	'playwright.config.ts',
 	'svelte.config.js',
