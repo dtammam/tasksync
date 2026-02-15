@@ -201,37 +201,39 @@
 
 	.sorter span {
 		font-size: 11px;
-		color: #94a3b8;
+		color: var(--app-muted);
 	}
 
 	.sorter select {
-		background: #0f172a;
-		color: #e2e8f0;
-		border: 1px solid #1f2937;
+		background: linear-gradient(180deg, var(--surface-1), color-mix(in oklab, var(--surface-1) 88%, black 12%));
+		color: var(--app-text);
+		border: 1px solid var(--border-1);
 		border-radius: 999px;
 		padding: 6px 10px;
 		min-height: 32px;
 		font-size: 13px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+		box-shadow: var(--ring-shadow);
 	}
 
 	.eyebrow {
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		font-size: 11px;
-		color: #94a3b8;
+		color: var(--app-muted);
 		margin: 0;
 	}
 
 	h1 {
 		margin: 4px 0;
-		font-size: 28px;
-		letter-spacing: -0.02em;
+		font-size: 34px;
+		line-height: 1.02;
+		letter-spacing: -0.04em;
+		font-weight: 640;
 	}
 
 	.sub {
 		margin: 0;
-		color: #94a3b8;
+		color: var(--app-muted);
 	}
 
 	.block {
@@ -239,7 +241,7 @@
 	}
 
 	.section-title {
-		color: #94a3b8;
+		color: var(--app-muted);
 		font-size: 13px;
 		margin-bottom: 6px;
 	}
@@ -250,12 +252,12 @@
 	}
 
 	.empty {
-		color: #94a3b8;
+		color: var(--app-muted);
 		margin: 0;
-		padding: 12px;
-		background: #0b1221;
-		border: 1px dashed #1f2937;
-		border-radius: 10px;
+		padding: 14px;
+		background: linear-gradient(180deg, var(--surface-2), color-mix(in oklab, var(--surface-2) 88%, black 12%));
+		border: 1px dashed var(--border-1);
+		border-radius: 12px;
 	}
 
 	.empty.subtle {
@@ -274,14 +276,14 @@
 	}
 
 	.mobile-add .bar {
-		background: rgba(15, 23, 42, 0.96);
-		border: 1px solid #1f2937;
-		border-radius: 16px;
+		background: color-mix(in oklab, var(--surface-1) 94%, white 6%);
+		border: 1px solid var(--border-1);
+		border-radius: 17px;
 		padding: 6px;
 		display: flex;
 		gap: 6px;
 		align-items: center;
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		box-shadow: var(--soft-shadow);
 		max-width: 720px;
 		margin: 0 auto;
 		pointer-events: auto;
@@ -292,7 +294,7 @@
 		min-width: 0;
 		background: transparent;
 		border: none;
-		color: #e2e8f0;
+		color: var(--app-text);
 		border-radius: 10px;
 		padding: 0 12px;
 		height: 46px;
@@ -307,9 +309,9 @@
 	}
 
 	.mobile-add button {
-		background: #2563eb;
+		background: linear-gradient(180deg, #1e40af, #1d4ed8);
 		color: white;
-		border: none;
+		border: 1px solid rgba(147, 197, 253, 0.4);
 		border-radius: 12px;
 		padding: 0 16px;
 		white-space: nowrap;
@@ -317,6 +319,12 @@
 		height: 46px;
 		font-weight: 600;
 		cursor: pointer;
+		box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+	}
+
+	.mobile-add button:hover {
+		transform: translateY(-1px);
+		filter: brightness(1.07);
 	}
 
 	@media (max-width: 900px) {
@@ -334,7 +342,7 @@
 		}
 
 		h1 {
-			font-size: 24px;
+			font-size: 28px;
 		}
 	}
 

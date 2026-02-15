@@ -327,8 +327,10 @@
 
 	h1 {
 		margin: 4px 0;
-		font-size: 28px;
-		letter-spacing: -0.02em;
+		font-size: 34px;
+		line-height: 1.02;
+		letter-spacing: -0.04em;
+		font-weight: 640;
 	}
 
 	.sub {
@@ -379,6 +381,10 @@
 	.missed-item {
 		display: grid;
 		gap: 6px;
+		padding: 10px 12px;
+		border: 1px solid var(--border-1);
+		border-radius: 12px;
+		background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 92%, #f59e0b 8%), var(--surface-2));
 	}
 
 	.missed-actions {
@@ -396,10 +402,20 @@
 		padding: 5px 10px;
 		font-size: 12px;
 		cursor: pointer;
+		box-shadow: var(--ring-shadow);
+	}
+
+	.missed-actions button:hover,
+	.suggestions-toggle:hover,
+	.panel-head .ghost.tiny:hover,
+	.suggestion button:hover,
+	.mobile-add button:hover {
+		transform: translateY(-1px);
+		filter: brightness(1.11);
 	}
 
 	.missed-actions button.ghost {
-		color: #cbd5e1;
+		color: var(--app-muted);
 	}
 
 	.missed-actions button.danger {
@@ -427,10 +443,11 @@
 		display: grid;
 		grid-template-columns: 1fr auto;
 		align-items: center;
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 95%, white 5%);
 		border: 1px solid var(--border-1);
 		border-radius: 12px;
 		padding: 10px 12px;
+		box-shadow: var(--ring-shadow);
 	}
 
 	.suggestions-flyout {
@@ -451,18 +468,18 @@
 		padding: 8px 14px;
 		font-size: 12px;
 		cursor: pointer;
-		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+		box-shadow: var(--soft-shadow);
 	}
 
 	.suggestions-panel {
 		width: min(420px, calc(100vw - 28px));
 		max-height: min(50vh, 420px);
 		overflow: auto;
-		background: var(--surface-2);
+		background: color-mix(in oklab, var(--surface-2) 95%, white 3%);
 		border: 1px solid var(--border-2);
-		border-radius: 14px;
+		border-radius: 13px;
 		padding: 12px;
-		box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+		box-shadow: var(--soft-shadow);
 	}
 
 	.panel-head {
@@ -494,22 +511,24 @@
 		font-size: 13px;
 	}
 
-	.suggestion button {
-		background: #16a34a;
+	.suggestion button,
+	.mobile-add button {
+		background: linear-gradient(180deg, #1e40af, #1d4ed8);
 		color: white;
-		border: none;
+		border: 1px solid rgba(147, 197, 253, 0.4);
 		padding: 10px 12px;
-		border-radius: 10px;
+		border-radius: 11px;
 		cursor: pointer;
+		box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
 	}
 
 	.empty {
 		color: var(--app-muted);
 		margin: 0;
-		padding: 12px;
-		background: var(--surface-2);
+		padding: 14px;
+		background: linear-gradient(180deg, var(--surface-2), color-mix(in oklab, var(--surface-2) 88%, black 12%));
 		border: 1px dashed var(--border-1);
-		border-radius: 10px;
+		border-radius: 12px;
 	}
 
 	.empty.subtle {
@@ -524,14 +543,14 @@
 	}
 
 	.sorter select {
-		background: var(--surface-1);
+		background: linear-gradient(180deg, var(--surface-1), color-mix(in oklab, var(--surface-1) 88%, black 12%));
 		color: var(--app-text);
 		border: 1px solid var(--border-1);
 		border-radius: 999px;
 		padding: 6px 10px;
 		min-height: 32px;
 		font-size: 13px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+		box-shadow: var(--ring-shadow);
 	}
 
 	.sorter span {
@@ -551,14 +570,14 @@
 	}
 
 	.mobile-add .bar {
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 94%, white 6%);
 		border: 1px solid var(--border-1);
-		border-radius: 16px;
+		border-radius: 17px;
 		padding: 6px;
 		display: flex;
 		gap: 6px;
 		align-items: center;
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		box-shadow: var(--soft-shadow);
 		max-width: 720px;
 		margin: 0 auto;
 		pointer-events: auto;
@@ -584,16 +603,10 @@
 	}
 
 	.mobile-add button {
-		background: #2563eb;
-		color: white;
-		border: none;
-		border-radius: 12px;
-		padding: 0 16px;
 		white-space: nowrap;
 		min-width: 92px;
 		height: 46px;
 		font-weight: 600;
-		cursor: pointer;
 	}
 
 	@media (max-width: 900px) {
@@ -623,7 +636,7 @@
 		}
 
 		h1 {
-			font-size: 24px;
+			font-size: 28px;
 		}
 	}
 

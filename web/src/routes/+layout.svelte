@@ -364,18 +364,23 @@
 
 <style>
 	:global(:root) {
-		--app-bg: radial-gradient(circle at 10% 20%, #0f172a, #0b1221 40%, #050a1a);
+		--app-bg:
+			radial-gradient(circle at 8% 6%, rgba(56, 189, 248, 0.11), transparent 30%),
+			radial-gradient(circle at 92% 0%, rgba(59, 130, 246, 0.1), transparent 28%),
+			linear-gradient(180deg, #04070f 0%, #060b16 52%, #050913 100%);
 		--app-bg-mobile: #0b1221;
 		--app-text: #e2e8f0;
 		--app-muted: #cbd5e1;
-		--surface-1: #0f172a;
-		--surface-2: #0b1221;
-		--surface-3: #11192b;
+		--surface-1: #0c1322;
+		--surface-2: #0a101d;
+		--surface-3: #161f31;
 		--surface-accent: #1d4ed8;
-		--border-1: #1f2937;
-		--border-2: #27344f;
+		--border-1: #2b374f;
+		--border-2: #3a4a67;
 		--error: #ef4444;
 		--focus: #60a5fa;
+		--ring-shadow: 0 0 0 1px rgba(148, 163, 184, 0.18), 0 8px 20px rgba(2, 6, 23, 0.34);
+		--soft-shadow: 0 16px 34px rgba(2, 6, 23, 0.34);
 	}
 
 	:global(html[data-ui-theme='dark']) {
@@ -412,7 +417,17 @@
 		margin: 0;
 		background: var(--app-bg);
 		color: var(--app-text);
-		font-family: 'Segoe UI Variable Text', 'Segoe UI', 'SF Pro Text', system-ui, sans-serif;
+		font-family:
+			-apple-system,
+			BlinkMacSystemFont,
+			'SF Pro Text',
+			'Segoe UI',
+			Roboto,
+			'Helvetica Neue',
+			Arial,
+			sans-serif;
+		text-rendering: geometricPrecision;
+		-webkit-font-smoothing: antialiased;
 		overflow: hidden;
 		overflow-x: hidden;
 		width: 100%;
@@ -429,6 +444,19 @@
 	:global(select),
 	:global(textarea) {
 		font-size: 16px;
+	}
+
+	:global(button),
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		font-family: inherit;
+		transition:
+			border-color 120ms ease,
+			background-color 120ms ease,
+			color 120ms ease,
+			box-shadow 120ms ease,
+			transform 120ms ease;
 	}
 
 	:global(button:focus-visible),
@@ -465,6 +493,17 @@
 		overflow-x: hidden;
 		max-width: 100vw;
 		min-width: 0;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-2) transparent;
+	}
+
+	main::-webkit-scrollbar {
+		width: 10px;
+	}
+
+	main::-webkit-scrollbar-thumb {
+		background: linear-gradient(180deg, var(--border-2), var(--border-1));
+		border-radius: 999px;
 	}
 
 	.app-header {
@@ -478,8 +517,8 @@
 		display: flex;
 		gap: 10px;
 		align-items: center;
-		font-weight: 700;
-		letter-spacing: 0.02em;
+		font-weight: 620;
+		letter-spacing: 0.01em;
 	}
 
 	.brand img {
@@ -507,10 +546,11 @@
 	.badge {
 		padding: 6px 10px;
 		border-radius: 999px;
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 92%, white 3%);
 		border: 1px solid var(--border-1);
 		color: var(--app-muted);
 		font-size: 12px;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 	}
 
 	.badge.busy {
@@ -538,6 +578,12 @@
 		padding: 6px 10px;
 		font-size: 12px;
 		cursor: pointer;
+		box-shadow: var(--ring-shadow);
+	}
+
+	.refresh-btn:hover {
+		transform: translateY(-1px);
+		color: var(--app-text);
 	}
 
 	.drawer-backdrop {
