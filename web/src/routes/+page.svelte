@@ -198,7 +198,7 @@
 			<div class="stack" data-testid="missed-section">
 				{#each sortedMissed as task (task.id)}
 					<div class="missed-item">
-						<TaskRow {task} mobileCompact={isMobilePwaViewport} on:openDetail={openDetail} />
+						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
 						<div class="missed-actions">
 							{#if task.recurrence_id}
 								<button
@@ -236,7 +236,7 @@
 		<div class="stack">
 				{#if sortedPending.length}
 				{#each sortedPending as task (task.id)}
-					<TaskRow {task} mobileCompact={isMobilePwaViewport} on:openDetail={openDetail} />
+					<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
 				{/each}
 			{:else}
 				<p class="empty">Nothing scheduled. Add a task to My Day.</p>
@@ -249,7 +249,7 @@
 		<div class="stack" data-testid="completed-section">
 				{#if sortedCompleted.length}
 				{#each sortedCompleted as task (task.id)}
-					<TaskRow {task} mobileCompact={isMobilePwaViewport} completedContext={true} on:openDetail={openDetail} />
+					<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
 				{/each}
 			{:else}
 				<p class="empty subtle">No completed tasks yet.</p>

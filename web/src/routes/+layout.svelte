@@ -409,6 +409,34 @@
 		--focus: #1d4ed8;
 	}
 
+
+	:global(html[data-ui-theme='demo-theme']) {
+		--app-bg: #f5f1e8;
+		--app-bg-mobile: #f5f1e8;
+		--app-text: #4a3f2e;
+		--app-muted: #5a4a38;
+		--surface-1: #fffef9;
+		--surface-2: #f5f1e8;
+		--surface-3: #d4b896;
+		--surface-accent: #b8956a;
+		--border-1: #d4b896;
+		--border-2: #b8956a;
+	}
+	:global(html[data-ui-theme='shades-of-coffee']) { --app-bg:#e2d8cf; --app-bg-mobile:#e2d8cf; --app-text:#1a0c00; --app-muted:#604b39; --surface-1:#f5f2ef; --surface-2:#e2d8cf; --surface-3:#c29670; --surface-accent:#cfb3ff; --border-1:#c29670; --border-2:#604b39; }
+	:global(html[data-ui-theme='miami-beach']) { --app-bg:#d095ca; --app-bg-mobile:#d095ca; --app-text:#5e2a91; --app-muted:#1e9484; --surface-1:#f9deb8; --surface-2:#c5ece4; --surface-3:#24b2a0; --surface-accent:#5e2a91; --border-1:#24b2a0; --border-2:#1e9484; }
+	:global(html[data-ui-theme='simple-dark']) { --app-bg:#222222; --app-bg-mobile:#222222; --app-text:#d9e2ec; --app-muted:#edbe5e; --surface-1:#063446; --surface-2:#222222; --surface-3:#434343; --surface-accent:#14aeeb; --border-1:#434343; --border-2:#14aeeb; }
+	:global(html[data-ui-theme='matrix']) { --app-bg:#000000; --app-bg-mobile:#000000; --app-text:#39ff14; --app-muted:#00ff00; --surface-1:#001a00; --surface-2:#000000; --surface-3:#004400; --surface-accent:#00ff41; --border-1:#004400; --border-2:#00ff00; }
+	:global(html[data-ui-theme='black-gold']) { --app-bg:#141520; --app-bg-mobile:#141520; --app-text:#E8ECF0; --app-muted:#FFD700; --surface-1:#242733; --surface-2:#141520; --surface-3:#373B4A; --surface-accent:#FFD700; --border-1:#373B4A; --border-2:#8F7A20; }
+	:global(html[data-ui-theme='okabe-ito']) { --app-bg:#222222; --app-bg-mobile:#222222; --app-text:#e69f00; --app-muted:#56b4e9; --surface-1:#141520; --surface-2:#222222; --surface-3:#00304d; --surface-accent:#b88115; --border-1:#00304d; --border-2:#56b4e9; }
+	:global(html[data-ui-theme='theme-from-1970']) { --app-bg:#f2f2f2; --app-bg-mobile:#f2f2f2; --app-text:#4d2d19; --app-muted:#61591f; --surface-1:#f4ebe7; --surface-2:#f2f2f2; --surface-3:#dad18b; --surface-accent:#a92da3; --border-1:#dad18b; --border-2:#61591f; }
+	:global(html[data-ui-theme='shades-of-gray-light']) { --app-bg:hsl(0, 0%, 90%); --app-bg-mobile:hsl(0, 0%, 90%); --app-text:hsl(0, 0%, 20%); --app-muted:hsl(0, 0%, 35%); --surface-1:#fff; --surface-2:hsl(0, 0%, 90%); --surface-3:hsl(0, 0%, 80%); --surface-accent:#99ffff; --border-1:hsl(0, 0%, 80%); --border-2:hsl(0, 0%, 35%); }
+	:global(html[data-ui-theme='catppuccin-latte']) { --app-bg:#eff1f5; --app-bg-mobile:#eff1f5; --app-text:#4c4f69; --app-muted:#8839ef; --surface-1:#dce0e8; --surface-2:#eff1f5; --surface-3:#ccd0da; --surface-accent:#1e66f5; --border-1:#ccd0da; --border-2:#8839ef; }
+	:global(html[data-ui-theme='catppuccin-frappe']) { --app-bg:#303446; --app-bg-mobile:#303446; --app-text:#c6d0f5; --app-muted:#ca9ee6; --surface-1:#232634; --surface-2:#303446; --surface-3:#414559; --surface-accent:#8caaee; --border-1:#414559; --border-2:#ca9ee6; }
+	:global(html[data-ui-theme='catppuccin-macchiato']) { --app-bg:#24273a; --app-bg-mobile:#24273a; --app-text:#cad3f5; --app-muted:#c6a0f6; --surface-1:#181926; --surface-2:#24273a; --surface-3:#363a4f; --surface-accent:#8aadf4; --border-1:#363a4f; --border-2:#c6a0f6; }
+	:global(html[data-ui-theme='catppuccin-mocha']) { --app-bg:#1e1e2e; --app-bg-mobile:#1e1e2e; --app-text:#cdd6f4; --app-muted:#cba6f7; --surface-1:#11111b; --surface-2:#1e1e2e; --surface-3:#313244; --surface-accent:#89b4fa; --border-1:#313244; --border-2:#cba6f7; }
+	:global(html[data-ui-theme='you-need-a-dark-mode']) { --app-bg:#121212; --app-bg-mobile:#121212; --app-text:#D4D4D4; --app-muted:#00B3C4; --surface-1:#1E1E1E; --surface-2:#121212; --surface-3:#333333; --surface-accent:#00B3C4; --border-1:#333333; --border-2:#006A84; }
+	:global(html[data-ui-theme='butterfly']) { --app-bg:#12110F; --app-bg-mobile:#12110F; --app-text:#E5E7EB; --app-muted:#F35B16; --surface-1:#22201D; --surface-2:#12110F; --surface-3:#3D261C; --surface-accent:#1B8366; --border-1:#3D261C; --border-2:#F35B16; }
+
 	:global(body) {
 		margin: 0;
 		background: var(--app-bg);

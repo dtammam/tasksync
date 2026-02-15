@@ -19,7 +19,25 @@ export interface SoundSettings {
 	profileAttachmentsJson?: string;
 }
 
-export type UiTheme = 'default' | 'dark' | 'light';
+export type UiTheme =
+	| 'default'
+	| 'dark'
+	| 'light'
+	| 'demo-theme'
+	| 'shades-of-coffee'
+	| 'miami-beach'
+	| 'simple-dark'
+	| 'matrix'
+	| 'black-gold'
+	| 'okabe-ito'
+	| 'theme-from-1970'
+	| 'shades-of-gray-light'
+	| 'catppuccin-latte'
+	| 'catppuccin-frappe'
+	| 'catppuccin-macchiato'
+	| 'catppuccin-mocha'
+	| 'you-need-a-dark-mode'
+	| 'butterfly';
 export type ListSortMode = 'created' | 'alpha' | 'due_date';
 export type ListSortDirection = 'asc' | 'desc';
 

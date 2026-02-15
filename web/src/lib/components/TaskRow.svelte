@@ -3,17 +3,13 @@
 import { createEventDispatcher, onDestroy } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
-import { members } from '$lib/stores/members';
 import { auth } from '$lib/stores/auth';
-import {
-	isRecurrenceRule,
-	nextDueForRecurrence,
-	recurrenceRuleLabels
-} from '$lib/tasks/recurrence';
+import { nextDueForRecurrence } from '$lib/tasks/recurrence';
 
 export let task;
 export let completedContext = false;
 export let mobileCompact = false;
+export let inMyDayView = false;
 
 const dispatch = createEventDispatcher();
 let editing = false;
@@ -38,17 +34,11 @@ const toggleMyDay = (event) => {
 	tasks.setMyDay(task.id, input.checked);
 };
 
-const badge = task.priority > 1 ? '🔥' : '•';
-
-let justSaved = false;
-
 const saveTitle = () => {
 	if (!canEditTask) return;
 	if (!titleDraft.trim()) return;
 	tasks.rename(task.id, titleDraft);
 	editing = false;
-	justSaved = true;
-	setTimeout(() => (justSaved = false), 1200);
 };
 
 const openDetail = () => dispatch('openDetail', { id: task.id });
@@ -85,7 +75,7 @@ const isTodayTs = (ts) => {
 	);
 };
 
-const recurrencePreview = (taskValue, count = 2) => {
+const recurrencePreview = (taskValue, count = 1) => {
 	if (!taskValue?.recurrence_id || !taskValue?.due_date) return '';
 	const nextDates = [];
 	let cursor = taskValue.due_date;
@@ -96,7 +86,7 @@ const recurrencePreview = (taskValue, count = 2) => {
 		cursor = next;
 	}
 	if (!nextDates.length) return '';
-	return `Next: ${nextDates.join(', ')}`;
+	return nextDates.join(', ');
 };
 
 const handleToggleStatus = () => {
@@ -169,13 +159,6 @@ const toRgba = (hex, alpha) => {
 	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-$: assigneeMember = task.assignee_user_id ? members.find(task.assignee_user_id) : null;
-$: assigneeDisplay = assigneeMember?.display ?? task.assignee_user_id;
-$: assigneeIcon = assigneeMember?.avatar_icon?.trim()
-	? assigneeMember.avatar_icon.slice(0, 4)
-		: assigneeDisplay?.trim()
-			? assigneeDisplay.trim().charAt(0).toUpperCase()
-			: '?';
 $: isContributor = $auth.user?.role === 'contributor';
 $: isOwner = !!$auth.user?.user_id && task.created_by_user_id === $auth.user.user_id;
 $: canEditTask = !isContributor || isOwner;
@@ -183,13 +166,9 @@ $: canToggleStatus = canEditTask;
 $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
-$: recurPreview = recurrencePreview(task);
+$: nextRecurrenceDate = recurrencePreview(task);
 $: isRecurringCompletedToday =
 	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
-$: recurLabel =
-	typeof task.recurrence_id === 'string' && isRecurrenceRule(task.recurrence_id)
-		? recurrenceRuleLabels[task.recurrence_id]
-		: task.recurrence_id;
 </script>
 
 <div
@@ -232,48 +211,34 @@ $: recurLabel =
 					</button>
 				{/if}
 			{/if}
-			{#if task.tags.length}
-				<span class="tags">{task.tags.join(', ')}</span>
-			{/if}
 		</div>
 		<div class="sub">
-			<span class="badge-dot">{badge}</span>
-			{#if task.due_date}
-				<span class="chip subtle due-chip">Due {task.due_date}</span>
+			{#if inMyDayView}
+				<span class="meta-inline list-name">{taskList?.name ?? 'Unknown list'}</span>
+			{:else}
+				<span class="chip subtle list-chip">
+					List:
+					<select on:change={updateList} title="Move task to list" disabled={!canEditTask}>
+						{#each $lists as list}
+							<option value={list.id} selected={list.id === task.list_id}>{list.name}</option>
+						{/each}
+					</select>
+				</span>
 			{/if}
-			{#if task.recurrence_id}
-				<span class="chip subtle recur-chip">{recurLabel}</span>
+			{#if inMyDayView && nextRecurrenceDate}
+				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
 			{/if}
-			{#if recurPreview}
-				<span class="chip subtle recur-next-chip">{recurPreview}</span>
+			{#if !inMyDayView}
+				<label class="chip toggle day-chip">
+					<input
+						type="checkbox"
+						checked={task.my_day}
+						on:change={toggleMyDay}
+						disabled={isContributor}
+					/>
+					My Day
+				</label>
 			{/if}
-			{#if assigneeDisplay}
-				<span class="chip subtle assignee-chip">To: {assigneeIcon} {assigneeDisplay}</span>
-			{/if}
-			<label class="chip toggle day-chip">
-				<input
-					type="checkbox"
-					checked={task.my_day}
-					on:change={toggleMyDay}
-					disabled={isContributor}
-				/>
-				My Day
-			</label>
-			{#if !mobileCompact}
-			<span class="chip subtle list-chip">
-				List:
-				<select on:change={updateList} title="Move task to list" disabled={!canEditTask}>
-					{#each $lists as list}
-						<option value={list.id} selected={list.id === task.list_id}>{list.name}</option>
-					{/each}
-				</select>
-						</span>
-		{/if}
-		{#if !mobileCompact}
-			<span class={`chip sync-chip ${task.dirty ? 'pending' : 'synced'}`} aria-live="polite">
-				{task.dirty ? 'Pending sync' : justSaved ? 'Saved' : 'Synced'}
-			</span>
-		{/if}
 			<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
 		</div>
 	</div>
@@ -326,20 +291,69 @@ $: recurLabel =
 	.status:disabled { cursor:not-allowed; opacity:0.6; }
 	.meta { min-width:0; }
 	.meta .title { font-weight:600; color:var(--app-text); display:flex; gap:8px; align-items:center; min-width:0; }
-	.title-text { display:block; min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-	.sub { display:flex; flex-wrap:wrap; gap:7px; color:var(--app-muted); font-size:12px; margin-top:6px; align-items:center; }
-	.badge-dot { color:#64748b; font-size:14px; line-height:1; }
-	.chip { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:999px; background:var(--surface-3); color:var(--app-text); border:1px solid transparent; white-space:nowrap; }
+	.title-text {
+		display: block;
+		min-width: 0;
+		max-width: 100%;
+		overflow: visible;
+		white-space: normal;
+		overflow-wrap: anywhere;
+		font-size: 15px;
+		line-height: 1.2;
+	}
+	.meta-inline {
+		font-size: 11px;
+		color: var(--app-muted);
+	}
+	.list-name {
+		font-weight: 500;
+	}
+	.sub { display:flex; flex-wrap:wrap; gap:6px; color:var(--app-muted); font-size:12px; margin-top:4px; align-items:center; }
+	.chip {
+		display:inline-flex;
+		align-items:center;
+		gap:5px;
+		min-height:24px;
+		padding:3px 8px;
+		border-radius:999px;
+		background:var(--surface-3);
+		color:var(--app-text);
+		border:1px solid transparent;
+		white-space:nowrap;
+		font-size:12px;
+		line-height:1;
+	}
 	.chip.subtle { background:var(--surface-2); border-color:var(--border-1); color:var(--app-muted); }
+
+	.recur-next-chip {
+		font-size: 11px;
+		padding-inline: 7px;
+	}
 	.chip.toggle { cursor:pointer; }
 	.chip.pending { background:#92400e; border-color:#f59e0b; color:#ffedd5; }
 	.chip.synced { background:#0b3a2a; border-color:#10b981; color:#d1fae5; }
-	.list-chip select { background:transparent; border:none; color:inherit; padding:0 2px; max-width:124px; }
+	.list-chip select {
+		background:transparent;
+		border:none;
+		color:var(--app-muted);
+		padding:0 2px;
+		max-width:124px;
+		font:inherit;
+		font-size:12px;
+		font-weight:500;
+		line-height:1;
+		height:18px;
+	}
+	.day-chip input {
+		margin:0;
+		width:13px;
+		height:13px;
+		transform: translateY(-0.5px);
+	}
 	.list-chip { border-color:var(--list-accent, #334155); background:var(--list-accent-soft, var(--surface-2)); }
 	.list-chip select:focus-visible { outline:none; }
 	input[type='checkbox'] { accent-color:#38bdf8; cursor:pointer; }
 	input[type='checkbox']:disabled, .list-chip select:disabled { cursor:not-allowed; opacity:0.65; }
-	.tags { color:#c7d2fe; font-size:13px; }
 	.quick { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-top:6px; }
 	.quick button {
 		background: color-mix(in oklab, var(--surface-1) 94%, white 4%);
@@ -353,18 +367,13 @@ $: recurLabel =
 	.title-input { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); border-radius:8px; padding:6px 8px; min-width:180px; }
 	.title-text.link { color:#60a5fa; text-decoration:underline; }
 	.error { grid-column:1 / -1; margin:0; color:#fda4af; font-size:12px; }
-	:global(html[data-ui-theme='light']) .task { background:linear-gradient(180deg, #ffffff, #f4f8ff); border-color:#bfd0ec; box-shadow: inset 3px 0 0 var(--list-accent, #3b82f6), 0 8px 22px rgba(15,23,42,0.08); }
-	:global(html[data-ui-theme='light']) .task .title-text, :global(html[data-ui-theme='light']) .task .meta .title { color:#0f172a; }
-	:global(html[data-ui-theme='light']) .task .chip { background:#e8efff; color:#1e293b; }
-	:global(html[data-ui-theme='light']) .task .chip.subtle { background:#f8fbff; border-color:#cbd5e1; color:#334155; }
-	:global(html[data-ui-theme='light']) .task .status, :global(html[data-ui-theme='light']) .task .quick button, :global(html[data-ui-theme='light']) .task .title-input { background:#ffffff; border-color:#94a3b8; color:#0f172a; }
-	:global(html[data-ui-theme='dark']) .task { background: #0d1524; border-color:var(--list-accent, #334155); }
 	@media (max-width: 900px) {
 		.task { padding: 11px 12px; gap: 12px; border-radius: 14px; }
 		.task.compact { padding: 10px 11px; gap: 10px; }
 		.status { width:40px; height:40px; min-width:40px; min-height:40px; font-size:16px; }
 		.task.compact .status { width:36px; height:36px; min-width:36px; min-height:36px; font-size:15px; }
 		.task.compact .sub { gap: 6px; margin-top: 5px; }
-		.task.compact .chip { padding: 3px 8px; }
+		.title-text { font-size: 14px; line-height: 1.18; }
+			.task.compact .chip { min-height: 22px; padding: 2px 7px; }
 	}
 </style>

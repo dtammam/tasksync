@@ -30,8 +30,29 @@ const defaultPreferences = (): UiPreferences => ({
 	listSort: defaultListSort()
 });
 
+const validThemes: UiTheme[] = [
+	'default',
+	'dark',
+	'light',
+	'demo-theme',
+	'shades-of-coffee',
+	'miami-beach',
+	'simple-dark',
+	'matrix',
+	'black-gold',
+	'okabe-ito',
+	'theme-from-1970',
+	'shades-of-gray-light',
+	'catppuccin-latte',
+	'catppuccin-frappe',
+	'catppuccin-macchiato',
+	'catppuccin-mocha',
+	'you-need-a-dark-mode',
+	'butterfly'
+];
+
 const normalizeTheme = (theme?: string): UiTheme =>
-	theme === 'dark' || theme === 'light' || theme === 'default' ? theme : 'default';
+	validThemes.includes(theme as UiTheme) ? (theme as UiTheme) : 'default';
 const normalizeListSortMode = (mode?: string): ListSortMode =>
 	mode === 'alpha' || mode === 'due_date' || mode === 'created' ? mode : 'created';
 const normalizeListSortDirection = (direction?: string): ListSortDirection =>

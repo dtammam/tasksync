@@ -97,3 +97,7 @@ Outcome-first project milestones in plain language.
 - 2026-02-13 10:20 - Simplified self-host port control by documenting and enforcing a single server port knob (`SERVER_HOST_PORT`) while keeping container-internal server port fixed, reducing brittle deploy misconfiguration.
 - 2026-02-13 10:25 - Hardened Portainer runtime behavior by explicitly pinning server internal `PORT=3000` in compose while retaining `SERVER_HOST_PORT` as the only stack-level server port knob.
 - 2026-02-13 10:30 - Finalized single-knob server port behavior by pinning internal server bind to `3000` in code and removing compose `PORT` env wiring, matching the same fixed-internal/variable-host pattern used by web.
+- 2026-02-15 12:20 - Tightened My Day card density and expanded theme support with Actual-style palettes, improving readability (full task titles + focused metadata) and restoring consistent contrast across dark/light/custom themes.
+- 2026-02-15 12:55 - Finalized My Day card density by showing full task names with tighter typography and moving My Day toggling to details in that view, preserving readability while preventing oversized cards.
+- 2026-02-15 13:05 - Polished My Day card density by shortening recurrence labels and tightening metadata typography/spacing, reducing wasted line wraps while preserving full-title readability.
+- 2026-02-15 13:10 - Standardized TaskRow pill sizing/typography so List dropdown and My Day chips share consistent height and rhythm, smoothing visual continuity in dense list cards.
