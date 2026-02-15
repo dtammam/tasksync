@@ -235,6 +235,9 @@
 		margin: 0;
 		color: var(--app-muted);
 	}
+	.eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 10px; font-weight: 700; color: var(--app-muted); margin: 0; }
+	h1 { margin: 4px 0; font-size: 32px; line-height: 1.04; }
+	.sub { margin: 0; color: var(--app-muted); }
 
 	.block {
 		margin-top: 14px;
@@ -260,9 +263,11 @@
 		border-radius: 12px;
 	}
 
-	.empty.subtle {
-		color: #64748b;
-	}
+	.section-title { color: var(--app-muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; }
+	.stack { display: grid; gap: 10px; }
+
+	.empty { color: var(--app-muted); margin: 0; padding: 14px; background: color-mix(in oklab, var(--surface-2) 92%, black 8%); border: 1px dashed var(--border-1); border-radius: 12px; }
+	.empty.subtle { color: #7285a4; }
 
 	.mobile-add {
 		display: block;
@@ -315,9 +320,9 @@
 		border-radius: 12px;
 		padding: 0 16px;
 		white-space: nowrap;
-		min-width: 92px;
+		min-width: 96px;
 		height: 46px;
-		font-weight: 600;
+		font-weight: 650;
 		cursor: pointer;
 		box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
 	}
@@ -326,6 +331,7 @@
 		transform: translateY(-1px);
 		filter: brightness(1.07);
 	}
+	.mobile-add button:hover { transform: translateY(-1px); filter: brightness(1.07); }
 
 	@media (max-width: 900px) {
 		.page-header {
@@ -345,5 +351,4 @@
 			font-size: 28px;
 		}
 	}
-
 </style>

@@ -305,22 +305,21 @@
 </div>
 
 <style>
-	.page-content {
-		padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px);
-	}
+	.page-content { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px); }
 
 	.page-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
-		margin-bottom: 10px;
 		gap: 12px;
+		margin-bottom: 12px;
 	}
 
 	.eyebrow {
 		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		font-size: 11px;
+		letter-spacing: 0.12em;
+		font-size: 10px;
+		font-weight: 700;
 		color: var(--app-muted);
 		margin: 0;
 	}
@@ -353,30 +352,33 @@
 		gap: 4px;
 	}
 
-	.sorter label {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
+	.actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }
+	.actions .sorter { display: flex; flex-direction: column; gap: 4px; }
+	.sorter label { display: inline-flex; align-items: center; gap: 8px; }
+	.sorter span { font-size: 11px; color: var(--app-muted); }
+	.sorter select {
+		background: var(--surface-1);
+		color: var(--app-text);
+		border: 1px solid var(--border-1);
+		border-radius: 999px;
+		padding: 6px 10px;
+		min-height: 32px;
+		font-size: 13px;
+		box-shadow: var(--ring-shadow);
 	}
 
 	.block {
 		margin-top: 14px;
+		padding: 12px;
+		border-radius: 16px;
+		border: 1px solid var(--border-1);
+		background: var(--surface-1);
+		box-shadow: var(--soft-shadow);
 	}
 
-	.missed-block .section-title {
-		color: #f59e0b;
-	}
-
-	.section-title {
-		color: var(--app-muted);
-		font-size: 13px;
-		margin-bottom: 6px;
-	}
-
-	.stack {
-		display: grid;
-		gap: 10px;
-	}
+	.section-title { color: var(--app-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+	.missed-block .section-title { color: #fbbf24; }
+	.stack { display: grid; gap: 10px; }
 
 	.missed-item {
 		display: grid;
@@ -391,15 +393,21 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
-		justify-content: flex-end;
+		padding: 10px 12px;
+		border: 1px solid color-mix(in oklab, #f59e0b 30%, var(--border-1));
+		border-radius: 14px;
+		background: color-mix(in oklab, var(--surface-2) 88%, #f59e0b 12%);
 	}
 
-	.missed-actions button {
+	.missed-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+	.missed-actions button,
+	.suggestions-toggle,
+	.panel-head .ghost.tiny {
 		background: var(--surface-1);
 		border: 1px solid var(--border-2);
 		color: var(--app-text);
 		border-radius: 999px;
-		padding: 5px 10px;
+		padding: 6px 11px;
 		font-size: 12px;
 		cursor: pointer;
 		box-shadow: var(--ring-shadow);
@@ -418,27 +426,11 @@
 		color: var(--app-muted);
 	}
 
-	.missed-actions button.danger {
-		border-color: #7f1d1d;
-		color: #fecaca;
-	}
+	.missed-actions button.danger { border-color: #7f1d1d; color: #fecaca; }
+	.missed-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+	.missed-error { margin: 0; color: #fda4af; font-size: 12px; }
 
-	.missed-actions button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.missed-error {
-		margin: 0;
-		color: #fda4af;
-		font-size: 12px;
-	}
-
-	.suggestions {
-		display: grid;
-		gap: 10px;
-	}
-
+	.suggestions { display: grid; gap: 10px; }
 	.suggestion {
 		display: grid;
 		grid-template-columns: 1fr auto;
@@ -472,8 +464,8 @@
 	}
 
 	.suggestions-panel {
-		width: min(420px, calc(100vw - 28px));
-		max-height: min(50vh, 420px);
+		width: min(430px, calc(100vw - 28px));
+		max-height: min(50vh, 430px);
 		overflow: auto;
 		background: color-mix(in oklab, var(--surface-2) 95%, white 3%);
 		border: 1px solid var(--border-2);
@@ -492,18 +484,15 @@
 
 	.panel-head .ghost.tiny {
 		background: var(--surface-1);
-		color: var(--app-text);
 		border: 1px solid var(--border-2);
-		border-radius: 999px;
-		padding: 5px 10px;
-		font-size: 12px;
-		cursor: pointer;
+		border-radius: 18px;
+		padding: 12px;
+		box-shadow: var(--soft-shadow);
 	}
 
-	.suggestion .title {
-		margin: 0;
-		font-weight: 600;
-	}
+	.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--app-text); }
+	.suggestion .title { margin: 0; font-weight: 650; }
+	.suggestion .meta { margin: 2px 0 0; color: var(--app-muted); font-size: 13px; }
 
 	.suggestion .meta {
 		margin: 2px 0 0;
@@ -557,6 +546,7 @@
 		font-size: 11px;
 		color: var(--app-muted);
 	}
+	.empty.subtle { color: #7285a4; }
 
 	.mobile-add {
 		display: block;
@@ -639,5 +629,4 @@
 			font-size: 28px;
 		}
 	}
-
 </style>

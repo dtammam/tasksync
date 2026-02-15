@@ -302,6 +302,10 @@ $: recurLabel =
 		border-radius: 12px;
 		padding: 11px 12px;
 		align-items: start;
+		border-radius: 14px;
+		border: 1px solid var(--list-accent, var(--border-1));
+		background: var(--surface-1);
+		box-shadow: inset 3px 0 0 var(--list-accent, #334155), 0 6px 18px rgba(2, 6, 23, 0.28);
 	}
 	.left { display:flex; align-items:flex-start; padding-top:1px; }
 	.status {
