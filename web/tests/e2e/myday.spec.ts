@@ -125,7 +125,7 @@ test.describe('My Day', () => {
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 	});
 
-	test('keeps alphabetical sort mode after reload', async ({ page }) => {
+	test('keeps alphabetical sort mode and direction after reload', async ({ page }) => {
 		await resetClientState(page);
 		const marker = makeTitle('Sort marker');
 		const titleB = `${marker} B`;
@@ -137,18 +137,21 @@ test.describe('My Day', () => {
 		await page.getByTestId('new-task-submit').click();
 
 		await page.getByLabel('Sort tasks').selectOption('alpha');
+		await page.getByLabel('Sort direction').selectOption('desc');
 		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
+		await expect(page.getByLabel('Sort direction')).toHaveValue('desc');
 		const plannedSection = page.locator('section.block', {
 			has: page.locator('.section-title', { hasText: 'Planned' })
 		});
 		const plannedRows = plannedSection.getByTestId('task-row');
 		const sortedRows = plannedRows.filter({ hasText: marker });
 		await expect(sortedRows).toHaveCount(2);
-		await expect(sortedRows.nth(0)).toContainText(titleA);
+		await expect(sortedRows.nth(0)).toContainText(titleB);
 
 		await page.reload();
 		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
-		await expect(plannedSection.getByTestId('task-row').filter({ hasText: marker }).nth(0)).toContainText(titleA);
+		await expect(page.getByLabel('Sort direction')).toHaveValue('desc');
+		await expect(plannedSection.getByTestId('task-row').filter({ hasText: marker }).nth(0)).toContainText(titleB);
 	});
 
 	test('persists sound settings changes across reload', async ({ page }) => {

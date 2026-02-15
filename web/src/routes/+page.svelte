@@ -12,12 +12,20 @@
 	const listsStore = lists;
 	let quickTitle = '';
 	let sortMode = 'created';
+	let sortDirection = 'asc';
 	let sortLoaded = false;
 	let detailId = null;
 	let showSuggestions = false;
 	let missedActionError = '';
 	let deletingMissedId = '';
+	let isMobilePwaViewport = false;
 	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
+	const MY_DAY_SORT_DIRECTION_KEY = 'tasksync:sort:myday:direction';
+	
+	const updateMobileViewport = () => {
+		if (typeof window === 'undefined') return;
+		isMobilePwaViewport = window.matchMedia('(max-width: 900px)').matches;
+	};
 	const compareAlpha = (left, right) => {
 		const a = (left ?? '').trim().toLowerCase();
 		const b = (right ?? '').trim().toLowerCase();
@@ -35,22 +43,26 @@
 	$: defaultListId =
 		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
 
-	const sortTasks = (arr, mode = sortMode) => {
+	const sortTasks = (arr, mode = sortMode, direction = sortDirection) => {
 		const copy = [...arr];
+		const isAscending = direction !== 'desc';
 		if (mode === 'alpha') {
 			copy.sort((a, b) => {
 				const byTitle = compareAlpha(a.title, b.title);
-				return byTitle === 0 ? a.created_ts - b.created_ts : byTitle;
+				if (byTitle === 0) {
+					return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+				}
+				return isAscending ? byTitle : byTitle * -1;
 			});
 		} else if (mode === 'created') {
-			copy.sort((a, b) => a.created_ts - b.created_ts);
+			copy.sort((a, b) => (isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts));
 		}
 		return copy;
 	};
 
-	$: sortedPending = sortTasks($myDayPending ?? [], sortMode);
-	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode);
-	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode);
+	$: sortedPending = sortTasks($myDayPending ?? [], sortMode, sortDirection);
+	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode, sortDirection);
+	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode, sortDirection);
 	$: copyLines = [
 		...sortedMissed.map((task) => `- [ ] ${task.title}`),
 		...sortedPending.map((task) => `- [ ] ${task.title}`),
@@ -60,17 +72,24 @@
 
 	$: if (typeof window !== 'undefined' && !sortLoaded) {
 		const saved = localStorage.getItem(MY_DAY_SORT_KEY);
+		const savedDirection = localStorage.getItem(MY_DAY_SORT_DIRECTION_KEY);
 		if (saved === 'alpha' || saved === 'created') {
 			sortMode = saved;
+		}
+		if (savedDirection === 'asc' || savedDirection === 'desc') {
+			sortDirection = savedDirection;
 		}
 		sortLoaded = true;
 	}
 
 	$: if (typeof window !== 'undefined' && sortLoaded) {
 		localStorage.setItem(MY_DAY_SORT_KEY, sortMode);
+		localStorage.setItem(MY_DAY_SORT_DIRECTION_KEY, sortDirection);
 	}
 
 	if (typeof window !== 'undefined') {
+		updateMobileViewport();
+		window.addEventListener('resize', updateMobileViewport);
 		Reflect.set(window, '__addTaskMyDay', () => quickAdd());
 	}
 
@@ -136,6 +155,10 @@
 	}
 
 	onDestroy(() => {
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('resize', updateMobileViewport);
+		}
+
 		if (typeof window !== 'undefined' && Reflect.get(window, '__copyTasksAsJoplin') === copyProvider) {
 			Reflect.deleteProperty(window, '__copyTasksAsJoplin');
 		}
@@ -158,6 +181,13 @@
 						<option value="alpha">Alphabetical</option>
 					</select>
 				</label>
+				<label class="order-control">
+					<span>Order</span>
+					<select bind:value={sortDirection} aria-label="Sort direction">
+						<option value="asc">Ascending</option>
+						<option value="desc">Descending</option>
+					</select>
+				</label>
 			</div>
 		</div>
 	</header>
@@ -168,7 +198,7 @@
 			<div class="stack" data-testid="missed-section">
 				{#each sortedMissed as task (task.id)}
 					<div class="missed-item">
-						<TaskRow {task} on:openDetail={openDetail} />
+						<TaskRow {task} mobileCompact={isMobilePwaViewport} on:openDetail={openDetail} />
 						<div class="missed-actions">
 							{#if task.recurrence_id}
 								<button
@@ -206,7 +236,7 @@
 		<div class="stack">
 				{#if sortedPending.length}
 				{#each sortedPending as task (task.id)}
-					<TaskRow {task} on:openDetail={openDetail} />
+					<TaskRow {task} mobileCompact={isMobilePwaViewport} on:openDetail={openDetail} />
 				{/each}
 			{:else}
 				<p class="empty">Nothing scheduled. Add a task to My Day.</p>
@@ -219,7 +249,7 @@
 		<div class="stack" data-testid="completed-section">
 				{#if sortedCompleted.length}
 				{#each sortedCompleted as task (task.id)}
-					<TaskRow {task} completedContext={true} on:openDetail={openDetail} />
+					<TaskRow {task} mobileCompact={isMobilePwaViewport} completedContext={true} on:openDetail={openDetail} />
 				{/each}
 			{:else}
 				<p class="empty subtle">No completed tasks yet.</p>
@@ -287,30 +317,31 @@
 </div>
 
 <style>
-	.page-content {
-		padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px);
-	}
+	.page-content { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px); }
 
 	.page-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
-		margin-bottom: 10px;
 		gap: 12px;
+		margin-bottom: 12px;
 	}
 
 	.eyebrow {
 		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		font-size: 11px;
+		letter-spacing: 0.12em;
+		font-size: 10px;
+		font-weight: 700;
 		color: var(--app-muted);
 		margin: 0;
 	}
 
 	h1 {
 		margin: 4px 0;
-		font-size: 28px;
-		letter-spacing: -0.02em;
+		font-size: 34px;
+		line-height: 1.02;
+		letter-spacing: -0.04em;
+		font-weight: 640;
 	}
 
 	.sub {
@@ -333,86 +364,94 @@
 		gap: 4px;
 	}
 
-	.sorter label {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
+	.actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }
+	.actions .sorter { display: flex; flex-direction: column; gap: 4px; }
+	.sorter label { display: inline-flex; align-items: center; gap: 8px; }
+	.sorter span { font-size: 11px; color: var(--app-muted); }
+	.sorter select {
+		background: var(--surface-1);
+		color: var(--app-text);
+		border: 1px solid var(--border-1);
+		border-radius: 999px;
+		padding: 6px 10px;
+		min-height: 32px;
+		font-size: 13px;
+		box-shadow: var(--ring-shadow);
 	}
 
 	.block {
 		margin-top: 14px;
+		padding: 12px;
+		border-radius: 16px;
+		border: 1px solid var(--border-1);
+		background: var(--surface-1);
+		box-shadow: var(--soft-shadow);
 	}
 
-	.missed-block .section-title {
-		color: #f59e0b;
-	}
-
-	.section-title {
-		color: var(--app-muted);
-		font-size: 13px;
-		margin-bottom: 6px;
-	}
-
-	.stack {
-		display: grid;
-		gap: 10px;
-	}
+	.section-title { color: var(--app-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+	.missed-block .section-title { color: #fbbf24; }
+	.stack { display: grid; gap: 10px; }
 
 	.missed-item {
 		display: grid;
 		gap: 6px;
+		padding: 10px 12px;
+		border: 1px solid var(--border-1);
+		border-radius: 12px;
+		background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 92%, #f59e0b 8%), var(--surface-2));
 	}
 
 	.missed-actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
-		justify-content: flex-end;
+		padding: 10px 12px;
+		border: 1px solid color-mix(in oklab, #f59e0b 30%, var(--border-1));
+		border-radius: 14px;
+		background: color-mix(in oklab, var(--surface-2) 88%, #f59e0b 12%);
 	}
 
-	.missed-actions button {
+	.missed-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+	.missed-actions button,
+	.suggestions-toggle,
+	.panel-head .ghost.tiny {
 		background: var(--surface-1);
 		border: 1px solid var(--border-2);
 		color: var(--app-text);
 		border-radius: 999px;
-		padding: 5px 10px;
+		padding: 6px 11px;
 		font-size: 12px;
 		cursor: pointer;
+		box-shadow: var(--ring-shadow);
+	}
+
+	.missed-actions button:hover,
+	.suggestions-toggle:hover,
+	.panel-head .ghost.tiny:hover,
+	.suggestion button:hover,
+	.mobile-add button:hover {
+		transform: translateY(-1px);
+		filter: brightness(1.11);
 	}
 
 	.missed-actions button.ghost {
-		color: #cbd5e1;
+		color: var(--app-muted);
 	}
 
-	.missed-actions button.danger {
-		border-color: #7f1d1d;
-		color: #fecaca;
-	}
+	.missed-actions button.danger { border-color: #7f1d1d; color: #fecaca; }
+	.missed-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+	.missed-error { margin: 0; color: #fda4af; font-size: 12px; }
 
-	.missed-actions button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.missed-error {
-		margin: 0;
-		color: #fda4af;
-		font-size: 12px;
-	}
-
-	.suggestions {
-		display: grid;
-		gap: 10px;
-	}
-
+	.suggestions { display: grid; gap: 10px; }
 	.suggestion {
 		display: grid;
 		grid-template-columns: 1fr auto;
 		align-items: center;
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 95%, white 5%);
 		border: 1px solid var(--border-1);
 		border-radius: 12px;
 		padding: 10px 12px;
+		box-shadow: var(--ring-shadow);
 	}
 
 	.suggestions-flyout {
@@ -433,18 +472,18 @@
 		padding: 8px 14px;
 		font-size: 12px;
 		cursor: pointer;
-		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+		box-shadow: var(--soft-shadow);
 	}
 
 	.suggestions-panel {
-		width: min(420px, calc(100vw - 28px));
-		max-height: min(50vh, 420px);
+		width: min(430px, calc(100vw - 28px));
+		max-height: min(50vh, 430px);
 		overflow: auto;
-		background: var(--surface-2);
+		background: color-mix(in oklab, var(--surface-2) 95%, white 3%);
 		border: 1px solid var(--border-2);
-		border-radius: 14px;
+		border-radius: 13px;
 		padding: 12px;
-		box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+		box-shadow: var(--soft-shadow);
 	}
 
 	.panel-head {
@@ -457,18 +496,15 @@
 
 	.panel-head .ghost.tiny {
 		background: var(--surface-1);
-		color: var(--app-text);
 		border: 1px solid var(--border-2);
-		border-radius: 999px;
-		padding: 5px 10px;
-		font-size: 12px;
-		cursor: pointer;
+		border-radius: 18px;
+		padding: 12px;
+		box-shadow: var(--soft-shadow);
 	}
 
-	.suggestion .title {
-		margin: 0;
-		font-weight: 600;
-	}
+	.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--app-text); }
+	.suggestion .title { margin: 0; font-weight: 650; }
+	.suggestion .meta { margin: 2px 0 0; color: var(--app-muted); font-size: 13px; }
 
 	.suggestion .meta {
 		margin: 2px 0 0;
@@ -476,22 +512,24 @@
 		font-size: 13px;
 	}
 
-	.suggestion button {
-		background: #16a34a;
+	.suggestion button,
+	.mobile-add button {
+		background: linear-gradient(180deg, #1e40af, #1d4ed8);
 		color: white;
-		border: none;
+		border: 1px solid rgba(147, 197, 253, 0.4);
 		padding: 10px 12px;
-		border-radius: 10px;
+		border-radius: 11px;
 		cursor: pointer;
+		box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
 	}
 
 	.empty {
 		color: var(--app-muted);
 		margin: 0;
-		padding: 12px;
-		background: var(--surface-2);
+		padding: 14px;
+		background: linear-gradient(180deg, var(--surface-2), color-mix(in oklab, var(--surface-2) 88%, black 12%));
 		border: 1px dashed var(--border-1);
-		border-radius: 10px;
+		border-radius: 12px;
 	}
 
 	.empty.subtle {
@@ -506,20 +544,21 @@
 	}
 
 	.sorter select {
-		background: var(--surface-1);
+		background: linear-gradient(180deg, var(--surface-1), color-mix(in oklab, var(--surface-1) 88%, black 12%));
 		color: var(--app-text);
 		border: 1px solid var(--border-1);
 		border-radius: 999px;
 		padding: 6px 10px;
 		min-height: 32px;
 		font-size: 13px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+		box-shadow: var(--ring-shadow);
 	}
 
 	.sorter span {
 		font-size: 11px;
 		color: var(--app-muted);
 	}
+	.empty.subtle { color: #7285a4; }
 
 	.mobile-add {
 		display: block;
@@ -533,14 +572,14 @@
 	}
 
 	.mobile-add .bar {
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 94%, white 6%);
 		border: 1px solid var(--border-1);
-		border-radius: 16px;
+		border-radius: 17px;
 		padding: 6px;
 		display: flex;
 		gap: 6px;
 		align-items: center;
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		box-shadow: var(--soft-shadow);
 		max-width: 720px;
 		margin: 0 auto;
 		pointer-events: auto;
@@ -566,16 +605,10 @@
 	}
 
 	.mobile-add button {
-		background: #2563eb;
-		color: white;
-		border: none;
-		border-radius: 12px;
-		padding: 0 16px;
 		white-space: nowrap;
 		min-width: 92px;
 		height: 46px;
 		font-weight: 600;
-		cursor: pointer;
 	}
 
 	@media (max-width: 900px) {
@@ -593,6 +626,10 @@
 			margin-left: 0;
 		}
 
+		.order-control {
+			display: none;
+		}
+
 		.suggestion {
 			grid-template-columns: 1fr;
 			gap: 8px;
@@ -605,8 +642,7 @@
 		}
 
 		h1 {
-			font-size: 24px;
+			font-size: 28px;
 		}
 	}
-
 </style>

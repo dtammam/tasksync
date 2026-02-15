@@ -364,47 +364,48 @@
 
 <style>
 	:global(:root) {
-		--app-bg: radial-gradient(circle at 10% 20%, #0f172a, #0b1221 40%, #050a1a);
+		--app-bg:
+			radial-gradient(circle at 8% 6%, rgba(56, 189, 248, 0.11), transparent 30%),
+			radial-gradient(circle at 92% 0%, rgba(59, 130, 246, 0.1), transparent 28%),
+			linear-gradient(180deg, #04070f 0%, #060b16 52%, #050913 100%);
 		--app-bg-mobile: #0b1221;
 		--app-text: #e2e8f0;
 		--app-muted: #cbd5e1;
-		--surface-1: #0f172a;
-		--surface-2: #0b1221;
-		--surface-3: #11192b;
+		--surface-1: #0c1322;
+		--surface-2: #0a101d;
+		--surface-3: #161f31;
 		--surface-accent: #1d4ed8;
-		--border-1: #1f2937;
-		--border-2: #27344f;
+		--border-1: #2b374f;
+		--border-2: #3a4a67;
 		--error: #ef4444;
 		--focus: #60a5fa;
+		--ring-shadow: 0 0 0 1px rgba(148, 163, 184, 0.18), 0 8px 20px rgba(2, 6, 23, 0.34);
+		--soft-shadow: 0 16px 34px rgba(2, 6, 23, 0.34);
 	}
 
 	:global(html[data-ui-theme='dark']) {
-		--app-bg: radial-gradient(circle at 15% 18%, #111111, #090909 45%, #040404);
-		--app-bg-mobile: #080808;
-		--app-text: #f1f5f9;
-		--app-muted: #d4d4d8;
-		--surface-1: #0d0d0d;
-		--surface-2: #070707;
-		--surface-3: #111111;
-		--surface-accent: #3b82f6;
-		--border-1: #1f1f1f;
-		--border-2: #2c2c2c;
-		--error: #fb7185;
-		--focus: #93c5fd;
+		--app-bg: #0e0e0e;
+		--app-bg-mobile: #0e0e0e;
+		--app-text: #f5f7fb;
+		--app-muted: #b8bec9;
+		--surface-1: #181818;
+		--surface-2: #121212;
+		--surface-3: #202020;
+		--border-1: #2a2a2a;
+		--border-2: #3a3a3a;
 	}
 
 	:global(html[data-ui-theme='light']) {
-		--app-bg: linear-gradient(180deg, #f6f9ff, #ecf3ff 36%, #f8fbff);
-		--app-bg-mobile: #f8fbff;
+		--app-bg: #f5f7fb;
+		--app-bg-mobile: #f5f7fb;
 		--app-text: #0f172a;
-		--app-muted: #334155;
+		--app-muted: #465870;
 		--surface-1: #ffffff;
-		--surface-2: #f8fbff;
-		--surface-3: #eef4ff;
+		--surface-2: #f4f7fb;
+		--surface-3: #eaf0f7;
 		--surface-accent: #2563eb;
-		--border-1: #cbd5e1;
-		--border-2: #94a3b8;
-		--error: #b91c1c;
+		--border-1: #ccd6e4;
+		--border-2: #a5b5cb;
 		--focus: #1d4ed8;
 	}
 
@@ -412,9 +413,18 @@
 		margin: 0;
 		background: var(--app-bg);
 		color: var(--app-text);
-		font-family: 'Segoe UI Variable Text', 'Segoe UI', 'SF Pro Text', system-ui, sans-serif;
+		font-family:
+			-apple-system,
+			BlinkMacSystemFont,
+			'SF Pro Text',
+			'Segoe UI',
+			Roboto,
+			'Helvetica Neue',
+			Arial,
+			sans-serif;
+		text-rendering: geometricPrecision;
+		-webkit-font-smoothing: antialiased;
 		overflow: hidden;
-		overflow-x: hidden;
 		width: 100%;
 	}
 
@@ -425,10 +435,38 @@
 		overflow-x: hidden;
 	}
 
+	:global(h1),
+	:global(h2),
+	:global(h3) {
+		letter-spacing: -0.025em;
+		font-weight: 700;
+	}
+
+	:global(button),
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		font-family: inherit;
+		transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+	}
+
 	:global(input),
 	:global(select),
 	:global(textarea) {
 		font-size: 16px;
+	}
+
+	:global(button),
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		font-family: inherit;
+		transition:
+			border-color 120ms ease,
+			background-color 120ms ease,
+			color 120ms ease,
+			box-shadow 120ms ease,
+			transform 120ms ease;
 	}
 
 	:global(button:focus-visible),
@@ -439,14 +477,38 @@
 		outline-offset: 2px;
 	}
 
+	:global(*) {
+		scrollbar-width: thin;
+		scrollbar-color: color-mix(in oklab, var(--border-2) 88%, white 12%) transparent;
+	}
+
+	:global(*::-webkit-scrollbar) {
+		width: 10px;
+		height: 10px;
+	}
+
+	:global(*::-webkit-scrollbar-track) {
+		background: transparent;
+	}
+
+	:global(*::-webkit-scrollbar-thumb) {
+		background: color-mix(in oklab, var(--border-2) 84%, white 16%);
+		border-radius: 999px;
+		border: 2px solid transparent;
+		background-clip: content-box;
+	}
+
+	:global(*::-webkit-scrollbar-thumb:hover) {
+		background: color-mix(in oklab, var(--border-2) 68%, white 32%);
+		background-clip: content-box;
+	}
+
 	.app-shell {
 		--sidebar-offset: 240px;
 		display: grid;
 		grid-template-columns: 240px 1fr;
-		min-height: 100vh;
 		height: 100vh;
 		width: 100%;
-		max-width: 100vw;
 		overflow: hidden;
 	}
 
@@ -459,43 +521,55 @@
 	}
 
 	main {
-		padding: 28px 32px;
+		padding: 30px 34px;
 		height: 100vh;
 		overflow-y: auto;
 		overflow-x: hidden;
-		max-width: 100vw;
 		min-width: 0;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-2) transparent;
+	}
+
+	main::-webkit-scrollbar {
+		width: 10px;
+	}
+
+	main::-webkit-scrollbar-thumb {
+		background: linear-gradient(180deg, var(--border-2), var(--border-1));
+		border-radius: 999px;
 	}
 
 	.app-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 16px;
+		margin-bottom: 18px;
 	}
 
 	.brand {
 		display: flex;
 		gap: 10px;
 		align-items: center;
-		font-weight: 700;
-		letter-spacing: 0.02em;
+		font-weight: 620;
+		letter-spacing: 0.01em;
 	}
 
-	.brand img {
-		width: 28px;
-		height: 28px;
-	}
+	.brand img { width: 28px; height: 28px; }
 
-	.nav-toggle {
-		display: none;
-		margin-right: 8px;
+	.nav-toggle,
+	.refresh-btn {
 		background: var(--surface-1);
 		border: 1px solid var(--border-1);
 		color: var(--app-text);
-		border-radius: 8px;
-		padding: 6px 8px;
+		border-radius: 10px;
+		padding: 6px 10px;
 		cursor: pointer;
+		box-shadow: var(--ring-shadow);
+	}
+
+	.refresh-btn:hover,
+	.nav-toggle:hover {
+		transform: translateY(-1px);
 	}
 
 	.sync {
@@ -507,10 +581,11 @@
 	.badge {
 		padding: 6px 10px;
 		border-radius: 999px;
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 92%, white 3%);
 		border: 1px solid var(--border-1);
 		color: var(--app-muted);
 		font-size: 12px;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 	}
 
 	.badge.busy {
@@ -538,110 +613,43 @@
 		padding: 6px 10px;
 		font-size: 12px;
 		cursor: pointer;
+		box-shadow: var(--ring-shadow);
+	}
+
+	.refresh-btn:hover {
+		transform: translateY(-1px);
+		color: var(--app-text);
 	}
 
 	.drawer-backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.45);
-		backdrop-filter: blur(2px);
+		background: rgba(0, 0, 0, 0.5);
+		backdrop-filter: blur(3px);
 		border: none;
 		z-index: 9;
 	}
 
 	@media (max-width: 900px) {
-		:global(body) {
-			background: var(--app-bg-mobile);
-		}
-
-		.app-shell {
-			--sidebar-offset: 0px;
-			grid-template-columns: 1fr;
-		}
-
+		:global(body) { background: var(--app-bg-mobile); }
+		.app-shell { --sidebar-offset: 0px; grid-template-columns: 1fr; }
 		.sidebar-drawer {
 			position: fixed;
 			inset: 0 auto 0 0;
-			width: min(260px, 78vw);
+			width: min(264px, 80vw);
 			transform: translateX(-110%);
-			transition: transform 160ms ease-out;
-			box-shadow: 12px 0 30px rgba(0, 0, 0, 0.4);
-			background: #0a0f1c;
+			transition: transform 170ms ease-out;
+			box-shadow: 12px 0 30px rgba(0, 0, 0, 0.5);
 			z-index: 12;
 			pointer-events: none;
 		}
-
-		.sidebar-drawer.open {
-			transform: translateX(0);
-			pointer-events: auto;
-		}
-
-		.app-shell.nav-split {
-			--sidebar-offset: min(208px, 58vw);
-			grid-template-columns: min(208px, 58vw) 1fr;
-		}
-
-		.app-shell.nav-split .sidebar-drawer {
-			position: sticky;
-			inset: auto;
-			width: 100%;
-			transform: none;
-			transition: none;
-			box-shadow: none;
-			pointer-events: auto;
-		}
-
-		.app-shell.nav-split main {
-			padding: 16px 12px 24px;
-		}
-
-		main {
-			padding: 18px 16px 28px;
-		}
-
-		.app-header {
-			margin-bottom: 12px;
-		}
-
-		.brand {
-			gap: 6px;
-		}
-
-		.nav-toggle {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-		}
-
-		.sync {
-			gap: 4px;
-		}
-
-		.badge {
-			font-size: 11px;
-			padding: 6px 8px;
-		}
-
-		.refresh-btn {
-			font-size: 11px;
-			padding: 6px 8px;
-		}
-
-		.err-msg {
-			display: none;
-		}
-	}
-
-	:global(.card),
-	:global(.task),
-	:global(.mobile-add .bar),
-	:global(.empty),
-	:global(.sorter select),
-	:global(.list-sort select),
-	:global(.mobile-add input),
-	:global(input),
-	:global(select),
-	:global(textarea) {
-		color: var(--app-text);
+		.sidebar-drawer.open { transform: translateX(0); pointer-events: auto; }
+		.app-shell.nav-split { --sidebar-offset: min(208px, 58vw); grid-template-columns: min(208px, 58vw) 1fr; }
+		.app-shell.nav-split .sidebar-drawer { position: sticky; inset: auto; width: 100%; transform: none; transition: none; box-shadow: none; pointer-events: auto; }
+		.app-shell.nav-split main { padding: 16px 12px 24px; }
+		main { padding: 18px 16px 28px; }
+		.app-header { margin-bottom: 12px; }
+		.nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+		.badge { font-size: 11px; padding: 6px 8px; }
 	}
 </style>
