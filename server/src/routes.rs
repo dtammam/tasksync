@@ -191,7 +191,26 @@ const SOUND_THEMES: [&str; 8] = [
     "custom_file",
 ];
 
-const UI_THEMES: [&str; 3] = ["default", "dark", "light"];
+const UI_THEMES: [&str; 18] = [
+    "default",
+    "dark",
+    "light",
+    "demo-theme",
+    "shades-of-coffee",
+    "miami-beach",
+    "simple-dark",
+    "matrix",
+    "black-gold",
+    "okabe-ito",
+    "theme-from-1970",
+    "shades-of-gray-light",
+    "catppuccin-latte",
+    "catppuccin-frappe",
+    "catppuccin-macchiato",
+    "catppuccin-mocha",
+    "you-need-a-dark-mode",
+    "butterfly",
+];
 
 const BACKUP_SCHEMA_V1: &str = "tasksync-space-backup-v1";
 
@@ -2427,7 +2446,7 @@ mod tests {
             State(state.clone()),
             headers.clone(),
             Json(UpdateUiPreferencesBody {
-                theme: Some("dark".to_string()),
+                theme: Some("butterfly".to_string()),
                 sidebar_panels_json: Some(
                     "{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}"
                         .to_string(),
@@ -2439,7 +2458,7 @@ mod tests {
         .expect("update preferences should work")
         .0;
 
-        assert_eq!(updated.theme, "dark");
+        assert_eq!(updated.theme, "butterfly");
         assert_eq!(
             updated.sidebar_panels_json.as_deref(),
             Some("{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}")
