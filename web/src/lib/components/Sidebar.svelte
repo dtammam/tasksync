@@ -1213,10 +1213,8 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	.sidebar {
 		width: 100%;
 		max-width: 264px;
-		background:
-			radial-gradient(circle at 10% 10%, rgba(29, 78, 216, 0.16), transparent 48%),
-			linear-gradient(180deg, #0a0f1c 0%, #090d18 100%);
-		border-right: 1px solid #13203a;
+		background: #0f1622;
+		border-right: 1px solid var(--border-1);
 		color: #cbd5e1;
 		padding: 14px 12px;
 		display: flex;
@@ -1257,11 +1255,12 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		letter-spacing: -0.03em;
 		color: #e2e8f0;
 		font-size: 24px;
+		line-height: 1.1;
 	}
 
 	.pin {
-		background: #0f172a;
-		border: 1px solid #1f2937;
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
 		color: #cbd5e1;
 		border-radius: 999px;
 		padding: 4px 10px;
@@ -1295,17 +1294,20 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		color: #cbd5e1;
 		text-decoration: none;
 		padding: 8px 10px;
-		border-radius: 10px;
-		transition: background 120ms ease, color 120ms ease;
+		border-radius: 11px;
+		transition: background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 	}
 
 	a:hover {
-		background: #111c31;
+		background: rgba(51, 65, 85, 0.55);
+		transform: translateX(1px);
+		box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.12);
 	}
 
 	a.selected {
-		background: linear-gradient(90deg, rgba(37, 99, 235, 0.3), rgba(15, 23, 42, 0.8));
+		background: rgba(59, 130, 246, 0.28);
 		color: #f1f5f9;
+		box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.25);
 	}
 
 	.list-sort {
@@ -1347,9 +1349,10 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	.card {
 		border: 1px solid #21314f;
-		border-radius: 12px;
+		border-radius: 14px;
 		padding: 10px;
-		background: linear-gradient(180deg, #0c1426, #0b1221);
+		background: #111a28;
+		box-shadow: var(--ring-shadow);
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
@@ -1377,7 +1380,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	input,
 	select {
-		background: #0f172a;
+		background: var(--surface-1);
 		border: 1px solid #243148;
 		color: #e2e8f0;
 		border-radius: 8px;
@@ -1385,13 +1388,14 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	button.primary {
-		background: linear-gradient(180deg, #2563eb, #1d4ed8);
+		background: #0f1622;
 		border: none;
 		color: #fff;
 		padding: 8px 10px;
-		border-radius: 8px;
+		border-radius: 10px;
 		cursor: pointer;
-		font-weight: 600;
+		font-weight: 650;
+		box-shadow: 0 8px 22px rgba(29, 78, 216, 0.35);
 	}
 
 	button.ghost {
@@ -1606,7 +1610,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		display: grid;
 		place-items: center;
 		border-radius: 50%;
-		background: linear-gradient(180deg, #1d4ed8, #1e3a8a);
+		background: #0f1622;
 		color: white;
 		font-size: 16px;
 		font-weight: 700;
@@ -1690,13 +1694,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		height: 8px;
 		border-radius: 999px;
 		border: 1px solid #334155;
-		background: linear-gradient(
-			to right,
-			#60a5fa 0,
-			#60a5fa var(--range-pct, 0%),
-			#1f2937 var(--range-pct, 0%),
-			#1f2937 100%
-		);
+		background: #0f1622;
 		padding: 0;
 	}
 
@@ -1777,9 +1775,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	:global(html[data-ui-theme='light']) .sidebar {
-		background:
-			radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.08), transparent 48%),
-			linear-gradient(180deg, #f5f9ff 0%, #edf3ff 100%);
+		background: #0f1622;
 		border-right-color: #bfd0ec;
 		color: #0f172a;
 	}
@@ -1801,12 +1797,12 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	:global(html[data-ui-theme='light']) .sidebar a.selected {
-		background: linear-gradient(90deg, rgba(37, 99, 235, 0.2), rgba(219, 234, 254, 0.85));
+		background: #0f1622;
 		color: #0f172a;
 	}
 
 	:global(html[data-ui-theme='light']) .sidebar .card {
-		background: linear-gradient(180deg, #ffffff, #f8fbff);
+		background: #0f1622;
 		border-color: #c4d3ee;
 	}
 
@@ -1846,13 +1842,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range'] {
 		border-color: #94a3b8;
-		background: linear-gradient(
-			to right,
-			#2563eb 0,
-			#2563eb var(--range-pct, 0%),
-			#cbd5e1 var(--range-pct, 0%),
-			#cbd5e1 100%
-		);
+		background: #0f1622;
 	}
 
 	:global(html[data-ui-theme='light']) .sidebar .sound .volume input[type='range']::-webkit-slider-thumb {
@@ -1866,14 +1856,12 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	:global(html[data-ui-theme='dark']) .sidebar {
-		background:
-			radial-gradient(circle at 8% 8%, rgba(37, 99, 235, 0.08), transparent 48%),
-			linear-gradient(180deg, #090909 0%, #070707 100%);
+		background: #0f1622;
 		border-right-color: #1f1f1f;
 	}
 
 	:global(html[data-ui-theme='dark']) .sidebar .card {
-		background: linear-gradient(180deg, #0f0f0f, #090909);
+		background: #0f1622;
 		border-color: #2a2a2a;
 	}
 
