@@ -178,12 +178,34 @@
 </div>
 
 <style>
-	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
-	.actions { display: flex; align-items: center; justify-content: flex-end; margin-left: auto; }
-	.sorter label { display: inline-flex; align-items: center; gap: 8px; }
-	.sorter span { font-size: 11px; color: var(--app-muted); }
+	.page-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 18px;
+		gap: 12px;
+	}
+
+	.actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		margin-left: auto;
+	}
+
+	.sorter label {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.sorter span {
+		font-size: 11px;
+		color: var(--app-muted);
+	}
+
 	.sorter select {
-		background: var(--surface-1);
+		background: linear-gradient(180deg, var(--surface-1), color-mix(in oklab, var(--surface-1) 88%, black 12%));
 		color: var(--app-text);
 		border: 1px solid var(--border-1);
 		border-radius: 999px;
@@ -192,17 +214,53 @@
 		font-size: 13px;
 		box-shadow: var(--ring-shadow);
 	}
+
+	.eyebrow {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 11px;
+		color: var(--app-muted);
+		margin: 0;
+	}
+
+	h1 {
+		margin: 4px 0;
+		font-size: 34px;
+		line-height: 1.02;
+		letter-spacing: -0.04em;
+		font-weight: 640;
+	}
+
+	.sub {
+		margin: 0;
+		color: var(--app-muted);
+	}
 	.eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 10px; font-weight: 700; color: var(--app-muted); margin: 0; }
 	h1 { margin: 4px 0; font-size: 32px; line-height: 1.04; }
 	.sub { margin: 0; color: var(--app-muted); }
 
 	.block {
 		margin-top: 14px;
-		padding: 12px;
-		border-radius: 16px;
-		border: 1px solid var(--border-1);
-		background: var(--surface-1);
-		box-shadow: var(--soft-shadow);
+	}
+
+	.section-title {
+		color: var(--app-muted);
+		font-size: 13px;
+		margin-bottom: 6px;
+	}
+
+	.stack {
+		display: grid;
+		gap: 10px;
+	}
+
+	.empty {
+		color: var(--app-muted);
+		margin: 0;
+		padding: 14px;
+		background: linear-gradient(180deg, var(--surface-2), color-mix(in oklab, var(--surface-2) 88%, black 12%));
+		border: 1px dashed var(--border-1);
+		border-radius: 12px;
 	}
 
 	.section-title { color: var(--app-muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; }
@@ -223,26 +281,42 @@
 	}
 
 	.mobile-add .bar {
-		background: var(--surface-1);
+		background: color-mix(in oklab, var(--surface-1) 94%, white 6%);
 		border: 1px solid var(--border-1);
-		border-radius: 18px;
+		border-radius: 17px;
 		padding: 6px;
 		display: flex;
 		gap: 6px;
 		align-items: center;
 		box-shadow: var(--soft-shadow);
-		max-width: 760px;
+		max-width: 720px;
 		margin: 0 auto;
 		pointer-events: auto;
 	}
 
-	.mobile-add input { flex: 1; min-width: 0; background: transparent; border: none; color: var(--app-text); border-radius: 10px; padding: 0 12px; height: 46px; }
-	.mobile-add input:focus-visible { outline: none; }
-	.mobile-add .bar:focus-within { border-color: var(--focus); }
+	.mobile-add input {
+		flex: 1;
+		min-width: 0;
+		background: transparent;
+		border: none;
+		color: var(--app-text);
+		border-radius: 10px;
+		padding: 0 12px;
+		height: 46px;
+	}
+
+	.mobile-add input:focus-visible {
+		outline: none;
+	}
+
+	.mobile-add .bar:focus-within {
+		border-color: var(--focus);
+	}
+
 	.mobile-add button {
-		background: #2563eb;
+		background: linear-gradient(180deg, #1e40af, #1d4ed8);
 		color: white;
-		border: 1px solid rgba(147, 197, 253, 0.55);
+		border: 1px solid rgba(147, 197, 253, 0.4);
 		border-radius: 12px;
 		padding: 0 16px;
 		white-space: nowrap;
@@ -250,15 +324,31 @@
 		height: 46px;
 		font-weight: 650;
 		cursor: pointer;
-		box-shadow: 0 10px 24px rgba(29, 78, 216, 0.4);
+		box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+	}
+
+	.mobile-add button:hover {
+		transform: translateY(-1px);
+		filter: brightness(1.07);
 	}
 	.mobile-add button:hover { transform: translateY(-1px); filter: brightness(1.07); }
 
 	@media (max-width: 900px) {
-		.page-header { margin-bottom: 12px; gap: 8px; }
-		h1 { font-size: 25px; }
-		.stack { padding-bottom: 88px; }
-		.block { padding: 10px; border-radius: 14px; }
-		.sorter span { display: none; }
+		.page-header {
+			margin-bottom: 12px;
+			gap: 8px;
+		}
+
+		.stack {
+			padding-bottom: 88px;
+		}
+
+		.sorter span {
+			display: none;
+		}
+
+		h1 {
+			font-size: 28px;
+		}
 	}
 </style>

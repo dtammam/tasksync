@@ -1213,7 +1213,10 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	.sidebar {
 		width: 100%;
 		max-width: 264px;
-		background: #0f1622;
+		background:
+			radial-gradient(circle at 10% 10%, rgba(56, 189, 248, 0.16), transparent 48%),
+			radial-gradient(circle at 90% 0%, rgba(168, 85, 247, 0.1), transparent 32%),
+			linear-gradient(180deg, #0a1120 0%, #080e19 100%);
 		border-right: 1px solid var(--border-1);
 		color: #cbd5e1;
 		padding: 14px 12px;
@@ -1259,7 +1262,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	.pin {
-		background: var(--surface-1);
+		background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
 		border: 1px solid var(--border-1);
 		color: #cbd5e1;
 		border-radius: 999px;
@@ -1294,18 +1297,17 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		color: #cbd5e1;
 		text-decoration: none;
 		padding: 8px 10px;
-		border-radius: 11px;
-		transition: background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+		border-radius: 10px;
+		transition: background 120ms ease, color 120ms ease, transform 120ms ease;
 	}
 
 	a:hover {
-		background: rgba(51, 65, 85, 0.55);
-		transform: translateX(1px);
-		box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.12);
+		background: #111c31;
+		transform: translateX(2px);
 	}
 
 	a.selected {
-		background: rgba(59, 130, 246, 0.28);
+		background: linear-gradient(90deg, rgba(37, 99, 235, 0.42), rgba(15, 23, 42, 0.9));
 		color: #f1f5f9;
 		box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.25);
 	}
@@ -1351,8 +1353,8 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		border: 1px solid #21314f;
 		border-radius: 14px;
 		padding: 10px;
-		background: #111a28;
-		box-shadow: var(--ring-shadow);
+		background: color-mix(in oklab, var(--surface-1) 93%, white 7%);
+		box-shadow: 0 6px 16px rgba(2,6,23,0.24);
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
@@ -1380,7 +1382,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	input,
 	select {
-		background: var(--surface-1);
+		background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
 		border: 1px solid #243148;
 		color: #e2e8f0;
 		border-radius: 8px;
