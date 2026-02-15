@@ -18,8 +18,14 @@
 	let showSuggestions = false;
 	let missedActionError = '';
 	let deletingMissedId = '';
+	let isMobilePwaViewport = false;
 	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
 	const MY_DAY_SORT_DIRECTION_KEY = 'tasksync:sort:myday:direction';
+	
+	const updateMobileViewport = () => {
+		if (typeof window === 'undefined') return;
+		isMobilePwaViewport = window.matchMedia('(max-width: 900px)').matches;
+	};
 	const compareAlpha = (left, right) => {
 		const a = (left ?? '').trim().toLowerCase();
 		const b = (right ?? '').trim().toLowerCase();
@@ -82,6 +88,8 @@
 	}
 
 	if (typeof window !== 'undefined') {
+		updateMobileViewport();
+		window.addEventListener('resize', updateMobileViewport);
 		Reflect.set(window, '__addTaskMyDay', () => quickAdd());
 	}
 
@@ -147,6 +155,10 @@
 	}
 
 	onDestroy(() => {
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('resize', updateMobileViewport);
+		}
+
 		if (typeof window !== 'undefined' && Reflect.get(window, '__copyTasksAsJoplin') === copyProvider) {
 			Reflect.deleteProperty(window, '__copyTasksAsJoplin');
 		}
@@ -169,7 +181,7 @@
 						<option value="alpha">Alphabetical</option>
 					</select>
 				</label>
-				<label>
+				<label class="order-control">
 					<span>Order</span>
 					<select bind:value={sortDirection} aria-label="Sort direction">
 						<option value="asc">Ascending</option>
@@ -186,7 +198,7 @@
 			<div class="stack" data-testid="missed-section">
 				{#each sortedMissed as task (task.id)}
 					<div class="missed-item">
-						<TaskRow {task} on:openDetail={openDetail} />
+						<TaskRow {task} mobileCompact={isMobilePwaViewport} on:openDetail={openDetail} />
 						<div class="missed-actions">
 							{#if task.recurrence_id}
 								<button
@@ -224,7 +236,7 @@
 		<div class="stack">
 				{#if sortedPending.length}
 				{#each sortedPending as task (task.id)}
-					<TaskRow {task} on:openDetail={openDetail} />
+					<TaskRow {task} mobileCompact={isMobilePwaViewport} on:openDetail={openDetail} />
 				{/each}
 			{:else}
 				<p class="empty">Nothing scheduled. Add a task to My Day.</p>
@@ -237,7 +249,7 @@
 		<div class="stack" data-testid="completed-section">
 				{#if sortedCompleted.length}
 				{#each sortedCompleted as task (task.id)}
-					<TaskRow {task} completedContext={true} on:openDetail={openDetail} />
+					<TaskRow {task} mobileCompact={isMobilePwaViewport} completedContext={true} on:openDetail={openDetail} />
 				{/each}
 			{:else}
 				<p class="empty subtle">No completed tasks yet.</p>
@@ -612,6 +624,10 @@
 
 		.actions {
 			margin-left: 0;
+		}
+
+		.order-control {
+			display: none;
 		}
 
 		.suggestion {
