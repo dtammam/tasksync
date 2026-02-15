@@ -12,12 +12,14 @@
 	const listsStore = lists;
 	let quickTitle = '';
 	let sortMode = 'created';
+	let sortDirection = 'asc';
 	let sortLoaded = false;
 	let detailId = null;
 	let showSuggestions = false;
 	let missedActionError = '';
 	let deletingMissedId = '';
 	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
+	const MY_DAY_SORT_DIRECTION_KEY = 'tasksync:sort:myday:direction';
 	const compareAlpha = (left, right) => {
 		const a = (left ?? '').trim().toLowerCase();
 		const b = (right ?? '').trim().toLowerCase();
@@ -35,22 +37,26 @@
 	$: defaultListId =
 		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
 
-	const sortTasks = (arr, mode = sortMode) => {
+	const sortTasks = (arr, mode = sortMode, direction = sortDirection) => {
 		const copy = [...arr];
+		const isAscending = direction !== 'desc';
 		if (mode === 'alpha') {
 			copy.sort((a, b) => {
 				const byTitle = compareAlpha(a.title, b.title);
-				return byTitle === 0 ? a.created_ts - b.created_ts : byTitle;
+				if (byTitle === 0) {
+					return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+				}
+				return isAscending ? byTitle : byTitle * -1;
 			});
 		} else if (mode === 'created') {
-			copy.sort((a, b) => a.created_ts - b.created_ts);
+			copy.sort((a, b) => (isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts));
 		}
 		return copy;
 	};
 
-	$: sortedPending = sortTasks($myDayPending ?? [], sortMode);
-	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode);
-	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode);
+	$: sortedPending = sortTasks($myDayPending ?? [], sortMode, sortDirection);
+	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode, sortDirection);
+	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode, sortDirection);
 	$: copyLines = [
 		...sortedMissed.map((task) => `- [ ] ${task.title}`),
 		...sortedPending.map((task) => `- [ ] ${task.title}`),
@@ -60,14 +66,19 @@
 
 	$: if (typeof window !== 'undefined' && !sortLoaded) {
 		const saved = localStorage.getItem(MY_DAY_SORT_KEY);
+		const savedDirection = localStorage.getItem(MY_DAY_SORT_DIRECTION_KEY);
 		if (saved === 'alpha' || saved === 'created') {
 			sortMode = saved;
+		}
+		if (savedDirection === 'asc' || savedDirection === 'desc') {
+			sortDirection = savedDirection;
 		}
 		sortLoaded = true;
 	}
 
 	$: if (typeof window !== 'undefined' && sortLoaded) {
 		localStorage.setItem(MY_DAY_SORT_KEY, sortMode);
+		localStorage.setItem(MY_DAY_SORT_DIRECTION_KEY, sortDirection);
 	}
 
 	if (typeof window !== 'undefined') {
@@ -156,6 +167,13 @@
 					<select bind:value={sortMode} aria-label="Sort tasks">
 						<option value="created">Creation</option>
 						<option value="alpha">Alphabetical</option>
+					</select>
+				</label>
+				<label>
+					<span>Order</span>
+					<select bind:value={sortDirection} aria-label="Sort direction">
+						<option value="asc">Ascending</option>
+						<option value="desc">Descending</option>
 					</select>
 				</label>
 			</div>
