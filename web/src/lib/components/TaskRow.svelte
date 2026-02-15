@@ -13,6 +13,7 @@ import {
 
 export let task;
 export let completedContext = false;
+export let mobileCompact = false;
 
 const dispatch = createEventDispatcher();
 let editing = false;
@@ -192,7 +193,7 @@ $: recurLabel =
 </script>
 
 <div
-	class="task"
+	class={`task ${mobileCompact ? 'compact' : ''}`}
 	data-testid="task-row"
 	title={`Created ${new Date(task.created_ts).toLocaleString()}\nUpdated ${new Date(task.updated_ts).toLocaleString()}`}
 	role="group"
@@ -258,6 +259,7 @@ $: recurLabel =
 				/>
 				My Day
 			</label>
+			{#if !mobileCompact}
 			<span class="chip subtle list-chip">
 				List:
 				<select on:change={updateList} title="Move task to list" disabled={!canEditTask}>
@@ -265,10 +267,13 @@ $: recurLabel =
 						<option value={list.id} selected={list.id === task.list_id}>{list.name}</option>
 					{/each}
 				</select>
-			</span>
+						</span>
+		{/if}
+		{#if !mobileCompact}
 			<span class={`chip sync-chip ${task.dirty ? 'pending' : 'synced'}`} aria-live="polite">
 				{task.dirty ? 'Pending sync' : justSaved ? 'Saved' : 'Synced'}
 			</span>
+		{/if}
 			<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
 		</div>
 	</div>
@@ -355,7 +360,11 @@ $: recurLabel =
 	:global(html[data-ui-theme='light']) .task .status, :global(html[data-ui-theme='light']) .task .quick button, :global(html[data-ui-theme='light']) .task .title-input { background:#ffffff; border-color:#94a3b8; color:#0f172a; }
 	:global(html[data-ui-theme='dark']) .task { background: #0d1524; border-color:var(--list-accent, #334155); }
 	@media (max-width: 900px) {
-		.task { padding:10px; gap:10px; border-radius:13px; }
-		.status { width:36px; height:36px; min-width:36px; min-height:36px; font-size:15px; }
+		.task { padding: 11px 12px; gap: 12px; border-radius: 14px; }
+		.task.compact { padding: 10px 11px; gap: 10px; }
+		.status { width:40px; height:40px; min-width:40px; min-height:40px; font-size:16px; }
+		.task.compact .status { width:36px; height:36px; min-width:36px; min-height:36px; font-size:15px; }
+		.task.compact .sub { gap: 6px; margin-top: 5px; }
+		.task.compact .chip { padding: 3px 8px; }
 	}
 </style>
