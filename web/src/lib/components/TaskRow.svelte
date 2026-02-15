@@ -12,8 +12,6 @@ export let mobileCompact = false;
 export let inMyDayView = false;
 
 const dispatch = createEventDispatcher();
-let editing = false;
-let titleDraft = task.title;
 let showActions = false;
 let deleting = false;
 let actionError = '';
@@ -32,13 +30,6 @@ const toggleMyDay = (event) => {
 	if ($auth.user?.role === 'contributor') return;
 	const input = event.target;
 	tasks.setMyDay(task.id, input.checked);
-};
-
-const saveTitle = () => {
-	if (!canEditTask) return;
-	if (!titleDraft.trim()) return;
-	tasks.rename(task.id, titleDraft);
-	editing = false;
 };
 
 const openDetail = () => dispatch('openDetail', { id: task.id });
@@ -192,24 +183,10 @@ $: isRecurringCompletedToday =
 	</div>
 	<div class="meta">
 		<div class="title">
-			{#if editing}
-				<input
-					class="title-input"
-					bind:value={titleDraft}
-					on:keydown={(e) => e.key === 'Enter' && saveTitle()}
-					on:blur={saveTitle}
-				/>
+			{#if task.url}
+				<a class="title-text link" href={task.url} target="_blank" rel="noreferrer" data-testid="task-title">{task.title}</a>
 			{:else}
-				{#if task.url}
-					<a class="title-text link" href={task.url} target="_blank" rel="noreferrer" data-testid="task-title">{task.title}</a>
-				{:else}
-					<span class="title-text" data-testid="task-title">{task.title}</span>
-				{/if}
-				{#if canEditTask}
-					<button class="icon-btn" type="button" title="Rename task" on:click={() => (editing = true)}>
-						✎
-					</button>
-				{/if}
+				<span class="title-text" data-testid="task-title">{task.title}</span>
 			{/if}
 		</div>
 		<div class="sub">
@@ -362,9 +339,6 @@ $: isRecurringCompletedToday =
 	.quick button:hover { background:var(--surface-3); transform:translateY(-1px); }
 	.quick button.ghost { border-color:var(--border-2); }
 	.quick button.danger { border-color:#7f1d1d; color:#fecaca; }
-	.icon-btn { background:none; border:none; color:var(--app-muted); cursor:pointer; padding:4px; border-radius:6px; min-width:28px; min-height:28px; }
-	.icon-btn:hover { background:var(--surface-3); color:var(--app-text); }
-	.title-input { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); border-radius:8px; padding:6px 8px; min-width:180px; }
 	.title-text.link { color:#60a5fa; text-decoration:underline; }
 	.error { grid-column:1 / -1; margin:0; color:#fda4af; font-size:12px; }
 	@media (max-width: 900px) {
