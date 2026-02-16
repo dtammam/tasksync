@@ -1908,7 +1908,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	@media (max-width: 900px) {
 		.sidebar {
 			max-width: none;
-			padding: 12px 10px;
+			padding: 12px 10px calc(12px + env(safe-area-inset-bottom) + 96px);
 		}
 
 		.app-title {
