@@ -60,6 +60,8 @@ test('can sign in with token mode and restore session after reload', async ({ pa
 	);
 
 	await page.goto('/');
+	await page.getByTestId('open-settings').click();
+	await expect(page.getByTestId('settings-modal')).toBeVisible();
 	await expect(page.getByTestId('auth-email')).toBeVisible();
 	await page.getByTestId('auth-email').fill('admin@example.com');
 	await page.getByTestId('auth-password').fill('tasksync');
@@ -140,6 +142,8 @@ test('can change password from account panel', async ({ page }) => {
 	);
 
 	await page.goto('/');
+	await page.getByTestId('open-settings').click();
+	await expect(page.getByTestId('settings-modal')).toBeVisible();
 	await page.getByTestId('auth-email').fill('admin@example.com');
 	await page.getByTestId('auth-password').fill('tasksync');
 	await page.getByTestId('auth-signin').click();
