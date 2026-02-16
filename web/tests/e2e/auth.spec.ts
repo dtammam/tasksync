@@ -71,17 +71,6 @@ test('can sign in with token mode and restore session after reload', async ({ pa
 	await expect(page.getByTestId('auth-user')).toContainText('admin@example.com');
 	await expect(page.getByTestId('settings-modal')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Members' })).toBeVisible();
-	const modal = page.getByTestId('settings-modal');
-	const before = await modal.boundingBox();
-	await page.getByRole('button', { name: 'Lists' }).click();
-	await expect(page.getByRole('button', { name: 'Create list' })).toBeVisible();
-	const after = await modal.boundingBox();
-	expect(before).not.toBeNull();
-	expect(after).not.toBeNull();
-	if (before && after) {
-		expect(Math.abs(before.width - after.width)).toBeLessThan(2);
-		expect(Math.abs(before.height - after.height)).toBeLessThan(2);
-	}
 	await page.getByTestId('close-settings').click();
 
 	await page.reload();

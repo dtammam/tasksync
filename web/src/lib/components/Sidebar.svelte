@@ -1284,8 +1284,8 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	.settings-modal {
-		width: min(980px, calc(100vw - 32px));
-		height: min(760px, calc(100vh - 32px));
+		width: min(980px, 100%);
+		max-height: min(90vh, 920px);
 		background: var(--surface-1);
 		border: 1px solid var(--border-1);
 		border-radius: 14px;
@@ -1875,36 +1875,33 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	@media (max-width: 900px) {
 		.settings-overlay {
-			padding: 12px;
+			padding: 0;
 		}
 
 		.settings-modal {
-			width: min(920px, calc(100vw - 24px));
-			height: min(720px, calc(100vh - 24px));
-			border-radius: 12px;
+			width: 100%;
+			height: 100%;
+			max-height: none;
+			border-radius: 0;
 		}
 
 		.settings-content {
-			grid-template-columns: 120px minmax(0, 1fr);
+			grid-template-columns: 1fr;
 		}
 
 		.settings-nav {
-			border-right: 1px solid var(--border-1);
-			border-bottom: 0;
-			flex-direction: column;
-			overflow-y: auto;
-			overflow-x: hidden;
-			padding: 10px 8px;
+			border-right: 0;
+			border-bottom: 1px solid var(--border-1);
+			flex-direction: row;
+			overflow-x: auto;
 		}
 
 		.settings-nav button {
-			white-space: normal;
-			font-size: 0.95rem;
-			padding: 8px;
+			white-space: nowrap;
 		}
 
 		.settings-panel {
-			padding: 10px;
+			padding: 12px;
 		}
 	}
 
