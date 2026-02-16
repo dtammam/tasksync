@@ -19,6 +19,14 @@ Within `web/src/lib/`:
 - `sound/` — audio runtime
 - `components/` — UI components
 
+## Settings surface standard
+
+- The sidebar is navigation-first; settings controls are not expanded inline in the rail.
+- Settings open in a dedicated modal surface (`web/src/lib/components/Sidebar.svelte`) with:
+  - desktop split-pane navigation (sections left, detail right)
+  - mobile section-list first, then section detail with back navigation
+- Section visibility rules are centralized in `web/src/lib/components/settingsMenu.ts`.
+
 ## Target layered model (directional dependencies)
 
 Within a domain, dependencies should flow:

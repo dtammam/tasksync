@@ -1,681 +1,715 @@
 <script lang="ts">
-// @ts-nocheck
-import { page } from '$app/stores';
-import { createEventDispatcher } from 'svelte';
-import { lists } from '$lib/stores/lists';
-import { listCounts, myDayPending } from '$lib/stores/tasks';
-import { soundSettings, soundThemes } from '$lib/stores/settings';
-import { uiPreferences } from '$lib/stores/preferences';
-import { auth } from '$lib/stores/auth';
-import { members } from '$lib/stores/members';
-import { api } from '$lib/api/client';
-import { playCompletion } from '$lib/sound/sound';
-import { BACKUP_SCHEMA_V1 } from '$shared/types/backup';
+	// @ts-nocheck
+	import { page } from '$app/stores';
+	import { createEventDispatcher } from 'svelte';
+	import { lists } from '$lib/stores/lists';
+	import { listCounts, myDayPending } from '$lib/stores/tasks';
+	import { soundSettings, soundThemes } from '$lib/stores/settings';
+	import { uiPreferences } from '$lib/stores/preferences';
+	import { auth } from '$lib/stores/auth';
+	import { members } from '$lib/stores/members';
+	import { api } from '$lib/api/client';
+	import { playCompletion } from '$lib/sound/sound';
+	import { BACKUP_SCHEMA_V1 } from '$shared/types/backup';
+	import { getSettingsSections, pickSettingsSection } from '$lib/components/settingsMenu';
 
-export let navPinned = false;
+	export let navPinned = false;
 
-const dispatch = createEventDispatcher();
+	const dispatch = createEventDispatcher();
 
-let showManager = false;
-let newListName = '';
-let newListIcon = '';
-let newListColor = '#3b82f6';
-let renameDraft = {};
-let iconDraft = {};
-let colorDraft = {};
-let listError = '';
-let busy = false;
-let listSortMode = 'manual';
-let listSortLoaded = false;
-const LIST_SORT_KEY = 'tasksync:sort:sidebar-lists';
+	let newListName = '';
+	let newListIcon = '';
+	let newListColor = '#3b82f6';
+	let renameDraft = {};
+	let iconDraft = {};
+	let colorDraft = {};
+	let listError = '';
+	let busy = false;
+	let listSortMode = 'manual';
+	let listSortLoaded = false;
+	const LIST_SORT_KEY = 'tasksync:sort:sidebar-lists';
 
-let authBusy = false;
-let loginEmail = 'admin@example.com';
-let loginPassword = '';
-let loginSpaceId = 's1';
-let showProfileEditor = false;
-let profileBusy = false;
-let profileDisplay = '';
-let profileIcon = '';
-let profileMessage = '';
-let profileError = '';
-let profileSeedUserId = '';
-let showPasswordEditor = false;
-let passwordBusy = false;
-let currentPasswordDraft = '';
-let newPasswordDraft = '';
-let confirmPasswordDraft = '';
-let passwordMessage = '';
-let passwordError = '';
+	let authBusy = false;
+	let loginEmail = 'admin@example.com';
+	let loginPassword = '';
+	let loginSpaceId = 's1';
+	let showProfileEditor = false;
+	let profileBusy = false;
+	let profileDisplay = '';
+	let profileIcon = '';
+	let profileMessage = '';
+	let profileError = '';
+	let profileSeedUserId = '';
+	let showPasswordEditor = false;
+	let passwordBusy = false;
+	let currentPasswordDraft = '';
+	let newPasswordDraft = '';
+	let confirmPasswordDraft = '';
+	let passwordMessage = '';
+	let passwordError = '';
 
-let showTeam = false;
-let showSoundPanel = false;
-let showBackupPanel = false;
-let showAccountPanel = true;
-let teamBusy = false;
-let teamError = '';
-let teamMessage = '';
-let grantsLoading = false;
-let grants = [];
-let loadedAdminScope = '';
-let newMemberEmail = '';
-let newMemberDisplay = '';
-let newMemberRole = 'contributor';
-let newMemberPassword = '';
-let newMemberIcon = '';
-let adminMode = false;
-let soundBusy = false;
-let soundError = '';
-let soundMessage = '';
-let backupBusy = false;
-let backupError = '';
-let backupMessage = '';
-const appThemes = [
-	{ value: 'default', label: 'Default Blue' },
-	{ value: 'light', label: 'Light' },
-	{ value: 'dark', label: 'Dark' },
-	{ value: 'demo-theme', label: 'Demo Theme' },
-	{ value: 'shades-of-coffee', label: 'Shades of Coffee' },
-	{ value: 'miami-beach', label: 'Miami Beach' },
-	{ value: 'simple-dark', label: 'Simple Dark' },
-	{ value: 'matrix', label: 'Matrix' },
-	{ value: 'black-gold', label: 'Black Gold' },
-	{ value: 'okabe-ito', label: 'Okabe Ito' },
-	{ value: 'theme-from-1970', label: 'Theme from 1970' },
-	{ value: 'shades-of-gray-light', label: 'Shades of Gray (light)' },
-	{ value: 'catppuccin-latte', label: 'Catppuccin Latte' },
-	{ value: 'catppuccin-frappe', label: 'Catppuccin Frappé' },
-	{ value: 'catppuccin-macchiato', label: 'Catppuccin Macchiato' },
-	{ value: 'catppuccin-mocha', label: 'Catppuccin Mocha' },
-	{ value: 'you-need-a-dark-mode', label: 'You Need A Dark Mode' },
-	{ value: 'butterfly', label: 'Butterfly' }
-];
+	let settingsOpen = false;
+	let settingsActiveSection = 'account';
+	let settingsMobileMenu = false;
+	let settingsIsMobile = false;
+	let teamBusy = false;
+	let teamError = '';
+	let teamMessage = '';
+	let grantsLoading = false;
+	let grants = [];
+	let loadedAdminScope = '';
+	let newMemberEmail = '';
+	let newMemberDisplay = '';
+	let newMemberRole = 'contributor';
+	let newMemberPassword = '';
+	let newMemberIcon = '';
+	let adminMode = false;
+	let soundBusy = false;
+	let soundError = '';
+	let soundMessage = '';
+	let backupBusy = false;
+	let backupError = '';
+	let backupMessage = '';
+	const appThemes = [
+		{ value: 'default', label: 'Default Blue' },
+		{ value: 'light', label: 'Light' },
+		{ value: 'dark', label: 'Dark' },
+		{ value: 'demo-theme', label: 'Demo Theme' },
+		{ value: 'shades-of-coffee', label: 'Shades of Coffee' },
+		{ value: 'miami-beach', label: 'Miami Beach' },
+		{ value: 'simple-dark', label: 'Simple Dark' },
+		{ value: 'matrix', label: 'Matrix' },
+		{ value: 'black-gold', label: 'Black Gold' },
+		{ value: 'okabe-ito', label: 'Okabe Ito' },
+		{ value: 'theme-from-1970', label: 'Theme from 1970' },
+		{ value: 'shades-of-gray-light', label: 'Shades of Gray (light)' },
+		{ value: 'catppuccin-latte', label: 'Catppuccin Latte' },
+		{ value: 'catppuccin-frappe', label: 'Catppuccin Frappé' },
+		{ value: 'catppuccin-macchiato', label: 'Catppuccin Macchiato' },
+		{ value: 'catppuccin-mocha', label: 'Catppuccin Mocha' },
+		{ value: 'you-need-a-dark-mode', label: 'You Need A Dark Mode' },
+		{ value: 'butterfly', label: 'Butterfly' },
+	];
 
-const iconFromIdentity = (display, email) => {
-	const source = (display ?? email ?? '').trim();
-	if (!source) return '?';
-	return source.charAt(0).toUpperCase();
-};
+	const iconFromIdentity = (display, email) => {
+		const source = (display ?? email ?? '').trim();
+		if (!source) return '?';
+		return source.charAt(0).toUpperCase();
+	};
 
-const avatarFor = (user) => {
-	const icon = user?.avatar_icon?.trim();
-	if (icon) return icon.slice(0, 4);
-	return iconFromIdentity(user?.display, user?.email);
-};
+	const avatarFor = (user) => {
+		const icon = user?.avatar_icon?.trim();
+		if (icon) return icon.slice(0, 4);
+		return iconFromIdentity(user?.display, user?.email);
+	};
 
-const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
+	const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
 
-const passwordIsValid = (value) => value.trim().length >= 8;
+	const passwordIsValid = (value) => value.trim().length >= 8;
 
-const readAsDataUrl = (file) =>
-	new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result ?? ''));
-		reader.onerror = () => reject(new Error('Could not read sound file.'));
-		reader.readAsDataURL(file);
-	});
+	const readAsDataUrl = (file) =>
+		new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(String(reader.result ?? ''));
+			reader.onerror = () => reject(new Error('Could not read sound file.'));
+			reader.readAsDataURL(file);
+		});
 
-const readAsText = (file) =>
-	new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result ?? ''));
-		reader.onerror = () => reject(new Error('Could not read backup file.'));
-		reader.readAsText(file);
-	});
+	const readAsText = (file) =>
+		new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(String(reader.result ?? ''));
+			reader.onerror = () => reject(new Error('Could not read backup file.'));
+			reader.readAsText(file);
+		});
 
-const uploadCustomSound = async (event) => {
-	const input = event.currentTarget;
-	const files = Array.from(input?.files ?? []);
-	if (!files.length) return;
-	if (files.length > 8) {
-		soundError = 'Please upload up to 8 sounds at a time.';
-		soundMessage = '';
-		input.value = '';
-		return;
-	}
-	for (const file of files) {
-		if (!/\.(mp3|wav)$/i.test(file.name)) {
-			soundError = 'Please upload MP3 or WAV files only.';
+	const uploadCustomSound = async (event) => {
+		const input = event.currentTarget;
+		const files = Array.from(input?.files ?? []);
+		if (!files.length) return;
+		if (files.length > 8) {
+			soundError = 'Please upload up to 8 sounds at a time.';
 			soundMessage = '';
 			input.value = '';
 			return;
 		}
-		if (file.size > 2 * 1024 * 1024) {
-			soundError = 'Sound file is too large (max 2MB each).';
-			soundMessage = '';
-			input.value = '';
-			return;
-		}
-	}
-	soundBusy = true;
-	soundError = '';
-	soundMessage = '';
-	try {
-		const payload = await Promise.all(
-			files.map(async (file) => ({
-				dataUrl: await readAsDataUrl(file),
-				fileName: file.name
-			}))
-		);
-		soundSettings.setCustomSounds(payload);
-		soundMessage =
-			payload.length === 1
-				? `Custom sound loaded: ${payload[0].fileName}`
-				: `${payload.length} custom sounds loaded. Playback will randomize.`;
-	} catch (err) {
-		soundError = err instanceof Error ? err.message : String(err);
-	} finally {
-		soundBusy = false;
-		input.value = '';
-	}
-};
-
-const clearCustomSound = () => {
-	soundSettings.clearCustomSound();
-	soundError = '';
-	soundMessage = 'Custom sound removed.';
-};
-
-const customSoundNames = (settings) => {
-	const raw = settings?.customSoundFilesJson;
-	if (typeof raw === 'string' && raw.trim()) {
-		try {
-			const parsed = JSON.parse(raw);
-			if (Array.isArray(parsed)) {
-				return parsed
-					.map((entry) => (entry && typeof entry === 'object' ? String(entry.name ?? '').trim() : ''))
-					.filter((name) => !!name)
-					.slice(0, 8);
+		for (const file of files) {
+			if (!/\.(mp3|wav)$/i.test(file.name)) {
+				soundError = 'Please upload MP3 or WAV files only.';
+				soundMessage = '';
+				input.value = '';
+				return;
 			}
-		} catch {
-			// Fall back to legacy single-file naming below.
+			if (file.size > 2 * 1024 * 1024) {
+				soundError = 'Sound file is too large (max 2MB each).';
+				soundMessage = '';
+				input.value = '';
+				return;
+			}
 		}
-	}
-	return settings?.customSoundFileName ? [settings.customSoundFileName] : [];
-};
-
-const previewSound = async () => {
-	await playCompletion(soundSettings.get());
-};
-
-const normalizeListIcon = (raw) => {
-	const trimmed = String(raw ?? '').trim();
-	if (!trimmed) return undefined;
-	if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
-		const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-		const first = Array.from(segmenter.segment(trimmed), (entry) => entry.segment)
-			.slice(0, 2)
-			.join('');
-		return first || undefined;
-	}
-	return Array.from(trimmed).slice(0, 4).join('') || undefined;
-};
-
-const togglePanel = (panel) => {
-	const current = $uiPreferences.sidebarPanels?.[panel] ?? false;
-	uiPreferences.setPanel(panel, !current);
-};
-
-const backupFileName = (spaceId, exportedAtTs) => {
-	const date = new Date(exportedAtTs * 1000);
-	const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(
-		date.getDate()
-	).padStart(2, '0')}-${String(date.getHours()).padStart(2, '0')}${String(
-		date.getMinutes()
-	).padStart(2, '0')}${String(date.getSeconds()).padStart(2, '0')}`;
-	return `tasksync-backup-${spaceId}-${stamp}.json`;
-};
-
-const downloadBackup = async () => {
-	if (!adminMode || $auth.status !== 'authenticated') return;
-	backupBusy = true;
-	backupError = '';
-	backupMessage = '';
-	try {
-		const backup = await api.getSpaceBackup();
-		const blob = new Blob([JSON.stringify(backup, null, 2)], {
-			type: 'application/json'
-		});
-		const url = URL.createObjectURL(blob);
-		const anchor = document.createElement('a');
-		anchor.href = url;
-		anchor.download = backupFileName(backup.space.id, backup.exported_at_ts);
-		document.body.append(anchor);
-		anchor.click();
-		anchor.remove();
-		URL.revokeObjectURL(url);
-		backupMessage = `Backup downloaded (${backup.lists.length} lists, ${backup.tasks.length} tasks).`;
-	} catch (err) {
-		backupError = err instanceof Error ? err.message : String(err);
-	} finally {
-		backupBusy = false;
-	}
-};
-
-const restoreBackup = async (event) => {
-	if (!adminMode || $auth.status !== 'authenticated') return;
-	const input = event.currentTarget;
-	const file = input?.files?.[0];
-	if (!file) return;
-
-	backupBusy = true;
-	backupError = '';
-	backupMessage = '';
-	try {
-		const raw = await readAsText(file);
-		const parsed = JSON.parse(raw);
-		if (!parsed || parsed.schema !== BACKUP_SCHEMA_V1) {
-			throw new Error('Invalid backup file schema.');
+		soundBusy = true;
+		soundError = '';
+		soundMessage = '';
+		try {
+			const payload = await Promise.all(
+				files.map(async (file) => ({
+					dataUrl: await readAsDataUrl(file),
+					fileName: file.name,
+				}))
+			);
+			soundSettings.setCustomSounds(payload);
+			soundMessage =
+				payload.length === 1
+					? `Custom sound loaded: ${payload[0].fileName}`
+					: `${payload.length} custom sounds loaded. Playback will randomize.`;
+		} catch (err) {
+			soundError = err instanceof Error ? err.message : String(err);
+		} finally {
+			soundBusy = false;
+			input.value = '';
 		}
-		if (!parsed.space?.id || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.lists)) {
-			throw new Error('Backup file is missing required fields.');
+	};
+
+	const clearCustomSound = () => {
+		soundSettings.clearCustomSound();
+		soundError = '';
+		soundMessage = 'Custom sound removed.';
+	};
+
+	const customSoundNames = (settings) => {
+		const raw = settings?.customSoundFilesJson;
+		if (typeof raw === 'string' && raw.trim()) {
+			try {
+				const parsed = JSON.parse(raw);
+				if (Array.isArray(parsed)) {
+					return parsed
+						.map((entry) =>
+							entry && typeof entry === 'object' ? String(entry.name ?? '').trim() : ''
+						)
+						.filter((name) => !!name)
+						.slice(0, 8);
+				}
+			} catch {
+				// Fall back to legacy single-file naming below.
+			}
 		}
-		const confirmRestore = confirm(
-			`Restore backup for space "${parsed.space.id}"? This will replace current space data.`
+		return settings?.customSoundFileName ? [settings.customSoundFileName] : [];
+	};
+
+	const previewSound = async () => {
+		await playCompletion(soundSettings.get());
+	};
+
+	const normalizeListIcon = (raw) => {
+		const trimmed = String(raw ?? '').trim();
+		if (!trimmed) return undefined;
+		if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+			const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+			const first = Array.from(segmenter.segment(trimmed), (entry) => entry.segment)
+				.slice(0, 2)
+				.join('');
+			return first || undefined;
+		}
+		return Array.from(trimmed).slice(0, 4).join('') || undefined;
+	};
+
+	const updateSettingsViewport = () => {
+		if (typeof window === 'undefined') return;
+		settingsIsMobile = window.innerWidth <= 900;
+		if (!settingsIsMobile) {
+			settingsMobileMenu = false;
+		}
+	};
+
+	const openSettings = (section) => {
+		updateSettingsViewport();
+		settingsActiveSection = pickSettingsSection(
+			section ?? settingsActiveSection,
+			adminMode,
+			'account'
 		);
-		if (!confirmRestore) {
-			return;
+		settingsMobileMenu = settingsIsMobile;
+		settingsOpen = true;
+	};
+
+	const closeSettings = () => {
+		settingsOpen = false;
+	};
+
+	const selectSettingsSection = (section) => {
+		settingsActiveSection = pickSettingsSection(section, adminMode, settingsActiveSection);
+		if (settingsIsMobile) {
+			settingsMobileMenu = false;
 		}
-		const result = await api.restoreSpaceBackup(parsed);
-		backupMessage = `Restore complete: ${result.lists} lists, ${result.tasks} tasks. Reloading…`;
-		if (typeof window !== 'undefined') {
-			window.setTimeout(() => window.location.reload(), 300);
+	};
+
+	const handleSettingsDialogKeydown = (event) => {
+		if (event.key === 'Escape') {
+			closeSettings();
 		}
-	} catch (err) {
-		backupError = err instanceof Error ? err.message : String(err);
-	} finally {
-		backupBusy = false;
-		input.value = '';
-	}
-};
+	};
 
-const resetDrafts = () => {
-	renameDraft = {};
-	iconDraft = {};
-	colorDraft = {};
-	newListName = '';
-	newListIcon = '';
-	newListColor = '#3b82f6';
-	listError = '';
-};
+	const backupFileName = (spaceId, exportedAtTs) => {
+		const date = new Date(exportedAtTs * 1000);
+		const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(
+			date.getDate()
+		).padStart(2, '0')}-${String(date.getHours()).padStart(2, '0')}${String(
+			date.getMinutes()
+		).padStart(2, '0')}${String(date.getSeconds()).padStart(2, '0')}`;
+		return `tasksync-backup-${spaceId}-${stamp}.json`;
+	};
 
-const sortByOrder = (items) =>
-	[...items].sort((a, b) => (a.order ?? '').localeCompare(b.order ?? ''));
+	const downloadBackup = async () => {
+		if (!adminMode || $auth.status !== 'authenticated') return;
+		backupBusy = true;
+		backupError = '';
+		backupMessage = '';
+		try {
+			const backup = await api.getSpaceBackup();
+			const blob = new Blob([JSON.stringify(backup, null, 2)], {
+				type: 'application/json',
+			});
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = backupFileName(backup.space.id, backup.exported_at_ts);
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			backupMessage = `Backup downloaded (${backup.lists.length} lists, ${backup.tasks.length} tasks).`;
+		} catch (err) {
+			backupError = err instanceof Error ? err.message : String(err);
+		} finally {
+			backupBusy = false;
+		}
+	};
 
-const manualOrderValue = (index) => `m-${String(index).padStart(4, '0')}`;
+	const restoreBackup = async (event) => {
+		if (!adminMode || $auth.status !== 'authenticated') return;
+		const input = event.currentTarget;
+		const file = input?.files?.[0];
+		if (!file) return;
 
-$: adminMode = $auth.status === 'authenticated' && $auth.user?.role === 'admin';
+		backupBusy = true;
+		backupError = '';
+		backupMessage = '';
+		try {
+			const raw = await readAsText(file);
+			const parsed = JSON.parse(raw);
+			if (!parsed || parsed.schema !== BACKUP_SCHEMA_V1) {
+				throw new Error('Invalid backup file schema.');
+			}
+			if (!parsed.space?.id || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.lists)) {
+				throw new Error('Backup file is missing required fields.');
+			}
+			const confirmRestore = confirm(
+				`Restore backup for space "${parsed.space.id}"? This will replace current space data.`
+			);
+			if (!confirmRestore) {
+				return;
+			}
+			const result = await api.restoreSpaceBackup(parsed);
+			backupMessage = `Restore complete: ${result.lists} lists, ${result.tasks} tasks. Reloading…`;
+			if (typeof window !== 'undefined') {
+				window.setTimeout(() => window.location.reload(), 300);
+			}
+		} catch (err) {
+			backupError = err instanceof Error ? err.message : String(err);
+		} finally {
+			backupBusy = false;
+			input.value = '';
+		}
+	};
 
-const togglePin = () => {
-	dispatch('togglePin', { pinned: !navPinned });
-};
+	const resetDrafts = () => {
+		renameDraft = {};
+		iconDraft = {};
+		colorDraft = {};
+		newListName = '';
+		newListIcon = '';
+		newListColor = '#3b82f6';
+		listError = '';
+	};
 
-const createList = async () => {
-	if (!adminMode) return;
-	const name = newListName.trim();
-	if (!name) return;
-	busy = true;
-	listError = '';
-	try {
-		await lists.createRemote(name, normalizeListIcon(newListIcon), newListColor || undefined);
-		resetDrafts();
-	} catch (err) {
-		listError = err instanceof Error ? err.message : String(err);
-	} finally {
-		busy = false;
-	}
-};
+	const sortByOrder = (items) =>
+		[...items].sort((a, b) => (a.order ?? '').localeCompare(b.order ?? ''));
 
-const renameList = async (id) => {
-	if (!adminMode) return;
-	const name = (renameDraft[id] ?? '').trim();
-	const iconInput = iconDraft[id];
-	const colorInput = colorDraft[id];
-	const icon = typeof iconInput === 'string' ? normalizeListIcon(iconInput) : undefined;
-	const color =
-		typeof colorInput === 'string'
-			? colorInput.trim()
-			: undefined;
-	if (!name && typeof iconInput !== 'string' && typeof colorInput !== 'string') return;
-	busy = true;
-	listError = '';
-	try {
-		await lists.updateRemote(id, {
-			name: name || undefined,
-			icon: typeof iconInput === 'string' ? icon || '' : undefined,
-			color: typeof colorInput === 'string' ? color || '' : undefined
+	const manualOrderValue = (index) => `m-${String(index).padStart(4, '0')}`;
+
+	$: adminMode = $auth.status === 'authenticated' && $auth.user?.role === 'admin';
+
+	const togglePin = () => {
+		dispatch('togglePin', { pinned: !navPinned });
+	};
+
+	const createList = async () => {
+		if (!adminMode) return;
+		const name = newListName.trim();
+		if (!name) return;
+		busy = true;
+		listError = '';
+		try {
+			await lists.createRemote(name, normalizeListIcon(newListIcon), newListColor || undefined);
+			resetDrafts();
+		} catch (err) {
+			listError = err instanceof Error ? err.message : String(err);
+		} finally {
+			busy = false;
+		}
+	};
+
+	const renameList = async (id) => {
+		if (!adminMode) return;
+		const name = (renameDraft[id] ?? '').trim();
+		const iconInput = iconDraft[id];
+		const colorInput = colorDraft[id];
+		const icon = typeof iconInput === 'string' ? normalizeListIcon(iconInput) : undefined;
+		const color = typeof colorInput === 'string' ? colorInput.trim() : undefined;
+		if (!name && typeof iconInput !== 'string' && typeof colorInput !== 'string') return;
+		busy = true;
+		listError = '';
+		try {
+			await lists.updateRemote(id, {
+				name: name || undefined,
+				icon: typeof iconInput === 'string' ? icon || '' : undefined,
+				color: typeof colorInput === 'string' ? color || '' : undefined,
+			});
+			renameDraft = { ...renameDraft, [id]: '' };
+			iconDraft = { ...iconDraft, [id]: '' };
+			colorDraft = { ...colorDraft, [id]: '' };
+		} catch (err) {
+			listError = err instanceof Error ? err.message : String(err);
+		} finally {
+			busy = false;
+		}
+	};
+
+	const moveList = async (id, direction) => {
+		if (!adminMode || busy) return;
+		const ordered = sortByOrder(($lists ?? []).filter((list) => list.id !== 'my-day'));
+		const currentIndex = ordered.findIndex((list) => list.id === id);
+		if (currentIndex < 0) return;
+		const nextIndex = currentIndex + direction;
+		if (nextIndex < 0 || nextIndex >= ordered.length) return;
+
+		const reordered = [...ordered];
+		const [moving] = reordered.splice(currentIndex, 1);
+		reordered.splice(nextIndex, 0, moving);
+
+		const updates = [];
+		reordered.forEach((list, index) => {
+			const nextOrder = manualOrderValue(index);
+			if ((list.order ?? '') !== nextOrder) {
+				updates.push(lists.updateRemote(list.id, { order: nextOrder }));
+			}
 		});
-		renameDraft = { ...renameDraft, [id]: '' };
-		iconDraft = { ...iconDraft, [id]: '' };
-		colorDraft = { ...colorDraft, [id]: '' };
-	} catch (err) {
-		listError = err instanceof Error ? err.message : String(err);
-	} finally {
-		busy = false;
-	}
-};
+		if (!updates.length) return;
 
-const moveList = async (id, direction) => {
-	if (!adminMode || busy) return;
-	const ordered = sortByOrder(($lists ?? []).filter((list) => list.id !== 'my-day'));
-	const currentIndex = ordered.findIndex((list) => list.id === id);
-	if (currentIndex < 0) return;
-	const nextIndex = currentIndex + direction;
-	if (nextIndex < 0 || nextIndex >= ordered.length) return;
-
-	const reordered = [...ordered];
-	const [moving] = reordered.splice(currentIndex, 1);
-	reordered.splice(nextIndex, 0, moving);
-
-	const updates = [];
-	reordered.forEach((list, index) => {
-		const nextOrder = manualOrderValue(index);
-		if ((list.order ?? '') !== nextOrder) {
-			updates.push(lists.updateRemote(list.id, { order: nextOrder }));
+		busy = true;
+		listError = '';
+		try {
+			await Promise.all(updates);
+		} catch (err) {
+			listError = err instanceof Error ? err.message : String(err);
+		} finally {
+			busy = false;
 		}
-	});
-	if (!updates.length) return;
+	};
 
-	busy = true;
-	listError = '';
-	try {
-		await Promise.all(updates);
-	} catch (err) {
-		listError = err instanceof Error ? err.message : String(err);
-	} finally {
-		busy = false;
-	}
-};
+	const deleteList = async (id) => {
+		if (!adminMode) return;
+		if (!confirm('Delete this list? Tasks within cannot be deleted yet.')) return;
+		busy = true;
+		listError = '';
+		try {
+			await lists.deleteRemote(id);
+		} catch (err) {
+			listError =
+				err instanceof Error && err.message.includes('409')
+					? 'Cannot delete: list still has tasks.'
+					: err instanceof Error
+						? err.message
+						: String(err);
+		} finally {
+			busy = false;
+		}
+	};
 
-const deleteList = async (id) => {
-	if (!adminMode) return;
-	if (!confirm('Delete this list? Tasks within cannot be deleted yet.')) return;
-	busy = true;
-	listError = '';
-	try {
-		await lists.deleteRemote(id);
-	} catch (err) {
-		listError =
-			err instanceof Error && err.message.includes('409')
-				? 'Cannot delete: list still has tasks.'
-				: err instanceof Error
-					? err.message
-					: String(err);
-	} finally {
-		busy = false;
-	}
-};
+	const signIn = async () => {
+		const email = loginEmail.trim();
+		const password = loginPassword.trim();
+		const spaceId = loginSpaceId.trim();
+		if (!email || !password) return;
+		authBusy = true;
+		try {
+			await auth.login(email, password, spaceId || undefined);
+			loginPassword = '';
+		} catch {
+			// Error messaging comes from the auth store.
+		} finally {
+			authBusy = false;
+		}
+	};
 
-const signIn = async () => {
-	const email = loginEmail.trim();
-	const password = loginPassword.trim();
-	const spaceId = loginSpaceId.trim();
-	if (!email || !password) return;
-	authBusy = true;
-	try {
-		await auth.login(email, password, spaceId || undefined);
+	const signOut = () => {
+		auth.logout();
 		loginPassword = '';
-	} catch {
-		// Error messaging comes from the auth store.
-	} finally {
-		authBusy = false;
-	}
-};
-
-const signOut = () => {
-	auth.logout();
-	loginPassword = '';
-	showProfileEditor = false;
-	showPasswordEditor = false;
-	profileMessage = '';
-	profileError = '';
-	passwordMessage = '';
-	passwordError = '';
-	currentPasswordDraft = '';
-	newPasswordDraft = '';
-	confirmPasswordDraft = '';
-};
-
-const saveProfile = async () => {
-	if ($auth.status !== 'authenticated') return;
-	const display = profileDisplay.trim();
-	if (!display) {
-		profileError = 'Display name is required.';
-		return;
-	}
-	profileBusy = true;
-	profileError = '';
-	profileMessage = '';
-	try {
-		await auth.updateProfile({
-			display,
-			avatar_icon: profileIcon
-		});
-		await members.hydrateFromServer();
-		profileMessage = 'Profile updated.';
-	} catch (err) {
-		profileError = err instanceof Error ? err.message : String(err);
-	} finally {
-		profileBusy = false;
-	}
-};
-
-const savePassword = async () => {
-	if ($auth.status !== 'authenticated') return;
-	const currentPassword = currentPasswordDraft.trim();
-	const newPassword = newPasswordDraft.trim();
-	const confirmPassword = confirmPasswordDraft.trim();
-	if (!currentPassword) {
-		passwordError = 'Current password is required.';
-		return;
-	}
-	if (!passwordIsValid(newPassword)) {
-		passwordError = 'New password must be at least 8 characters.';
-		return;
-	}
-	if (newPassword !== confirmPassword) {
-		passwordError = 'New passwords do not match.';
-		return;
-	}
-	passwordBusy = true;
-	passwordError = '';
-	passwordMessage = '';
-	try {
-		await api.changePassword({
-			current_password: currentPassword,
-			new_password: newPassword
-		});
+		showProfileEditor = false;
+		showPasswordEditor = false;
+		profileMessage = '';
+		profileError = '';
+		passwordMessage = '';
+		passwordError = '';
 		currentPasswordDraft = '';
 		newPasswordDraft = '';
 		confirmPasswordDraft = '';
-		passwordMessage = 'Password updated.';
-	} catch (err) {
-		passwordError = err instanceof Error ? err.message : String(err);
-	} finally {
-		passwordBusy = false;
-	}
-};
+	};
 
-const loadGrants = async () => {
-	if (!adminMode) return;
-	grantsLoading = true;
-	teamError = '';
-	teamMessage = '';
-	try {
-		grants = await api.getListGrants();
-	} catch (err) {
-		teamError = err instanceof Error ? err.message : String(err);
-	} finally {
-		grantsLoading = false;
-	}
-};
-
-const createMember = async () => {
-	if (!adminMode) return;
-	const email = newMemberEmail.trim().toLowerCase();
-	const display = newMemberDisplay.trim();
-	const password = newMemberPassword.trim();
-	if (!email || !display || !passwordIsValid(password)) {
-		teamError = 'Member password must be at least 8 characters.';
-		return;
-	}
-	teamBusy = true;
-	teamError = '';
-	teamMessage = '';
-	try {
-		await api.createMember({
-			email,
-			display,
-			role: newMemberRole,
-			password,
-			avatar_icon: newMemberIcon
-		});
-		newMemberEmail = '';
-		newMemberDisplay = '';
-		newMemberRole = 'contributor';
-		newMemberPassword = '';
-		newMemberIcon = '';
-		await Promise.all([members.hydrateFromServer(), loadGrants()]);
-		teamMessage = `Added ${display}.`;
-	} catch (err) {
-		teamError = err instanceof Error ? err.message : String(err);
-	} finally {
-		teamBusy = false;
-	}
-};
-
-const hasGrant = (userId, listId) =>
-	grants.some((grant) => grant.user_id === userId && grant.list_id === listId);
-
-const setGrant = async (userId, listId, granted) => {
-	if (!adminMode) return;
-	teamBusy = true;
-	teamError = '';
-	teamMessage = '';
-	try {
-		await api.setListGrant({ user_id: userId, list_id: listId, granted });
-		if (granted) {
-			if (!hasGrant(userId, listId)) {
-				grants = [...grants, { user_id: userId, list_id: listId }];
-			}
-		} else {
-			grants = grants.filter((grant) => !(grant.user_id === userId && grant.list_id === listId));
+	const saveProfile = async () => {
+		if ($auth.status !== 'authenticated') return;
+		const display = profileDisplay.trim();
+		if (!display) {
+			profileError = 'Display name is required.';
+			return;
 		}
-	} catch (err) {
-		teamError = err instanceof Error ? err.message : String(err);
-	} finally {
-		teamBusy = false;
-	}
-};
+		profileBusy = true;
+		profileError = '';
+		profileMessage = '';
+		try {
+			await auth.updateProfile({
+				display,
+				avatar_icon: profileIcon,
+			});
+			await members.hydrateFromServer();
+			profileMessage = 'Profile updated.';
+		} catch (err) {
+			profileError = err instanceof Error ? err.message : String(err);
+		} finally {
+			profileBusy = false;
+		}
+	};
 
-const resetMemberPassword = async (member) => {
-	if (!adminMode) return;
-	const draft = prompt(`New password for ${member.display}`, '');
-	if (draft === null) return;
-	const password = draft.trim();
-	if (!passwordIsValid(password)) {
-		teamError = 'Member password must be at least 8 characters.';
+	const savePassword = async () => {
+		if ($auth.status !== 'authenticated') return;
+		const currentPassword = currentPasswordDraft.trim();
+		const newPassword = newPasswordDraft.trim();
+		const confirmPassword = confirmPasswordDraft.trim();
+		if (!currentPassword) {
+			passwordError = 'Current password is required.';
+			return;
+		}
+		if (!passwordIsValid(newPassword)) {
+			passwordError = 'New password must be at least 8 characters.';
+			return;
+		}
+		if (newPassword !== confirmPassword) {
+			passwordError = 'New passwords do not match.';
+			return;
+		}
+		passwordBusy = true;
+		passwordError = '';
+		passwordMessage = '';
+		try {
+			await api.changePassword({
+				current_password: currentPassword,
+				new_password: newPassword,
+			});
+			currentPasswordDraft = '';
+			newPasswordDraft = '';
+			confirmPasswordDraft = '';
+			passwordMessage = 'Password updated.';
+		} catch (err) {
+			passwordError = err instanceof Error ? err.message : String(err);
+		} finally {
+			passwordBusy = false;
+		}
+	};
+
+	const loadGrants = async () => {
+		if (!adminMode) return;
+		grantsLoading = true;
+		teamError = '';
 		teamMessage = '';
-		return;
+		try {
+			grants = await api.getListGrants();
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : String(err);
+		} finally {
+			grantsLoading = false;
+		}
+	};
+
+	const createMember = async () => {
+		if (!adminMode) return;
+		const email = newMemberEmail.trim().toLowerCase();
+		const display = newMemberDisplay.trim();
+		const password = newMemberPassword.trim();
+		if (!email || !display || !passwordIsValid(password)) {
+			teamError = 'Member password must be at least 8 characters.';
+			return;
+		}
+		teamBusy = true;
+		teamError = '';
+		teamMessage = '';
+		try {
+			await api.createMember({
+				email,
+				display,
+				role: newMemberRole,
+				password,
+				avatar_icon: newMemberIcon,
+			});
+			newMemberEmail = '';
+			newMemberDisplay = '';
+			newMemberRole = 'contributor';
+			newMemberPassword = '';
+			newMemberIcon = '';
+			await Promise.all([members.hydrateFromServer(), loadGrants()]);
+			teamMessage = `Added ${display}.`;
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : String(err);
+		} finally {
+			teamBusy = false;
+		}
+	};
+
+	const hasGrant = (userId, listId) =>
+		grants.some((grant) => grant.user_id === userId && grant.list_id === listId);
+
+	const setGrant = async (userId, listId, granted) => {
+		if (!adminMode) return;
+		teamBusy = true;
+		teamError = '';
+		teamMessage = '';
+		try {
+			await api.setListGrant({ user_id: userId, list_id: listId, granted });
+			if (granted) {
+				if (!hasGrant(userId, listId)) {
+					grants = [...grants, { user_id: userId, list_id: listId }];
+				}
+			} else {
+				grants = grants.filter((grant) => !(grant.user_id === userId && grant.list_id === listId));
+			}
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : String(err);
+		} finally {
+			teamBusy = false;
+		}
+	};
+
+	const resetMemberPassword = async (member) => {
+		if (!adminMode) return;
+		const draft = prompt(`New password for ${member.display}`, '');
+		if (draft === null) return;
+		const password = draft.trim();
+		if (!passwordIsValid(password)) {
+			teamError = 'Member password must be at least 8 characters.';
+			teamMessage = '';
+			return;
+		}
+		teamBusy = true;
+		teamError = '';
+		teamMessage = '';
+		try {
+			await api.setMemberPassword(member.user_id, { password });
+			teamMessage = `Password reset for ${member.display}.`;
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : String(err);
+		} finally {
+			teamBusy = false;
+		}
+	};
+
+	const canDeleteMember = (member) =>
+		adminMode && $auth.user && member.user_id !== $auth.user.user_id;
+
+	const deleteMember = async (member) => {
+		if (!canDeleteMember(member) || teamBusy) return;
+		const confirmed = confirm(`Delete ${member.display} from this space?`);
+		if (!confirmed) return;
+		teamBusy = true;
+		teamError = '';
+		teamMessage = '';
+		try {
+			await api.deleteMember(member.user_id);
+			await Promise.all([members.hydrateFromServer(), loadGrants()]);
+			teamMessage = `Removed ${member.display}.`;
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : String(err);
+		} finally {
+			teamBusy = false;
+		}
+	};
+
+	$: if ($auth.user?.user_id && profileSeedUserId !== $auth.user.user_id) {
+		profileSeedUserId = $auth.user.user_id;
+		profileDisplay = $auth.user.display ?? '';
+		profileIcon = $auth.user.avatar_icon ?? '';
+		profileMessage = '';
+		profileError = '';
+		passwordMessage = '';
+		passwordError = '';
+		currentPasswordDraft = '';
+		newPasswordDraft = '';
+		confirmPasswordDraft = '';
+		showProfileEditor = false;
+		showPasswordEditor = false;
 	}
-	teamBusy = true;
-	teamError = '';
-	teamMessage = '';
-	try {
-		await api.setMemberPassword(member.user_id, { password });
-		teamMessage = `Password reset for ${member.display}.`;
-	} catch (err) {
-		teamError = err instanceof Error ? err.message : String(err);
-	} finally {
-		teamBusy = false;
+
+	$: adminScope = adminMode && $auth.user ? `${$auth.user.space_id}:${$auth.user.user_id}` : '';
+	$: if (adminScope && adminScope !== loadedAdminScope) {
+		loadedAdminScope = adminScope;
+		void Promise.all([members.hydrateFromServer(), loadGrants()]);
 	}
-};
-
-const canDeleteMember = (member) =>
-	adminMode &&
-	$auth.user &&
-	member.user_id !== $auth.user.user_id;
-
-const deleteMember = async (member) => {
-	if (!canDeleteMember(member) || teamBusy) return;
-	const confirmed = confirm(`Delete ${member.display} from this space?`);
-	if (!confirmed) return;
-	teamBusy = true;
-	teamError = '';
-	teamMessage = '';
-	try {
-		await api.deleteMember(member.user_id);
-		await Promise.all([members.hydrateFromServer(), loadGrants()]);
-		teamMessage = `Removed ${member.display}.`;
-	} catch (err) {
-		teamError = err instanceof Error ? err.message : String(err);
-	} finally {
-		teamBusy = false;
+	$: if (!adminScope && loadedAdminScope) {
+		loadedAdminScope = '';
+		grants = [];
+		teamMessage = '';
 	}
-};
 
-$: if ($auth.user?.user_id && profileSeedUserId !== $auth.user.user_id) {
-	profileSeedUserId = $auth.user.user_id;
-	profileDisplay = $auth.user.display ?? '';
-	profileIcon = $auth.user.avatar_icon ?? '';
-	profileMessage = '';
-	profileError = '';
-	passwordMessage = '';
-	passwordError = '';
-	currentPasswordDraft = '';
-	newPasswordDraft = '';
-	confirmPasswordDraft = '';
-	showProfileEditor = false;
-	showPasswordEditor = false;
-}
-
-$: adminScope = adminMode && $auth.user ? `${$auth.user.space_id}:${$auth.user.user_id}` : '';
-$: if (adminScope && adminScope !== loadedAdminScope) {
-	loadedAdminScope = adminScope;
-	void Promise.all([members.hydrateFromServer(), loadGrants()]);
-}
-$: if (!adminScope && loadedAdminScope) {
-	loadedAdminScope = '';
-	grants = [];
-	teamMessage = '';
-}
-
-$: showManager = !!$uiPreferences.sidebarPanels?.lists;
-$: showTeam = !!$uiPreferences.sidebarPanels?.members;
-$: showSoundPanel = !!$uiPreferences.sidebarPanels?.sound;
-$: showBackupPanel = !!$uiPreferences.sidebarPanels?.backups;
-$: showAccountPanel = !!$uiPreferences.sidebarPanels?.account;
-$: loadedCustomSoundNames = customSoundNames($soundSettings);
-$: hasCustomSounds =
-	loadedCustomSoundNames.length > 0 ||
-	!!$soundSettings.customSoundDataUrl ||
-	!!$soundSettings.customSoundFilesJson;
-
-$: teamMembers = ($members ?? []).filter((member) => member.user_id !== $auth.user?.user_id);
-$: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
-$: managedListsManual = sortByOrder($lists ?? []).filter((list) => list.id !== 'my-day');
-$: if (typeof localStorage !== 'undefined' && !listSortLoaded) {
-	const saved = localStorage.getItem(LIST_SORT_KEY);
-	if (saved === 'manual' || saved === 'alpha') {
-		listSortMode = saved;
+	$: settingsSections = getSettingsSections(adminMode);
+	$: {
+		const nextSettingsSection = pickSettingsSection(settingsActiveSection, adminMode, 'account');
+		if (nextSettingsSection !== settingsActiveSection) {
+			settingsActiveSection = nextSettingsSection;
+		}
 	}
-	listSortLoaded = true;
-}
-$: if (typeof localStorage !== 'undefined' && listSortLoaded) {
-	localStorage.setItem(LIST_SORT_KEY, listSortMode);
-}
-$: sidebarLists = [...($lists ?? [])].sort((a, b) => {
-	if (a.id === 'my-day') return -1;
-	if (b.id === 'my-day') return 1;
-	if (listSortMode === 'alpha') {
-		return (a.name ?? '').localeCompare(b.name ?? '', undefined, {
-			sensitivity: 'base',
-			numeric: true
-		});
+	$: settingsSectionMeta =
+		settingsSections.find((section) => section.id === settingsActiveSection) ?? settingsSections[0];
+	$: loadedCustomSoundNames = customSoundNames($soundSettings);
+	$: hasCustomSounds =
+		loadedCustomSoundNames.length > 0 ||
+		!!$soundSettings.customSoundDataUrl ||
+		!!$soundSettings.customSoundFilesJson;
+
+	$: teamMembers = ($members ?? []).filter((member) => member.user_id !== $auth.user?.user_id);
+	$: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
+	$: managedListsManual = sortByOrder($lists ?? []).filter((list) => list.id !== 'my-day');
+	$: if (typeof localStorage !== 'undefined' && !listSortLoaded) {
+		const saved = localStorage.getItem(LIST_SORT_KEY);
+		if (saved === 'manual' || saved === 'alpha') {
+			listSortMode = saved;
+		}
+		listSortLoaded = true;
 	}
-	return (a.order ?? '').localeCompare(b.order ?? '');
-});
+	$: if (typeof localStorage !== 'undefined' && listSortLoaded) {
+		localStorage.setItem(LIST_SORT_KEY, listSortMode);
+	}
+	$: sidebarLists = [...($lists ?? [])].sort((a, b) => {
+		if (a.id === 'my-day') return -1;
+		if (b.id === 'my-day') return 1;
+		if (listSortMode === 'alpha') {
+			return (a.name ?? '').localeCompare(b.name ?? '', undefined, {
+				sensitivity: 'base',
+				numeric: true,
+			});
+		}
+		return (a.order ?? '').localeCompare(b.order ?? '');
+	});
 </script>
+
+<svelte:window on:resize={updateSettingsViewport} />
 
 <nav class="sidebar">
 	<div class="sidebar-main">
@@ -718,511 +752,600 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 				{/if}
 			{/each}
 		{/if}
-
-		{#if adminMode}
-			<div class="section-label muted">Lists</div>
-			<button class="section-toggle" type="button" on:click={() => togglePanel('lists')}>
-				{showManager ? 'Close list manager' : 'Manage lists'}
-			</button>
-			{#if showManager}
-				<div class="card manager">
-					<label>
-						Name
-						<input
-							type="text"
-							placeholder="List name"
-							bind:value={newListName}
-							on:keydown={(e) => e.key === 'Enter' && createList()}
-						/>
-					</label>
-					<label>
-						Icon (optional)
-						<input
-							type="text"
-							placeholder="emoji"
-							maxlength="24"
-							autocapitalize="off"
-							spellcheck="false"
-							bind:value={newListIcon}
-							on:keydown={(e) => e.key === 'Enter' && createList()}
-						/>
-					</label>
-					<label>
-						Color (optional)
-						<input type="color" bind:value={newListColor} />
-					</label>
-					<button
-						type="button"
-						class="primary"
-						on:click={createList}
-						disabled={busy || !newListName.trim()}
-					>
-						Create list
-					</button>
-					{#if listError}
-						<p class="error">{listError}</p>
-					{/if}
-					<p class="muted-note">Manual order: use ↑ and ↓, then keep list sort set to Manual.</p>
-					<div class="existing">
-						{#each managedListsManual as list, index}
-							<div class="row">
-								<input
-									class="name-input"
-									type="text"
-									placeholder={list.name}
-									bind:value={renameDraft[list.id]}
-									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
-								/>
-								<input
-									class="icon-input"
-									type="text"
-									placeholder={list.icon ?? 'emoji'}
-									maxlength="24"
-									autocapitalize="off"
-									spellcheck="false"
-									bind:value={iconDraft[list.id]}
-									on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
-								/>
-								<input
-									class="color-input"
-									type="color"
-									value={colorDraft[list.id] ?? list.color ?? '#3b82f6'}
-									on:input={(e) => (colorDraft[list.id] = e.currentTarget.value)}
-								/>
-								<div class="row-actions">
-									<button
-										type="button"
-										class="ghost tiny"
-										aria-label={`Move ${list.name} up`}
-										title="Move up"
-										on:click={() => moveList(list.id, -1)}
-										disabled={busy || index === 0}
-									>
-										↑
-									</button>
-									<button
-										type="button"
-										class="ghost tiny"
-										aria-label={`Move ${list.name} down`}
-										title="Move down"
-										on:click={() => moveList(list.id, 1)}
-										disabled={busy || index === managedListsManual.length - 1}
-									>
-										↓
-									</button>
-									<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
-										Save
-									</button>
-									<button type="button" class="ghost" on:click={() => deleteList(list.id)} disabled={busy}>
-										Delete
-									</button>
-								</div>
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/if}
-
-			<div class="section-label muted">Members</div>
-			<button class="section-toggle" type="button" on:click={() => togglePanel('members')}>
-				{showTeam ? 'Close member manager' : 'Manage members'}
-			</button>
-			{#if showTeam}
-				<div class="card team">
-					<div class="create-member">
-						<p class="team-helper">Create a member, then toggle list access below.</p>
-						<div class="field-row">
-							<label>
-								Display
-								<input type="text" placeholder="Name" bind:value={newMemberDisplay} />
-							</label>
-							<label>
-								Email
-								<input type="email" placeholder="person@example.com" bind:value={newMemberEmail} />
-							</label>
-						</div>
-						<div class="field-row">
-							<label>
-								Role
-								<select bind:value={newMemberRole}>
-									<option value="contributor">Contributor</option>
-									<option value="admin">Admin</option>
-								</select>
-							</label>
-							<label>
-								Password
-								<input
-									type="password"
-									placeholder="min 8 chars"
-									autocomplete="new-password"
-									bind:value={newMemberPassword}
-								/>
-							</label>
-							<label>
-								Icon
-								<input type="text" placeholder="AA" maxlength="4" bind:value={newMemberIcon} />
-							</label>
-						</div>
-						<button
-							type="button"
-							class="primary"
-							on:click={createMember}
-							disabled={
-								teamBusy ||
-								!newMemberDisplay.trim() ||
-								!newMemberEmail.trim() ||
-								newMemberPassword.trim().length < 8
-							}
-						>
-							Add member
-						</button>
-					</div>
-
-					{#if grantsLoading}
-						<p class="muted-note">Loading access matrix...</p>
-					{:else}
-						<div class="member-list">
-							{#if teamMembers.length}
-								{#each teamMembers as member}
-									<div class="member-row">
-										<div class="member-head">
-											<span class="avatar small">{avatarFor(member)}</span>
-											<div>
-												<strong>{member.display}</strong>
-												<span>{member.email}</span>
-											</div>
-											<span class="role-chip">{roleLabel(member.role)}</span>
-										</div>
-										<div class="member-tools">
-											<button
-												type="button"
-												class="ghost tiny"
-												disabled={teamBusy}
-												on:click={() => resetMemberPassword(member)}
-											>
-												Reset password
-											</button>
-											<button
-												type="button"
-												class="ghost tiny danger"
-												disabled={!canDeleteMember(member) || teamBusy}
-												on:click={() => deleteMember(member)}
-											>
-												Delete member
-											</button>
-										</div>
-										{#if member.role === 'contributor'}
-											<div class="grant-grid">
-												{#each managedLists as list}
-													<label class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}>
-														<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
-														<span class="grant-controls">
-															<span class="grant-state">{hasGrant(member.user_id, list.id) ? 'On' : 'Off'}</span>
-															<input
-																type="checkbox"
-																checked={hasGrant(member.user_id, list.id)}
-																disabled={teamBusy}
-																on:change={(e) =>
-																	setGrant(member.user_id, list.id, e.currentTarget.checked)}
-															/>
-														</span>
-													</label>
-												{/each}
-											</div>
-										{/if}
-									</div>
-								{/each}
-							{:else}
-								<p class="muted-note">No other members yet. Add one above.</p>
-							{/if}
-						</div>
-					{/if}
-					{#if teamMessage}
-						<p class="ok">{teamMessage}</p>
-					{/if}
-					{#if teamError}
-						<p class="error">{teamError}</p>
-					{/if}
-				</div>
-			{/if}
-		{/if}
 	</div>
 
 	<div class="sidebar-bottom">
-		<div class="section-label muted">Sound</div>
-		<button class="section-toggle" type="button" on:click={() => togglePanel('sound')}>
-			{showSoundPanel ? 'Close sound settings' : 'Manage sound'}
+		<div class="section-label muted">Workspace</div>
+		<button
+			class="section-toggle settings-entry"
+			type="button"
+			data-testid="settings-open"
+			on:click={() => openSettings(settingsActiveSection)}
+		>
+			Open settings
 		</button>
-		{#if showSoundPanel}
-			<div class="card sound">
-				<label class="toggle" for="sound-enabled">
-					<input
-						id="sound-enabled"
-						data-testid="sound-enabled"
-						type="checkbox"
-						checked={$soundSettings.enabled}
-						on:change={(e) => soundSettings.setEnabled(e.target.checked)}
-					/>
-					Completion sound
-				</label>
-				<label>
-					Theme
-					<select
-						data-testid="sound-theme"
-						value={$soundSettings.theme}
-						on:change={(e) => soundSettings.setTheme(e.target.value)}
-					>
-						{#each soundThemes as theme}
-							<option value={theme}>{theme.replace('_', ' ')}</option>
-						{/each}
-					</select>
-				</label>
-				<label>
-					Custom sounds (mp3/wav)
-					<input
-						type="file"
-						accept=".mp3,.wav,audio/mpeg,audio/wav"
-						multiple
-						on:change={uploadCustomSound}
-						disabled={soundBusy}
-					/>
-				</label>
-				<div class="sound-actions">
-					<button type="button" class="ghost tiny" on:click={previewSound}>
-						Test sound
-					</button>
-					<button
-						type="button"
-						class="ghost tiny"
-						on:click={clearCustomSound}
-						disabled={!hasCustomSounds}
-					>
-						Clear custom
-					</button>
-				</div>
-				{#if loadedCustomSoundNames.length}
-					<p class="muted-note">
-						Loaded:
-						{loadedCustomSoundNames.join(', ')}
-					</p>
-				{/if}
-				{#if soundMessage}
-					<p class="ok">{soundMessage}</p>
-				{/if}
-				{#if soundError}
-					<p class="error">{soundError}</p>
-				{/if}
-				<label>
-					Volume
-					<div class="volume">
-						<input
-							data-testid="sound-volume"
-							type="range"
-							min="0"
-							max="100"
-							step="1"
-							value={$soundSettings.volume}
-							style={`--range-pct:${$soundSettings.volume}%`}
-							on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
-						/>
-						<span>{$soundSettings.volume}%</span>
-					</div>
-				</label>
+	</div>
+</nav>
+
+{#if settingsOpen}
+	<button
+		class="settings-backdrop"
+		type="button"
+		aria-label="Close settings"
+		on:click={closeSettings}
+	></button>
+	<div
+		class="settings-window"
+		role="dialog"
+		aria-modal="true"
+		aria-label="Settings"
+		data-testid="settings-window"
+		tabindex="0"
+		on:keydown={handleSettingsDialogKeydown}
+	>
+		<header class="settings-header">
+			<div>
+				<p class="settings-kicker">Workspace settings</p>
+				<h2>Customize tasksync</h2>
 			</div>
-		{/if}
-
-		{#if adminMode && $auth.status === 'authenticated'}
-			<div class="section-label muted">Backup</div>
-			<button class="section-toggle" type="button" on:click={() => togglePanel('backups')}>
-				{showBackupPanel ? 'Close backup settings' : 'Manage backups'}
-			</button>
-			{#if showBackupPanel}
-				<div class="card backup" data-testid="backup-panel">
-					<p class="muted-note">Download a full JSON snapshot of this space, then restore it if needed.</p>
-					<div class="backup-actions">
-						<button type="button" class="ghost" on:click={downloadBackup} disabled={backupBusy}>
-							{backupBusy ? 'Working…' : 'Download backup'}
-						</button>
-						<label class="file-btn">
-							<span>{backupBusy ? 'Working…' : 'Restore backup JSON'}</span>
-							<input
-								type="file"
-								accept=".json,application/json"
-								on:change={restoreBackup}
-								disabled={backupBusy}
-							/>
-						</label>
-					</div>
-					{#if backupMessage}
-						<p class="ok">{backupMessage}</p>
-					{/if}
-					{#if backupError}
-						<p class="error">{backupError}</p>
-					{/if}
-				</div>
-			{/if}
-		{/if}
-
-		<div class="section-label muted">Account</div>
-		<button class="section-toggle" type="button" on:click={() => togglePanel('account')}>
-			{showAccountPanel ? 'Close account settings' : 'Manage account'}
-		</button>
-		{#if showAccountPanel}
-			<div class="card account" data-testid="auth-panel">
-				<label>
-					App theme
-					<select
-						data-testid="ui-theme"
-						value={$uiPreferences.theme}
-						on:change={(e) => uiPreferences.setTheme(e.target.value)}
-					>
-						{#each appThemes as option}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</label>
-			{#if $auth.status === 'loading'}
-				<p class="muted-note">Checking session...</p>
-			{:else if $auth.status === 'authenticated' && $auth.user}
-				<div class="user-head" data-testid="auth-user">
-					<span class="avatar">{avatarFor($auth.user)}</span>
-					<div class="who">
-						<strong>{$auth.user.display}</strong>
-						<span>{$auth.user.email}</span>
-						<span class="meta">{roleLabel($auth.user.role)} · {$auth.user.space_id}</span>
-					</div>
-				</div>
-
-				<div class="account-actions">
-					<button type="button" class="ghost" on:click={() => (showProfileEditor = !showProfileEditor)}>
-						{showProfileEditor ? 'Close profile edit' : 'Edit profile'}
-					</button>
+			<button class="ghost" type="button" on:click={closeSettings}>Close</button>
+		</header>
+		{#if settingsIsMobile && settingsMobileMenu}
+			<div class="settings-mobile-menu" data-testid="settings-mobile-menu">
+				{#each settingsSections as section}
 					<button
 						type="button"
-						class="ghost"
-						on:click={() => {
-							showPasswordEditor = !showPasswordEditor;
-							passwordError = '';
-							passwordMessage = '';
-						}}
+						class={`settings-mobile-item ${settingsActiveSection === section.id ? 'active' : ''}`}
+						data-testid={`settings-section-${section.id}`}
+						on:click={() => selectSettingsSection(section.id)}
 					>
-						{showPasswordEditor ? 'Close password edit' : 'Change password'}
+						<span>{section.label}</span>
+						<small>{section.description}</small>
 					</button>
-					<button type="button" class="ghost danger" data-testid="auth-signout" on:click={signOut}>
-						Sign out
-					</button>
+				{/each}
+			</div>
+		{:else}
+			<div class="settings-shell">
+				<aside class="settings-nav">
+					{#each settingsSections as section}
+						<button
+							type="button"
+							class={`settings-nav-item ${settingsActiveSection === section.id ? 'active' : ''}`}
+							data-testid={`settings-section-${section.id}`}
+							on:click={() => selectSettingsSection(section.id)}
+						>
+							<span>{section.label}</span>
+							<small>{section.description}</small>
+						</button>
+					{/each}
+				</aside>
+				<div class="settings-detail">
+					<div class="settings-detail-head">
+						{#if settingsIsMobile}
+							<button
+								type="button"
+								class="ghost tiny settings-back-btn"
+								on:click={() => (settingsMobileMenu = true)}
+							>
+								Back
+							</button>
+						{/if}
+						<div>
+							<h3>{settingsSectionMeta?.label ?? 'Settings'}</h3>
+							<p class="muted-note">{settingsSectionMeta?.description ?? ''}</p>
+						</div>
+					</div>
+
+					{#if settingsActiveSection === 'lists' && adminMode}
+						<div class="card manager">
+							<label>
+								Name
+								<input
+									type="text"
+									placeholder="List name"
+									bind:value={newListName}
+									on:keydown={(e) => e.key === 'Enter' && createList()}
+								/>
+							</label>
+							<label>
+								Icon (optional)
+								<input
+									type="text"
+									placeholder="emoji"
+									maxlength="24"
+									autocapitalize="off"
+									spellcheck="false"
+									bind:value={newListIcon}
+									on:keydown={(e) => e.key === 'Enter' && createList()}
+								/>
+							</label>
+							<label>
+								Color (optional)
+								<input type="color" bind:value={newListColor} />
+							</label>
+							<button
+								type="button"
+								class="primary"
+								on:click={createList}
+								disabled={busy || !newListName.trim()}
+							>
+								Create list
+							</button>
+							{#if listError}
+								<p class="error">{listError}</p>
+							{/if}
+							<p class="muted-note">
+								Manual order: use ↑ and ↓, then keep list sort set to Manual.
+							</p>
+							<div class="existing">
+								{#each managedListsManual as list, index}
+									<div class="row">
+										<input
+											class="name-input"
+											type="text"
+											placeholder={list.name}
+											bind:value={renameDraft[list.id]}
+											on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+										/>
+										<input
+											class="icon-input"
+											type="text"
+											placeholder={list.icon ?? 'emoji'}
+											maxlength="24"
+											autocapitalize="off"
+											spellcheck="false"
+											bind:value={iconDraft[list.id]}
+											on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+										/>
+										<input
+											class="color-input"
+											type="color"
+											value={colorDraft[list.id] ?? list.color ?? '#3b82f6'}
+											on:input={(e) => (colorDraft[list.id] = e.currentTarget.value)}
+										/>
+										<div class="row-actions">
+											<button
+												type="button"
+												class="ghost tiny"
+												aria-label={`Move ${list.name} up`}
+												title="Move up"
+												on:click={() => moveList(list.id, -1)}
+												disabled={busy || index === 0}
+											>
+												↑
+											</button>
+											<button
+												type="button"
+												class="ghost tiny"
+												aria-label={`Move ${list.name} down`}
+												title="Move down"
+												on:click={() => moveList(list.id, 1)}
+												disabled={busy || index === managedListsManual.length - 1}
+											>
+												↓
+											</button>
+											<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
+												Save
+											</button>
+											<button
+												type="button"
+												class="ghost"
+												on:click={() => deleteList(list.id)}
+												disabled={busy}
+											>
+												Delete
+											</button>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{:else if settingsActiveSection === 'members' && adminMode}
+						<div class="card team">
+							<div class="create-member">
+								<p class="team-helper">Create a member, then toggle list access below.</p>
+								<div class="field-row">
+									<label>
+										Display
+										<input type="text" placeholder="Name" bind:value={newMemberDisplay} />
+									</label>
+									<label>
+										Email
+										<input
+											type="email"
+											placeholder="person@example.com"
+											bind:value={newMemberEmail}
+										/>
+									</label>
+								</div>
+								<div class="field-row">
+									<label>
+										Role
+										<select bind:value={newMemberRole}>
+											<option value="contributor">Contributor</option>
+											<option value="admin">Admin</option>
+										</select>
+									</label>
+									<label>
+										Password
+										<input
+											type="password"
+											placeholder="min 8 chars"
+											autocomplete="new-password"
+											bind:value={newMemberPassword}
+										/>
+									</label>
+									<label>
+										Icon
+										<input type="text" placeholder="AA" maxlength="4" bind:value={newMemberIcon} />
+									</label>
+								</div>
+								<button
+									type="button"
+									class="primary"
+									on:click={createMember}
+									disabled={teamBusy ||
+										!newMemberDisplay.trim() ||
+										!newMemberEmail.trim() ||
+										newMemberPassword.trim().length < 8}
+								>
+									Add member
+								</button>
+							</div>
+
+							{#if grantsLoading}
+								<p class="muted-note">Loading access matrix...</p>
+							{:else}
+								<div class="member-list">
+									{#if teamMembers.length}
+										{#each teamMembers as member}
+											<div class="member-row">
+												<div class="member-head">
+													<span class="avatar small">{avatarFor(member)}</span>
+													<div>
+														<strong>{member.display}</strong>
+														<span>{member.email}</span>
+													</div>
+													<span class="role-chip">{roleLabel(member.role)}</span>
+												</div>
+												<div class="member-tools">
+													<button
+														type="button"
+														class="ghost tiny"
+														disabled={teamBusy}
+														on:click={() => resetMemberPassword(member)}
+													>
+														Reset password
+													</button>
+													<button
+														type="button"
+														class="ghost tiny danger"
+														disabled={!canDeleteMember(member) || teamBusy}
+														on:click={() => deleteMember(member)}
+													>
+														Delete member
+													</button>
+												</div>
+												{#if member.role === 'contributor'}
+													<div class="grant-grid">
+														{#each managedLists as list}
+															<label
+																class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}
+															>
+																<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
+																<span class="grant-controls">
+																	<span class="grant-state"
+																		>{hasGrant(member.user_id, list.id) ? 'On' : 'Off'}</span
+																	>
+																	<input
+																		type="checkbox"
+																		checked={hasGrant(member.user_id, list.id)}
+																		disabled={teamBusy}
+																		on:change={(e) =>
+																			setGrant(member.user_id, list.id, e.currentTarget.checked)}
+																	/>
+																</span>
+															</label>
+														{/each}
+													</div>
+												{/if}
+											</div>
+										{/each}
+									{:else}
+										<p class="muted-note">No other members yet. Add one above.</p>
+									{/if}
+								</div>
+							{/if}
+							{#if teamMessage}
+								<p class="ok">{teamMessage}</p>
+							{/if}
+							{#if teamError}
+								<p class="error">{teamError}</p>
+							{/if}
+						</div>
+					{:else if settingsActiveSection === 'sound'}
+						<div class="card sound">
+							<label class="toggle" for="sound-enabled">
+								<input
+									id="sound-enabled"
+									data-testid="sound-enabled"
+									type="checkbox"
+									checked={$soundSettings.enabled}
+									on:change={(e) => soundSettings.setEnabled(e.target.checked)}
+								/>
+								Completion sound
+							</label>
+							<label>
+								Theme
+								<select
+									data-testid="sound-theme"
+									value={$soundSettings.theme}
+									on:change={(e) => soundSettings.setTheme(e.target.value)}
+								>
+									{#each soundThemes as theme}
+										<option value={theme}>{theme.replace('_', ' ')}</option>
+									{/each}
+								</select>
+							</label>
+							<label>
+								Custom sounds (mp3/wav)
+								<input
+									type="file"
+									accept=".mp3,.wav,audio/mpeg,audio/wav"
+									multiple
+									on:change={uploadCustomSound}
+									disabled={soundBusy}
+								/>
+							</label>
+							<div class="sound-actions">
+								<button type="button" class="ghost tiny" on:click={previewSound}>
+									Test sound
+								</button>
+								<button
+									type="button"
+									class="ghost tiny"
+									on:click={clearCustomSound}
+									disabled={!hasCustomSounds}
+								>
+									Clear custom
+								</button>
+							</div>
+							{#if loadedCustomSoundNames.length}
+								<p class="muted-note">
+									Loaded:
+									{loadedCustomSoundNames.join(', ')}
+								</p>
+							{/if}
+							{#if soundMessage}
+								<p class="ok">{soundMessage}</p>
+							{/if}
+							{#if soundError}
+								<p class="error">{soundError}</p>
+							{/if}
+							<label>
+								Volume
+								<div class="volume">
+									<input
+										data-testid="sound-volume"
+										type="range"
+										min="0"
+										max="100"
+										step="1"
+										value={$soundSettings.volume}
+										style={`--range-pct:${$soundSettings.volume}%`}
+										on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+									/>
+									<span>{$soundSettings.volume}%</span>
+								</div>
+							</label>
+						</div>
+					{:else if settingsActiveSection === 'backups' && adminMode && $auth.status === 'authenticated'}
+						<div class="card backup" data-testid="backup-panel">
+							<p class="muted-note">
+								Download a full JSON snapshot of this space, then restore it if needed.
+							</p>
+							<div class="backup-actions">
+								<button type="button" class="ghost" on:click={downloadBackup} disabled={backupBusy}>
+									{backupBusy ? 'Working…' : 'Download backup'}
+								</button>
+								<label class="file-btn">
+									<span>{backupBusy ? 'Working…' : 'Restore backup JSON'}</span>
+									<input
+										type="file"
+										accept=".json,application/json"
+										on:change={restoreBackup}
+										disabled={backupBusy}
+									/>
+								</label>
+							</div>
+							{#if backupMessage}
+								<p class="ok">{backupMessage}</p>
+							{/if}
+							{#if backupError}
+								<p class="error">{backupError}</p>
+							{/if}
+						</div>
+					{:else}
+						<div class="card account" data-testid="auth-panel">
+							<label>
+								App theme
+								<select
+									data-testid="ui-theme"
+									value={$uiPreferences.theme}
+									on:change={(e) => uiPreferences.setTheme(e.target.value)}
+								>
+									{#each appThemes as option}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							</label>
+							{#if $auth.status === 'loading'}
+								<p class="muted-note">Checking session...</p>
+							{:else if $auth.status === 'authenticated' && $auth.user}
+								<div class="user-head" data-testid="auth-user">
+									<span class="avatar">{avatarFor($auth.user)}</span>
+									<div class="who">
+										<strong>{$auth.user.display}</strong>
+										<span>{$auth.user.email}</span>
+										<span class="meta">{roleLabel($auth.user.role)} · {$auth.user.space_id}</span>
+									</div>
+								</div>
+								<div class="account-actions">
+									<button
+										type="button"
+										class="ghost"
+										on:click={() => (showProfileEditor = !showProfileEditor)}
+									>
+										{showProfileEditor ? 'Close profile edit' : 'Edit profile'}
+									</button>
+									<button
+										type="button"
+										class="ghost"
+										on:click={() => {
+											showPasswordEditor = !showPasswordEditor;
+											passwordError = '';
+											passwordMessage = '';
+										}}
+									>
+										{showPasswordEditor ? 'Close password edit' : 'Change password'}
+									</button>
+									<button
+										type="button"
+										class="ghost danger"
+										data-testid="auth-signout"
+										on:click={signOut}
+									>
+										Sign out
+									</button>
+								</div>
+								{#if showProfileEditor}
+									<div class="profile-editor">
+										<label>
+											Display
+											<input type="text" bind:value={profileDisplay} />
+										</label>
+										<label>
+											Icon
+											<input
+												type="text"
+												placeholder="emoji or initials"
+												maxlength="4"
+												bind:value={profileIcon}
+											/>
+										</label>
+										<button
+											type="button"
+											class="primary"
+											on:click={saveProfile}
+											disabled={profileBusy || !profileDisplay.trim()}
+										>
+											{profileBusy ? 'Saving...' : 'Save profile'}
+										</button>
+										{#if profileMessage}
+											<p class="ok">{profileMessage}</p>
+										{/if}
+										{#if profileError}
+											<p class="error">{profileError}</p>
+										{/if}
+									</div>
+								{/if}
+								{#if showPasswordEditor}
+									<div class="profile-editor">
+										<label>
+											Current password
+											<input
+												type="password"
+												autocomplete="current-password"
+												bind:value={currentPasswordDraft}
+											/>
+										</label>
+										<label>
+											New password
+											<input
+												type="password"
+												placeholder="min 8 chars"
+												autocomplete="new-password"
+												bind:value={newPasswordDraft}
+											/>
+										</label>
+										<label>
+											Confirm new password
+											<input
+												type="password"
+												placeholder="repeat new password"
+												autocomplete="new-password"
+												bind:value={confirmPasswordDraft}
+											/>
+										</label>
+										<button
+											type="button"
+											class="primary"
+											on:click={savePassword}
+											disabled={passwordBusy ||
+												!currentPasswordDraft.trim() ||
+												!newPasswordDraft.trim()}
+										>
+											{passwordBusy ? 'Updating...' : 'Update password'}
+										</button>
+										{#if passwordMessage}
+											<p class="ok">{passwordMessage}</p>
+										{/if}
+										{#if passwordError}
+											<p class="error">{passwordError}</p>
+										{/if}
+									</div>
+								{/if}
+							{:else}
+								<label>
+									Email
+									<input
+										type="email"
+										placeholder="you@example.com"
+										autocomplete="username"
+										data-testid="auth-email"
+										bind:value={loginEmail}
+									/>
+								</label>
+								<label>
+									Password
+									<input
+										type="password"
+										placeholder="password"
+										autocomplete="current-password"
+										data-testid="auth-password"
+										bind:value={loginPassword}
+										on:keydown={(e) => e.key === 'Enter' && signIn()}
+									/>
+								</label>
+								<label>
+									Space
+									<input
+										type="text"
+										placeholder="s1"
+										data-testid="auth-space"
+										bind:value={loginSpaceId}
+									/>
+								</label>
+								<button
+									type="button"
+									class="primary"
+									data-testid="auth-signin"
+									disabled={authBusy || !loginEmail.trim() || !loginPassword.trim()}
+									on:click={signIn}
+								>
+									{authBusy ? 'Signing in...' : 'Sign in'}
+								</button>
+								{#if $auth.error}
+									<p class="error">{$auth.error}</p>
+								{/if}
+							{/if}
+						</div>
+					{/if}
 				</div>
-
-				{#if showProfileEditor}
-					<div class="profile-editor">
-						<label>
-							Display
-							<input type="text" bind:value={profileDisplay} />
-						</label>
-						<label>
-							Icon
-							<input type="text" placeholder="emoji or initials" maxlength="4" bind:value={profileIcon} />
-						</label>
-						<button
-							type="button"
-							class="primary"
-							on:click={saveProfile}
-							disabled={profileBusy || !profileDisplay.trim()}
-						>
-							{profileBusy ? 'Saving...' : 'Save profile'}
-						</button>
-						{#if profileMessage}
-							<p class="ok">{profileMessage}</p>
-						{/if}
-						{#if profileError}
-							<p class="error">{profileError}</p>
-						{/if}
-					</div>
-				{/if}
-
-				{#if showPasswordEditor}
-					<div class="profile-editor">
-						<label>
-							Current password
-							<input type="password" autocomplete="current-password" bind:value={currentPasswordDraft} />
-						</label>
-						<label>
-							New password
-							<input
-								type="password"
-								placeholder="min 8 chars"
-								autocomplete="new-password"
-								bind:value={newPasswordDraft}
-							/>
-						</label>
-						<label>
-							Confirm new password
-							<input
-								type="password"
-								placeholder="repeat new password"
-								autocomplete="new-password"
-								bind:value={confirmPasswordDraft}
-							/>
-						</label>
-						<button
-							type="button"
-							class="primary"
-							on:click={savePassword}
-							disabled={passwordBusy || !currentPasswordDraft.trim() || !newPasswordDraft.trim()}
-						>
-							{passwordBusy ? 'Updating...' : 'Update password'}
-						</button>
-						{#if passwordMessage}
-							<p class="ok">{passwordMessage}</p>
-						{/if}
-						{#if passwordError}
-							<p class="error">{passwordError}</p>
-						{/if}
-					</div>
-				{/if}
-			{:else}
-				<label>
-					Email
-					<input
-						type="email"
-						placeholder="you@example.com"
-						autocomplete="username"
-						data-testid="auth-email"
-						bind:value={loginEmail}
-					/>
-				</label>
-				<label>
-					Password
-					<input
-						type="password"
-						placeholder="password"
-						autocomplete="current-password"
-						data-testid="auth-password"
-						bind:value={loginPassword}
-						on:keydown={(e) => e.key === 'Enter' && signIn()}
-					/>
-				</label>
-				<label>
-					Space
-					<input type="text" placeholder="s1" data-testid="auth-space" bind:value={loginSpaceId} />
-				</label>
-				<button
-					type="button"
-					class="primary"
-					data-testid="auth-signin"
-					disabled={authBusy || !loginEmail.trim() || !loginPassword.trim()}
-					on:click={signIn}
-				>
-					{authBusy ? 'Signing in...' : 'Sign in'}
-				</button>
-				{#if $auth.error}
-					<p class="error">{$auth.error}</p>
-				{/if}
-			{/if}
 			</div>
 		{/if}
 	</div>
-</nav>
+{/if}
 
 <style>
 	.sidebar {
@@ -1310,7 +1433,10 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		text-decoration: none;
 		padding: 8px 10px;
 		border-radius: 10px;
-		transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+		transition:
+			background 120ms ease,
+			color 120ms ease,
+			transform 120ms ease;
 	}
 
 	a:hover {
@@ -1361,12 +1487,185 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		cursor: pointer;
 	}
 
+	.section-toggle.settings-entry {
+		background:
+			radial-gradient(circle at 18% 24%, rgba(56, 189, 248, 0.26), transparent 36%),
+			linear-gradient(140deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.95));
+		border-color: color-mix(in oklab, var(--surface-accent) 58%, var(--border-2) 42%);
+		box-shadow: 0 10px 26px rgba(2, 6, 23, 0.42);
+		font-weight: 700;
+		letter-spacing: 0.01em;
+	}
+
+	.settings-backdrop {
+		position: fixed;
+		inset: 0;
+		border: none;
+		background:
+			radial-gradient(circle at 14% 12%, rgba(37, 99, 235, 0.2), transparent 38%),
+			radial-gradient(circle at 82% 22%, rgba(14, 165, 233, 0.15), transparent 45%),
+			rgba(2, 6, 23, 0.68);
+		backdrop-filter: blur(6px);
+		z-index: 41;
+	}
+
+	.settings-window {
+		position: fixed;
+		inset: clamp(16px, 3.2vw, 34px);
+		z-index: 42;
+		border-radius: 22px;
+		border: 1px solid color-mix(in oklab, var(--border-1) 72%, white 28%);
+		background:
+			radial-gradient(circle at 8% 10%, rgba(59, 130, 246, 0.18), transparent 34%),
+			radial-gradient(circle at 92% 0%, rgba(56, 189, 248, 0.12), transparent 28%),
+			color-mix(in oklab, var(--surface-2) 92%, black 8%);
+		box-shadow: 0 30px 80px rgba(2, 6, 23, 0.58);
+		padding: clamp(12px, 2vw, 20px);
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		outline: none;
+		animation: settings-enter 160ms ease-out;
+	}
+
+	@keyframes settings-enter {
+		from {
+			opacity: 0;
+			transform: translateY(10px) scale(0.99);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
+	}
+
+	.settings-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.settings-kicker {
+		margin: 0;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: #8fb1d6;
+	}
+
+	.settings-header h2 {
+		margin: 2px 0 0;
+		font-size: clamp(20px, 2.6vw, 30px);
+		letter-spacing: -0.03em;
+	}
+
+	.settings-shell {
+		flex: 1;
+		min-height: 0;
+		display: grid;
+		grid-template-columns: minmax(192px, 240px) 1fr;
+		gap: 12px;
+	}
+
+	.settings-nav {
+		border: 1px solid var(--border-1);
+		border-radius: 16px;
+		background: color-mix(in oklab, var(--surface-1) 92%, white 8%);
+		padding: 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		overflow-y: auto;
+	}
+
+	.settings-nav-item,
+	.settings-mobile-item {
+		border: 1px solid transparent;
+		background: transparent;
+		color: var(--app-text);
+		border-radius: 12px;
+		padding: 10px 12px;
+		cursor: pointer;
+		text-align: left;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.settings-nav-item span,
+	.settings-mobile-item span {
+		font-size: 14px;
+		font-weight: 640;
+	}
+
+	.settings-nav-item small,
+	.settings-mobile-item small {
+		font-size: 11px;
+		color: #91a3bf;
+		line-height: 1.35;
+	}
+
+	.settings-nav-item.active,
+	.settings-mobile-item.active,
+	.settings-nav-item:hover,
+	.settings-mobile-item:hover {
+		border-color: color-mix(in oklab, var(--surface-accent) 60%, var(--border-2) 40%);
+		background:
+			linear-gradient(
+				120deg,
+				color-mix(in oklab, var(--surface-accent) 28%, transparent),
+				transparent 88%
+			),
+			color-mix(in oklab, var(--surface-1) 90%, white 10%);
+	}
+
+	.settings-detail {
+		border: 1px solid color-mix(in oklab, var(--border-1) 70%, white 30%);
+		border-radius: 16px;
+		background: color-mix(in oklab, var(--surface-1) 95%, white 5%);
+		padding: clamp(10px, 2vw, 16px);
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.settings-detail-head {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	.settings-detail-head h3 {
+		margin: 0;
+		font-size: clamp(18px, 2.1vw, 24px);
+	}
+
+	.settings-mobile-menu {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		overflow-y: auto;
+		padding-right: 2px;
+	}
+
+	.settings-mobile-item {
+		padding: 14px;
+		border-color: var(--border-1);
+		background: color-mix(in oklab, var(--surface-1) 94%, white 6%);
+	}
+
+	.settings-back-btn {
+		align-self: flex-start;
+	}
+
 	.card {
 		border: 1px solid var(--border-1);
 		border-radius: 14px;
 		padding: 10px;
 		background: color-mix(in oklab, var(--surface-1) 93%, white 7%);
-		box-shadow: 0 6px 16px rgba(2,6,23,0.24);
+		box-shadow: 0 6px 16px rgba(2, 6, 23, 0.24);
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
@@ -1806,6 +2105,38 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 		.team .create-member {
 			padding: 7px;
+		}
+
+		.settings-window {
+			inset: 0;
+			border-radius: 0;
+			padding: 12px 10px 14px;
+			border: none;
+		}
+
+		.settings-header {
+			align-items: center;
+		}
+
+		.settings-header h2 {
+			font-size: 24px;
+		}
+
+		.settings-shell {
+			grid-template-columns: 1fr;
+		}
+
+		.settings-nav {
+			display: none;
+		}
+
+		.settings-detail {
+			border-radius: 14px;
+			padding: 10px;
+		}
+
+		.settings-mobile-menu {
+			padding-top: 4px;
 		}
 	}
 </style>

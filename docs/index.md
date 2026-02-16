@@ -6,6 +6,7 @@ Start here, then follow links. The goal is progressive disclosure: small entry p
 
 ## Core docs
 
+- Contributions: `CONTRIBUTING.md`
 - Architecture: `ARCHITECTURE.md`
 - Frontend structure & boundaries: `FRONTEND.md`
 - Reliability & performance budgets: `RELIABILITY.md`
