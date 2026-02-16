@@ -107,7 +107,7 @@
 	<div class="actions">
 		<div class="sorter">
 			<label>
-				<span>Sort by</span>
+				<span>Sort</span>
 				<select
 					value={$uiPreferences.listSort.mode}
 					data-testid="list-sort-mode"
@@ -119,7 +119,7 @@
 					<option value="due_date">Due date</option>
 				</select>
 			</label>
-			<label>
+			<label class="order-control">
 				<span>Order</span>
 				<select
 					value={$uiPreferences.listSort.direction}
@@ -181,16 +181,23 @@
 	.page-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 18px;
+		align-items: flex-start;
+		margin-bottom: 12px;
 		gap: 12px;
 	}
 
 	.actions {
 		display: flex;
+		gap: 8px;
 		align-items: center;
 		justify-content: flex-end;
 		margin-left: auto;
+	}
+
+	.actions .sorter {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
 	}
 
 	.sorter label {
@@ -314,9 +321,9 @@
 	}
 
 	.mobile-add button {
-		background: linear-gradient(180deg, #1e40af, #1d4ed8);
-		color: white;
-		border: 1px solid rgba(147, 197, 253, 0.4);
+		background: color-mix(in oklab, var(--surface-accent) 82%, var(--surface-1) 18%);
+		color: var(--app-text);
+		border: 1px solid color-mix(in oklab, var(--surface-accent) 58%, var(--border-2) 42%);
 		border-radius: 12px;
 		padding: 0 16px;
 		white-space: nowrap;
@@ -324,7 +331,7 @@
 		height: 46px;
 		font-weight: 650;
 		cursor: pointer;
-		box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+		box-shadow: var(--ring-shadow);
 	}
 
 	.mobile-add button:hover {
@@ -335,15 +342,20 @@
 
 	@media (max-width: 900px) {
 		.page-header {
-			margin-bottom: 12px;
+			flex-direction: row;
+			align-items: center;
 			gap: 8px;
+		}
+
+		.actions {
+			margin-left: 0;
 		}
 
 		.stack {
 			padding-bottom: 88px;
 		}
 
-		.sorter span {
+		.order-control {
 			display: none;
 		}
 

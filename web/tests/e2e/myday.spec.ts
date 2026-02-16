@@ -20,7 +20,11 @@ const waitForTaskInIdb = async (page: Page, title: string) => {
 							// Keep fallback scope.
 						}
 					}
-					const sanitized = scope.toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 80) || 'legacy';
+					const sanitized =
+						scope
+							.toLowerCase()
+							.replace(/[^a-z0-9_-]/g, '_')
+							.slice(0, 80) || 'legacy';
 					return `tasksync_${sanitized}`;
 				};
 				const dbName = resolveScopedDbName();
@@ -63,19 +67,27 @@ const ensureSoundPanelOpen = async (page: Page) => {
 	if (await soundEnabled.count()) {
 		return;
 	}
-	const manageSound = page.getByRole('button', { name: 'Manage sound' });
+	const openSettings = page.getByTestId('settings-open');
+	const soundSection = page.getByTestId('settings-section-sound');
 	await expect
 		.poll(
-			async () => (await soundEnabled.count()) + (await manageSound.count()),
+			async () =>
+				(await soundEnabled.count()) +
+				(await openSettings.count()) +
+				(await page.getByTestId('settings-window').count()),
 			{ timeout: 10_000 }
 		)
 		.toBeGreaterThan(0);
 	if (await soundEnabled.count()) {
 		return;
 	}
-	await expect(manageSound.first()).toBeVisible();
-	await manageSound.first().scrollIntoViewIfNeeded();
-	await manageSound.first().click();
+	if (!(await page.getByTestId('settings-window').count())) {
+		await expect(openSettings.first()).toBeVisible();
+		await openSettings.first().scrollIntoViewIfNeeded();
+		await openSettings.first().click();
+	}
+	await expect(soundSection.first()).toBeVisible();
+	await soundSection.first().click();
 	await expect(soundEnabled).toHaveCount(1);
 };
 
@@ -141,7 +153,7 @@ test.describe('My Day', () => {
 		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
 		await expect(page.getByLabel('Sort direction')).toHaveValue('desc');
 		const plannedSection = page.locator('section.block', {
-			has: page.locator('.section-title', { hasText: 'Planned' })
+			has: page.locator('.section-title', { hasText: 'Planned' }),
 		});
 		const plannedRows = plannedSection.getByTestId('task-row');
 		const sortedRows = plannedRows.filter({ hasText: marker });
@@ -151,7 +163,9 @@ test.describe('My Day', () => {
 		await page.reload();
 		await expect(page.getByLabel('Sort tasks')).toHaveValue('alpha');
 		await expect(page.getByLabel('Sort direction')).toHaveValue('desc');
-		await expect(plannedSection.getByTestId('task-row').filter({ hasText: marker }).nth(0)).toContainText(titleB);
+		await expect(
+			plannedSection.getByTestId('task-row').filter({ hasText: marker }).nth(0)
+		).toContainText(titleB);
 	});
 
 	test('persists sound settings changes across reload', async ({ page }) => {
@@ -202,7 +216,9 @@ test.describe('List view', () => {
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 	});
 
-	test('supports due-date sort with asc/desc order and keeps preference after reload', async ({ page }) => {
+	test('supports due-date sort with asc/desc order and keeps preference after reload', async ({
+		page,
+	}) => {
 		await resetClientState(page);
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
@@ -238,7 +254,7 @@ test.describe('List view', () => {
 		await page.getByTestId('list-sort-direction').selectOption('asc');
 
 		const pendingSection = page.locator('section.block', {
-			has: page.locator('.section-title', { hasText: 'Pending' })
+			has: page.locator('.section-title', { hasText: 'Pending' }),
 		});
 		const pendingRows = pendingSection.getByTestId('task-row').filter({ hasText: marker });
 		await expect(pendingRows).toHaveCount(3);
@@ -261,6 +277,46 @@ test.describe('List view', () => {
 });
 
 test.describe('Navigation', () => {
+	test('hides add button while settings modal is open', async ({ page }) => {
+		await resetClientState(page);
+		const addInput = page.getByTestId('new-task-input');
+		const addButton = page.getByTestId('new-task-submit');
+		await expect(addInput).toBeVisible();
+		await expect(addButton).toBeVisible();
+
+		await page.getByTestId('settings-open').click();
+		await expect(page.getByTestId('settings-window')).toBeVisible();
+		await expect(addInput).toBeHidden();
+		await expect(addButton).toBeHidden();
+
+		await page
+			.getByTestId('settings-window')
+			.getByRole('button', { name: 'Close', exact: true })
+			.click();
+		await expect(page.getByTestId('settings-window')).toHaveCount(0);
+		await expect(addInput).toBeVisible();
+		await expect(addButton).toBeVisible();
+	});
+
+	test('hides add field and button while mobile sidebar drawer is open', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await resetClientState(page);
+		const addInput = page.getByTestId('new-task-input');
+		const addButton = page.getByTestId('new-task-submit');
+		await expect(addInput).toBeVisible();
+		await expect(addButton).toBeVisible();
+
+		await page.getByRole('button', { name: 'Toggle navigation' }).click();
+		await expect(page.getByTestId('sidebar-drawer')).toHaveClass(/open/);
+		await expect(addInput).toBeHidden();
+		await expect(addButton).toBeHidden();
+
+		await page.getByRole('button', { name: 'Close navigation' }).dispatchEvent('click');
+		await expect(page.getByTestId('sidebar-drawer')).not.toHaveClass(/open/);
+		await expect(addInput).toBeVisible();
+		await expect(addButton).toBeVisible();
+	});
+
 	test('keeps mobile sidebar open when pinned', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await resetClientState(page);
