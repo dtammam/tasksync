@@ -16,7 +16,6 @@ export let navPinned = false;
 
 const dispatch = createEventDispatcher();
 
-let showManager = false;
 let newListName = '';
 let newListIcon = '';
 let newListColor = '#3b82f6';
@@ -48,10 +47,8 @@ let confirmPasswordDraft = '';
 let passwordMessage = '';
 let passwordError = '';
 
-let showTeam = false;
-let showSoundPanel = false;
-let showBackupPanel = false;
-let showAccountPanel = true;
+let showSettingsModal = false;
+let activeSettingsPanel = 'account';
 let teamBusy = false;
 let teamError = '';
 let teamMessage = '';
@@ -211,9 +208,18 @@ const normalizeListIcon = (raw) => {
 	return Array.from(trimmed).slice(0, 4).join('') || undefined;
 };
 
-const togglePanel = (panel) => {
-	const current = $uiPreferences.sidebarPanels?.[panel] ?? false;
-	uiPreferences.setPanel(panel, !current);
+const openSettingsModal = (panel = 'account') => {
+	showSettingsModal = true;
+	activeSettingsPanel = panel;
+};
+
+const closeSettingsModal = () => {
+	showSettingsModal = false;
+};
+
+const selectSettingsPanel = (panel) => {
+	activeSettingsPanel = panel;
+	uiPreferences.setPanel(panel, true);
 };
 
 const backupFileName = (spaceId, exportedAtTs) => {
@@ -640,11 +646,6 @@ $: if (!adminScope && loadedAdminScope) {
 	teamMessage = '';
 }
 
-$: showManager = !!$uiPreferences.sidebarPanels?.lists;
-$: showTeam = !!$uiPreferences.sidebarPanels?.members;
-$: showSoundPanel = !!$uiPreferences.sidebarPanels?.sound;
-$: showBackupPanel = !!$uiPreferences.sidebarPanels?.backups;
-$: showAccountPanel = !!$uiPreferences.sidebarPanels?.account;
 $: loadedCustomSoundNames = customSoundNames($soundSettings);
 $: hasCustomSounds =
 	loadedCustomSoundNames.length > 0 ||
@@ -719,12 +720,39 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 			{/each}
 		{/if}
 
-		{#if adminMode}
-			<div class="section-label muted">Lists</div>
-			<button class="section-toggle" type="button" on:click={() => togglePanel('lists')}>
-				{showManager ? 'Close list manager' : 'Manage lists'}
-			</button>
-			{#if showManager}
+
+	</div>
+
+	<div class="sidebar-bottom">
+		<button
+			type="button"
+			class="settings-launch"
+			data-testid="open-settings"
+			on:click={() => openSettingsModal('account')}
+		>
+			Settings
+		</button>
+	</div>
+
+	{#if showSettingsModal}
+		<div class="settings-overlay" role="presentation" on:click={(e) => e.target === e.currentTarget && closeSettingsModal()}>
+			<div class="settings-modal" role="dialog" aria-modal="true" aria-label="Preferences" data-testid="settings-modal">
+				<div class="settings-header">
+					<h2>Preferences</h2>
+					<button type="button" class="ghost tiny" data-testid="close-settings" on:click={closeSettingsModal}>Close</button>
+				</div>
+				<div class="settings-content">
+					<nav class="settings-nav" aria-label="Settings panels">
+						<button type="button" class:active={activeSettingsPanel === 'account'} on:click={() => selectSettingsPanel('account')}>Account</button>
+						<button type="button" class:active={activeSettingsPanel === 'sound'} on:click={() => selectSettingsPanel('sound')}>Sound</button>
+						{#if adminMode}
+							<button type="button" class:active={activeSettingsPanel === 'lists'} on:click={() => selectSettingsPanel('lists')}>Lists</button>
+							<button type="button" class:active={activeSettingsPanel === 'members'} on:click={() => selectSettingsPanel('members')}>Members</button>
+							<button type="button" class:active={activeSettingsPanel === 'backups'} on:click={() => selectSettingsPanel('backups')}>Backups</button>
+						{/if}
+					</nav>
+					<section class="settings-panel">
+						{#if activeSettingsPanel === 'lists' && adminMode}
 				<div class="card manager">
 					<label>
 						Name
@@ -821,13 +849,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 						{/each}
 					</div>
 				</div>
-			{/if}
-
-			<div class="section-label muted">Members</div>
-			<button class="section-toggle" type="button" on:click={() => togglePanel('members')}>
-				{showTeam ? 'Close member manager' : 'Manage members'}
-			</button>
-			{#if showTeam}
+						{:else if activeSettingsPanel === 'members' && adminMode}
 				<div class="card team">
 					<div class="create-member">
 						<p class="team-helper">Create a member, then toggle list access below.</p>
@@ -944,16 +966,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 						<p class="error">{teamError}</p>
 					{/if}
 				</div>
-			{/if}
-		{/if}
-	</div>
-
-	<div class="sidebar-bottom">
-		<div class="section-label muted">Sound</div>
-		<button class="section-toggle" type="button" on:click={() => togglePanel('sound')}>
-			{showSoundPanel ? 'Close sound settings' : 'Manage sound'}
-		</button>
-		{#if showSoundPanel}
+						{:else if activeSettingsPanel === 'sound'}
 			<div class="card sound">
 				<label class="toggle" for="sound-enabled">
 					<input
@@ -1029,14 +1042,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 					</div>
 				</label>
 			</div>
-		{/if}
-
-		{#if adminMode && $auth.status === 'authenticated'}
-			<div class="section-label muted">Backup</div>
-			<button class="section-toggle" type="button" on:click={() => togglePanel('backups')}>
-				{showBackupPanel ? 'Close backup settings' : 'Manage backups'}
-			</button>
-			{#if showBackupPanel}
+						{:else if activeSettingsPanel === 'backups' && adminMode && $auth.status === 'authenticated'}
 				<div class="card backup" data-testid="backup-panel">
 					<p class="muted-note">Download a full JSON snapshot of this space, then restore it if needed.</p>
 					<div class="backup-actions">
@@ -1060,14 +1066,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 						<p class="error">{backupError}</p>
 					{/if}
 				</div>
-			{/if}
-		{/if}
-
-		<div class="section-label muted">Account</div>
-		<button class="section-toggle" type="button" on:click={() => togglePanel('account')}>
-			{showAccountPanel ? 'Close account settings' : 'Manage account'}
-		</button>
-		{#if showAccountPanel}
+						{:else}
 			<div class="card account" data-testid="auth-panel">
 				<label>
 					App theme
@@ -1105,7 +1104,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 							passwordError = '';
 							passwordMessage = '';
 						}}
-					>
+						>
 						{showPasswordEditor ? 'Close password edit' : 'Change password'}
 					</button>
 					<button type="button" class="ghost danger" data-testid="auth-signout" on:click={signOut}>
@@ -1220,8 +1219,12 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 				{/if}
 			{/if}
 			</div>
-		{/if}
-	</div>
+						{/if}
+					</section>
+				</div>
+			</div>
+		</div>
+	{/if}
 </nav>
 
 <style>
@@ -1231,7 +1234,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		background: var(--surface-2);
 		border-right: 1px solid var(--border-1);
 		color: var(--app-text);
-		padding: 14px 12px;
+		padding: 14px 12px calc(14px + env(safe-area-inset-bottom) + 92px);
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
@@ -1239,6 +1242,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		position: sticky;
 		top: 0;
 		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 		box-sizing: border-box;
 	}
 
@@ -1254,7 +1258,88 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		flex-direction: column;
 		gap: 6px;
 		padding-top: 10px;
+		padding-bottom: calc(env(safe-area-inset-bottom) + 28px);
 		border-top: 1px solid rgba(71, 85, 105, 0.35);
+	}
+
+	.settings-launch {
+		width: 100%;
+		border-radius: 10px;
+		padding: 10px 12px;
+		border: 1px solid var(--border-1);
+		background: var(--surface-1);
+		color: var(--app-text);
+		font-weight: 600;
+	}
+
+	.settings-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgb(15 23 42 / 56%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 16px;
+		z-index: 40;
+	}
+
+	.settings-modal {
+		width: min(980px, calc(100vw - 32px));
+		height: min(760px, calc(100vh - 32px));
+		background: var(--surface-1);
+		border: 1px solid var(--border-1);
+		border-radius: 14px;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.settings-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 14px 16px;
+		border-bottom: 1px solid var(--border-1);
+	}
+
+	.settings-header h2 {
+		margin: 0;
+		font-size: 1.25rem;
+	}
+
+	.settings-content {
+		display: grid;
+		grid-template-columns: 220px minmax(0, 1fr);
+		flex: 1;
+		min-height: 0;
+	}
+
+	.settings-nav {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 12px 10px;
+		border-right: 1px solid var(--border-1);
+		overflow-y: auto;
+	}
+
+	.settings-nav button {
+		text-align: left;
+		padding: 8px 10px;
+		border-radius: 8px;
+		border: 1px solid transparent;
+		background: transparent;
+		color: var(--app-text);
+	}
+
+	.settings-nav button.active {
+		background: var(--surface-2);
+		border-color: var(--border-1);
+	}
+
+	.settings-panel {
+		padding: 12px;
+		overflow-y: auto;
 	}
 
 	.title-row {
@@ -1786,6 +1871,41 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		color: #86efac;
 		font-size: 12px;
 		margin: 0;
+	}
+
+	@media (max-width: 900px) {
+		.settings-overlay {
+			padding: 12px;
+		}
+
+		.settings-modal {
+			width: min(920px, calc(100vw - 24px));
+			height: min(720px, calc(100vh - 24px));
+			border-radius: 12px;
+		}
+
+		.settings-content {
+			grid-template-columns: 120px minmax(0, 1fr);
+		}
+
+		.settings-nav {
+			border-right: 1px solid var(--border-1);
+			border-bottom: 0;
+			flex-direction: column;
+			overflow-y: auto;
+			overflow-x: hidden;
+			padding: 10px 8px;
+		}
+
+		.settings-nav button {
+			white-space: normal;
+			font-size: 0.95rem;
+			padding: 8px;
+		}
+
+		.settings-panel {
+			padding: 10px;
+		}
 	}
 
 	@media (max-width: 900px) {
