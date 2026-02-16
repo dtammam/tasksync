@@ -19,6 +19,7 @@
 	const NAV_PIN_KEY = 'tasksync:nav-pinned';
 	let navOpen = false;
 	let navPinned = false;
+	let settingsDialogOpen = false;
 	let appReady = false;
 	let syncInFlight = null;
 	let syncCoordinator = null;
@@ -35,7 +36,15 @@
 		navOpen = !navOpen;
 	};
 	const closeNav = () => {
+		if (settingsDialogOpen) return;
 		if (!navPinned) navOpen = false;
+	};
+
+	const handleSettingsOpenChange = (event) => {
+		settingsDialogOpen = !!event?.detail?.open;
+		if (settingsDialogOpen) {
+			navOpen = true;
+		}
 	};
 
 	const savePinned = (pinned) => {
@@ -306,12 +315,17 @@
 </svelte:head>
 
 <div
-	class={`app-shell ${navPinned && navOpen ? 'nav-split' : ''}`}
+	class={`app-shell ${navPinned && navOpen ? 'nav-split' : ''} ${settingsDialogOpen ? 'settings-open' : ''}`}
 	data-testid="app-shell"
 	data-ready={appReady ? 'true' : 'false'}
+	data-settings-open={settingsDialogOpen ? 'true' : 'false'}
 >
-	<div class={`sidebar-drawer ${navOpen ? 'open' : ''}`} data-testid="sidebar-drawer">
-		<Sidebar navPinned={navPinned} on:togglePin={(e) => savePinned(e.detail.pinned)} />
+	<div class={`sidebar-drawer ${navOpen ? 'open' : ''} ${settingsDialogOpen ? 'settings-open' : ''}`} data-testid="sidebar-drawer">
+		<Sidebar
+			navPinned={navPinned}
+			on:togglePin={(e) => savePinned(e.detail.pinned)}
+			on:settingsOpenChange={handleSettingsOpenChange}
+		/>
 	</div>
 	{#if navOpen && !navPinned}
 		<button class="drawer-backdrop" type="button" aria-label="Close navigation" on:click={closeNav}></button>
@@ -531,6 +545,10 @@
 		background-clip: content-box;
 	}
 
+	:global(.app-shell.settings-open [data-testid='new-task-submit']) {
+		display: none;
+	}
+
 	.app-shell {
 		--sidebar-offset: 240px;
 		display: grid;
@@ -675,6 +693,16 @@
 		.app-shell.nav-split { --sidebar-offset: min(208px, 58vw); grid-template-columns: min(208px, 58vw) 1fr; }
 		.app-shell.nav-split .sidebar-drawer { position: sticky; inset: auto; width: 100%; transform: none; transition: none; box-shadow: none; pointer-events: auto; }
 		.app-shell.nav-split main { padding: 16px 12px 24px; }
+		.app-shell.settings-open { --sidebar-offset: 0px; grid-template-columns: 1fr; }
+		.app-shell.settings-open .sidebar-drawer {
+			position: fixed;
+			inset: 0;
+			width: 100vw;
+			transform: none;
+			transition: none;
+			box-shadow: none;
+			pointer-events: auto;
+		}
 		main { padding: 18px 16px 28px; }
 		.app-header { margin-bottom: 12px; }
 		.nav-toggle { display: inline-flex; align-items: center; justify-content: center; }

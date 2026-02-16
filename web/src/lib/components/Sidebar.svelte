@@ -221,6 +221,12 @@
 		}
 	};
 
+	const setSettingsOpen = (nextOpen) => {
+		if (settingsOpen === nextOpen) return;
+		settingsOpen = nextOpen;
+		dispatch('settingsOpenChange', { open: settingsOpen });
+	};
+
 	const openSettings = (section) => {
 		updateSettingsViewport();
 		settingsActiveSection = pickSettingsSection(
@@ -229,11 +235,11 @@
 			'account'
 		);
 		settingsMobileMenu = settingsIsMobile;
-		settingsOpen = true;
+		setSettingsOpen(true);
 	};
 
 	const closeSettings = () => {
-		settingsOpen = false;
+		setSettingsOpen(false);
 	};
 
 	const selectSettingsSection = (section) => {
@@ -752,17 +758,16 @@
 				{/if}
 			{/each}
 		{/if}
-	</div>
-
-	<div class="sidebar-bottom">
 		<div class="section-label muted">Workspace</div>
 		<button
-			class="section-toggle settings-entry"
+			class="sidebar-nav-action settings-entry selected"
 			type="button"
 			data-testid="settings-open"
 			on:click={() => openSettings(settingsActiveSection)}
 		>
-			Open settings
+			<span class="icon">⚙️</span>
+			<span>Settings</span>
+			<span class="count">›</span>
 		</button>
 	</div>
 </nav>
@@ -1371,15 +1376,6 @@
 		gap: 6px;
 	}
 
-	.sidebar-bottom {
-		margin-top: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		padding-top: 10px;
-		border-top: 1px solid rgba(71, 85, 105, 0.35);
-	}
-
 	.title-row {
 		display: flex;
 		align-items: center;
@@ -1424,7 +1420,8 @@
 		color: #55617a;
 	}
 
-	a {
+	a,
+	.sidebar-nav-action {
 		display: grid;
 		grid-template-columns: 26px 1fr auto;
 		align-items: center;
@@ -1433,18 +1430,26 @@
 		text-decoration: none;
 		padding: 8px 10px;
 		border-radius: 10px;
+		border: none;
+		background: transparent;
+		width: 100%;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
 		transition:
 			background 120ms ease,
 			color 120ms ease,
 			transform 120ms ease;
 	}
 
-	a:hover {
+	a:hover,
+	.sidebar-nav-action:hover {
 		background: #111c31;
 		transform: translateX(2px);
 	}
 
-	a.selected {
+	a.selected,
+	.sidebar-nav-action.selected {
 		background: linear-gradient(90deg, rgba(37, 99, 235, 0.42), rgba(15, 23, 42, 0.9));
 		color: #f1f5f9;
 		box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.25);
@@ -1477,22 +1482,7 @@
 		color: #94a3b8;
 	}
 
-	.section-toggle {
-		color: var(--app-text);
-		background: var(--surface-1);
-		border: 1px solid var(--border-1);
-		border-radius: 10px;
-		padding: 8px 10px;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.section-toggle.settings-entry {
-		background:
-			radial-gradient(circle at 18% 24%, rgba(56, 189, 248, 0.26), transparent 36%),
-			linear-gradient(140deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.95));
-		border-color: color-mix(in oklab, var(--surface-accent) 58%, var(--border-2) 42%);
-		box-shadow: 0 10px 26px rgba(2, 6, 23, 0.42);
+	.settings-entry {
 		font-weight: 700;
 		letter-spacing: 0.01em;
 	}
@@ -1581,16 +1571,20 @@
 
 	.settings-nav-item,
 	.settings-mobile-item {
-		border: 1px solid transparent;
+		border: none;
 		background: transparent;
 		color: var(--app-text);
-		border-radius: 12px;
+		border-radius: 10px;
 		padding: 10px 12px;
 		cursor: pointer;
 		text-align: left;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		transition:
+			background 120ms ease,
+			color 120ms ease,
+			transform 120ms ease;
 	}
 
 	.settings-nav-item span,
@@ -1606,18 +1600,22 @@
 		line-height: 1.35;
 	}
 
-	.settings-nav-item.active,
-	.settings-mobile-item.active,
 	.settings-nav-item:hover,
 	.settings-mobile-item:hover {
-		border-color: color-mix(in oklab, var(--surface-accent) 60%, var(--border-2) 40%);
-		background:
-			linear-gradient(
-				120deg,
-				color-mix(in oklab, var(--surface-accent) 28%, transparent),
-				transparent 88%
-			),
-			color-mix(in oklab, var(--surface-1) 90%, white 10%);
+		background: #111c31;
+		transform: translateX(2px);
+	}
+
+	.settings-nav-item.active,
+	.settings-mobile-item.active {
+		background: linear-gradient(90deg, rgba(37, 99, 235, 0.42), rgba(15, 23, 42, 0.9));
+		color: #f1f5f9;
+		box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.25);
+	}
+
+	.settings-nav-item.active small,
+	.settings-mobile-item.active small {
+		color: #cfe0f7;
 	}
 
 	.settings-detail {
@@ -1652,8 +1650,6 @@
 
 	.settings-mobile-item {
 		padding: 14px;
-		border-color: var(--border-1);
-		background: color-mix(in oklab, var(--surface-1) 94%, white 6%);
 	}
 
 	.settings-back-btn {

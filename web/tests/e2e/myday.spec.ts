@@ -277,6 +277,23 @@ test.describe('List view', () => {
 });
 
 test.describe('Navigation', () => {
+	test('hides add button while settings modal is open', async ({ page }) => {
+		await resetClientState(page);
+		const addButton = page.getByTestId('new-task-submit');
+		await expect(addButton).toBeVisible();
+
+		await page.getByTestId('settings-open').click();
+		await expect(page.getByTestId('settings-window')).toBeVisible();
+		await expect(addButton).toBeHidden();
+
+		await page
+			.getByTestId('settings-window')
+			.getByRole('button', { name: 'Close', exact: true })
+			.click();
+		await expect(page.getByTestId('settings-window')).toHaveCount(0);
+		await expect(addButton).toBeVisible();
+	});
+
 	test('keeps mobile sidebar open when pinned', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await resetClientState(page);
