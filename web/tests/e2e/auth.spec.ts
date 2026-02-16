@@ -60,6 +60,7 @@ test('can sign in with token mode and restore session after reload', async ({ pa
 	);
 
 	await page.goto('/');
+	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 	await page.getByTestId('open-settings').click();
 	await expect(page.getByTestId('settings-modal')).toBeVisible();
 	await expect(page.getByTestId('auth-email')).toBeVisible();
@@ -68,8 +69,6 @@ test('can sign in with token mode and restore session after reload', async ({ pa
 	await page.getByTestId('auth-space').fill('s1');
 	await page.getByTestId('auth-signin').click();
 	await expect(page.getByTestId('auth-user')).toContainText('admin@example.com');
-	await expect(page.getByTestId('open-settings')).toBeVisible();
-	await page.getByTestId('open-settings').click();
 	await expect(page.getByTestId('settings-modal')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Members' })).toBeVisible();
 	await page.getByTestId('close-settings').click();
@@ -142,13 +141,13 @@ test('can change password from account panel', async ({ page }) => {
 	);
 
 	await page.goto('/');
+	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 	await page.getByTestId('open-settings').click();
 	await expect(page.getByTestId('settings-modal')).toBeVisible();
 	await page.getByTestId('auth-email').fill('admin@example.com');
 	await page.getByTestId('auth-password').fill('tasksync');
 	await page.getByTestId('auth-signin').click();
 	await expect(page.getByTestId('auth-user')).toContainText('admin@example.com');
-	await page.getByTestId('open-settings').click();
 	await expect(page.getByTestId('settings-modal')).toBeVisible();
 
 	await page.getByRole('button', { name: 'Change password' }).click();
