@@ -1284,9 +1284,8 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	.settings-modal {
-		width: min(980px, calc(100vw - 32px));
-		height: clamp(620px, calc(100vh - 32px), 760px);
-		min-height: clamp(620px, calc(100vh - 32px), 760px);
+		width: min(980px, 100%);
+		max-height: min(90vh, 920px);
 		background: var(--surface-1);
 		border: 1px solid var(--border-1);
 		border-radius: 14px;
@@ -1325,22 +1324,12 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 	}
 
 	.settings-nav button {
-		display: flex;
-		align-items: center;
-		justify-content: flex-start;
 		text-align: left;
-		padding: 0 12px;
-		height: 44px;
-		min-height: 44px;
-		max-height: 44px;
-		line-height: 44px;
+		padding: 8px 10px;
 		border-radius: 8px;
 		border: 1px solid transparent;
 		background: transparent;
 		color: var(--app-text);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.settings-nav button.active {
@@ -1886,40 +1875,33 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 
 	@media (max-width: 900px) {
 		.settings-overlay {
-			padding: 12px;
+			padding: 0;
 		}
 
 		.settings-modal {
-			width: calc(100vw - 24px);
-			height: calc(100vh - 24px);
-			min-height: calc(100vh - 24px);
-			border-radius: 12px;
+			width: 100%;
+			height: 100%;
+			max-height: none;
+			border-radius: 0;
 		}
 
 		.settings-content {
-			grid-template-columns: 140px minmax(0, 1fr);
+			grid-template-columns: 1fr;
 		}
 
 		.settings-nav {
-			border-right: 1px solid var(--border-1);
-			border-bottom: 0;
-			flex-direction: column;
-			overflow-y: auto;
-			overflow-x: hidden;
-			padding: 10px 8px;
+			border-right: 0;
+			border-bottom: 1px solid var(--border-1);
+			flex-direction: row;
+			overflow-x: auto;
 		}
 
 		.settings-nav button {
-			font-size: 0.95rem;
-			height: 42px;
-			min-height: 42px;
-			max-height: 42px;
-			line-height: 42px;
-			padding: 0 10px;
+			white-space: nowrap;
 		}
 
 		.settings-panel {
-			padding: 10px;
+			padding: 12px;
 		}
 	}
 
