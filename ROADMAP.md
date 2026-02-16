@@ -1,9 +1,18 @@
 # ROADMAP
 
-Human goals and scheduled cleanup/features.
+This file captures directional intent only.
+Items here are not commitments.
 
-## Planned
+Authoritative plans live in `docs/exec-plans/`.
 
-- Documentation/comment pass
-- Make it a full on local client with cached data similar to Actual Budget
-- Review miscellaneous non-blocking/non-breaking .ts issues when compiling
+## Now
+- Improve determinism around sync and offline behavior
+- Harden performance budgets with CI enforcement
+
+## Next
+- Multi-user team workflows
+- Admin UX refinements
+
+## Later / Ideas
+- Mobile-specific UX pass
+- Advanced analytics / insights

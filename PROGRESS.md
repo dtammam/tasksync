@@ -1,6 +1,14 @@
 # PROGRESS
 
-Outcome-first project milestones in plain language.
+This file is an append-only log of completed work and notable discoveries.
+
+Rules:
+- Do not edit old entries except to fix factual errors.
+- Do not plan in this file.
+- Do not describe future work here.
+- If an entry implies future work, link to:
+  - an execution plan in `docs/exec-plans/active/`, or
+  - an item in `docs/exec-plans/tech-debt-tracker.md`
 
 - 2026-01-31 19:13 - Set up shared web/server/types foundations so the app could evolve as one cohesive product.
 - 2026-01-31 19:13 - Audited dependencies and environment readiness early to reduce setup and security surprises.

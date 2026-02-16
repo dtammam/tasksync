@@ -1,7 +1,7 @@
 # Contributing to tasksync
 
 ## Basics
-- Follow `docs/AGENTS.md` and `docs/ARCHITECTURE.md` for constraints, budgets, and testing matrix.
+- Follow `AGENTS.md` (root) and `docs/index.md` for constraints, budgets, and testing matrix.
 - Dual-licensed MIT OR Apache-2.0 (see LICENSE).
 - Default branch: `main`. Use topic branches (`feat/*`, `chore/*`, `fix/*`).
 
