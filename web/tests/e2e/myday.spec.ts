@@ -103,6 +103,28 @@ const resetClientState = async (page: Page) => {
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 };
 
+const seedSuggestions = async (page: Page) => {
+	await resetClientState(page);
+	await page.goto('/list/goal-management');
+	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+	const title = makeTitle('Suggestion seed');
+	await page.getByTestId('new-task-input').fill(title);
+	await page.getByTestId('new-task-submit').click();
+
+	const row = page.getByTestId('task-row').filter({ hasText: title });
+	await expect(row).toHaveCount(1);
+	await row.getByRole('button', { name: '⋯' }).click();
+	await page.getByRole('button', { name: 'Star' }).click();
+	await row.getByRole('button', { name: 'Close', exact: true }).click();
+
+	await page.goto('/');
+	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+	const suggestionsButton = page.getByRole('button', { name: /^Suggestions \d+/ });
+	await expect(suggestionsButton).toBeVisible();
+	return suggestionsButton;
+};
+
 test.describe('My Day', () => {
 	test('shows tasks and moves to completed when toggled', async ({ page }) => {
 		await resetClientState(page);
@@ -277,6 +299,36 @@ test.describe('List view', () => {
 });
 
 test.describe('Navigation', () => {
+	test('hides suggestions button while settings modal is open', async ({ page }) => {
+		const suggestionsButton = await seedSuggestions(page);
+		await expect(suggestionsButton).toBeVisible();
+
+		await page.getByTestId('settings-open').click();
+		await expect(page.getByTestId('settings-window')).toBeVisible();
+		await expect(suggestionsButton).toBeHidden();
+
+		await page
+			.getByTestId('settings-window')
+			.getByRole('button', { name: 'Close', exact: true })
+			.click();
+		await expect(page.getByTestId('settings-window')).toHaveCount(0);
+		await expect(suggestionsButton).toBeVisible();
+	});
+
+	test('hides suggestions button while mobile sidebar drawer is open', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		const suggestionsButton = await seedSuggestions(page);
+		await expect(suggestionsButton).toBeVisible();
+
+		await page.getByRole('button', { name: 'Toggle navigation' }).click();
+		await expect(page.getByTestId('sidebar-drawer')).toHaveClass(/open/);
+		await expect(suggestionsButton).toBeHidden();
+
+		await page.getByRole('button', { name: 'Close navigation' }).dispatchEvent('click');
+		await expect(page.getByTestId('sidebar-drawer')).not.toHaveClass(/open/);
+		await expect(suggestionsButton).toBeVisible();
+	});
+
 	test('hides add button while settings modal is open', async ({ page }) => {
 		await resetClientState(page);
 		const addInput = page.getByTestId('new-task-input');
