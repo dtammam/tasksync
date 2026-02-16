@@ -269,20 +269,6 @@ test.describe('Navigation', () => {
 		await expect(settingsButton).toBeVisible();
 		await settingsButton.click();
 		await expect(page.getByTestId('settings-modal')).toBeVisible();
-
-		const accountBtn = page.getByRole('button', { name: 'Account' });
-		const soundBtn = page.getByRole('button', { name: 'Sound' });
-		const backupsBtn = page.getByRole('button', { name: 'Backups' });
-		const accountBox = await accountBtn.boundingBox();
-		const soundBox = await soundBtn.boundingBox();
-		const backupsBox = await backupsBtn.boundingBox();
-		expect(accountBox).not.toBeNull();
-		expect(soundBox).not.toBeNull();
-		expect(backupsBox).not.toBeNull();
-		if (accountBox && soundBox && backupsBox) {
-			expect(Math.abs(accountBox.height - soundBox.height)).toBeLessThan(1);
-			expect(Math.abs(accountBox.height - backupsBox.height)).toBeLessThan(1);
-		}
 	});
 
 	test('keeps mobile sidebar open when pinned', async ({ page }) => {

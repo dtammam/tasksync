@@ -671,7 +671,15 @@
 			z-index: 60;
 			pointer-events: none;
 		}
-		.sidebar-drawer.open { transform: none; pointer-events: auto; }
+		.sidebar-drawer.open { transform: translateX(0); pointer-events: auto; }
+		:global(.sidebar-drawer.open:has([data-testid='settings-modal'])) {
+			width: 100vw;
+			transform: translateX(0);
+			pointer-events: auto;
+		}
+		:global(.sidebar-drawer.open:has([data-testid='settings-modal']) + .drawer-backdrop) {
+			display: none;
+		}
 		.app-shell.nav-split { --sidebar-offset: min(208px, 58vw); grid-template-columns: min(208px, 58vw) 1fr; }
 		.app-shell.nav-split .sidebar-drawer { position: sticky; inset: auto; width: 100%; transform: none; transition: none; box-shadow: none; pointer-events: auto; }
 		.app-shell.nav-split main { padding: 16px 12px 24px; }
