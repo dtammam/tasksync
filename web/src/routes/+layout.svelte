@@ -549,6 +549,10 @@
 		display: none;
 	}
 
+	:global(.app-shell.settings-open .suggestions-toggle) {
+		display: none;
+	}
+
 	.app-shell {
 		--sidebar-offset: 240px;
 		display: grid;
@@ -694,6 +698,9 @@
 		.app-shell.nav-split .sidebar-drawer { position: sticky; inset: auto; width: 100%; transform: none; transition: none; box-shadow: none; pointer-events: auto; }
 		.app-shell.nav-split main { padding: 16px 12px 24px; }
 		:global(.app-shell.nav-drawer-open .mobile-add) {
+			display: none;
+		}
+		:global(.app-shell.nav-drawer-open .suggestions-toggle) {
 			display: none;
 		}
 		.app-shell.settings-open { --sidebar-offset: 0px; grid-template-columns: 1fr; }
