@@ -1358,6 +1358,9 @@
 		max-width: 264px;
 		background: var(--surface-2);
 		border-right: 1px solid var(--border-1);
+		box-shadow:
+			inset -1px 0 0 color-mix(in oklab, var(--border-2) 42%, transparent),
+			1px 0 0 color-mix(in oklab, var(--surface-3) 36%, transparent);
 		color: var(--app-text);
 		padding: 14px 12px;
 		display: flex;
@@ -1431,16 +1434,33 @@
 		text-decoration: none;
 		padding: 8px 10px;
 		border-radius: 10px;
-		border: none;
+		border: 1px solid transparent;
 		background: transparent;
 		box-sizing: border-box;
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
+		position: relative;
 		transition:
 			background 120ms ease,
 			color 120ms ease,
+			border-color 120ms ease,
+			box-shadow 120ms ease,
 			transform 120ms ease;
+	}
+
+	a::before,
+	.sidebar-nav-action::before {
+		content: '';
+		position: absolute;
+		left: 5px;
+		top: 6px;
+		bottom: 6px;
+		width: 3px;
+		border-radius: 999px;
+		background: var(--border-2);
+		opacity: 0;
+		transition: opacity 120ms ease;
 	}
 
 	.sidebar-nav-action {
@@ -1449,15 +1469,26 @@
 
 	a:hover,
 	.sidebar-nav-action:hover {
-		background: #111c31;
-		transform: translateX(2px);
+		background: color-mix(in oklab, var(--surface-1) 94%, white 6%);
+		border-color: color-mix(in oklab, var(--border-1) 76%, white 24%);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border-1) 55%, transparent);
 	}
 
 	a.selected,
 	.sidebar-nav-action.selected {
-		background: linear-gradient(90deg, rgba(37, 99, 235, 0.42), rgba(15, 23, 42, 0.9));
-		color: #f1f5f9;
-		box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.25);
+		background: color-mix(in oklab, var(--surface-1) 88%, var(--surface-3) 12%);
+		border-color: var(--border-2);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border-2) 46%, transparent);
+	}
+
+	a.selected::before,
+	.sidebar-nav-action.selected::before {
+		opacity: 1;
+	}
+
+	a.selected .count,
+	.sidebar-nav-action.selected .count {
+		color: var(--app-text);
 	}
 
 	.list-sort {
@@ -1466,16 +1497,22 @@
 		gap: 6px;
 		margin: 0 6px 6px;
 		font-size: 11px;
-		color: #93a4bf;
+		color: var(--app-muted);
 	}
 
 	.list-sort select {
-		background: #0f172a;
-		border: 1px solid #243148;
-		color: #d4e2f3;
+		background: linear-gradient(
+			180deg,
+			var(--surface-1),
+			color-mix(in oklab, var(--surface-1) 88%, black 12%)
+		);
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		border-radius: 999px;
-		padding: 3px 8px;
-		font-size: 11px;
+		padding: 6px 10px;
+		min-height: 32px;
+		font-size: 13px;
+		box-shadow: var(--ring-shadow);
 	}
 
 	.icon {

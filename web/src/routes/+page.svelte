@@ -512,8 +512,7 @@
 		font-size: 13px;
 	}
 
-	.suggestion button,
-	.mobile-add button {
+	.suggestion button {
 		background: linear-gradient(180deg, #1e40af, #1d4ed8);
 		color: white;
 		border: 1px solid rgba(147, 197, 253, 0.4);
@@ -605,10 +604,17 @@
 	}
 
 	.mobile-add button {
+		background: color-mix(in oklab, var(--surface-accent) 82%, var(--surface-1) 18%);
+		color: var(--app-text);
+		border: 1px solid color-mix(in oklab, var(--surface-accent) 58%, var(--border-2) 42%);
+		border-radius: 12px;
+		padding: 0 16px;
 		white-space: nowrap;
-		min-width: 92px;
+		min-width: 96px;
 		height: 46px;
-		font-weight: 600;
+		font-weight: 650;
+		cursor: pointer;
+		box-shadow: var(--ring-shadow);
 	}
 
 	@media (max-width: 900px) {
