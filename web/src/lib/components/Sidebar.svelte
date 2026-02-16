@@ -1234,7 +1234,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		background: var(--surface-2);
 		border-right: 1px solid var(--border-1);
 		color: var(--app-text);
-		padding: 14px 12px;
+		padding: 14px 12px calc(14px + env(safe-area-inset-bottom) + 92px);
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
@@ -1242,6 +1242,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		position: sticky;
 		top: 0;
 		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 		box-sizing: border-box;
 	}
 
@@ -1257,6 +1258,7 @@ $: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		flex-direction: column;
 		gap: 6px;
 		padding-top: 10px;
+		padding-bottom: calc(env(safe-area-inset-bottom) + 28px);
 		border-top: 1px solid rgba(71, 85, 105, 0.35);
 	}
 

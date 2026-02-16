@@ -259,6 +259,18 @@ test.describe('List view', () => {
 });
 
 test.describe('Navigation', () => {
+	test('keeps settings launcher accessible on mobile sidebar', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await resetClientState(page);
+
+		await page.getByRole('button', { name: 'Toggle navigation' }).click();
+		const settingsButton = page.getByTestId('open-settings');
+		await settingsButton.scrollIntoViewIfNeeded();
+		await expect(settingsButton).toBeVisible();
+		await settingsButton.click();
+		await expect(page.getByTestId('settings-modal')).toBeVisible();
+	});
+
 	test('keeps mobile sidebar open when pinned', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await resetClientState(page);
