@@ -63,19 +63,17 @@ const ensureSoundPanelOpen = async (page: Page) => {
 	if (await soundEnabled.count()) {
 		return;
 	}
-	const manageSound = page.getByRole('button', { name: 'Manage sound' });
-	await expect
-		.poll(
-			async () => (await soundEnabled.count()) + (await manageSound.count()),
-			{ timeout: 10_000 }
-		)
-		.toBeGreaterThan(0);
-	if (await soundEnabled.count()) {
-		return;
-	}
-	await expect(manageSound.first()).toBeVisible();
-	await manageSound.first().scrollIntoViewIfNeeded();
-	await manageSound.first().click();
+
+	const settingsButton = page.getByTestId('open-settings');
+	await expect(settingsButton).toBeVisible();
+	await settingsButton.click();
+	await expect(page.getByTestId('settings-modal')).toBeVisible();
+	const soundTab = page
+		.locator('.settings-nav button')
+		.filter({ hasText: /^Sound$/ })
+		.first();
+	await expect(soundTab).toBeVisible();
+	await soundTab.click();
 	await expect(soundEnabled).toHaveCount(1);
 };
 
