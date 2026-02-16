@@ -1367,6 +1367,7 @@
 		position: sticky;
 		top: 0;
 		overflow-y: auto;
+		overflow-x: hidden;
 		box-sizing: border-box;
 	}
 
@@ -1432,7 +1433,7 @@
 		border-radius: 10px;
 		border: none;
 		background: transparent;
-		width: 100%;
+		box-sizing: border-box;
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
@@ -1440,6 +1441,10 @@
 			background 120ms ease,
 			color 120ms ease,
 			transform 120ms ease;
+	}
+
+	.sidebar-nav-action {
+		width: 100%;
 	}
 
 	a:hover,

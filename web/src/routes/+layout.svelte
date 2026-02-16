@@ -315,7 +315,7 @@
 </svelte:head>
 
 <div
-	class={`app-shell ${navPinned && navOpen ? 'nav-split' : ''} ${settingsDialogOpen ? 'settings-open' : ''}`}
+	class={`app-shell ${navPinned && navOpen ? 'nav-split' : ''} ${settingsDialogOpen ? 'settings-open' : ''} ${navOpen && !navPinned ? 'nav-drawer-open' : ''}`}
 	data-testid="app-shell"
 	data-ready={appReady ? 'true' : 'false'}
 	data-settings-open={settingsDialogOpen ? 'true' : 'false'}
@@ -545,7 +545,7 @@
 		background-clip: content-box;
 	}
 
-	:global(.app-shell.settings-open [data-testid='new-task-submit']) {
+	:global(.app-shell.settings-open .mobile-add) {
 		display: none;
 	}
 
@@ -693,6 +693,9 @@
 		.app-shell.nav-split { --sidebar-offset: min(208px, 58vw); grid-template-columns: min(208px, 58vw) 1fr; }
 		.app-shell.nav-split .sidebar-drawer { position: sticky; inset: auto; width: 100%; transform: none; transition: none; box-shadow: none; pointer-events: auto; }
 		.app-shell.nav-split main { padding: 16px 12px 24px; }
+		:global(.app-shell.nav-drawer-open .mobile-add) {
+			display: none;
+		}
 		.app-shell.settings-open { --sidebar-offset: 0px; grid-template-columns: 1fr; }
 		.app-shell.settings-open .sidebar-drawer {
 			position: fixed;

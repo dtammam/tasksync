@@ -279,11 +279,14 @@ test.describe('List view', () => {
 test.describe('Navigation', () => {
 	test('hides add button while settings modal is open', async ({ page }) => {
 		await resetClientState(page);
+		const addInput = page.getByTestId('new-task-input');
 		const addButton = page.getByTestId('new-task-submit');
+		await expect(addInput).toBeVisible();
 		await expect(addButton).toBeVisible();
 
 		await page.getByTestId('settings-open').click();
 		await expect(page.getByTestId('settings-window')).toBeVisible();
+		await expect(addInput).toBeHidden();
 		await expect(addButton).toBeHidden();
 
 		await page
@@ -291,6 +294,26 @@ test.describe('Navigation', () => {
 			.getByRole('button', { name: 'Close', exact: true })
 			.click();
 		await expect(page.getByTestId('settings-window')).toHaveCount(0);
+		await expect(addInput).toBeVisible();
+		await expect(addButton).toBeVisible();
+	});
+
+	test('hides add field and button while mobile sidebar drawer is open', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await resetClientState(page);
+		const addInput = page.getByTestId('new-task-input');
+		const addButton = page.getByTestId('new-task-submit');
+		await expect(addInput).toBeVisible();
+		await expect(addButton).toBeVisible();
+
+		await page.getByRole('button', { name: 'Toggle navigation' }).click();
+		await expect(page.getByTestId('sidebar-drawer')).toHaveClass(/open/);
+		await expect(addInput).toBeHidden();
+		await expect(addButton).toBeHidden();
+
+		await page.getByRole('button', { name: 'Close navigation' }).dispatchEvent('click');
+		await expect(page.getByTestId('sidebar-drawer')).not.toHaveClass(/open/);
+		await expect(addInput).toBeVisible();
 		await expect(addButton).toBeVisible();
 	});
 
