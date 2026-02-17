@@ -4,7 +4,7 @@ import { createEventDispatcher, onDestroy } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
-import { nextDueForRecurrence } from '$lib/tasks/recurrence';
+import { nextDueForRecurrence, toLocalIsoDate } from '$lib/tasks/recurrence';
 
 export let task;
 export let completedContext = false;
@@ -35,9 +35,8 @@ const toggleMyDay = (event) => {
 const openDetail = () => dispatch('openDetail', { id: task.id });
 
 const tomorrowIso = () => {
-	const d = new Date();
-	d.setDate(d.getDate() + 1);
-	return d.toISOString().slice(0, 10);
+	const today = toLocalIsoDate(new Date());
+	return nextDueForRecurrence(today, 'daily') ?? today;
 };
 
 const nextWeekIso = () => {
@@ -78,6 +77,11 @@ const recurrencePreview = (taskValue, count = 1) => {
 	}
 	if (!nextDates.length) return '';
 	return nextDates.join(', ');
+};
+
+const punt = () => {
+	if (!canPunt) return;
+	tasks.punt(task.id);
 };
 
 const handleToggleStatus = () => {
@@ -149,15 +153,23 @@ const toRgba = (hex, alpha) => {
 	const b = value & 255;
 	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
+$: todayKey = toLocalIsoDate(new Date());
 
 $: isContributor = $auth.user?.role === 'contributor';
 $: isOwner = !!$auth.user?.user_id && task.created_by_user_id === $auth.user.user_id;
 $: canEditTask = !isContributor || isOwner;
 $: canToggleStatus = canEditTask;
+$: canPunt =
+	inMyDayView &&
+	canEditTask &&
+	task.status === 'pending' &&
+	!!task.recurrence_id &&
+	task.due_date === todayKey;
 $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 $: nextRecurrenceDate = recurrencePreview(task);
+$: showPuntedTag = inMyDayView && task.punted_on_date === todayKey;
 $: isRecurringCompletedToday =
 	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
 </script>
@@ -205,6 +217,9 @@ $: isRecurringCompletedToday =
 			{#if inMyDayView && nextRecurrenceDate}
 				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
 			{/if}
+			{#if showPuntedTag}
+				<span class="chip subtle punted-chip">Punted</span>
+			{/if}
 			{#if !inMyDayView}
 				<label class="chip toggle day-chip">
 					<input
@@ -223,6 +238,9 @@ $: isRecurringCompletedToday =
 			<div class="quick">
 				<button type="button" on:click={openDetailFromMenu}>Details</button>
 				{#if canEditTask}
+					{#if canPunt}
+						<button type="button" on:click={punt} data-testid="task-punt">Punt</button>
+					{/if}
 					<button type="button" on:click={addTomorrow}>Tomorrow</button>
 					<button type="button" on:click={addNextWeek}>Next week</button>
 					<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
@@ -305,6 +323,12 @@ $: isRecurringCompletedToday =
 	.recur-next-chip {
 		font-size: 11px;
 		padding-inline: 7px;
+	}
+	.punted-chip {
+		font-size: 11px;
+		border-color: color-mix(in oklab, var(--surface-accent) 52%, var(--border-2) 48%);
+		background: color-mix(in oklab, var(--surface-accent) 32%, var(--surface-2) 68%);
+		color: var(--app-text);
 	}
 	.chip.toggle { cursor:pointer; }
 	.chip.pending { background:#92400e; border-color:#f59e0b; color:#ffedd5; }

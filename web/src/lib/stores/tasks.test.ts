@@ -29,6 +29,8 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	updated_ts: overrides.updated_ts ?? Date.now(),
 	dirty: overrides.dirty ?? false,
 	occurrences_completed: overrides.occurrences_completed ?? 0,
+	punted_from_due_date: overrides.punted_from_due_date,
+	punted_on_date: overrides.punted_on_date,
 	due_date: overrides.due_date,
 	recurrence_id: overrides.recurrence_id,
 	notes: overrides.notes,
@@ -248,6 +250,105 @@ describe('tasks store helpers', () => {
 
 		expect(get(myDayMissed)).toEqual([]);
 		expect(get(myDayPending).map((t) => t.id)).toEqual(['missed-recurring']);
+	});
+
+	it('punts a recurring task by one day and keeps it visible in My Day on punt day', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'punt-recurring',
+				recurrence_id: 'daily',
+				due_date: '2026-02-02',
+				status: 'pending'
+			})
+		]);
+
+		tasks.punt('punt-recurring');
+
+		const updated = tasks.getAll().find((t) => t.id === 'punt-recurring');
+		expect(updated?.due_date).toBe('2026-02-03');
+		expect(updated?.punted_from_due_date).toBe('2026-02-02');
+		expect(updated?.punted_on_date).toBe('2026-02-02');
+		expect(get(myDayPending).map((t) => t.id)).toContain('punt-recurring');
+	});
+
+	it('keeps weekly cadence after punting an instance before completing it', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'punt-weekly',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-02',
+				status: 'pending'
+			})
+		]);
+
+		tasks.punt('punt-weekly');
+		vi.setSystemTime(new Date('2026-02-03T12:00:00Z'));
+		tasks.toggle('punt-weekly');
+
+		const updated = tasks.getAll().find((t) => t.id === 'punt-weekly');
+		expect(updated?.due_date).toBe('2026-02-09');
+		expect(updated?.punted_from_due_date).toBeUndefined();
+		expect(updated?.punted_on_date).toBeUndefined();
+	});
+
+	it('preserves punt metadata when remote merge matches the same pending occurrence', () => {
+		const local = baseTask({
+			id: 'remote-punt',
+			recurrence_id: 'weekly',
+			due_date: '2026-02-03',
+			status: 'pending',
+			punted_from_due_date: '2026-02-02',
+			punted_on_date: '2026-02-02',
+			dirty: false,
+			local: false
+		});
+		tasks.setAll([local]);
+
+		tasks.mergeRemote([
+			baseTask({
+				id: 'remote-punt',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03',
+				status: 'pending',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		const updated = tasks.getAll().find((t) => t.id === 'remote-punt');
+		expect(updated?.punted_from_due_date).toBe('2026-02-02');
+		expect(updated?.punted_on_date).toBe('2026-02-02');
+	});
+
+	it('preserves punt metadata when push replace returns the same pending occurrence', () => {
+		const local = baseTask({
+			id: 'replace-punt',
+			recurrence_id: 'weekly',
+			due_date: '2026-02-03',
+			status: 'pending',
+			punted_from_due_date: '2026-02-02',
+			punted_on_date: '2026-02-02',
+			dirty: true,
+			local: false
+		});
+		tasks.setAll([local]);
+
+		tasks.replaceWithRemote(
+			'replace-punt',
+			baseTask({
+				id: 'replace-punt',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03',
+				status: 'pending',
+				dirty: false,
+				local: false
+			}),
+			{ ...local }
+		);
+
+		const updated = tasks.getAll().find((t) => t.id === 'replace-punt');
+		expect(updated?.punted_from_due_date).toBe('2026-02-02');
+		expect(updated?.punted_on_date).toBe('2026-02-02');
 	});
 
 	it('renames a task and marks it dirty', () => {
