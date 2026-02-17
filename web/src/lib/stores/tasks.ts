@@ -14,6 +14,7 @@ import {
 const tasksStore = writable<Task[]>([]);
 const isServerId = (id: string) =>
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+const todayIso = () => toLocalIsoDate(new Date());
 
 const makeLocalTask = (
 	title: string,
@@ -73,7 +74,49 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.notes !== sent.notes ||
 	current.assignee_user_id !== sent.assignee_user_id ||
 	(current.occurrences_completed ?? 0) !== (sent.occurrences_completed ?? 0) ||
+	current.punted_from_due_date !== sent.punted_from_due_date ||
+	current.punted_on_date !== sent.punted_on_date ||
 	JSON.stringify(current.attachments ?? []) !== JSON.stringify(sent.attachments ?? []);
+
+const clearPuntState = (task: Task) => ({
+	...task,
+	punted_from_due_date: undefined,
+	punted_on_date: undefined
+});
+
+const nextRecurringDueAfterCurrent = (task: Task) => {
+	const anchor = task.punted_from_due_date ?? task.due_date;
+	let next = nextDueForRecurrence(anchor, task.recurrence_id);
+	if (!next) return task.due_date;
+	while (task.due_date && next <= task.due_date) {
+		const candidate = nextDueForRecurrence(next, task.recurrence_id);
+		if (!candidate || candidate === next) break;
+		next = candidate;
+	}
+	return next;
+};
+
+const preservePuntState = (incoming: Task, existing?: Task) => {
+	if (
+		!existing?.punted_from_due_date &&
+		!existing?.punted_on_date
+	) {
+		return incoming;
+	}
+	if (
+		existing.recurrence_id !== incoming.recurrence_id ||
+		existing.status !== 'pending' ||
+		incoming.status !== 'pending' ||
+		existing.due_date !== incoming.due_date
+	) {
+		return incoming;
+	}
+	return {
+		...incoming,
+		punted_from_due_date: existing.punted_from_due_date,
+		punted_on_date: existing.punted_on_date
+	};
+};
 
 export const tasks = {
 	subscribe: tasksStore.subscribe,
@@ -115,7 +158,7 @@ export const tasks = {
 			for (const task of remote) {
 				const existing = merged.get(task.id);
 				if (existing?.dirty) continue;
-				merged.set(task.id, task);
+				merged.set(task.id, preservePuntState(task, existing));
 			}
 			return Array.from(merged.values());
 		});
@@ -130,9 +173,9 @@ export const tasks = {
 							const now = Date.now();
 							if (task.recurrence_id && task.status !== 'done') {
 								shouldPlayCompletion = true;
-								const next = nextDueForRecurrence(task.due_date, task.recurrence_id);
+								const next = nextRecurringDueAfterCurrent(task);
 								return {
-									...task,
+									...clearPuntState(task),
 									status: 'pending',
 									due_date: next,
 									occurrences_completed: (task.occurrences_completed ?? 0) + 1,
@@ -148,6 +191,8 @@ export const tasks = {
 							return {
 								...task,
 								status: nextStatus,
+								punted_from_due_date: undefined,
+								punted_on_date: undefined,
 								completed_ts: nextStatus === 'done' ? now : undefined,
 								updated_ts: now,
 								dirty: true
@@ -238,7 +283,7 @@ export const tasks = {
 			list.map((t) =>
 				t.id === id
 					? {
-							...t,
+							...clearPuntState(t),
 							due_date,
 							dirty: true,
 							updated_ts: now
@@ -281,17 +326,45 @@ export const tasks = {
 		void repo.saveTasks(get(tasksStore));
 	},
 	skip(id: string) {
+		const now = Date.now();
 		tasksStore.update((list) =>
 			list.map((t) =>
-				t.id === id
+				t.id === id && !!t.recurrence_id
 					? {
-							...t,
-							due_date: nextDueForRecurrence(t.due_date, t.recurrence_id),
-							updated_ts: Date.now(),
+							...clearPuntState(t),
+							due_date: nextRecurringDueAfterCurrent(t),
+							updated_ts: now,
 							dirty: true
 						}
 					: t
 			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	punt(id: string) {
+		const now = Date.now();
+		const today = todayIso();
+		tasksStore.update((list) =>
+			list.map((task) => {
+				if (
+					task.id !== id ||
+					task.status !== 'pending' ||
+					!task.recurrence_id ||
+					task.due_date !== today
+				) {
+					return task;
+				}
+				const tomorrow = nextDueForRecurrence(task.due_date, 'daily');
+				if (!tomorrow) return task;
+				return {
+					...task,
+					due_date: tomorrow,
+					punted_from_due_date: task.punted_from_due_date ?? task.due_date,
+					punted_on_date: today,
+					updated_ts: now,
+					dirty: true
+				};
+			})
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
@@ -330,6 +403,7 @@ export const tasks = {
 			completed_ts?: number;
 		}
 	) {
+		const clearsPuntState = details.due_date !== undefined || details.recurrence_id !== undefined;
 		tasksStore.update((list) =>
 			list.map((t) =>
 				t.id === id
@@ -343,6 +417,9 @@ export const tasks = {
 							occurrences_completed:
 								details.occurrences_completed ?? t.occurrences_completed ?? 0,
 							completed_ts: details.completed_ts ?? t.completed_ts,
+							...(clearsPuntState
+								? { punted_from_due_date: undefined, punted_on_date: undefined }
+								: {}),
 							updated_ts: Date.now(),
 							dirty: true
 						}
@@ -362,7 +439,7 @@ export const tasks = {
 								local: false,
 								dirty: true
 							}
-						: { ...remote, dirty: false, local: false }
+						: preservePuntState({ ...remote, dirty: false, local: false }, task)
 					: task.id === remote.id
 						? task
 						: task
@@ -380,7 +457,6 @@ export const pendingCount = derived(tasksStore, ($tasks) =>
 	$tasks.filter((task) => task.status === 'pending').length
 );
 
-const todayIso = () => toLocalIsoDate(new Date());
 const isToday = (date?: string) => date && date === todayIso();
 const isBeforeToday = (date?: string) => !!date && date < todayIso();
 const isTodayTs = (ts?: number) =>
@@ -412,6 +488,7 @@ const isAssignedToUser = (task: Task, userId?: string | null) => {
 
 const inMyDay = (task: Task) => {
 	if (task.my_day) return true;
+	if (task.punted_on_date === todayIso()) return true;
 	return isToday(task.due_date);
 };
 
