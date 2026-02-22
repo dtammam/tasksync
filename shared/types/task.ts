@@ -10,7 +10,7 @@ export interface ChecklistItem {
 export interface FileRef {
 	id: string;
 	name: string;
-	size: number; // bytes, enforced <= 10MB
+	size: number; // bytes, enforced <= 15MB
 	mime: string;
 	hash: string;
 	path: string;

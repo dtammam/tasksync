@@ -68,7 +68,7 @@ package "tasksync Server" {
 - **UI:** Svelte components; virtualized lists for large sets; keyboard‑first flows.
 - **State:** Svelte writable/derived stores; repository layer persists to IndexedDB; background SharedWorker handles sync + indexing.
 - **Search:** MiniSearch (in‑memory) for MVP; upgrade to SQLite WASM + FTS5 in V1 if needed.
-- **Attachments:** Saved in OPFS/Cache API by SHA‑256 path; ≤10 MB enforced client‑side.
+- **Attachments (MVP):** Stored as task attachment refs in task metadata; file uploads are encoded as data URLs with a per-file **15 MB** limit and no extension allow-list.
 - **Audio:** Web Audio API with pre‑decoded buffers and custom-file buffer playback (gain-controlled for mobile/WebKit consistency); user settings control theme, volume, enable.
 - **UI preferences:** per-user preferences (app theme + sidebar panel collapse state) are cached locally and synced via authenticated profile endpoints.
 - **PWA install metadata:** static `manifest.webmanifest` + `apple-touch-icon`/PNG icon set in `web/static` so installed shortcuts use branded artwork on iOS/Android.
@@ -86,7 +86,7 @@ package "tasksync Server" {
 ID = ulid | TS = ms
 Task { id, title, notes?, url?, due?, start?, scheduled?, priority(0..3), status(pending|done|cancelled), list_id, project_id?, area_id?, tags:Set<ID>, checklist:[ChecklistItem], order, recurrence_id?, recur_state?, punted_from_due_date?, punted_on_date?, created_ts, updated_ts, attachments:Set<FileRef> }
 ChecklistItem { id, title, done, order }
-FileRef { id, name, size<=10MB, mime, hash, path }
+FileRef { id, name, size<=15MB, mime, hash, path }
 List { id, name, order }
 Project { id, name, order }
 Area { id, name, order }

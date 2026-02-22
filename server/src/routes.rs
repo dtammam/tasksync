@@ -316,6 +316,116 @@ fn normalize_profile_attachments(raw: Option<String>) -> Result<Option<String>, 
     Ok(Some(trimmed.to_string()))
 }
 
+const MAX_TASK_ATTACHMENT_FILE_BYTES: usize = 15 * 1024 * 1024;
+const MAX_TASK_ATTACHMENTS_PER_TASK: usize = 32;
+const MAX_TASK_ATTACHMENTS_JSON_BYTES: usize = 64 * 1024 * 1024;
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskAttachmentRef {
+    id: Option<String>,
+    name: Option<String>,
+    size: Option<i64>,
+    mime: Option<String>,
+    hash: Option<String>,
+    path: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NormalizedTaskAttachmentRef {
+    id: String,
+    name: String,
+    size: i64,
+    mime: String,
+    hash: String,
+    path: String,
+}
+
+fn estimated_data_url_bytes(path: &str) -> Option<usize> {
+    let trimmed = path.trim();
+    if !trimmed.starts_with("data:") {
+        return None;
+    }
+    let split_idx = trimmed.find(',')?;
+    let metadata = &trimmed[..split_idx];
+    let payload = &trimmed[split_idx + 1..];
+    if metadata.ends_with(";base64") {
+        let payload_len = payload.len();
+        if payload_len == 0 {
+            return Some(0);
+        }
+        let padding = payload.as_bytes().iter().rev().take_while(|byte| **byte == b'=').count();
+        let triplets = payload_len / 4;
+        return Some(triplets.saturating_mul(3).saturating_sub(padding));
+    }
+    Some(payload.len())
+}
+
+fn normalize_task_attachments(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > MAX_TASK_ATTACHMENTS_JSON_BYTES {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let parsed = serde_json::from_str::<Vec<TaskAttachmentRef>>(trimmed)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    if parsed.len() > MAX_TASK_ATTACHMENTS_PER_TASK {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let mut normalized = Vec::with_capacity(parsed.len());
+    for attachment in parsed {
+        let path = attachment.path.trim();
+        if path.is_empty() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if path.len() > MAX_TASK_ATTACHMENTS_JSON_BYTES {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let declared_size = attachment.size.unwrap_or(0);
+        if declared_size < 0 || declared_size as usize > MAX_TASK_ATTACHMENT_FILE_BYTES {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let inferred_size = estimated_data_url_bytes(path);
+        if inferred_size.is_some_and(|size| size > MAX_TASK_ATTACHMENT_FILE_BYTES) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let normalized_size =
+            if declared_size > 0 { declared_size } else { inferred_size.unwrap_or(0) as i64 };
+        let id = attachment.id.unwrap_or_default().trim().to_string();
+        let name = attachment.name.unwrap_or_else(|| "attachment".to_string()).trim().to_string();
+        let mime = attachment
+            .mime
+            .unwrap_or_else(|| "application/octet-stream".to_string())
+            .trim()
+            .to_string();
+        let hash = attachment.hash.unwrap_or_default().trim().to_string();
+        if name.is_empty() || name.chars().count() > 255 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if mime.is_empty() || mime.chars().count() > 255 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if id.chars().count() > 255 || hash.chars().count() > 255 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        normalized.push(NormalizedTaskAttachmentRef {
+            id,
+            name,
+            size: normalized_size,
+            mime,
+            hash,
+            path: path.to_string(),
+        });
+    }
+    serde_json::to_string(&normalized).map(Some).map_err(|_| StatusCode::BAD_REQUEST)
+}
+
 fn normalize_ui_theme(raw: Option<String>) -> Result<Option<String>, StatusCode> {
     let Some(value) = raw else {
         return Ok(None);
@@ -1774,6 +1884,7 @@ async fn create_task(
     }
 
     let assignee_user_id = ctx.user_id.clone();
+    let attachments = normalize_task_attachments(body.attachments.clone())?;
 
     let id = body
         .id
@@ -1808,7 +1919,7 @@ async fn create_task(
 	.bind(now)
 	.bind(&body.url)
 	.bind(&body.recur_rule)
-	.bind(&body.attachments)
+	.bind(&attachments)
 	.bind(&body.due_date)
 	.bind(&punted_from_due_date)
 	.bind(&punted_on_date)
@@ -2115,6 +2226,7 @@ async fn update_task_meta(
         }
     }
     let priority = normalize_task_priority(body.priority)?;
+    let attachments = normalize_task_attachments(body.attachments.clone())?;
 
     if let Some(list_id) = &body.list_id {
         let exists: Option<i64> =
@@ -2204,7 +2316,7 @@ async fn update_task_meta(
     .bind(priority)
     .bind(&body.url)
     .bind(&body.recur_rule)
-    .bind(&body.attachments)
+    .bind(&attachments)
     .bind(&body.due_date)
     .bind(&body.punted_from_due_date)
     .bind(&body.punted_on_date)
@@ -3067,6 +3179,99 @@ mod tests {
             .await
             .expect("count task rows");
         assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn create_task_accepts_small_attachment_payload() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let attachments = serde_json::json!([
+            {
+                "id": "att-1",
+                "name": "hello.txt",
+                "size": 5,
+                "mime": "text/plain",
+                "hash": "",
+                "path": "data:text/plain;base64,aGVsbG8="
+            }
+        ])
+        .to_string();
+
+        let created = create_task(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Attachment create".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                priority: None,
+                url: None,
+                recur_rule: None,
+                attachments: Some(attachments),
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: Some("u-admin".to_string()),
+            }),
+        )
+        .await
+        .expect("create should succeed")
+        .1
+         .0;
+
+        assert!(created.attachments.is_some());
+    }
+
+    #[tokio::test]
+    async fn create_task_rejects_attachment_over_15mb() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let attachments = serde_json::json!([
+            {
+                "id": "att-big",
+                "name": "big.bin",
+                "size": (15 * 1024 * 1024) + 1,
+                "mime": "application/octet-stream",
+                "hash": "",
+                "path": "data:application/octet-stream;base64,AA=="
+            }
+        ])
+        .to_string();
+
+        let result = create_task(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Attachment too large".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                priority: None,
+                url: None,
+                recur_rule: None,
+                attachments: Some(attachments),
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: Some("u-admin".to_string()),
+            }),
+        )
+        .await;
+
+        assert_eq!(result.err(), Some(StatusCode::BAD_REQUEST));
     }
 
     #[tokio::test]

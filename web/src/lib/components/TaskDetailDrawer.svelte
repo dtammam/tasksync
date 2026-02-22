@@ -20,9 +20,11 @@ let notes = '';
 let attachments = [];
 let priority = 0;
 let attachmentError = '';
+const MAX_ATTACHMENT_FILE_BYTES = 15 * 1024 * 1024;
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
+let attachmentFileInput = null;
 const recurrenceOptions = recurrenceRules.map((rule) => ({
 	value: rule,
 	label: recurrenceRuleLabels[rule]
@@ -89,6 +91,76 @@ const nextAttachmentId = () => {
 	if (randomId) return randomId;
 	return `att-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 };
+const isDataAttachment = (attachment) =>
+	typeof attachment?.path === 'string' && attachment.path.startsWith('data:');
+const addAttachmentRef = (ref) => {
+	if (attachments.some((attachment) => attachment.path === ref.path)) {
+		return false;
+	}
+	attachments = [...attachments, ref];
+	return true;
+};
+const toHex = (bytes) => Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+const hashBytes = async (buffer) => {
+	try {
+		if (!globalThis.crypto?.subtle) return '';
+		const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
+		return toHex(new Uint8Array(digest));
+	} catch {
+		return '';
+	}
+};
+const readFileAsDataUrl = (file) =>
+	new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => {
+			if (typeof reader.result === 'string') {
+				resolve(reader.result);
+				return;
+			}
+			reject(new Error('Invalid file data.'));
+		};
+		reader.onerror = () => reject(new Error('Failed to read file.'));
+		reader.readAsDataURL(file);
+	});
+const addSelectedFiles = async (event) => {
+	if (!task || !canEditTask) return;
+	const input = event?.target;
+	const selectedFiles = Array.from(input?.files ?? []);
+	if (!selectedFiles.length) return;
+	let nextError = '';
+	for (const file of selectedFiles) {
+		if (file.size > MAX_ATTACHMENT_FILE_BYTES) {
+			nextError = `${file.name || 'File'} exceeds the 15MB file limit.`;
+			continue;
+		}
+		try {
+			const [dataUrl, buffer] = await Promise.all([readFileAsDataUrl(file), file.arrayBuffer()]);
+			const ref = {
+				id: nextAttachmentId(),
+				name: file.name || 'attachment',
+				size: file.size,
+				mime: file.type || 'application/octet-stream',
+				hash: await hashBytes(buffer),
+				path: dataUrl
+			};
+			const added = addAttachmentRef(ref);
+			if (!added) {
+				nextError = `${file.name || 'File'} is already attached.`;
+			}
+		} catch (err) {
+			nextError = err instanceof Error ? err.message : 'Unable to attach file.';
+		}
+	}
+	attachmentError = nextError;
+	if (input) {
+		input.value = '';
+	}
+};
+const openFilePicker = () => {
+	if (!canEditTask) return;
+	attachmentFileInput?.click();
+};
 const addAttachment = () => {
 	if (!task || !canEditTask) return;
 	const path = newAttachment.trim();
@@ -109,7 +181,7 @@ const addAttachment = () => {
 		hash: '',
 		path
 	};
-	attachments = [...attachments, ref];
+	addAttachmentRef(ref);
 	newAttachment = '';
 	attachmentError = '';
 };
@@ -245,6 +317,26 @@ const memberAvatar = (member) => {
 					Add attachment
 				</button>
 			</div>
+			<div class="row attach">
+				<input
+					type="file"
+					hidden
+					bind:this={attachmentFileInput}
+					data-testid="attachment-file-input"
+					on:change={addSelectedFiles}
+					disabled={!canEditTask}
+				/>
+				<button
+					type="button"
+					class="ghost"
+					data-testid="attachment-upload"
+					on:click={openFilePicker}
+					disabled={!canEditTask}
+				>
+					Upload file
+				</button>
+				<p class="muted tiny">Max file size: 15MB</p>
+			</div>
 			{#if attachmentError}
 				<p class="error">{attachmentError}</p>
 			{/if}
@@ -252,7 +344,14 @@ const memberAvatar = (member) => {
 				<ul class="attachments" data-testid="attachments-list">
 					{#each attachments as att}
 						<li>
-							<a href={att.path} target="_blank" rel="noreferrer">{att.name}</a>
+							<a
+								href={att.path}
+								target={isDataAttachment(att) ? undefined : '_blank'}
+								rel={isDataAttachment(att) ? undefined : 'noreferrer'}
+								download={isDataAttachment(att) ? att.name : undefined}
+							>
+								{att.name}
+							</a>
 							{#if canEditTask}
 								<button
 									type="button"
@@ -325,5 +424,6 @@ const memberAvatar = (member) => {
 	.attachments { margin:0; padding-left:16px; color:var(--app-text); display:grid; gap:6px; }
 	.attachments li { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 	.attachments .tiny { padding: 5px 8px; font-size: 12px; }
+	.muted.tiny { font-size: 12px; margin: 0; align-self: center; }
 	.error { margin: 0; color: #fda4af; font-size: 12px; }
 </style>
