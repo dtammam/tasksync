@@ -27,6 +27,12 @@ Within `web/src/lib/`:
   - mobile section-list first, then section detail with back navigation
 - Section visibility rules are centralized in `web/src/lib/components/settingsMenu.ts`.
 
+## Mobile quick-add positioning
+
+- Route-level quick-add bars (`.mobile-add`) rely on `var(--mobile-keyboard-offset, 0px)` in their `bottom` offset.
+- `web/src/routes/+layout.svelte` is the single owner of `--mobile-keyboard-offset` and updates it from `visualViewport` + focus events.
+- Do not duplicate keyboard-offset logic inside route components.
+
 ## Target layered model (directional dependencies)
 
 Within a domain, dependencies should flow:

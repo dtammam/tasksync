@@ -369,6 +369,64 @@ test.describe('Navigation', () => {
 		await expect(addButton).toBeVisible();
 	});
 
+	test('keeps add field anchored when mobile viewport shrinks on first focus', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.addInitScript(() => {
+			class FakeVisualViewport extends EventTarget {
+				width = window.innerWidth;
+				height = window.innerHeight;
+				offsetTop = 0;
+				offsetLeft = 0;
+				pageTop = 0;
+				pageLeft = 0;
+				scale = 1;
+
+				setHeight(nextHeight: number) {
+					this.height = nextHeight;
+					this.dispatchEvent(new Event('resize'));
+					this.dispatchEvent(new Event('scroll'));
+				}
+			}
+
+			const fakeViewport = new FakeVisualViewport();
+			Object.defineProperty(window, 'visualViewport', {
+				configurable: true,
+				value: fakeViewport
+			});
+			Reflect.set(window, '__setFakeViewportHeight', (nextHeight: number) => {
+				fakeViewport.setHeight(nextHeight);
+			});
+		});
+
+		await resetClientState(page);
+		const addInput = page.getByTestId('new-task-input');
+		await addInput.focus();
+
+		await page.evaluate(() => {
+			const setFakeHeight = Reflect.get(window, '__setFakeViewportHeight');
+			if (typeof setFakeHeight === 'function') {
+				setFakeHeight(window.innerHeight - 320);
+			}
+		});
+
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					getComputedStyle(document.documentElement).getPropertyValue('--mobile-keyboard-offset').trim()
+				)
+			)
+			.toBe('320px');
+
+		await addInput.blur();
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					getComputedStyle(document.documentElement).getPropertyValue('--mobile-keyboard-offset').trim()
+				)
+			)
+			.toBe('0px');
+	});
+
 	test('keeps mobile sidebar open when pinned', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await resetClientState(page);

@@ -281,7 +281,7 @@
 		position: fixed;
 		left: var(--sidebar-offset, 0px);
 		right: 0;
-		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+		bottom: calc(env(safe-area-inset-bottom, 0px) + 10px + var(--mobile-keyboard-offset, 0px));
 		padding: 0 14px;
 		z-index: 15;
 		pointer-events: none;
