@@ -49,7 +49,6 @@ const mapApiTask = (t: ApiTask | SyncTask): Task => ({
 	tags: [],
 	checklist: [],
 	order: t.order,
-	attachments: t.attachments ? JSON.parse(t.attachments) : [],
 	url: t.url ?? undefined,
 	recurrence_id: t.recur_rule ?? undefined,
 	due_date: t.due_date ?? undefined,
@@ -63,9 +62,6 @@ const mapApiTask = (t: ApiTask | SyncTask): Task => ({
 	created_ts: t.created_ts,
 	updated_ts: t.updated_ts
 });
-
-const serializeAttachments = (task: Task) =>
-	task.attachments && task.attachments.length ? JSON.stringify(task.attachments) : undefined;
 
 interface PendingPushOp {
 	op_id: string;
@@ -96,7 +92,6 @@ const toPushChange = (
 					priority: task.priority,
 					url: task.url,
 					recur_rule: task.recurrence_id,
-					attachments: serializeAttachments(task),
 					due_date: task.due_date,
 					punted_from_due_date: task.punted_from_due_date,
 					punted_on_date: task.punted_on_date,
@@ -121,7 +116,6 @@ const toPushChange = (
 				priority: task.priority,
 				url: task.url,
 				recur_rule: task.recurrence_id,
-				attachments: serializeAttachments(task),
 				due_date: task.due_date,
 				punted_from_due_date: task.punted_from_due_date,
 				punted_on_date: task.punted_on_date,

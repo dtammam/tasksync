@@ -60,7 +60,6 @@ export interface SpaceBackupTask {
 	created_ts: number;
 	url?: string;
 	recur_rule?: string;
-	attachments?: string;
 	due_date?: string;
 	punted_from_due_date?: string;
 	punted_on_date?: string;

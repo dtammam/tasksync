@@ -17,14 +17,10 @@ let due = '';
 let recur = '';
 let url = '';
 let notes = '';
-let attachments = [];
 let priority = 0;
-let attachmentError = '';
-const MAX_ATTACHMENT_FILE_BYTES = 15 * 1024 * 1024;
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
-let attachmentFileInput = null;
 const recurrenceOptions = recurrenceRules.map((rule) => ({
 	value: rule,
 	label: recurrenceRuleLabels[rule]
@@ -42,9 +38,7 @@ function hydrate(t) {
 	recur = t.recurrence_id ?? '';
 	url = t.url ?? '';
 	notes = t.notes ?? '';
-	attachments = t.attachments ?? [];
 	priority = t.priority ?? 0;
-	attachmentError = '';
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
@@ -64,8 +58,7 @@ const save = () => {
 		due_date: due || undefined,
 		recurrence_id: recur || undefined,
 		url: url || undefined,
-		notes,
-		attachments
+		notes
 	});
 	if (priority !== (task.priority ?? 0)) {
 		tasks.setPriority(task.id, priority);
@@ -83,113 +76,6 @@ const save = () => {
 const toggleStatus = () => {
 	if (!task || !canEditTask) return;
 	tasks.toggle(task.id);
-};
-
-let newAttachment = '';
-const nextAttachmentId = () => {
-	const randomId = globalThis.crypto?.randomUUID?.();
-	if (randomId) return randomId;
-	return `att-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-};
-const isDataAttachment = (attachment) =>
-	typeof attachment?.path === 'string' && attachment.path.startsWith('data:');
-const addAttachmentRef = (ref) => {
-	if (attachments.some((attachment) => attachment.path === ref.path)) {
-		return false;
-	}
-	attachments = [...attachments, ref];
-	return true;
-};
-const toHex = (bytes) => Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-const hashBytes = async (buffer) => {
-	try {
-		if (!globalThis.crypto?.subtle) return '';
-		const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
-		return toHex(new Uint8Array(digest));
-	} catch {
-		return '';
-	}
-};
-const readFileAsDataUrl = (file) =>
-	new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => {
-			if (typeof reader.result === 'string') {
-				resolve(reader.result);
-				return;
-			}
-			reject(new Error('Invalid file data.'));
-		};
-		reader.onerror = () => reject(new Error('Failed to read file.'));
-		reader.readAsDataURL(file);
-	});
-const addSelectedFiles = async (event) => {
-	if (!task || !canEditTask) return;
-	const input = event?.target;
-	const selectedFiles = Array.from(input?.files ?? []);
-	if (!selectedFiles.length) return;
-	let nextError = '';
-	for (const file of selectedFiles) {
-		if (file.size > MAX_ATTACHMENT_FILE_BYTES) {
-			nextError = `${file.name || 'File'} exceeds the 15MB file limit.`;
-			continue;
-		}
-		try {
-			const [dataUrl, buffer] = await Promise.all([readFileAsDataUrl(file), file.arrayBuffer()]);
-			const ref = {
-				id: nextAttachmentId(),
-				name: file.name || 'attachment',
-				size: file.size,
-				mime: file.type || 'application/octet-stream',
-				hash: await hashBytes(buffer),
-				path: dataUrl
-			};
-			const added = addAttachmentRef(ref);
-			if (!added) {
-				nextError = `${file.name || 'File'} is already attached.`;
-			}
-		} catch (err) {
-			nextError = err instanceof Error ? err.message : 'Unable to attach file.';
-		}
-	}
-	attachmentError = nextError;
-	if (input) {
-		input.value = '';
-	}
-};
-const openFilePicker = () => {
-	if (!canEditTask) return;
-	attachmentFileInput?.click();
-};
-const addAttachment = () => {
-	if (!task || !canEditTask) return;
-	const path = newAttachment.trim();
-	if (!path) {
-		attachmentError = 'Enter a link or path before adding an attachment.';
-		return;
-	}
-	if (attachments.some((attachment) => attachment.path === path)) {
-		attachmentError = 'This attachment is already listed.';
-		return;
-	}
-	const name = path.split('/').filter(Boolean).pop() ?? 'attachment';
-	const ref = {
-		id: nextAttachmentId(),
-		name,
-		size: 0,
-		mime: 'text/uri-list',
-		hash: '',
-		path
-	};
-	addAttachmentRef(ref);
-	newAttachment = '';
-	attachmentError = '';
-};
-
-const removeAttachment = (id) => {
-	if (!canEditTask) return;
-	attachments = attachments.filter((attachment) => attachment.id !== id);
-	attachmentError = '';
 };
 
 const toggleStar = () => {
@@ -304,71 +190,6 @@ const memberAvatar = (member) => {
 				<textarea rows="4" bind:value={notes} disabled={!canEditTask}></textarea>
 			</label>
 
-			<div class="row attach">
-				<input
-					type="text"
-					placeholder="https://link-to-file or file path"
-					bind:value={newAttachment}
-					data-testid="attachment-input"
-					on:keydown={(e) => e.key === 'Enter' && addAttachment()}
-					disabled={!canEditTask}
-				/>
-				<button type="button" data-testid="attachment-add" on:click={addAttachment} disabled={!canEditTask}>
-					Add attachment
-				</button>
-			</div>
-			<div class="row attach">
-				<input
-					type="file"
-					hidden
-					bind:this={attachmentFileInput}
-					data-testid="attachment-file-input"
-					on:change={addSelectedFiles}
-					disabled={!canEditTask}
-				/>
-				<button
-					type="button"
-					class="ghost"
-					data-testid="attachment-upload"
-					on:click={openFilePicker}
-					disabled={!canEditTask}
-				>
-					Upload file
-				</button>
-				<p class="muted tiny">Max file size: 15MB</p>
-			</div>
-			{#if attachmentError}
-				<p class="error">{attachmentError}</p>
-			{/if}
-			{#if attachments?.length}
-				<ul class="attachments" data-testid="attachments-list">
-					{#each attachments as att}
-						<li>
-							<a
-								href={att.path}
-								target={isDataAttachment(att) ? undefined : '_blank'}
-								rel={isDataAttachment(att) ? undefined : 'noreferrer'}
-								download={isDataAttachment(att) ? att.name : undefined}
-							>
-								{att.name}
-							</a>
-							{#if canEditTask}
-								<button
-									type="button"
-									class="ghost tiny"
-									data-testid="attachment-remove"
-									on:click={() => removeAttachment(att.id)}
-								>
-									Remove
-								</button>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-			{:else}
-				<p class="muted">No attachments.</p>
-			{/if}
-
 			<div class="row buttons">
 				{#if !canEditTask}
 					<p class="muted">This task is owned by another member and is read-only for contributors.</p>
@@ -404,7 +225,6 @@ const memberAvatar = (member) => {
 	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(120px, auto)); }
-	.row.attach { grid-template-columns: 1fr auto; }
 	button.primary, .status {
 		background: linear-gradient(180deg, #1d4ed8, #1e40af); border:1px solid rgba(147,197,253,0.4);
 		color:#fff; padding:10px 12px; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
@@ -421,9 +241,4 @@ const memberAvatar = (member) => {
 		font-size: 12px;
 		color: var(--app-text);
 	}
-	.attachments { margin:0; padding-left:16px; color:var(--app-text); display:grid; gap:6px; }
-	.attachments li { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-	.attachments .tiny { padding: 5px 8px; font-size: 12px; }
-	.muted.tiny { font-size: 12px; margin: 0; align-self: center; }
-	.error { margin: 0; color: #fda4af; font-size: 12px; }
 </style>

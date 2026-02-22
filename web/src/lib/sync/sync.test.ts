@@ -92,7 +92,6 @@ describe('syncFromServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: false,
@@ -122,7 +121,6 @@ describe('syncFromServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: false,
@@ -138,7 +136,6 @@ describe('syncFromServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'b',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: false,
@@ -375,7 +372,6 @@ describe('pushPendingToServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: true
@@ -426,7 +422,6 @@ describe('pushPendingToServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: true
@@ -476,7 +471,6 @@ describe('pushPendingToServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: true
@@ -585,7 +579,6 @@ describe('pushPendingToServer', () => {
 			due_date: '2026-02-03',
 			punted_from_due_date: '2026-02-02',
 			punted_on_date: '2026-02-02',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 2,
 			dirty: true

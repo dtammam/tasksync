@@ -12,7 +12,7 @@
 
 ## High‑level Design
 - **Client:** SvelteKit PWA (TypeScript) using IndexedDB + OPFS; WebAudio for completion sound.
-- **Server:** Rust (Axum + SQLx), single static binary; SQLite (WAL). Attachments on disk (content‑addressed).
+- **Server:** Rust (Axum + SQLx), single static binary; SQLite (WAL).
 - **Sync:** Append‑only changesets + per‑entity version vector; WS live sync, HTTP fallback.
 - **Conflicts:** Per‑field LWW + deterministic tiebreak; sets=union+tombstones; ordering via fractional indexes.
 
@@ -25,17 +25,14 @@ package "tasksync Client (PWA)" {
   [Local Stores] --> [IndexedDB]
   [Service Worker] --> [Sync Engine]
   [Sync Engine] --> [WebSocket/HTTP]
-  [OPFS/Cache API] --> [Attachments]
 }
 package "tasksync Server" {
   [HTTP+WS API]
   [Sync Coordinator]
   [SQLite]
-  [Attachment Store]
 }
 [WebSocket/HTTP] <--> [HTTP+WS API]
 [Sync Coordinator] --> [SQLite]
-[Sync Coordinator] --> [Attachment Store]
 @enduml
 ```
 
@@ -68,14 +65,14 @@ package "tasksync Server" {
 - **UI:** Svelte components; virtualized lists for large sets; keyboard‑first flows.
 - **State:** Svelte writable/derived stores; repository layer persists to IndexedDB; background SharedWorker handles sync + indexing.
 - **Search:** MiniSearch (in‑memory) for MVP; upgrade to SQLite WASM + FTS5 in V1 if needed.
-- **Attachments (MVP):** Stored as task attachment refs in task metadata; file uploads are encoded as data URLs with a per-file **15 MB** limit and no extension allow-list.
+- **Task references (MVP):** Tasks support `url` references only; binary task attachments were reviewed and retired due low product demand and long-term maintenance cost.
 - **Audio:** Web Audio API with pre‑decoded buffers and custom-file buffer playback (gain-controlled for mobile/WebKit consistency); user settings control theme, volume, enable.
 - **UI preferences:** per-user preferences (app theme + sidebar panel collapse state) are cached locally and synced via authenticated profile endpoints.
 - **PWA install metadata:** static `manifest.webmanifest` + `apple-touch-icon`/PNG icon set in `web/static` so installed shortcuts use branded artwork on iOS/Android.
 
 ## Server Architecture
 - **Axum** web server; **SQLx** to SQLite (WAL). Pragmas: `journal_mode=WAL`, `synchronous=NORMAL`.
-- **Files:** `data/obj/xx/<sha256>` content‑addressed; MIME allow‑list; 10 MB limit.
+- **Files:** No general task file object store in MVP; server persists task metadata and user sound/profile metadata.
 - **Auth:** JWT (HS256) per user; device `client_id` per installation; all endpoints behind TLS.
 - **User media/settings:** `/auth/sound` persists per-user sound + profile media metadata server-side for cross-device consistency.
 - **User UI preferences:** `/auth/preferences` persists per-user app theme and sidebar panel-collapse state for cross-device consistency.
@@ -84,9 +81,8 @@ package "tasksync Server" {
 ## Data Model (abridged)
 ```
 ID = ulid | TS = ms
-Task { id, title, notes?, url?, due?, start?, scheduled?, priority(0..3), status(pending|done|cancelled), list_id, project_id?, area_id?, tags:Set<ID>, checklist:[ChecklistItem], order, recurrence_id?, recur_state?, punted_from_due_date?, punted_on_date?, created_ts, updated_ts, attachments:Set<FileRef> }
+Task { id, title, notes?, url?, due?, start?, scheduled?, priority(0..3), status(pending|done|cancelled), list_id, project_id?, area_id?, tags:Set<ID>, checklist:[ChecklistItem], order, recurrence_id?, recur_state?, punted_from_due_date?, punted_on_date?, created_ts, updated_ts }
 ChecklistItem { id, title, done, order }
-FileRef { id, name, size<=15MB, mime, hash, path }
 List { id, name, order }
 Project { id, name, order }
 Area { id, name, order }
@@ -173,5 +169,5 @@ create table if not exists change (
 
 ## Roadmap
 - **MVP**: PWA shell, local stores + IndexedDB/OPFS, CRUD, recurrence, My Day, single‑binary server, sync, role model (admin/contributor create‑only), completion sounds.
-- **V1**: Multi‑user spaces, invites, E2EE (optional), SQLite WASM + FTS5, natural‑language add, S3 backend for attachments.
+- **V1**: Multi‑user spaces, invites, E2EE (optional), SQLite WASM + FTS5, natural‑language add.
 - **V2**: Plugin API, collaborative notes, optional native wrappers, push/background sync.

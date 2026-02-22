@@ -20,7 +20,6 @@ export interface SyncTask {
 	created_ts: number;
 	url?: string;
 	recur_rule?: string;
-	attachments?: string;
 	due_date?: string;
 	punted_from_due_date?: string;
 	punted_on_date?: string;
@@ -54,7 +53,6 @@ export interface SyncCreateTaskChange {
 		priority?: number;
 		url?: string;
 		recur_rule?: string;
-		attachments?: string;
 		due_date?: string;
 		punted_from_due_date?: string;
 		punted_on_date?: string;
@@ -75,7 +73,6 @@ export interface SyncUpdateTaskChange {
 		priority?: number;
 		url?: string;
 		recur_rule?: string;
-		attachments?: string;
 		due_date?: string;
 		punted_from_due_date?: string;
 		punted_on_date?: string;

@@ -65,7 +65,6 @@ export interface ApiTask {
 	created_ts: number;
 	url?: string;
 	recur_rule?: string;
-	attachments?: string;
 	due_date?: string;
 	punted_from_due_date?: string;
 	punted_on_date?: string;
@@ -165,7 +164,6 @@ export const api = {
 		order?: string;
 		url?: string;
 		recur_rule?: string;
-		attachments?: string;
 		due_date?: string;
 		punted_from_due_date?: string;
 		punted_on_date?: string;
@@ -186,7 +184,6 @@ export const api = {
 			priority?: number;
 			url?: string;
 			recur_rule?: string;
-			attachments?: string;
 			due_date?: string;
 			punted_from_due_date?: string;
 			punted_on_date?: string;

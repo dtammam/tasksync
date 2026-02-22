@@ -1,10 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 
-declare const Buffer: {
-	from(input: string): Uint8Array;
-	alloc(size: number, fill?: number): Uint8Array;
-};
-
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 const toLocalIsoDate = (date: Date) =>
 	`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -281,59 +276,6 @@ test.describe('My Day', () => {
 		await expect(page.getByTestId('sound-enabled')).not.toBeChecked();
 		await expect(page.getByTestId('sound-theme')).toHaveValue('wood_tick');
 		await expect(page.getByTestId('sound-volume')).toHaveValue('25');
-	});
-
-	test('supports adding and removing task attachments from details', async ({ page }) => {
-		await resetClientState(page);
-		const title = makeTitle('Attachment task');
-		const fileName = 'spec.txt';
-
-		await page.getByTestId('new-task-input').fill(title);
-		await page.getByTestId('new-task-submit').click();
-		const row = page.getByTestId('task-row').filter({ hasText: title });
-		await expect(row).toHaveCount(1);
-
-		await row.getByRole('button', { name: '⋯' }).click();
-		await row.getByRole('button', { name: 'Details' }).click();
-		await page.getByTestId('attachment-file-input').setInputFiles({
-			name: fileName,
-			mimeType: 'text/plain',
-			buffer: Buffer.from('hello attachment')
-		});
-		await expect(page.getByRole('link', { name: fileName })).toHaveCount(1);
-		await page.getByRole('button', { name: 'Save' }).click();
-
-		await row.getByRole('button', { name: '⋯' }).click();
-		await row.getByRole('button', { name: 'Details' }).click();
-		await expect(page.getByRole('link', { name: fileName })).toHaveCount(1);
-		await page.getByTestId('attachment-remove').first().click();
-		await page.getByRole('button', { name: 'Save' }).click();
-
-		await row.getByRole('button', { name: '⋯' }).click();
-		await row.getByRole('button', { name: 'Details' }).click();
-		await expect(page.getByRole('link', { name: fileName })).toHaveCount(0);
-		await expect(page.getByText('No attachments.')).toBeVisible();
-	});
-
-	test('rejects file attachments larger than 15MB', async ({ page }) => {
-		await resetClientState(page);
-		const title = makeTitle('Large attachment task');
-
-		await page.getByTestId('new-task-input').fill(title);
-		await page.getByTestId('new-task-submit').click();
-		const row = page.getByTestId('task-row').filter({ hasText: title });
-		await expect(row).toHaveCount(1);
-
-		await row.getByRole('button', { name: '⋯' }).click();
-		await row.getByRole('button', { name: 'Details' }).click();
-		await page.getByTestId('attachment-file-input').setInputFiles({
-			name: 'huge.bin',
-			mimeType: 'application/octet-stream',
-			buffer: Buffer.alloc(15 * 1024 * 1024 + 1, 1)
-		});
-
-		await expect(page.getByText('exceeds the 15MB file limit.')).toBeVisible();
-		await expect(page.getByRole('link', { name: 'huge.bin' })).toHaveCount(0);
 	});
 
 	test('keeps recurring cadence when punting only a single scheduled instance', async ({ page }) => {

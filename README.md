@@ -32,7 +32,7 @@ It works well in a web browser, but that "app" experience is pretty nifty.
 - Color-coding for lists and tasks to improve scanability and visual organization.
 - Multi-user management with tiered permissions: admins have full access, contributors can add/edit only on explicitly granted lists.
 - Team administration in sidebar: member creation, password lifecycle flows, and list-grant controls.
-- Fast My Day execution flow with due dates, recurrence, notes, attachments, and missed-task recovery actions.
+- Fast My Day execution flow with due dates, recurrence, notes, URL references, and missed-task recovery actions.
 - Admin-gated JSON backup/restore for recoverable space snapshots.
 - Self-host ready: Rust + SQLite backend, SvelteKit frontend, Docker/Compose deployment support.
 

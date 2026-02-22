@@ -44,7 +44,6 @@ const makeLocalTask = (
 		tags: [],
 		checklist: [],
 		order,
-		attachments: [],
 		due_date: opts?.due_date,
 		recurrence_id: opts?.recurrence_id,
 		url: opts?.url,
@@ -76,8 +75,7 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.assignee_user_id !== sent.assignee_user_id ||
 	(current.occurrences_completed ?? 0) !== (sent.occurrences_completed ?? 0) ||
 	current.punted_from_due_date !== sent.punted_from_due_date ||
-	current.punted_on_date !== sent.punted_on_date ||
-	JSON.stringify(current.attachments ?? []) !== JSON.stringify(sent.attachments ?? []);
+	current.punted_on_date !== sent.punted_on_date;
 
 const clearPuntState = (task: Task) => ({
 	...task,
@@ -397,7 +395,6 @@ export const tasks = {
 		details: {
 			url?: string;
 			recurrence_id?: string;
-			attachments?: Task['attachments'];
 			due_date?: string;
 			notes?: string;
 			occurrences_completed?: number;
@@ -412,7 +409,6 @@ export const tasks = {
 							...t,
 							url: details.url ?? t.url,
 							recurrence_id: details.recurrence_id ?? t.recurrence_id,
-							attachments: details.attachments ?? t.attachments,
 							due_date: details.due_date ?? t.due_date,
 							notes: details.notes ?? t.notes,
 							occurrences_completed:

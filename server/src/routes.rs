@@ -316,116 +316,6 @@ fn normalize_profile_attachments(raw: Option<String>) -> Result<Option<String>, 
     Ok(Some(trimmed.to_string()))
 }
 
-const MAX_TASK_ATTACHMENT_FILE_BYTES: usize = 15 * 1024 * 1024;
-const MAX_TASK_ATTACHMENTS_PER_TASK: usize = 32;
-const MAX_TASK_ATTACHMENTS_JSON_BYTES: usize = 64 * 1024 * 1024;
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct TaskAttachmentRef {
-    id: Option<String>,
-    name: Option<String>,
-    size: Option<i64>,
-    mime: Option<String>,
-    hash: Option<String>,
-    path: String,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct NormalizedTaskAttachmentRef {
-    id: String,
-    name: String,
-    size: i64,
-    mime: String,
-    hash: String,
-    path: String,
-}
-
-fn estimated_data_url_bytes(path: &str) -> Option<usize> {
-    let trimmed = path.trim();
-    if !trimmed.starts_with("data:") {
-        return None;
-    }
-    let split_idx = trimmed.find(',')?;
-    let metadata = &trimmed[..split_idx];
-    let payload = &trimmed[split_idx + 1..];
-    if metadata.ends_with(";base64") {
-        let payload_len = payload.len();
-        if payload_len == 0 {
-            return Some(0);
-        }
-        let padding = payload.as_bytes().iter().rev().take_while(|byte| **byte == b'=').count();
-        let triplets = payload_len / 4;
-        return Some(triplets.saturating_mul(3).saturating_sub(padding));
-    }
-    Some(payload.len())
-}
-
-fn normalize_task_attachments(raw: Option<String>) -> Result<Option<String>, StatusCode> {
-    let Some(value) = raw else {
-        return Ok(None);
-    };
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-    if trimmed.len() > MAX_TASK_ATTACHMENTS_JSON_BYTES {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let parsed = serde_json::from_str::<Vec<TaskAttachmentRef>>(trimmed)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
-    if parsed.len() > MAX_TASK_ATTACHMENTS_PER_TASK {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let mut normalized = Vec::with_capacity(parsed.len());
-    for attachment in parsed {
-        let path = attachment.path.trim();
-        if path.is_empty() {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        if path.len() > MAX_TASK_ATTACHMENTS_JSON_BYTES {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        let declared_size = attachment.size.unwrap_or(0);
-        if declared_size < 0 || declared_size as usize > MAX_TASK_ATTACHMENT_FILE_BYTES {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        let inferred_size = estimated_data_url_bytes(path);
-        if inferred_size.is_some_and(|size| size > MAX_TASK_ATTACHMENT_FILE_BYTES) {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        let normalized_size =
-            if declared_size > 0 { declared_size } else { inferred_size.unwrap_or(0) as i64 };
-        let id = attachment.id.unwrap_or_default().trim().to_string();
-        let name = attachment.name.unwrap_or_else(|| "attachment".to_string()).trim().to_string();
-        let mime = attachment
-            .mime
-            .unwrap_or_else(|| "application/octet-stream".to_string())
-            .trim()
-            .to_string();
-        let hash = attachment.hash.unwrap_or_default().trim().to_string();
-        if name.is_empty() || name.chars().count() > 255 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        if mime.is_empty() || mime.chars().count() > 255 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        if id.chars().count() > 255 || hash.chars().count() > 255 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        normalized.push(NormalizedTaskAttachmentRef {
-            id,
-            name,
-            size: normalized_size,
-            mime,
-            hash,
-            path: path.to_string(),
-        });
-    }
-    serde_json::to_string(&normalized).map(Some).map_err(|_| StatusCode::BAD_REQUEST)
-}
-
 fn normalize_ui_theme(raw: Option<String>) -> Result<Option<String>, StatusCode> {
     let Some(value) = raw else {
         return Ok(None);
@@ -682,7 +572,6 @@ struct BackupTaskRow {
     created_ts: i64,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
     punted_from_due_date: Option<String>,
     punted_on_date: Option<String>,
@@ -1096,7 +985,7 @@ async fn load_space_backup(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tasks = sqlx::query_as::<_, BackupTaskRow>(
-        "select id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+        "select id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -1309,7 +1198,7 @@ async fn auth_restore_backup(
 
     for task in &body.tasks {
         sqlx::query(
-            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
         )
         .bind(&task.id)
         .bind(&task.space_id)
@@ -1323,7 +1212,6 @@ async fn auth_restore_backup(
         .bind(task.created_ts)
         .bind(&task.url)
         .bind(&task.recur_rule)
-        .bind(&task.attachments)
         .bind(&task.due_date)
         .bind(&task.punted_from_due_date)
         .bind(&task.punted_on_date)
@@ -1793,7 +1681,6 @@ struct TaskRow {
     created_ts: i64,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
     punted_from_due_date: Option<String>,
     punted_on_date: Option<String>,
@@ -1814,7 +1701,6 @@ struct CreateTask {
     priority: Option<i64>,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
     punted_from_due_date: Option<String>,
     punted_on_date: Option<String>,
@@ -1830,7 +1716,7 @@ async fn get_tasks(
     let ctx = ctx_from_headers(&headers, &state).await?;
     let rows = if ctx.role == Role::Admin {
         sqlx::query_as::<_, TaskRow>(
-            "select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+            "select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
         )
         .bind(&ctx.space_id)
         .fetch_all(&state.pool)
@@ -1838,7 +1724,7 @@ async fn get_tasks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
         sqlx::query_as::<_, TaskRow>(
-            "select t.id, t.space_id, t.title, t.status, t.list_id, t.my_day, t.priority, t.task_order as \"order\", t.updated_ts, t.created_ts, t.url, t.recur_rule, t.attachments, t.due_date, t.punted_from_due_date, t.punted_on_date, t.occurrences_completed, t.completed_ts, t.notes, t.assignee_user_id, t.created_by_user_id from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.task_order asc",
+            "select t.id, t.space_id, t.title, t.status, t.list_id, t.my_day, t.priority, t.task_order as \"order\", t.updated_ts, t.created_ts, t.url, t.recur_rule, t.due_date, t.punted_from_due_date, t.punted_on_date, t.occurrences_completed, t.completed_ts, t.notes, t.assignee_user_id, t.created_by_user_id from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.task_order asc",
         )
         .bind(&ctx.space_id)
         .bind(&ctx.user_id)
@@ -1884,7 +1770,6 @@ async fn create_task(
     }
 
     let assignee_user_id = ctx.user_id.clone();
-    let attachments = normalize_task_attachments(body.attachments.clone())?;
 
     let id = body
         .id
@@ -1907,7 +1792,7 @@ async fn create_task(
     let punted_from_due_date = body.punted_from_due_date.clone();
     let punted_on_date = body.punted_on_date.clone();
     let insert_result = sqlx::query_as::<_, TaskRow>(
-		"insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0, null, ?15, ?16, ?17) returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+		"insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, 0, null, ?14, ?15, ?16) returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&id)
 	.bind(&ctx.space_id)
@@ -1919,7 +1804,6 @@ async fn create_task(
 	.bind(now)
 	.bind(&body.url)
 	.bind(&body.recur_rule)
-	.bind(&attachments)
 	.bind(&body.due_date)
 	.bind(&punted_from_due_date)
 	.bind(&punted_on_date)
@@ -1935,7 +1819,7 @@ async fn create_task(
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
             let existing = sqlx::query_as::<_, TaskRow>(
-				"select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
+				"select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
 			)
 			.bind(&id)
 			.bind(&ctx.space_id)
@@ -1964,7 +1848,6 @@ struct UpdateTaskMeta {
     priority: Option<i64>,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
     punted_from_due_date: Option<String>,
     punted_on_date: Option<String>,
@@ -2164,7 +2047,7 @@ async fn update_task_status(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-		"update task set status = ?1, completed_ts = case when ?1 = 'done' then coalesce(completed_ts, ?2) else null end, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+		"update task set status = ?1, completed_ts = case when ?1 = 'done' then coalesce(completed_ts, ?2) else null end, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&body.status)
 	.bind(now)
@@ -2226,7 +2109,6 @@ async fn update_task_meta(
         }
     }
     let priority = normalize_task_priority(body.priority)?;
-    let attachments = normalize_task_attachments(body.attachments.clone())?;
 
     if let Some(list_id) = &body.list_id {
         let exists: Option<i64> =
@@ -2307,7 +2189,7 @@ async fn update_task_meta(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-        "update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), priority = coalesce(?5, priority), url = coalesce(?6, url), recur_rule = coalesce(?7, recur_rule), attachments = coalesce(?8, attachments), due_date = coalesce(?9, due_date), punted_from_due_date = coalesce(?10, punted_from_due_date), punted_on_date = coalesce(?11, punted_on_date), occurrences_completed = coalesce(?12, occurrences_completed), completed_ts = case when ?13 is not null then ?13 when ?2 is null then completed_ts when ?2 = 'done' then coalesce(completed_ts, ?16) else null end, notes = coalesce(?14, notes), assignee_user_id = coalesce(?15, assignee_user_id), updated_ts = ?16 where id = ?17 and space_id = ?18 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+        "update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), priority = coalesce(?5, priority), url = coalesce(?6, url), recur_rule = coalesce(?7, recur_rule), due_date = coalesce(?8, due_date), punted_from_due_date = coalesce(?9, punted_from_due_date), punted_on_date = coalesce(?10, punted_on_date), occurrences_completed = coalesce(?11, occurrences_completed), completed_ts = case when ?12 is not null then ?12 when ?2 is null then completed_ts when ?2 = 'done' then coalesce(completed_ts, ?15) else null end, notes = coalesce(?13, notes), assignee_user_id = coalesce(?14, assignee_user_id), updated_ts = ?15 where id = ?16 and space_id = ?17 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
     )
     .bind(&body.title)
     .bind(&body.status)
@@ -2316,7 +2198,6 @@ async fn update_task_meta(
     .bind(priority)
     .bind(&body.url)
     .bind(&body.recur_rule)
-    .bind(&attachments)
     .bind(&body.due_date)
     .bind(&body.punted_from_due_date)
     .bind(&body.punted_on_date)
@@ -3095,7 +2976,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3134,7 +3014,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3160,7 +3039,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3179,99 +3057,6 @@ mod tests {
             .await
             .expect("count task rows");
         assert_eq!(count, 1);
-    }
-
-    #[tokio::test]
-    async fn create_task_accepts_small_attachment_payload() {
-        let pool = setup_pool().await;
-        let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
-
-        let attachments = serde_json::json!([
-            {
-                "id": "att-1",
-                "name": "hello.txt",
-                "size": 5,
-                "mime": "text/plain",
-                "hash": "",
-                "path": "data:text/plain;base64,aGVsbG8="
-            }
-        ])
-        .to_string();
-
-        let created = create_task(
-            State(state),
-            headers,
-            Json(CreateTask {
-                id: None,
-                title: "Attachment create".to_string(),
-                list_id: "goal-management".to_string(),
-                order: Some("z".to_string()),
-                my_day: Some(false),
-                priority: None,
-                url: None,
-                recur_rule: None,
-                attachments: Some(attachments),
-                due_date: None,
-                punted_from_due_date: None,
-                punted_on_date: None,
-                notes: None,
-                assignee_user_id: Some("u-admin".to_string()),
-            }),
-        )
-        .await
-        .expect("create should succeed")
-        .1
-         .0;
-
-        assert!(created.attachments.is_some());
-    }
-
-    #[tokio::test]
-    async fn create_task_rejects_attachment_over_15mb() {
-        let pool = setup_pool().await;
-        let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
-
-        let attachments = serde_json::json!([
-            {
-                "id": "att-big",
-                "name": "big.bin",
-                "size": (15 * 1024 * 1024) + 1,
-                "mime": "application/octet-stream",
-                "hash": "",
-                "path": "data:application/octet-stream;base64,AA=="
-            }
-        ])
-        .to_string();
-
-        let result = create_task(
-            State(state),
-            headers,
-            Json(CreateTask {
-                id: None,
-                title: "Attachment too large".to_string(),
-                list_id: "goal-management".to_string(),
-                order: Some("z".to_string()),
-                my_day: Some(false),
-                priority: None,
-                url: None,
-                recur_rule: None,
-                attachments: Some(attachments),
-                due_date: None,
-                punted_from_due_date: None,
-                punted_on_date: None,
-                notes: None,
-                assignee_user_id: Some("u-admin".to_string()),
-            }),
-        )
-        .await;
-
-        assert_eq!(result.err(), Some(StatusCode::BAD_REQUEST));
     }
 
     #[tokio::test]
@@ -3347,7 +3132,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3391,7 +3175,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: Some("2026-02-06".to_string()),
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3438,7 +3221,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3479,7 +3261,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: Some("2026-02-09".to_string()),
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3535,7 +3316,6 @@ mod tests {
                 priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
                 punted_from_due_date: None,
                 punted_on_date: None,
@@ -3657,7 +3437,6 @@ mod tests {
                             priority: None,
                             url: None,
                             recur_rule: None,
-                            attachments: None,
                             due_date: None,
                             punted_from_due_date: None,
                             punted_on_date: None,

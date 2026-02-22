@@ -18,6 +18,7 @@ Start here, then follow links. The goal is progressive disclosure: small entry p
 
 - Active plans: `exec-plans/active/`
 - Completed plans: `exec-plans/completed/`
+- Attachment retirement decision: `exec-plans/completed/task-attachments-retired.md`
 - Tech debt tracker: `exec-plans/tech-debt-tracker.md`
 
 ## References (agent-facing)

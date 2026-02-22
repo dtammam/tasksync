@@ -24,7 +24,6 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	tags: overrides.tags ?? [],
 	checklist: overrides.checklist ?? [],
 	order: overrides.order ?? 'a',
-	attachments: overrides.attachments ?? [],
 	created_ts: overrides.created_ts ?? Date.now(),
 	updated_ts: overrides.updated_ts ?? Date.now(),
 	dirty: overrides.dirty ?? false,
