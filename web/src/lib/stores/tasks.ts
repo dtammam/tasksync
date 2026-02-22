@@ -44,7 +44,6 @@ const makeLocalTask = (
 		tags: [],
 		checklist: [],
 		order,
-		attachments: [],
 		due_date: opts?.due_date,
 		recurrence_id: opts?.recurrence_id,
 		url: opts?.url,
@@ -66,6 +65,7 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.status !== sent.status ||
 	current.list_id !== sent.list_id ||
 	current.my_day !== sent.my_day ||
+	current.priority !== sent.priority ||
 	current.order !== sent.order ||
 	current.url !== sent.url ||
 	current.recurrence_id !== sent.recurrence_id ||
@@ -75,8 +75,7 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.assignee_user_id !== sent.assignee_user_id ||
 	(current.occurrences_completed ?? 0) !== (sent.occurrences_completed ?? 0) ||
 	current.punted_from_due_date !== sent.punted_from_due_date ||
-	current.punted_on_date !== sent.punted_on_date ||
-	JSON.stringify(current.attachments ?? []) !== JSON.stringify(sent.attachments ?? []);
+	current.punted_on_date !== sent.punted_on_date;
 
 const clearPuntState = (task: Task) => ({
 	...task,
@@ -349,15 +348,17 @@ export const tasks = {
 				if (
 					task.id !== id ||
 					task.status !== 'pending' ||
-					!task.recurrence_id ||
 					task.due_date !== today
 				) {
 					return task;
 				}
+				// Daily recurrence already lands on tomorrow by design; punting is a no-op.
+				if (task.recurrence_id === 'daily') return task;
 				const tomorrow = nextDueForRecurrence(task.due_date, 'daily');
 				if (!tomorrow) return task;
 				return {
 					...task,
+					my_day: false,
 					due_date: tomorrow,
 					punted_from_due_date: task.punted_from_due_date ?? task.due_date,
 					punted_on_date: today,
@@ -396,7 +397,6 @@ export const tasks = {
 		details: {
 			url?: string;
 			recurrence_id?: string;
-			attachments?: Task['attachments'];
 			due_date?: string;
 			notes?: string;
 			occurrences_completed?: number;
@@ -411,7 +411,6 @@ export const tasks = {
 							...t,
 							url: details.url ?? t.url,
 							recurrence_id: details.recurrence_id ?? t.recurrence_id,
-							attachments: details.attachments ?? t.attachments,
 							due_date: details.due_date ?? t.due_date,
 							notes: details.notes ?? t.notes,
 							occurrences_completed:
@@ -488,13 +487,14 @@ const isAssignedToUser = (task: Task, userId?: string | null) => {
 
 const inMyDay = (task: Task) => {
 	if (task.my_day) return true;
-	if (task.punted_on_date === todayIso()) return true;
 	return isToday(task.due_date);
 };
 
 const isMissedTask = (task: Task) => task.status === 'pending' && isBeforeToday(task.due_date);
 const wasRecurringCompletedToday = (task: Task) =>
 	!!task.recurrence_id && task.status === 'pending' && isTodayTs(task.completed_ts);
+const wasPuntedToday = (task: Task) =>
+	task.status === 'pending' && task.punted_on_date === todayIso() && !!task.punted_from_due_date;
 
 const wasCompletedToday = (task: Task) => {
 	if (task.status !== 'done') return false;
@@ -542,7 +542,9 @@ export const myDayCompleted = derived(
 			(task) =>
 				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
 				isAssignedToUser(task, $auth.user?.user_id) &&
-				((inMyDay(task) && wasCompletedToday(task)) || wasRecurringCompletedToday(task))
+				((inMyDay(task) && wasCompletedToday(task)) ||
+					wasRecurringCompletedToday(task) ||
+					wasPuntedToday(task))
 		);
 	}
 );

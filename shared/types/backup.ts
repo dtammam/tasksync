@@ -54,13 +54,15 @@ export interface SpaceBackupTask {
 	status: 'pending' | 'done' | 'cancelled';
 	list_id: string;
 	my_day: number;
+	priority: number;
 	task_order: string;
 	updated_ts: number;
 	created_ts: number;
 	url?: string;
 	recur_rule?: string;
-	attachments?: string;
 	due_date?: string;
+	punted_from_due_date?: string;
+	punted_on_date?: string;
 	occurrences_completed: number;
 	completed_ts?: number;
 	notes?: string;

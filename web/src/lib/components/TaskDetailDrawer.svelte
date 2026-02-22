@@ -5,7 +5,7 @@ import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
-import { recurrenceRuleLabels, recurrenceRules } from '$lib/tasks/recurrence';
+import { recurrenceRuleLabels, recurrenceRules, toLocalIsoDate } from '$lib/tasks/recurrence';
 
 export let task = null;
 export let open = false;
@@ -17,7 +17,7 @@ let due = '';
 let recur = '';
 let url = '';
 let notes = '';
-let attachments = [];
+let priority = 0;
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
@@ -38,7 +38,7 @@ function hydrate(t) {
 	recur = t.recurrence_id ?? '';
 	url = t.url ?? '';
 	notes = t.notes ?? '';
-	attachments = t.attachments ?? [];
+	priority = t.priority ?? 0;
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
@@ -50,6 +50,19 @@ $: isOwner = !!$auth.user?.user_id && task?.created_by_user_id === $auth.user.us
 $: canEditTask = !isContributor || isOwner;
 $: canEditMyDay = !isContributor;
 $: canEditAssignee = !isContributor;
+$: todayKey = toLocalIsoDate(new Date());
+$: showPuntedArrivalIndicator =
+	task?.status === 'pending' &&
+	task?.due_date === todayKey &&
+	!!task?.punted_from_due_date &&
+	!!task?.punted_on_date &&
+	task.punted_on_date < todayKey;
+$: showPuntedTodayIndicator =
+	task?.status === 'pending' &&
+	!!task?.due_date &&
+	task.due_date > todayKey &&
+	task.punted_on_date === todayKey &&
+	!!task?.punted_from_due_date;
 
 const save = () => {
 	if (!task || !canEditTask) return;
@@ -58,9 +71,11 @@ const save = () => {
 		due_date: due || undefined,
 		recurrence_id: recur || undefined,
 		url: url || undefined,
-		notes,
-		attachments
+		notes
 	});
+	if (priority !== (task.priority ?? 0)) {
+		tasks.setPriority(task.id, priority);
+	}
 	if (canEditMyDay) {
 		tasks.setMyDay(task.id, myDay);
 	}
@@ -76,20 +91,9 @@ const toggleStatus = () => {
 	tasks.toggle(task.id);
 };
 
-let newAttachment = '';
-const addAttachment = () => {
-	if (!newAttachment.trim() || !task || !canEditTask) return;
-	const name = newAttachment.split('/').filter(Boolean).pop() ?? 'attachment';
-	const ref = {
-		id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
-		name,
-		size: 0,
-		mime: 'text/uri-list',
-		hash: '',
-		path: newAttachment.trim()
-	};
-	attachments = [...attachments, ref];
-	newAttachment = '';
+const toggleStar = () => {
+	if (!canEditTask) return;
+	priority = priority > 0 ? 0 : 1;
 };
 
 const skip = () => {
@@ -112,6 +116,15 @@ const memberAvatar = (member) => {
 			<div>
 				<p class="eyebrow">Details</p>
 				<h2>{title}</h2>
+				{#if priority > 0}
+					<p class="star-pill" data-testid="detail-star-indicator">★ Starred</p>
+				{/if}
+				{#if showPuntedArrivalIndicator}
+					<p class="punt-pill" data-testid="detail-punt-indicator">👟 Punted from {task.punted_from_due_date}</p>
+				{/if}
+				{#if showPuntedTodayIndicator}
+					<p class="punt-pill" data-testid="detail-punt-indicator">👟 Punted today to {task.due_date}</p>
+				{/if}
 				<p class="muted">
 					Created {new Date(task.created_ts).toLocaleString()} • Updated {new Date(task.updated_ts).toLocaleString()}
 				</p>
@@ -135,6 +148,18 @@ const memberAvatar = (member) => {
 				<label>
 					My Day
 					<input type="checkbox" bind:checked={myDay} disabled={!canEditMyDay} />
+				</label>
+				<label>
+					Starred
+					<button
+						class={`ghost star-toggle ${priority > 0 ? 'active' : ''}`}
+						type="button"
+						data-testid="detail-star-toggle"
+						on:click={toggleStar}
+						disabled={!canEditTask}
+					>
+						{priority > 0 ? '★ Starred' : '☆ Star'}
+					</button>
 				</label>
 			</div>
 
@@ -184,26 +209,6 @@ const memberAvatar = (member) => {
 				<textarea rows="4" bind:value={notes} disabled={!canEditTask}></textarea>
 			</label>
 
-			<div class="row attach">
-				<input
-					type="url"
-					placeholder="https://link-to-file"
-					bind:value={newAttachment}
-					on:keydown={(e) => e.key === 'Enter' && addAttachment()}
-					disabled={!canEditTask}
-				/>
-				<button type="button" on:click={addAttachment} disabled={!canEditTask}>Add attachment</button>
-			</div>
-			{#if attachments?.length}
-				<ul class="attachments">
-					{#each attachments as att}
-						<li><a href={att.path} target="_blank" rel="noreferrer">{att.name}</a></li>
-					{/each}
-				</ul>
-			{:else}
-				<p class="muted">No attachments.</p>
-			{/if}
-
 			<div class="row buttons">
 				{#if !canEditTask}
 					<p class="muted">This task is owned by another member and is read-only for contributors.</p>
@@ -239,13 +244,25 @@ const memberAvatar = (member) => {
 	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(120px, auto)); }
-	.row.attach { grid-template-columns: 1fr auto; }
 	button.primary, .status {
 		background: linear-gradient(180deg, #1d4ed8, #1e40af); border:1px solid rgba(147,197,253,0.4);
 		color:#fff; padding:10px 12px; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
 	}
 	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); padding:8px 10px; border-radius:9px; cursor:pointer; }
+	button.ghost.star-toggle.active {
+		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
+		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
+	}
 	button.primary:hover, .status:hover, button.ghost:hover { transform: translateY(-1px); }
 	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
-	.attachments { margin:0; padding-left:16px; color:var(--app-text); }
+	.star-pill {
+		margin: 6px 0 0;
+		font-size: 12px;
+		color: var(--app-text);
+	}
+	.punt-pill {
+		margin: 6px 0 0;
+		font-size: 12px;
+		color: var(--app-text);
+	}
 </style>

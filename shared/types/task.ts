@@ -7,15 +7,6 @@ export interface ChecklistItem {
 	order: string;
 }
 
-export interface FileRef {
-	id: string;
-	name: string;
-	size: number; // bytes, enforced <= 10MB
-	mime: string;
-	hash: string;
-	path: string;
-}
-
 export interface Task {
 	id: string;
 	title: string;
@@ -34,7 +25,6 @@ export interface Task {
 	order: string;
 	recurrence_id?: string;
 	recur_state?: string;
-	attachments: FileRef[];
 	notes?: string;
 	occurrences_completed?: number;
 	punted_from_due_date?: string;

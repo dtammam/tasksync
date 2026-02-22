@@ -160,16 +160,28 @@ $: isOwner = !!$auth.user?.user_id && task.created_by_user_id === $auth.user.use
 $: canEditTask = !isContributor || isOwner;
 $: canToggleStatus = canEditTask;
 $: canPunt =
-	inMyDayView &&
 	canEditTask &&
 	task.status === 'pending' &&
-	!!task.recurrence_id &&
+	task.recurrence_id !== 'daily' &&
 	task.due_date === todayKey;
 $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 $: nextRecurrenceDate = recurrencePreview(task);
-$: showPuntedTag = inMyDayView && task.punted_on_date === todayKey;
+$: showPuntedArrivalTag =
+	task.status === 'pending' &&
+	task.due_date === todayKey &&
+	!!task.punted_from_due_date &&
+	!!task.punted_on_date &&
+	task.punted_on_date < todayKey;
+$: showPuntedCompletedTag =
+	completedContext &&
+	task.status === 'pending' &&
+	!!task.due_date &&
+	task.due_date > todayKey &&
+	task.punted_on_date === todayKey &&
+	!!task.punted_from_due_date;
+$: showPuntIndicator = showPuntedArrivalTag || showPuntedCompletedTag;
 $: isRecurringCompletedToday =
 	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
 </script>
@@ -195,6 +207,12 @@ $: isRecurringCompletedToday =
 	</div>
 	<div class="meta">
 		<div class="title">
+			{#if task.priority > 0}
+				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
+			{/if}
+			{#if showPuntIndicator}
+				<span class="punt-indicator" data-testid="task-punt-indicator" aria-label="Punted">👟</span>
+			{/if}
 			{#if task.url}
 				<a class="title-text link" href={task.url} target="_blank" rel="noreferrer" data-testid="task-title">{task.title}</a>
 			{:else}
@@ -217,8 +235,11 @@ $: isRecurringCompletedToday =
 			{#if inMyDayView && nextRecurrenceDate}
 				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
 			{/if}
-			{#if showPuntedTag}
+			{#if showPuntedArrivalTag}
 				<span class="chip subtle punted-chip">Punted</span>
+			{/if}
+			{#if showPuntedCompletedTag}
+				<span class="chip subtle punted-chip">Punted today</span>
 			{/if}
 			{#if !inMyDayView}
 				<label class="chip toggle day-chip">
@@ -286,6 +307,25 @@ $: isRecurringCompletedToday =
 	.status:disabled { cursor:not-allowed; opacity:0.6; }
 	.meta { min-width:0; }
 	.meta .title { font-weight:600; color:var(--app-text); display:flex; gap:8px; align-items:center; min-width:0; }
+	.star-indicator {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		flex: 0 0 auto;
+		font-size: 14px;
+		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
+	}
+	.punt-indicator {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		flex: 0 0 auto;
+		font-size: 14px;
+	}
 	.title-text {
 		display: block;
 		min-width: 0;

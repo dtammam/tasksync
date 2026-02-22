@@ -92,7 +92,6 @@ describe('syncFromServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: false,
@@ -122,7 +121,6 @@ describe('syncFromServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: false,
@@ -138,7 +136,6 @@ describe('syncFromServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'b',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: false,
@@ -250,6 +247,38 @@ describe('syncFromServer', () => {
 		expect(result.error).toBe(true);
 		expect(readStatus().pull).toBe('error');
 	});
+
+	it('hydrates priority and punt metadata from remote tasks', async () => {
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 15,
+			lists: [],
+			tasks: [
+				{
+					id: 'srv-punt',
+					space_id: 's1',
+					title: 'punted item',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 1,
+					priority: 1,
+					order: 'z',
+					due_date: '2026-02-03',
+					punted_from_due_date: '2026-02-02',
+					punted_on_date: '2026-02-02',
+					created_ts: 1,
+					updated_ts: 15
+				}
+			]
+		});
+
+		await syncFromServer();
+
+		const saved = tasks.getAll().find((task) => task.id === 'srv-punt');
+		expect(saved?.priority).toBe(1);
+		expect(saved?.punted_from_due_date).toBe('2026-02-02');
+		expect(saved?.punted_on_date).toBe('2026-02-02');
+	});
 });
 
 describe('pushPendingToServer', () => {
@@ -343,7 +372,6 @@ describe('pushPendingToServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: true
@@ -394,7 +422,6 @@ describe('pushPendingToServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: true
@@ -444,7 +471,6 @@ describe('pushPendingToServer', () => {
 			tags: [],
 			checklist: [],
 			order: 'a',
-			attachments: [],
 			created_ts: 1,
 			updated_ts: 1,
 			dirty: true
@@ -536,5 +562,61 @@ describe('pushPendingToServer', () => {
 		expect(status.queueDepth).toBe(0);
 		expect(status.lastReplayTs).toBeDefined();
 		expect(status.lastReplayTs).toBeGreaterThanOrEqual(before);
+	});
+
+	it('includes priority and punt metadata in update push payload', async () => {
+		const recurring: Task = {
+			id: '123e4567-e89b-12d3-a456-426614174333',
+			title: 'priority punt',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: true,
+			priority: 1,
+			tags: [],
+			checklist: [],
+			order: 'a',
+			recurrence_id: 'weekly',
+			due_date: '2026-02-03',
+			punted_from_due_date: '2026-02-02',
+			punted_on_date: '2026-02-02',
+			created_ts: 1,
+			updated_ts: 2,
+			dirty: true
+		};
+		tasks.setAll([recurring]);
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 3,
+			applied: [
+				{
+					id: recurring.id,
+					space_id: 's1',
+					title: recurring.title,
+					status: recurring.status,
+					list_id: recurring.list_id,
+					my_day: 1,
+					priority: 1,
+					order: recurring.order,
+					due_date: recurring.due_date,
+					punted_from_due_date: recurring.punted_from_due_date,
+					punted_on_date: recurring.punted_on_date,
+					created_ts: recurring.created_ts,
+					updated_ts: 3
+				}
+			],
+			rejected: []
+		});
+
+		await pushPendingToServer();
+
+		const pushedBody = mockedApi.syncPush.mock.calls[0]?.[0]?.changes?.[0];
+		expect(pushedBody).toMatchObject({
+			kind: 'update_task',
+			body: {
+				priority: 1,
+				punted_from_due_date: '2026-02-02',
+				punted_on_date: '2026-02-02'
+			}
+		});
 	});
 });

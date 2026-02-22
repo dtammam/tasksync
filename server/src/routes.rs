@@ -399,6 +399,16 @@ fn is_valid_task_status(status: &str) -> bool {
     matches!(status, "pending" | "done" | "cancelled")
 }
 
+fn normalize_task_priority(raw: Option<i64>) -> Result<Option<i64>, StatusCode> {
+    let Some(priority) = raw else {
+        return Ok(None);
+    };
+    if (0..=3).contains(&priority) {
+        return Ok(Some(priority));
+    }
+    Err(StatusCode::BAD_REQUEST)
+}
+
 #[derive(Deserialize)]
 struct LoginBody {
     email: String,
@@ -556,13 +566,15 @@ struct BackupTaskRow {
     status: String,
     list_id: String,
     my_day: i64,
+    priority: i64,
     task_order: String,
     updated_ts: i64,
     created_ts: i64,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
+    punted_from_due_date: Option<String>,
+    punted_on_date: Option<String>,
     occurrences_completed: i64,
     completed_ts: Option<i64>,
     notes: Option<String>,
@@ -973,7 +985,7 @@ async fn load_space_backup(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tasks = sqlx::query_as::<_, BackupTaskRow>(
-        "select id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+        "select id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -1074,6 +1086,7 @@ async fn auth_restore_backup(
             || task.list_id.trim().is_empty()
             || task.title.trim().is_empty()
             || !is_valid_task_status(&task.status)
+            || !(0..=3).contains(&task.priority)
         {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -1185,7 +1198,7 @@ async fn auth_restore_backup(
 
     for task in &body.tasks {
         sqlx::query(
-            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
         )
         .bind(&task.id)
         .bind(&task.space_id)
@@ -1193,13 +1206,15 @@ async fn auth_restore_backup(
         .bind(&task.status)
         .bind(&task.list_id)
         .bind(task.my_day)
+        .bind(task.priority)
         .bind(&task.task_order)
         .bind(task.updated_ts)
         .bind(task.created_ts)
         .bind(&task.url)
         .bind(&task.recur_rule)
-        .bind(&task.attachments)
         .bind(&task.due_date)
+        .bind(&task.punted_from_due_date)
+        .bind(&task.punted_on_date)
         .bind(task.occurrences_completed)
         .bind(task.completed_ts)
         .bind(&task.notes)
@@ -1660,13 +1675,15 @@ struct TaskRow {
     status: String,
     list_id: String,
     my_day: i64,
+    priority: i64,
     order: String,
     updated_ts: i64,
     created_ts: i64,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
+    punted_from_due_date: Option<String>,
+    punted_on_date: Option<String>,
     occurrences_completed: i64,
     completed_ts: Option<i64>,
     notes: Option<String>,
@@ -1681,10 +1698,12 @@ struct CreateTask {
     list_id: String,
     order: Option<String>,
     my_day: Option<bool>,
+    priority: Option<i64>,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
+    punted_from_due_date: Option<String>,
+    punted_on_date: Option<String>,
     notes: Option<String>,
     #[allow(dead_code)]
     assignee_user_id: Option<String>,
@@ -1697,7 +1716,7 @@ async fn get_tasks(
     let ctx = ctx_from_headers(&headers, &state).await?;
     let rows = if ctx.role == Role::Admin {
         sqlx::query_as::<_, TaskRow>(
-            "select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+            "select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
         )
         .bind(&ctx.space_id)
         .fetch_all(&state.pool)
@@ -1705,7 +1724,7 @@ async fn get_tasks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
         sqlx::query_as::<_, TaskRow>(
-            "select t.id, t.space_id, t.title, t.status, t.list_id, t.my_day, t.task_order as \"order\", t.updated_ts, t.created_ts, t.url, t.recur_rule, t.attachments, t.due_date, t.occurrences_completed, t.completed_ts, t.notes, t.assignee_user_id, t.created_by_user_id from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.task_order asc",
+            "select t.id, t.space_id, t.title, t.status, t.list_id, t.my_day, t.priority, t.task_order as \"order\", t.updated_ts, t.created_ts, t.url, t.recur_rule, t.due_date, t.punted_from_due_date, t.punted_on_date, t.occurrences_completed, t.completed_ts, t.notes, t.assignee_user_id, t.created_by_user_id from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.task_order asc",
         )
         .bind(&ctx.space_id)
         .bind(&ctx.user_id)
@@ -1768,20 +1787,26 @@ async fn create_task(
     } else {
         0
     };
+    let priority = normalize_task_priority(body.priority)?;
+    let priority = priority.unwrap_or(0);
+    let punted_from_due_date = body.punted_from_due_date.clone();
+    let punted_on_date = body.punted_on_date.clone();
     let insert_result = sqlx::query_as::<_, TaskRow>(
-		"insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, 0, null, ?12, ?13, ?14) returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+		"insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, 0, null, ?14, ?15, ?16) returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&id)
 	.bind(&ctx.space_id)
 	.bind(&body.title)
 	.bind(&body.list_id)
 	.bind(my_day)
+	.bind(priority)
 	.bind(&order)
 	.bind(now)
 	.bind(&body.url)
 	.bind(&body.recur_rule)
-	.bind(&body.attachments)
 	.bind(&body.due_date)
+	.bind(&punted_from_due_date)
+	.bind(&punted_on_date)
 	.bind(&body.notes)
     .bind(&assignee_user_id)
     .bind(&ctx.user_id)
@@ -1794,7 +1819,7 @@ async fn create_task(
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
             let existing = sqlx::query_as::<_, TaskRow>(
-				"select id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
+				"select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
 			)
 			.bind(&id)
 			.bind(&ctx.space_id)
@@ -1820,10 +1845,12 @@ struct UpdateTaskMeta {
     status: Option<String>,
     list_id: Option<String>,
     my_day: Option<bool>,
+    priority: Option<i64>,
     url: Option<String>,
     recur_rule: Option<String>,
-    attachments: Option<String>,
     due_date: Option<String>,
+    punted_from_due_date: Option<String>,
+    punted_on_date: Option<String>,
     notes: Option<String>,
     occurrences_completed: Option<i64>,
     completed_ts: Option<i64>,
@@ -2020,7 +2047,7 @@ async fn update_task_status(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-		"update task set status = ?1, completed_ts = case when ?1 = 'done' then coalesce(completed_ts, ?2) else null end, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+		"update task set status = ?1, completed_ts = case when ?1 = 'done' then coalesce(completed_ts, ?2) else null end, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&body.status)
 	.bind(now)
@@ -2081,6 +2108,7 @@ async fn update_task_meta(
             return Err(StatusCode::BAD_REQUEST);
         }
     }
+    let priority = normalize_task_priority(body.priority)?;
 
     if let Some(list_id) = &body.list_id {
         let exists: Option<i64> =
@@ -2161,16 +2189,18 @@ async fn update_task_meta(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-        "update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), url = coalesce(?5, url), recur_rule = coalesce(?6, recur_rule), attachments = coalesce(?7, attachments), due_date = coalesce(?8, due_date), occurrences_completed = coalesce(?9, occurrences_completed), completed_ts = case when ?10 is not null then ?10 when ?2 is null then completed_ts when ?2 = 'done' then coalesce(completed_ts, ?13) else null end, notes = coalesce(?11, notes), assignee_user_id = coalesce(?12, assignee_user_id), updated_ts = ?13 where id = ?14 and space_id = ?15 returning id, space_id, title, status, list_id, my_day, task_order as \"order\", updated_ts, created_ts, url, recur_rule, attachments, due_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+        "update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), priority = coalesce(?5, priority), url = coalesce(?6, url), recur_rule = coalesce(?7, recur_rule), due_date = coalesce(?8, due_date), punted_from_due_date = coalesce(?9, punted_from_due_date), punted_on_date = coalesce(?10, punted_on_date), occurrences_completed = coalesce(?11, occurrences_completed), completed_ts = case when ?12 is not null then ?12 when ?2 is null then completed_ts when ?2 = 'done' then coalesce(completed_ts, ?15) else null end, notes = coalesce(?13, notes), assignee_user_id = coalesce(?14, assignee_user_id), updated_ts = ?15 where id = ?16 and space_id = ?17 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
     )
     .bind(&body.title)
     .bind(&body.status)
     .bind(&body.list_id)
     .bind(my_day)
+    .bind(priority)
     .bind(&body.url)
     .bind(&body.recur_rule)
-    .bind(&body.attachments)
     .bind(&body.due_date)
+    .bind(&body.punted_from_due_date)
+    .bind(&body.punted_on_date)
     .bind(body.occurrences_completed)
     .bind(body.completed_ts)
     .bind(&body.notes)
@@ -2943,10 +2973,12 @@ mod tests {
                 list_id: "goal-management".to_string(),
                 order: Some("z".to_string()),
                 my_day: Some(true),
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: None,
                 assignee_user_id: Some("u-admin".to_string()),
             }),
@@ -2979,10 +3011,12 @@ mod tests {
                 list_id: "goal-management".to_string(),
                 order: Some("z".to_string()),
                 my_day: Some(false),
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: None,
                 assignee_user_id: Some("u-admin".to_string()),
             }),
@@ -3002,10 +3036,12 @@ mod tests {
                 list_id: "goal-management".to_string(),
                 order: Some("z".to_string()),
                 my_day: Some(false),
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: None,
                 assignee_user_id: Some("u-admin".to_string()),
             }),
@@ -3093,10 +3129,12 @@ mod tests {
                 status: None,
                 list_id: None,
                 my_day: Some(false),
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: None,
                 occurrences_completed: None,
                 completed_ts: None,
@@ -3134,10 +3172,12 @@ mod tests {
                 status: Some("pending".to_string()),
                 list_id: None,
                 my_day: None,
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: Some("2026-02-06".to_string()),
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: None,
                 occurrences_completed: Some(1),
                 completed_ts: Some(completed_ts),
@@ -3178,10 +3218,12 @@ mod tests {
                 status: None,
                 list_id: None,
                 my_day: None,
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: None,
                 occurrences_completed: None,
                 completed_ts: None,
@@ -3216,10 +3258,12 @@ mod tests {
                 status: None,
                 list_id: None,
                 my_day: Some(false),
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: Some("2026-02-09".to_string()),
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: Some("note".to_string()),
                 occurrences_completed: None,
                 completed_ts: None,
@@ -3269,10 +3313,12 @@ mod tests {
                 status: None,
                 list_id: None,
                 my_day: Some(true),
+                priority: None,
                 url: None,
                 recur_rule: None,
-                attachments: None,
                 due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
                 notes: None,
                 occurrences_completed: None,
                 completed_ts: None,
@@ -3388,10 +3434,12 @@ mod tests {
                             list_id: "goal-management".to_string(),
                             order: Some("z".to_string()),
                             my_day: Some(false),
+                            priority: None,
                             url: None,
                             recur_rule: None,
-                            attachments: None,
                             due_date: None,
+                            punted_from_due_date: None,
+                            punted_on_date: None,
                             notes: None,
                             assignee_user_id: Some("u-admin".to_string()),
                         },

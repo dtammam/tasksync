@@ -32,6 +32,7 @@ Rules:
 - 2026-02-01 14:05 - Stopped accidental reseeding on hydrate to prevent duplicate task confusion.
 - 2026-02-01 14:09 - Reordered sync stages so pushed items resolved to stable server identity sooner.
 - 2026-02-01 14:18 - Closed a persistence race that could re-trigger duplicate pushes after fast refreshes.
+- 2026-02-22 16:05 - Retired task binary attachments after review; task URLs remain as the lightweight file-reference workflow.
 - 2026-02-01 14:56 - Cleared stale local records during saves to avoid ghost data and inconsistent sync outcomes.
 - 2026-02-01 14:59 - Prioritized unsynced local edits over remote snapshots to preserve user intent.
 - 2026-02-01 15:02 - Revalidated sync stability after duplicate/status regressions.
@@ -39,7 +40,7 @@ Rules:
 - 2026-02-01 15:07 - Completed seed cleanup to reduce maintenance drag and accidental reintroduction of old behavior.
 - 2026-02-01 15:28 - Stabilized E2E behavior around real runtime data.
 - 2026-02-01 15:54 - Added a single pre-push verification path to standardize quality checks.
-- 2026-02-02 19:34 - Expanded task planning depth with due dates, recurrence, notes, attachments, and sorting.
+- 2026-02-02 19:34 - Expanded task planning depth with due dates, recurrence, notes, and sorting.
 - 2026-02-02 20:22 - Added richer list and task-detail management so users can organize without leaving flow.
 - 2026-02-02 21:10 - Improved sidebar/detail ergonomics to reduce friction in daily task editing.
 - 2026-02-02 23:40 - Restored local auth/dev continuity after a 401 interruption.
