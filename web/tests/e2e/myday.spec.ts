@@ -399,7 +399,12 @@ test.describe('My Day', () => {
 		await expect
 			.poll(async () => (await readTaskFromIdb(page, title))?.punted_on_date ?? null)
 			.toBe(today);
-		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(0);
+		await expect(
+			page.locator('[data-testid="completed-section"] [data-testid="task-row"]').filter({ hasText: title })
+		).toHaveCount(1);
+		await expect(
+			page.locator('[data-testid="completed-section"] [data-testid="task-row"]').filter({ hasText: title }).getByTestId('task-punt-indicator')
+		).toHaveCount(1);
 
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');

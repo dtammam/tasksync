@@ -251,7 +251,7 @@ describe('tasks store helpers', () => {
 		expect(get(myDayPending).map((t) => t.id)).toEqual(['missed-recurring']);
 	});
 
-	it('punts a due-today task by one day and removes it from today My Day', () => {
+	it('punts a due-today task into tomorrow while marking today as addressed', () => {
 		tasks.setAll([
 			baseTask({
 				id: 'punt-once',
@@ -269,6 +269,11 @@ describe('tasks store helpers', () => {
 		expect(updated?.punted_from_due_date).toBe('2026-02-02');
 		expect(updated?.punted_on_date).toBe('2026-02-02');
 		expect(get(myDayPending).map((t) => t.id)).not.toContain('punt-once');
+		expect(get(myDayCompleted).map((t) => t.id)).toContain('punt-once');
+
+		vi.setSystemTime(new Date('2026-02-03T12:00:00Z'));
+		expect(get(myDayCompleted).map((t) => t.id)).not.toContain('punt-once');
+		expect(get(myDayPending).map((t) => t.id)).toContain('punt-once');
 	});
 
 	it('does not punt daily recurrence tasks because they already roll to tomorrow on completion', () => {

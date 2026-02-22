@@ -168,12 +168,20 @@ $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 $: nextRecurrenceDate = recurrencePreview(task);
-$: showPuntedTag =
+$: showPuntedArrivalTag =
 	task.status === 'pending' &&
 	task.due_date === todayKey &&
 	!!task.punted_from_due_date &&
 	!!task.punted_on_date &&
 	task.punted_on_date < todayKey;
+$: showPuntedCompletedTag =
+	completedContext &&
+	task.status === 'pending' &&
+	!!task.due_date &&
+	task.due_date > todayKey &&
+	task.punted_on_date === todayKey &&
+	!!task.punted_from_due_date;
+$: showPuntIndicator = showPuntedArrivalTag || showPuntedCompletedTag;
 $: isRecurringCompletedToday =
 	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
 </script>
@@ -202,8 +210,8 @@ $: isRecurringCompletedToday =
 			{#if task.priority > 0}
 				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
 			{/if}
-			{#if showPuntedTag}
-				<span class="punt-indicator" data-testid="task-punt-indicator" aria-label="Punted to today">👟</span>
+			{#if showPuntIndicator}
+				<span class="punt-indicator" data-testid="task-punt-indicator" aria-label="Punted">👟</span>
 			{/if}
 			{#if task.url}
 				<a class="title-text link" href={task.url} target="_blank" rel="noreferrer" data-testid="task-title">{task.title}</a>
@@ -227,8 +235,11 @@ $: isRecurringCompletedToday =
 			{#if inMyDayView && nextRecurrenceDate}
 				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
 			{/if}
-			{#if showPuntedTag}
+			{#if showPuntedArrivalTag}
 				<span class="chip subtle punted-chip">Punted</span>
+			{/if}
+			{#if showPuntedCompletedTag}
+				<span class="chip subtle punted-chip">Punted today</span>
 			{/if}
 			{#if !inMyDayView}
 				<label class="chip toggle day-chip">

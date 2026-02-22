@@ -493,6 +493,8 @@ const inMyDay = (task: Task) => {
 const isMissedTask = (task: Task) => task.status === 'pending' && isBeforeToday(task.due_date);
 const wasRecurringCompletedToday = (task: Task) =>
 	!!task.recurrence_id && task.status === 'pending' && isTodayTs(task.completed_ts);
+const wasPuntedToday = (task: Task) =>
+	task.status === 'pending' && task.punted_on_date === todayIso() && !!task.punted_from_due_date;
 
 const wasCompletedToday = (task: Task) => {
 	if (task.status !== 'done') return false;
@@ -540,7 +542,9 @@ export const myDayCompleted = derived(
 			(task) =>
 				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
 				isAssignedToUser(task, $auth.user?.user_id) &&
-				((inMyDay(task) && wasCompletedToday(task)) || wasRecurringCompletedToday(task))
+				((inMyDay(task) && wasCompletedToday(task)) ||
+					wasRecurringCompletedToday(task) ||
+					wasPuntedToday(task))
 		);
 	}
 );
