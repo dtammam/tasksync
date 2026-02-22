@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
+const toLocalIsoDate = (date: Date) =>
+	`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const addDaysLocalIso = (days: number) => {
+	const value = new Date();
+	value.setDate(value.getDate() + days);
+	return toLocalIsoDate(value);
+};
 
 const waitForTaskInIdb = async (page: Page, title: string) => {
 	await expect
@@ -60,6 +67,66 @@ const waitForTaskInIdb = async (page: Page, title: string) => {
 		)
 		.toBe(true);
 };
+
+const readTaskFromIdb = async (page: Page, title: string) =>
+	page.evaluate(async (taskTitle) => {
+		const resolveScopedDbName = () => {
+			const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
+			const rawUser = localStorage.getItem('tasksync:auth-user');
+			let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
+			if (rawUser) {
+				try {
+					const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
+					if (parsed.user_id && parsed.space_id) {
+						scope = `space:${parsed.space_id}:user:${parsed.user_id}`;
+					}
+				} catch {
+					// Keep fallback scope.
+				}
+			}
+			const sanitized =
+				scope
+					.toLowerCase()
+					.replace(/[^a-z0-9_-]/g, '_')
+					.slice(0, 80) || 'legacy';
+			return `tasksync_${sanitized}`;
+		};
+		const dbName = resolveScopedDbName();
+		const db = await new Promise<IDBDatabase | null>((resolve) => {
+			const req = indexedDB.open(dbName);
+			req.onsuccess = () => resolve(req.result);
+			req.onerror = () => resolve(null);
+		});
+		if (!db) return null;
+		const storeNames = Array.from(db.objectStoreNames);
+		if (!storeNames.includes('tasks')) {
+			db.close();
+			return null;
+		}
+		const all = await new Promise<unknown[]>((resolve) => {
+			try {
+				const tx = db.transaction('tasks', 'readonly');
+				const store = tx.objectStore('tasks');
+				const allReq = store.getAll();
+				allReq.onsuccess = () => resolve(allReq.result ?? []);
+				allReq.onerror = () => resolve([]);
+			} catch {
+				resolve([]);
+			}
+		});
+		db.close();
+		const matched = all.find((task) => {
+			if (!task || typeof task !== 'object') return false;
+			if (!('title' in task)) return false;
+			return (task as { title?: unknown }).title === taskTitle;
+		});
+		if (!matched || typeof matched !== 'object') return null;
+		return matched as {
+			due_date?: string;
+			punted_from_due_date?: string;
+			punted_on_date?: string;
+		};
+	}, title);
 
 const ensureSoundPanelOpen = async (page: Page) => {
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
@@ -210,6 +277,113 @@ test.describe('My Day', () => {
 		await expect(page.getByTestId('sound-theme')).toHaveValue('wood_tick');
 		await expect(page.getByTestId('sound-volume')).toHaveValue('25');
 	});
+
+	test('supports adding and removing task attachments from details', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('Attachment task');
+		const attachmentUrl = 'https://example.com/files/spec.pdf';
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+		await page.getByTestId('attachment-input').fill(attachmentUrl);
+		await page.getByTestId('attachment-add').click();
+		await expect(page.getByRole('link', { name: 'spec.pdf' })).toHaveCount(1);
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+		await expect(page.getByRole('link', { name: 'spec.pdf' })).toHaveCount(1);
+		await page.getByTestId('attachment-remove').first().click();
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+		await expect(page.getByRole('link', { name: 'spec.pdf' })).toHaveCount(0);
+		await expect(page.getByText('No attachments.')).toBeVisible();
+	});
+
+	test('keeps recurring cadence when punting only a single scheduled instance', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('Punt recurrence');
+		const today = addDaysLocalIso(0);
+		const tomorrow = addDaysLocalIso(1);
+		const nextWeek = addDaysLocalIso(7);
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		const openTaskActions = async () => {
+			const row = page.getByTestId('task-row').filter({ hasText: title });
+			await expect(row).toHaveCount(1);
+			await row.getByRole('button', { name: '⋯' }).click();
+		};
+		const openTaskDetails = async () => {
+			await openTaskActions();
+			await page.getByRole('button', { name: 'Details' }).first().click();
+		};
+
+		await openTaskDetails();
+		await page.getByLabel('Due date').fill(today);
+		await page.getByLabel('Recurrence').selectOption('weekly');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await openTaskActions();
+		await page.getByRole('button', { name: 'Punt' }).first().click();
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null)
+			.toBe(tomorrow);
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.punted_from_due_date ?? null)
+			.toBe(today);
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.punted_on_date ?? null)
+			.toBe(today);
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await row.getByTestId('task-toggle').click();
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null)
+			.toBe(nextWeek);
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.punted_from_due_date ?? null)
+			.toBe(null);
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.punted_on_date ?? null)
+			.toBe(null);
+	});
+
+	test('keeps starred tasks at top in My Day sorting', async ({ page }) => {
+		await resetClientState(page);
+		const marker = makeTitle('MyDay star sort');
+		const titleA = `${marker} A`;
+		const titleB = `${marker} B`;
+
+		await page.getByTestId('new-task-input').fill(titleA);
+		await page.getByTestId('new-task-submit').click();
+		await page.getByTestId('new-task-input').fill(titleB);
+		await page.getByTestId('new-task-submit').click();
+
+		const rowB = page.getByTestId('task-row').filter({ hasText: titleB });
+		await rowB.getByRole('button', { name: '⋯' }).click();
+		await rowB.getByRole('button', { name: 'Star' }).click();
+		await expect(rowB.getByTestId('task-star-indicator')).toHaveCount(1);
+
+		await page.getByLabel('Sort tasks').selectOption('created');
+		await page.getByLabel('Sort direction').selectOption('asc');
+		const plannedSection = page.locator('section.block', {
+			has: page.locator('.section-title', { hasText: 'Planned' }),
+		});
+		const markerRows = plannedSection.getByTestId('task-row').filter({ hasText: marker });
+		await expect(markerRows.first()).toContainText(titleB);
+
+		await page.getByLabel('Sort tasks').selectOption('alpha');
+		await page.getByLabel('Sort direction').selectOption('asc');
+		await expect(markerRows.first()).toContainText(titleB);
+	});
 });
 
 test.describe('List view', () => {
@@ -295,6 +469,46 @@ test.describe('List view', () => {
 		await expect(pendingRows.nth(0)).toContainText(dueLaterTitle);
 		await expect(pendingRows.nth(1)).toContainText(dueSoonTitle);
 		await expect(pendingRows.nth(2)).toContainText(noDueTitle);
+	});
+
+	test('shows starred indicator and keeps starred tasks at top for created/alpha sorting', async ({
+		page,
+	}) => {
+		await resetClientState(page);
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const marker = makeTitle('Star sort');
+		const titleA = `${marker} A`;
+		const titleB = `${marker} B`;
+
+		await page.getByTestId('new-task-input').fill(titleA);
+		await page.getByTestId('new-task-submit').click();
+		await page.getByTestId('new-task-input').fill(titleB);
+		await page.getByTestId('new-task-submit').click();
+
+		const rowB = page.getByTestId('task-row').filter({ hasText: titleB });
+		await expect(rowB).toHaveCount(1);
+		await rowB.getByRole('button', { name: '⋯' }).click();
+		await rowB.getByRole('button', { name: 'Star' }).click();
+		await expect(rowB.getByTestId('task-star-indicator')).toHaveCount(1);
+
+		await rowB.getByRole('button', { name: 'Details' }).click();
+		await expect(page.getByTestId('detail-star-indicator')).toBeVisible();
+		await page.getByRole('button', { name: '×' }).click();
+
+		const pendingSection = page.locator('section.block', {
+			has: page.locator('.section-title', { hasText: 'Pending' }),
+		});
+		const markerRows = pendingSection.getByTestId('task-row').filter({ hasText: marker });
+
+		await page.getByTestId('list-sort-mode').selectOption('created');
+		await page.getByTestId('list-sort-direction').selectOption('asc');
+		await expect(markerRows.first()).toContainText(titleB);
+
+		await page.getByTestId('list-sort-mode').selectOption('alpha');
+		await page.getByTestId('list-sort-direction').selectOption('asc');
+		await expect(markerRows.first()).toContainText(titleB);
 	});
 });
 

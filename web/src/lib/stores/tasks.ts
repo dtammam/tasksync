@@ -66,6 +66,7 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.status !== sent.status ||
 	current.list_id !== sent.list_id ||
 	current.my_day !== sent.my_day ||
+	current.priority !== sent.priority ||
 	current.order !== sent.order ||
 	current.url !== sent.url ||
 	current.recurrence_id !== sent.recurrence_id ||

@@ -21,6 +21,11 @@ const requestIdForLocalTask = (id: string): string | undefined => {
 	return undefined;
 };
 
+const toTaskPriority = (value?: number): Task['priority'] => {
+	if (value === 1 || value === 2 || value === 3) return value;
+	return 0;
+};
+
 let lastPullCursorTs: number | undefined;
 
 export const resetSyncCursor = () => {
@@ -40,7 +45,7 @@ const mapApiTask = (t: ApiTask | SyncTask): Task => ({
 	my_day: t.my_day === 1,
 	dirty: false,
 	local: false,
-	priority: 0,
+	priority: toTaskPriority(typeof t.priority === 'number' ? t.priority : undefined),
 	tags: [],
 	checklist: [],
 	order: t.order,
@@ -48,6 +53,8 @@ const mapApiTask = (t: ApiTask | SyncTask): Task => ({
 	url: t.url ?? undefined,
 	recurrence_id: t.recur_rule ?? undefined,
 	due_date: t.due_date ?? undefined,
+	punted_from_due_date: t.punted_from_due_date ?? undefined,
+	punted_on_date: t.punted_on_date ?? undefined,
 	occurrences_completed: t.occurrences_completed ?? 0,
 	completed_ts: t.completed_ts ?? undefined,
 	notes: t.notes ?? undefined,
@@ -86,10 +93,13 @@ const toPushChange = (
 					list_id: task.list_id,
 					order: task.order,
 					my_day: task.my_day ?? false,
+					priority: task.priority,
 					url: task.url,
 					recur_rule: task.recurrence_id,
 					attachments: serializeAttachments(task),
 					due_date: task.due_date,
+					punted_from_due_date: task.punted_from_due_date,
+					punted_on_date: task.punted_on_date,
 					notes: task.notes,
 					assignee_user_id: task.assignee_user_id
 				}
@@ -108,10 +118,13 @@ const toPushChange = (
 				status: task.status,
 				list_id: task.list_id,
 				my_day: task.my_day ?? false,
+				priority: task.priority,
 				url: task.url,
 				recur_rule: task.recurrence_id,
 				attachments: serializeAttachments(task),
 				due_date: task.due_date,
+				punted_from_due_date: task.punted_from_due_date,
+				punted_on_date: task.punted_on_date,
 				notes: task.notes,
 				occurrences_completed: task.occurrences_completed,
 				assignee_user_id: task.assignee_user_id,

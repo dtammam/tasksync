@@ -20,6 +20,12 @@
 		if (a === b) return 0;
 		return a < b ? -1 : 1;
 	};
+	const compareStarredFirst = (left, right) => {
+		const leftStarred = (left?.priority ?? 0) > 0;
+		const rightStarred = (right?.priority ?? 0) > 0;
+		if (leftStarred === rightStarred) return 0;
+		return leftStarred ? -1 : 1;
+	};
 
 	const quickAdd = () => {
 		if (!quickTitle.trim()) return;
@@ -45,8 +51,11 @@
 	const sortTasks = (arr, mode = 'created', direction = 'asc') => {
 		const copy = [...arr];
 		const isAscending = direction !== 'desc';
-		if (mode === 'due_date') {
-			copy.sort((a, b) => {
+		copy.sort((a, b) => {
+			const starredOrder = compareStarredFirst(a, b);
+			if (starredOrder !== 0) return starredOrder;
+
+			if (mode === 'due_date') {
 				const dueA = typeof a.due_date === 'string' ? a.due_date : '';
 				const dueB = typeof b.due_date === 'string' ? b.due_date : '';
 				const hasDueA = !!dueA;
@@ -59,18 +68,18 @@
 					return hasDueA ? -1 : 1;
 				}
 				return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
-			});
-		} else if (mode === 'alpha') {
-			copy.sort((a, b) => {
+			}
+
+			if (mode === 'alpha') {
 				const byTitle = compareAlpha(a.title, b.title);
 				if (byTitle === 0) {
 					return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
 				}
 				return isAscending ? byTitle : byTitle * -1;
-			});
-		} else {
-			copy.sort((a, b) => (isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts));
-		}
+			}
+
+			return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+		});
 		return copy;
 	};
 	$: pendingTasks = sortTasks(

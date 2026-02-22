@@ -195,6 +195,9 @@ $: isRecurringCompletedToday =
 	</div>
 	<div class="meta">
 		<div class="title">
+			{#if task.priority > 0}
+				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
+			{/if}
 			{#if task.url}
 				<a class="title-text link" href={task.url} target="_blank" rel="noreferrer" data-testid="task-title">{task.title}</a>
 			{:else}
@@ -286,6 +289,16 @@ $: isRecurringCompletedToday =
 	.status:disabled { cursor:not-allowed; opacity:0.6; }
 	.meta { min-width:0; }
 	.meta .title { font-weight:600; color:var(--app-text); display:flex; gap:8px; align-items:center; min-width:0; }
+	.star-indicator {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		flex: 0 0 auto;
+		font-size: 14px;
+		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
+	}
 	.title-text {
 		display: block;
 		min-width: 0;

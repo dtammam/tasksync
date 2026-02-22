@@ -32,6 +32,12 @@
 		if (a === b) return 0;
 		return a < b ? -1 : 1;
 	};
+	const compareStarredFirst = (left, right) => {
+		const leftStarred = (left?.priority ?? 0) > 0;
+		const rightStarred = (right?.priority ?? 0) > 0;
+		if (leftStarred === rightStarred) return 0;
+		return leftStarred ? -1 : 1;
+	};
 	$: detailTask = detailId ? getTask(detailId) : null;
 	const today = new Date();
 	const dateLabel = today.toLocaleDateString(undefined, {
@@ -46,17 +52,20 @@
 	const sortTasks = (arr, mode = sortMode, direction = sortDirection) => {
 		const copy = [...arr];
 		const isAscending = direction !== 'desc';
-		if (mode === 'alpha') {
-			copy.sort((a, b) => {
+		copy.sort((a, b) => {
+			const starredOrder = compareStarredFirst(a, b);
+			if (starredOrder !== 0) return starredOrder;
+
+			if (mode === 'alpha') {
 				const byTitle = compareAlpha(a.title, b.title);
 				if (byTitle === 0) {
 					return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
 				}
 				return isAscending ? byTitle : byTitle * -1;
-			});
-		} else if (mode === 'created') {
-			copy.sort((a, b) => (isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts));
-		}
+			}
+
+			return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
+		});
 		return copy;
 	};
 

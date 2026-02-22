@@ -18,6 +18,8 @@ let recur = '';
 let url = '';
 let notes = '';
 let attachments = [];
+let priority = 0;
+let attachmentError = '';
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
@@ -39,6 +41,8 @@ function hydrate(t) {
 	url = t.url ?? '';
 	notes = t.notes ?? '';
 	attachments = t.attachments ?? [];
+	priority = t.priority ?? 0;
+	attachmentError = '';
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
@@ -61,6 +65,9 @@ const save = () => {
 		notes,
 		attachments
 	});
+	if (priority !== (task.priority ?? 0)) {
+		tasks.setPriority(task.id, priority);
+	}
 	if (canEditMyDay) {
 		tasks.setMyDay(task.id, myDay);
 	}
@@ -77,19 +84,45 @@ const toggleStatus = () => {
 };
 
 let newAttachment = '';
+const nextAttachmentId = () => {
+	const randomId = globalThis.crypto?.randomUUID?.();
+	if (randomId) return randomId;
+	return `att-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+};
 const addAttachment = () => {
-	if (!newAttachment.trim() || !task || !canEditTask) return;
-	const name = newAttachment.split('/').filter(Boolean).pop() ?? 'attachment';
+	if (!task || !canEditTask) return;
+	const path = newAttachment.trim();
+	if (!path) {
+		attachmentError = 'Enter a link or path before adding an attachment.';
+		return;
+	}
+	if (attachments.some((attachment) => attachment.path === path)) {
+		attachmentError = 'This attachment is already listed.';
+		return;
+	}
+	const name = path.split('/').filter(Boolean).pop() ?? 'attachment';
 	const ref = {
-		id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+		id: nextAttachmentId(),
 		name,
 		size: 0,
 		mime: 'text/uri-list',
 		hash: '',
-		path: newAttachment.trim()
+		path
 	};
 	attachments = [...attachments, ref];
 	newAttachment = '';
+	attachmentError = '';
+};
+
+const removeAttachment = (id) => {
+	if (!canEditTask) return;
+	attachments = attachments.filter((attachment) => attachment.id !== id);
+	attachmentError = '';
+};
+
+const toggleStar = () => {
+	if (!canEditTask) return;
+	priority = priority > 0 ? 0 : 1;
 };
 
 const skip = () => {
@@ -112,6 +145,9 @@ const memberAvatar = (member) => {
 			<div>
 				<p class="eyebrow">Details</p>
 				<h2>{title}</h2>
+				{#if priority > 0}
+					<p class="star-pill" data-testid="detail-star-indicator">★ Starred</p>
+				{/if}
 				<p class="muted">
 					Created {new Date(task.created_ts).toLocaleString()} • Updated {new Date(task.updated_ts).toLocaleString()}
 				</p>
@@ -135,6 +171,18 @@ const memberAvatar = (member) => {
 				<label>
 					My Day
 					<input type="checkbox" bind:checked={myDay} disabled={!canEditMyDay} />
+				</label>
+				<label>
+					Starred
+					<button
+						class={`ghost star-toggle ${priority > 0 ? 'active' : ''}`}
+						type="button"
+						data-testid="detail-star-toggle"
+						on:click={toggleStar}
+						disabled={!canEditTask}
+					>
+						{priority > 0 ? '★ Starred' : '☆ Star'}
+					</button>
 				</label>
 			</div>
 
@@ -186,18 +234,36 @@ const memberAvatar = (member) => {
 
 			<div class="row attach">
 				<input
-					type="url"
-					placeholder="https://link-to-file"
+					type="text"
+					placeholder="https://link-to-file or file path"
 					bind:value={newAttachment}
+					data-testid="attachment-input"
 					on:keydown={(e) => e.key === 'Enter' && addAttachment()}
 					disabled={!canEditTask}
 				/>
-				<button type="button" on:click={addAttachment} disabled={!canEditTask}>Add attachment</button>
+				<button type="button" data-testid="attachment-add" on:click={addAttachment} disabled={!canEditTask}>
+					Add attachment
+				</button>
 			</div>
+			{#if attachmentError}
+				<p class="error">{attachmentError}</p>
+			{/if}
 			{#if attachments?.length}
-				<ul class="attachments">
+				<ul class="attachments" data-testid="attachments-list">
 					{#each attachments as att}
-						<li><a href={att.path} target="_blank" rel="noreferrer">{att.name}</a></li>
+						<li>
+							<a href={att.path} target="_blank" rel="noreferrer">{att.name}</a>
+							{#if canEditTask}
+								<button
+									type="button"
+									class="ghost tiny"
+									data-testid="attachment-remove"
+									on:click={() => removeAttachment(att.id)}
+								>
+									Remove
+								</button>
+							{/if}
+						</li>
 					{/each}
 				</ul>
 			{:else}
@@ -245,7 +311,19 @@ const memberAvatar = (member) => {
 		color:#fff; padding:10px 12px; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
 	}
 	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); padding:8px 10px; border-radius:9px; cursor:pointer; }
+	button.ghost.star-toggle.active {
+		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
+		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
+	}
 	button.primary:hover, .status:hover, button.ghost:hover { transform: translateY(-1px); }
 	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
-	.attachments { margin:0; padding-left:16px; color:var(--app-text); }
+	.star-pill {
+		margin: 6px 0 0;
+		font-size: 12px;
+		color: var(--app-text);
+	}
+	.attachments { margin:0; padding-left:16px; color:var(--app-text); display:grid; gap:6px; }
+	.attachments li { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+	.attachments .tiny { padding: 5px 8px; font-size: 12px; }
+	.error { margin: 0; color: #fda4af; font-size: 12px; }
 </style>

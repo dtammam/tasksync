@@ -59,6 +59,7 @@ export interface ApiTask {
 	status: string;
 	list_id: string;
 	my_day: number;
+	priority?: number;
 	order: string;
 	updated_ts: number;
 	created_ts: number;
@@ -66,6 +67,8 @@ export interface ApiTask {
 	recur_rule?: string;
 	attachments?: string;
 	due_date?: string;
+	punted_from_due_date?: string;
+	punted_on_date?: string;
 	occurrences_completed?: number;
 	completed_ts?: number;
 	notes?: string;
@@ -158,11 +161,14 @@ export const api = {
 		title: string;
 		list_id: string;
 		my_day?: boolean;
+		priority?: number;
 		order?: string;
 		url?: string;
 		recur_rule?: string;
 		attachments?: string;
 		due_date?: string;
+		punted_from_due_date?: string;
+		punted_on_date?: string;
 		notes?: string;
 		assignee_user_id?: string;
 	}) =>
@@ -177,10 +183,13 @@ export const api = {
 			status?: string;
 			list_id?: string;
 			my_day?: boolean;
+			priority?: number;
 			url?: string;
 			recur_rule?: string;
 			attachments?: string;
 			due_date?: string;
+			punted_from_due_date?: string;
+			punted_on_date?: string;
 			notes?: string;
 			occurrences_completed?: number;
 			completed_ts?: number;

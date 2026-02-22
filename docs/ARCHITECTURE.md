@@ -84,7 +84,7 @@ package "tasksync Server" {
 ## Data Model (abridged)
 ```
 ID = ulid | TS = ms
-Task { id, title, notes?, url?, due?, start?, scheduled?, priority(0..3), status(pending|done|cancelled), list_id, project_id?, area_id?, tags:Set<ID>, checklist:[ChecklistItem], order, recurrence_id?, recur_state?, created_ts, updated_ts, attachments:Set<FileRef> }
+Task { id, title, notes?, url?, due?, start?, scheduled?, priority(0..3), status(pending|done|cancelled), list_id, project_id?, area_id?, tags:Set<ID>, checklist:[ChecklistItem], order, recurrence_id?, recur_state?, punted_from_due_date?, punted_on_date?, created_ts, updated_ts, attachments:Set<FileRef> }
 ChecklistItem { id, title, done, order }
 FileRef { id, name, size<=10MB, mime, hash, path }
 List { id, name, order }
@@ -152,6 +152,7 @@ create table if not exists change (
 - Recurring completion behavior: when a recurring task is completed, it can appear in **Completed** for the current day while the next due instance is already materialized.
 - Recurring completion undo behavior: from **Completed**, users can undo a same-day recurring completion, restoring the prior due date/occurrence count instead of creating another future roll-forward.
 - Recurring sync behavior: explicit completion timestamps are preserved even when the rolled-forward task remains `pending`, so same-day completion acknowledgment survives sync and naturally clears at day rollover.
+- Punt behavior: punting is instance-scoped (not series-wide) and sync-safe through persisted punt metadata (`punted_from_due_date`, `punted_on_date`) carried across pull/push.
 
 ## Completion Sound
 - Built‑ins: `chime_soft`, `click_pop`, `sparkle_short`, `wood_tick` (≤150KB each).
