@@ -160,16 +160,20 @@ $: isOwner = !!$auth.user?.user_id && task.created_by_user_id === $auth.user.use
 $: canEditTask = !isContributor || isOwner;
 $: canToggleStatus = canEditTask;
 $: canPunt =
-	inMyDayView &&
 	canEditTask &&
 	task.status === 'pending' &&
-	!!task.recurrence_id &&
+	task.recurrence_id !== 'daily' &&
 	task.due_date === todayKey;
 $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
 $: nextRecurrenceDate = recurrencePreview(task);
-$: showPuntedTag = inMyDayView && task.punted_on_date === todayKey;
+$: showPuntedTag =
+	task.status === 'pending' &&
+	task.due_date === todayKey &&
+	!!task.punted_from_due_date &&
+	!!task.punted_on_date &&
+	task.punted_on_date < todayKey;
 $: isRecurringCompletedToday =
 	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
 </script>
@@ -197,6 +201,9 @@ $: isRecurringCompletedToday =
 		<div class="title">
 			{#if task.priority > 0}
 				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
+			{/if}
+			{#if showPuntedTag}
+				<span class="punt-indicator" data-testid="task-punt-indicator" aria-label="Punted to today">👟</span>
 			{/if}
 			{#if task.url}
 				<a class="title-text link" href={task.url} target="_blank" rel="noreferrer" data-testid="task-title">{task.title}</a>
@@ -298,6 +305,15 @@ $: isRecurringCompletedToday =
 		flex: 0 0 auto;
 		font-size: 14px;
 		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
+	}
+	.punt-indicator {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		flex: 0 0 auto;
+		font-size: 14px;
 	}
 	.title-text {
 		display: block;

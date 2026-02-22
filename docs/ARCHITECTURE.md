@@ -148,7 +148,7 @@ create table if not exists change (
 - Recurring completion behavior: when a recurring task is completed, it can appear in **Completed** for the current day while the next due instance is already materialized.
 - Recurring completion undo behavior: from **Completed**, users can undo a same-day recurring completion, restoring the prior due date/occurrence count instead of creating another future roll-forward.
 - Recurring sync behavior: explicit completion timestamps are preserved even when the rolled-forward task remains `pending`, so same-day completion acknowledgment survives sync and naturally clears at day rollover.
-- Punt behavior: punting is instance-scoped (not series-wide) and sync-safe through persisted punt metadata (`punted_from_due_date`, `punted_on_date`) carried across pull/push.
+- Punt behavior: punting is instance-scoped (not series-wide), moves a due-today pending task to tomorrow, and is sync-safe through persisted punt metadata (`punted_from_due_date`, `punted_on_date`) carried across pull/push; punted tasks drop out of today's My Day, show a punt indicator when they surface on their next due day, and daily recurrences are excluded from punt.
 
 ## Completion Sound
 - Built‑ins: `chime_soft`, `click_pop`, `sparkle_short`, `wood_tick` (≤150KB each).

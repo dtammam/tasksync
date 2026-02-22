@@ -128,6 +128,92 @@ const readTaskFromIdb = async (page: Page, title: string) =>
 		};
 	}, title);
 
+const updateTaskInIdb = async (
+	page: Page,
+	title: string,
+	patch: Partial<{ due_date: string; punted_from_due_date: string; punted_on_date: string }>
+) =>
+	page.evaluate(
+		async ({
+			taskTitle,
+			taskPatch
+		}: {
+			taskTitle: string;
+			taskPatch: Partial<{ due_date: string; punted_from_due_date: string; punted_on_date: string }>;
+		}) => {
+			const resolveScopedDbName = () => {
+				const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
+				const rawUser = localStorage.getItem('tasksync:auth-user');
+				let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
+				if (rawUser) {
+					try {
+						const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
+						if (parsed.user_id && parsed.space_id) {
+							scope = `space:${parsed.space_id}:user:${parsed.user_id}`;
+						}
+					} catch {
+						// Keep fallback scope.
+					}
+				}
+				const sanitized =
+					scope
+						.toLowerCase()
+						.replace(/[^a-z0-9_-]/g, '_')
+						.slice(0, 80) || 'legacy';
+				return `tasksync_${sanitized}`;
+			};
+			const dbName = resolveScopedDbName();
+			const db = await new Promise<IDBDatabase | null>((resolve) => {
+				const req = indexedDB.open(dbName);
+				req.onsuccess = () => resolve(req.result);
+				req.onerror = () => resolve(null);
+			});
+			if (!db) return false;
+			const storeNames = Array.from(db.objectStoreNames);
+			if (!storeNames.includes('tasks')) {
+				db.close();
+				return false;
+			}
+			try {
+				const all = await new Promise<unknown[]>((resolve) => {
+					const tx = db.transaction('tasks', 'readonly');
+					const store = tx.objectStore('tasks');
+					const allReq = store.getAll();
+					allReq.onsuccess = () => resolve(allReq.result ?? []);
+					allReq.onerror = () => resolve([]);
+				});
+				const matched = all.find((task) => {
+					if (!task || typeof task !== 'object') return false;
+					if (!('title' in task)) return false;
+					return (task as { title?: unknown }).title === taskTitle;
+				});
+				if (!matched || typeof matched !== 'object') {
+					db.close();
+					return false;
+				}
+				const updated = {
+					...matched,
+					...taskPatch,
+					dirty: true,
+					updated_ts: Date.now()
+				};
+				await new Promise<boolean>((resolve) => {
+					const tx = db.transaction('tasks', 'readwrite');
+					const store = tx.objectStore('tasks');
+					const putReq = store.put(updated);
+					putReq.onsuccess = () => resolve(true);
+					putReq.onerror = () => resolve(false);
+				});
+				db.close();
+				return true;
+			} catch {
+				db.close();
+				return false;
+			}
+		},
+		{ taskTitle: title, taskPatch: patch }
+	);
+
 const ensureSoundPanelOpen = async (page: Page) => {
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 	const soundEnabled = page.getByTestId('sound-enabled');
@@ -313,7 +399,10 @@ test.describe('My Day', () => {
 		await expect
 			.poll(async () => (await readTaskFromIdb(page, title))?.punted_on_date ?? null)
 			.toBe(today);
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(0);
 
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 		const row = page.getByTestId('task-row').filter({ hasText: title });
 		await row.getByTestId('task-toggle').click();
 		await expect
@@ -325,6 +414,51 @@ test.describe('My Day', () => {
 		await expect
 			.poll(async () => (await readTaskFromIdb(page, title))?.punted_on_date ?? null)
 			.toBe(null);
+	});
+
+	test('does not offer punt for daily recurrence tasks', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('Daily no punt');
+		const today = addDaysLocalIso(0);
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+		await page.getByLabel('Due date').fill(today);
+		await page.getByLabel('Recurrence').selectOption('daily');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await row.getByRole('button', { name: '⋯' }).click();
+		await expect(row.getByRole('button', { name: 'Punt' })).toHaveCount(0);
+	});
+
+	test('shows punt indicator when a task lands on today from a previous-day punt', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('Punt marker');
+		const today = addDaysLocalIso(0);
+		const yesterday = addDaysLocalIso(-1);
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		const wasUpdated = await updateTaskInIdb(page, title, {
+			due_date: today,
+			punted_from_due_date: yesterday,
+			punted_on_date: yesterday
+		});
+		expect(wasUpdated).toBe(true);
+
+		await page.reload();
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await expect(row.getByTestId('task-punt-indicator')).toHaveCount(1);
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+		await expect(page.getByTestId('detail-punt-indicator')).toContainText(yesterday);
 	});
 
 	test('keeps starred tasks at top in My Day sorting', async ({ page }) => {

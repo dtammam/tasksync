@@ -5,7 +5,7 @@ import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
-import { recurrenceRuleLabels, recurrenceRules } from '$lib/tasks/recurrence';
+import { recurrenceRuleLabels, recurrenceRules, toLocalIsoDate } from '$lib/tasks/recurrence';
 
 export let task = null;
 export let open = false;
@@ -50,6 +50,13 @@ $: isOwner = !!$auth.user?.user_id && task?.created_by_user_id === $auth.user.us
 $: canEditTask = !isContributor || isOwner;
 $: canEditMyDay = !isContributor;
 $: canEditAssignee = !isContributor;
+$: todayKey = toLocalIsoDate(new Date());
+$: showPuntedIndicator =
+	task?.status === 'pending' &&
+	task?.due_date === todayKey &&
+	!!task?.punted_from_due_date &&
+	!!task?.punted_on_date &&
+	task.punted_on_date < todayKey;
 
 const save = () => {
 	if (!task || !canEditTask) return;
@@ -105,6 +112,9 @@ const memberAvatar = (member) => {
 				<h2>{title}</h2>
 				{#if priority > 0}
 					<p class="star-pill" data-testid="detail-star-indicator">★ Starred</p>
+				{/if}
+				{#if showPuntedIndicator}
+					<p class="punt-pill" data-testid="detail-punt-indicator">👟 Punted from {task.punted_from_due_date}</p>
 				{/if}
 				<p class="muted">
 					Created {new Date(task.created_ts).toLocaleString()} • Updated {new Date(task.updated_ts).toLocaleString()}
@@ -237,6 +247,11 @@ const memberAvatar = (member) => {
 	button.primary:hover, .status:hover, button.ghost:hover { transform: translateY(-1px); }
 	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
 	.star-pill {
+		margin: 6px 0 0;
+		font-size: 12px;
+		color: var(--app-text);
+	}
+	.punt-pill {
 		margin: 6px 0 0;
 		font-size: 12px;
 		color: var(--app-text);

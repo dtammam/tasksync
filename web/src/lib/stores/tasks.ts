@@ -348,15 +348,17 @@ export const tasks = {
 				if (
 					task.id !== id ||
 					task.status !== 'pending' ||
-					!task.recurrence_id ||
 					task.due_date !== today
 				) {
 					return task;
 				}
+				// Daily recurrence already lands on tomorrow by design; punting is a no-op.
+				if (task.recurrence_id === 'daily') return task;
 				const tomorrow = nextDueForRecurrence(task.due_date, 'daily');
 				if (!tomorrow) return task;
 				return {
 					...task,
+					my_day: false,
 					due_date: tomorrow,
 					punted_from_due_date: task.punted_from_due_date ?? task.due_date,
 					punted_on_date: today,
@@ -485,7 +487,6 @@ const isAssignedToUser = (task: Task, userId?: string | null) => {
 
 const inMyDay = (task: Task) => {
 	if (task.my_day) return true;
-	if (task.punted_on_date === todayIso()) return true;
 	return isToday(task.due_date);
 };
 

@@ -251,23 +251,42 @@ describe('tasks store helpers', () => {
 		expect(get(myDayPending).map((t) => t.id)).toEqual(['missed-recurring']);
 	});
 
-	it('punts a recurring task by one day and keeps it visible in My Day on punt day', () => {
+	it('punts a due-today task by one day and removes it from today My Day', () => {
 		tasks.setAll([
 			baseTask({
-				id: 'punt-recurring',
+				id: 'punt-once',
+				due_date: '2026-02-02',
+				my_day: true,
+				status: 'pending'
+			})
+		]);
+
+		tasks.punt('punt-once');
+
+		const updated = tasks.getAll().find((t) => t.id === 'punt-once');
+		expect(updated?.my_day).toBe(false);
+		expect(updated?.due_date).toBe('2026-02-03');
+		expect(updated?.punted_from_due_date).toBe('2026-02-02');
+		expect(updated?.punted_on_date).toBe('2026-02-02');
+		expect(get(myDayPending).map((t) => t.id)).not.toContain('punt-once');
+	});
+
+	it('does not punt daily recurrence tasks because they already roll to tomorrow on completion', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'punt-daily',
 				recurrence_id: 'daily',
 				due_date: '2026-02-02',
 				status: 'pending'
 			})
 		]);
 
-		tasks.punt('punt-recurring');
+		tasks.punt('punt-daily');
 
-		const updated = tasks.getAll().find((t) => t.id === 'punt-recurring');
-		expect(updated?.due_date).toBe('2026-02-03');
-		expect(updated?.punted_from_due_date).toBe('2026-02-02');
-		expect(updated?.punted_on_date).toBe('2026-02-02');
-		expect(get(myDayPending).map((t) => t.id)).toContain('punt-recurring');
+		const updated = tasks.getAll().find((t) => t.id === 'punt-daily');
+		expect(updated?.due_date).toBe('2026-02-02');
+		expect(updated?.punted_from_due_date).toBeUndefined();
+		expect(updated?.punted_on_date).toBeUndefined();
 	});
 
 	it('keeps weekly cadence after punting an instance before completing it', () => {
