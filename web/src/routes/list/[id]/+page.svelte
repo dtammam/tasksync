@@ -347,14 +347,10 @@
 			<textarea
 				rows="8"
 				data-testid="list-import-input"
-				placeholder="- [ ] Buy milk"
+				placeholder="[ ] Buy milk&#10;[x] Buy cheese&#10;Buy bagel"
 				bind:value={importText}
 			></textarea>
 		</label>
-		<p class="example-label">Examples</p>
-		<pre class="import-example" data-testid="list-import-example">- [ ] Buy milk
-- [x] Done item
-Plain task line</pre>
 
 		<div class="import-controls">
 			<label class="file-btn">
@@ -635,26 +631,6 @@ Plain task line</pre>
 		background: color-mix(in oklab, var(--surface-1) 95%, white 5%);
 		color: var(--app-text);
 		resize: vertical;
-	}
-
-	.example-label {
-		margin: 0;
-		font-size: 11px;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--app-muted);
-	}
-
-	.import-example {
-		margin: 0;
-		padding: 8px 10px;
-		border-radius: 10px;
-		border: 1px dashed var(--border-1);
-		background: color-mix(in oklab, var(--surface-2) 94%, black 6%);
-		color: var(--app-muted);
-		font-size: 12px;
-		line-height: 1.5;
-		white-space: pre-wrap;
 	}
 
 	.import-controls {
