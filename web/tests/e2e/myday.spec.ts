@@ -620,6 +620,74 @@ test.describe('List view', () => {
 		await page.getByTestId('list-sort-direction').selectOption('asc');
 		await expect(markerRows.first()).toContainText(titleB);
 	});
+
+	test('imports plain text and Joplin-style markdown tasks into the active list', async ({ page }) => {
+		await resetClientState(page);
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const marker = makeTitle('Import list');
+		const pendingOne = `${marker} Milk`;
+		const completedOne = `${marker} Eggs`;
+		const pendingTwo = `${marker} Bread`;
+
+		await page.getByTestId('list-import-open').click();
+		await expect(page.getByTestId('list-import-modal')).toBeVisible();
+		await page.getByTestId('list-import-input').fill(
+			`- [ ] ${pendingOne}\n- [x] ${completedOne}\n${pendingTwo}\n- [ ] ${pendingOne}`
+		);
+		await page.getByTestId('list-import-apply').click();
+		await expect(page.getByTestId('list-import-message')).toContainText(
+			'Imported 3 tasks, skipped 1 duplicate.'
+		);
+
+		const pendingSection = page.locator('section.block', {
+			has: page.locator('.section-title', { hasText: 'Pending' }),
+		});
+		await expect(pendingSection.getByTestId('task-row').filter({ hasText: pendingOne })).toHaveCount(1);
+		await expect(pendingSection.getByTestId('task-row').filter({ hasText: pendingTwo })).toHaveCount(1);
+		await expect(
+			page
+				.locator('[data-testid="completed-section"] [data-testid="task-row"]')
+				.filter({ hasText: completedOne })
+		).toHaveCount(1);
+	});
+
+	test('unchecks all completed tasks in the current list', async ({ page }) => {
+		await resetClientState(page);
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const marker = makeTitle('Uncheck all');
+		const firstTitle = `${marker} A`;
+		const secondTitle = `${marker} B`;
+
+		await page.getByTestId('new-task-input').fill(firstTitle);
+		await page.getByTestId('new-task-submit').click();
+		await page.getByTestId('new-task-input').fill(secondTitle);
+		await page.getByTestId('new-task-submit').click();
+
+		await page.getByTestId('task-row').filter({ hasText: firstTitle }).getByTestId('task-toggle').click();
+		await page.getByTestId('task-row').filter({ hasText: secondTitle }).getByTestId('task-toggle').click();
+		await expect(
+			page
+				.locator('[data-testid="completed-section"] [data-testid="task-row"]')
+				.filter({ hasText: marker })
+		).toHaveCount(2);
+
+		await page.getByTestId('list-uncheck-all').click();
+		await expect(page.getByTestId('list-action-message')).toContainText('Unchecked 2 completed tasks.');
+		await expect(
+			page
+				.locator('[data-testid="completed-section"] [data-testid="task-row"]')
+				.filter({ hasText: marker })
+		).toHaveCount(0);
+
+		const pendingSection = page.locator('section.block', {
+			has: page.locator('.section-title', { hasText: 'Pending' }),
+		});
+		await expect(pendingSection.getByTestId('task-row').filter({ hasText: marker })).toHaveCount(2);
+	});
 });
 
 test.describe('Navigation', () => {
