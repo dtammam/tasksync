@@ -347,7 +347,6 @@
 			<textarea
 				rows="8"
 				data-testid="list-import-input"
-				placeholder="[ ] Buy milk&#10;[x] Buy cheese&#10;Buy bagel"
 				bind:value={importText}
 			></textarea>
 		</label>
