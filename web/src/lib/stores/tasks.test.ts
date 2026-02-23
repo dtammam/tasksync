@@ -374,6 +374,37 @@ describe('tasks store helpers', () => {
 		expect(updated?.punted_on_date).toBe('2026-02-02');
 	});
 
+	it('removes local tasks when remote tombstones arrive', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'deleted-1',
+				status: 'pending',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		tasks.applyRemoteDeletes([{ id: 'deleted-1', deleted_ts: 1770033600001 }]);
+
+		expect(tasks.getAll().find((task) => task.id === 'deleted-1')).toBeUndefined();
+	});
+
+	it('keeps clean tasks newer than tombstones to allow recreate-after-delete', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'recreated-1',
+				status: 'pending',
+				updated_ts: 100,
+				dirty: false,
+				local: false
+			})
+		]);
+
+		tasks.applyRemoteDeletes([{ id: 'recreated-1', deleted_ts: 50 }]);
+
+		expect(tasks.getAll().find((task) => task.id === 'recreated-1')).toBeTruthy();
+	});
+
 	it('renames a task and marks it dirty', () => {
 		const t = baseTask({ id: 'r1', title: 'old', dirty: false });
 		tasks.setAll([t]);

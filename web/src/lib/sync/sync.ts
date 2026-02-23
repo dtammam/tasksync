@@ -6,7 +6,7 @@ import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
 import type { List } from '$shared/types/list';
 import type { ApiTask } from '$lib/api/client';
-import type { SyncPushChange, SyncPushRejected, SyncTask } from '$shared/types/sync';
+import type { SyncDeletedTask, SyncPushChange, SyncPushRejected, SyncTask } from '$shared/types/sync';
 
 const isServerId = (id: string) =>
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -149,9 +149,11 @@ export const syncFromServer = async () => {
 			color: l.color ?? undefined,
 			order: l.order
 		}));
+		const deletedTasks: SyncDeletedTask[] = pull.deleted_tasks ?? [];
 
 		lists.setAll(toLists);
 		tasks.mergeRemote(toTasks);
+		tasks.applyRemoteDeletes(deletedTasks);
 		bumpSyncCursor(pull.cursor_ts);
 		await repo.saveTasks(tasks.getAll());
 		syncStatus.setQueueDepth(tasks.getAll().filter((t) => t.dirty).length);

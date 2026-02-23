@@ -208,6 +208,66 @@ describe('syncFromServer', () => {
 		expect(all.find((task) => task.id === created?.id)).toBeTruthy();
 	});
 
+	it('removes tasks deleted remotely via tombstones', async () => {
+		const existing: Task = {
+			id: 'srv-deleted',
+			title: 'remove me',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: false,
+			priority: 0,
+			tags: [],
+			checklist: [],
+			order: 'a',
+			created_ts: 1,
+			updated_ts: 20,
+			dirty: false,
+			local: false
+		};
+		tasks.setAll([existing]);
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 30,
+			lists: [],
+			tasks: [],
+			deleted_tasks: [{ id: 'srv-deleted', deleted_ts: 30 }]
+		});
+
+		await syncFromServer();
+
+		expect(tasks.getAll().find((task) => task.id === 'srv-deleted')).toBeUndefined();
+	});
+
+	it('applies tombstone deletes even when local copy is dirty', async () => {
+		const dirty: Task = {
+			id: 'srv-dirty',
+			title: 'dirty stale',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: false,
+			priority: 0,
+			tags: [],
+			checklist: [],
+			order: 'a',
+			created_ts: 1,
+			updated_ts: 99,
+			dirty: true,
+			local: false
+		};
+		tasks.setAll([dirty]);
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 100,
+			lists: [],
+			tasks: [],
+			deleted_tasks: [{ id: dirty.id, deleted_ts: 100 }]
+		});
+
+		await syncFromServer();
+
+		expect(tasks.getAll().find((task) => task.id === dirty.id)).toBeUndefined();
+	});
+
 	it('uses incremental cursor across pulls and resets when requested', async () => {
 		mockedApi.syncPull
 			.mockResolvedValueOnce({

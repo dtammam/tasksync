@@ -28,6 +28,7 @@ These budgets must be backed by:
 
 - Push is idempotent (re-sending the same payload does not create duplicates)
 - Pull/apply is idempotent (re-applying the same snapshot does not change state)
+- Deletes converge deterministically across devices via sync tombstones (a deleted task must not reappear after subsequent pulls)
 - Cross-tab coordination:
   - only one tab performs periodic sync
   - other tabs observe status and do not fight for leadership

@@ -163,6 +163,26 @@ export const tasks = {
 		});
 		void repo.saveTasks(get(tasksStore));
 	},
+	applyRemoteDeletes(deleted: { id: string; deleted_ts: number }[]) {
+		if (!deleted.length) return;
+		const deletedTsById = new Map<string, number>();
+		for (const tombstone of deleted) {
+			const prior = deletedTsById.get(tombstone.id);
+			if (prior === undefined || tombstone.deleted_ts > prior) {
+				deletedTsById.set(tombstone.id, tombstone.deleted_ts);
+			}
+		}
+		tasksStore.update((current) =>
+			current.filter((task) => {
+				const deletedTs = deletedTsById.get(task.id);
+				if (deletedTs === undefined) return true;
+				// Keep only clean tasks that are newer than the tombstone (recreate-after-delete case).
+				if (!task.dirty && task.updated_ts > deletedTs) return true;
+				return false;
+			})
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	toggle(id: string) {
 		let shouldPlayCompletion = false;
 		tasksStore.update((list) =>
