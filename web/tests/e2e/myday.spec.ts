@@ -388,8 +388,12 @@ test.describe('My Day', () => {
 		await page.getByLabel('Recurrence').selectOption('weekly');
 		await page.getByRole('button', { name: 'Save' }).click();
 
-		await openTaskActions();
-		await page.getByRole('button', { name: 'Punt' }).first().click();
+		await openTaskDetails();
+		const puntToggle = page.getByTestId('detail-punt-toggle');
+		await expect(puntToggle).toHaveText(/Punt/);
+		await expect(puntToggle).toBeEnabled();
+		await puntToggle.click();
+		await page.getByRole('button', { name: '×' }).click();
 		await expect
 			.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null)
 			.toBe(tomorrow);
@@ -435,6 +439,7 @@ test.describe('My Day', () => {
 		await row.getByRole('button', { name: 'Details' }).click();
 		await page.getByLabel('Due date').fill(today);
 		await page.getByLabel('Recurrence').selectOption('daily');
+		await expect(page.getByTestId('detail-punt-toggle')).toHaveCount(0);
 		await page.getByRole('button', { name: 'Save' }).click();
 
 		await row.getByRole('button', { name: '⋯' }).click();
