@@ -518,6 +518,48 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
+	saveFromDetails(
+		id: string,
+		details: {
+			title: string;
+			url?: string;
+			recurrence_id?: string;
+			due_date?: string;
+			notes: string;
+			priority: Task['priority'];
+			my_day: boolean;
+			list_id: string;
+			assignee_user_id?: string;
+		}
+	) {
+		const now = Date.now();
+		const trimmedTitle = details.title.trim();
+		tasksStore.update((list) =>
+			list.map((t) => {
+				if (t.id !== id) return t;
+				const clearsPuntState =
+					details.due_date !== t.due_date || details.recurrence_id !== t.recurrence_id;
+				return {
+					...t,
+					title: trimmedTitle || t.title,
+					url: details.url,
+					recurrence_id: details.recurrence_id,
+					due_date: details.due_date,
+					notes: details.notes,
+					priority: details.priority,
+					my_day: details.my_day,
+					list_id: details.list_id || t.list_id,
+					assignee_user_id: details.assignee_user_id,
+					...(clearsPuntState
+						? { punted_from_due_date: undefined, punted_on_date: undefined }
+						: {}),
+					updated_ts: now,
+					dirty: true
+				};
+			})
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	updateDetails(
 		id: string,
 		details: {

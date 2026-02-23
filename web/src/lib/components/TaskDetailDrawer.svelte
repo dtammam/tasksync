@@ -72,23 +72,17 @@ $: showPuntedBadge = showPuntedArrivalIndicator || showPuntedTodayIndicator;
 
 const save = () => {
 	if (!task || !canEditTask) return;
-	tasks.rename(task.id, title);
-	tasks.updateDetails(task.id, {
+	tasks.saveFromDetails(task.id, {
+		title,
 		due_date: due || undefined,
 		recurrence_id: recur || undefined,
 		url: url || undefined,
-		notes
+		notes,
+		priority,
+		my_day: canEditMyDay ? myDay : (task.my_day ?? false),
+		list_id: listId,
+		assignee_user_id: canEditAssignee ? assigneeUserId || undefined : task.assignee_user_id
 	});
-	if (priority !== (task.priority ?? 0)) {
-		tasks.setPriority(task.id, priority);
-	}
-	if (canEditMyDay) {
-		tasks.setMyDay(task.id, myDay);
-	}
-	tasks.moveToList(task.id, listId);
-	if (canEditAssignee && assigneeUserId !== (task.assignee_user_id ?? '')) {
-		tasks.setAssignee(task.id, assigneeUserId || undefined);
-	}
 	close();
 };
 
@@ -100,6 +94,11 @@ const toggleStatus = () => {
 const toggleStar = () => {
 	if (!canEditTask) return;
 	priority = priority > 0 ? 0 : 1;
+};
+
+const toggleMyDay = () => {
+	if (!canEditMyDay) return;
+	myDay = !myDay;
 };
 
 const punt = () => {
@@ -158,7 +157,15 @@ const memberAvatar = (member) => {
 				</label>
 				<label>
 					My Day
-					<input type="checkbox" bind:checked={myDay} disabled={!canEditMyDay} />
+					<button
+						class={`ghost myday-toggle ${myDay ? 'active' : ''}`}
+						type="button"
+						data-testid="detail-myday-toggle"
+						on:click={toggleMyDay}
+						disabled={!canEditMyDay}
+					>
+						{myDay ? 'My Day' : 'Add to My Day'}
+					</button>
 				</label>
 				<label>
 					Starred
@@ -285,6 +292,10 @@ const memberAvatar = (member) => {
 		gap: 6px;
 	}
 	button.ghost.punt-toggle.active {
+		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
+		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
+	}
+	button.ghost.myday-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
 	}

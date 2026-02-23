@@ -415,6 +415,48 @@ describe('tasks store helpers', () => {
 		expect(updated?.dirty).toBe(true);
 	});
 
+	it('saves detail edits in one mutation and one persistence call', () => {
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+		tasks.setAll([
+			baseTask({
+				id: 'detail-1',
+				title: 'Original title',
+				list_id: 'goal-management',
+				status: 'pending',
+				my_day: false
+			})
+		]);
+		saveSpy.mockClear();
+
+		tasks.saveFromDetails('detail-1', {
+			title: 'Updated title',
+			due_date: '2026-02-06',
+			recurrence_id: 'weekly',
+			url: 'https://example.com',
+			notes: 'Updated notes',
+			priority: 1,
+			my_day: true,
+			list_id: 'goal-management',
+			assignee_user_id: 'u-me'
+		});
+
+		const updated = tasks.getAll().find((task) => task.id === 'detail-1');
+		expect(updated).toMatchObject({
+			title: 'Updated title',
+			due_date: '2026-02-06',
+			recurrence_id: 'weekly',
+			url: 'https://example.com',
+			notes: 'Updated notes',
+			priority: 1,
+			my_day: true,
+			list_id: 'goal-management',
+			assignee_user_id: 'u-me',
+			dirty: true
+		});
+		expect(saveSpy).toHaveBeenCalledTimes(1);
+		saveSpy.mockRestore();
+	});
+
 	it('suggests tasks due today or tomorrow that are not already in My Day', () => {
 		tasks.setAll([
 			baseTask({ id: 'due-today', due_date: '2026-02-02', status: 'pending' }),
