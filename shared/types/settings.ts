@@ -23,7 +23,6 @@ export type UiTheme =
 	| 'default'
 	| 'dark'
 	| 'light'
-	| 'demo-theme'
 	| 'shades-of-coffee'
 	| 'miami-beach'
 	| 'simple-dark'

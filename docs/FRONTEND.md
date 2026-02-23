@@ -26,6 +26,11 @@ Within `web/src/lib/`:
   - desktop split-pane navigation (sections left, detail right)
   - mobile section-list first, then section detail with back navigation
 - Section visibility rules are centralized in `web/src/lib/components/settingsMenu.ts`.
+- App theme labels in settings must stay aligned with product copy:
+  - `default` = `To-Do Blue`
+  - `light` = `Plain White Light`
+  - `dark` = `Discernable Dark`
+  - `demo-theme` is retired and must not appear in selectable theme options.
 
 ## Mobile quick-add positioning
 
