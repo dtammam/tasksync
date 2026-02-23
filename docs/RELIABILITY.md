@@ -19,6 +19,7 @@ These budgets must be backed by:
   - viewing cached tasks/lists
   - creating/editing tasks locally
   - queueing changes for later sync
+- Task detail saves must persist as a single local mutation/write (not split across multiple writes) so first-save behavior remains deterministic for fields like due date, recurrence, and My Day.
 - When connectivity returns:
   - queued changes replay deterministically
   - duplicates are not created

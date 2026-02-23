@@ -122,7 +122,11 @@ const readTaskFromIdb = async (page: Page, title: string) =>
 		});
 		if (!matched || typeof matched !== 'object') return null;
 		return matched as {
+			title?: string;
 			due_date?: string;
+			recurrence_id?: string;
+			my_day?: boolean;
+			notes?: string;
 			punted_from_due_date?: string;
 			punted_on_date?: string;
 		};
@@ -310,6 +314,52 @@ test.describe('My Day', () => {
 		await waitForTaskInIdb(page, title);
 		await page.reload();
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+	});
+
+	test('persists first detail save deterministically with recurrence and My Day button state', async ({
+		page
+	}) => {
+		await resetClientState(page);
+		const title = makeTitle('Detail persist');
+		const notes = `Detail notes ${Math.random().toString(36).slice(2, 6)}`;
+		const today = addDaysLocalIso(0);
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+
+		const myDayToggle = page.getByTestId('detail-myday-toggle');
+		await expect(myDayToggle).toHaveText('My Day');
+		await myDayToggle.click();
+		await expect(myDayToggle).toHaveText('Add to My Day');
+		await myDayToggle.click();
+		await expect(myDayToggle).toHaveText('My Day');
+		await page.getByLabel('Due date').fill(today);
+		await page.getByLabel('Recurrence').selectOption('weekly');
+		await page.getByLabel('Notes').fill(notes);
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null).toBe(today);
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.recurrence_id ?? null).toBe(
+			'weekly'
+		);
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.my_day ?? null).toBe(true);
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.notes ?? null).toBe(notes);
+
+		await page.reload();
+		const reloadedRow = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(reloadedRow).toHaveCount(1);
+		await reloadedRow.getByRole('button', { name: '⋯' }).click();
+		await reloadedRow.getByRole('button', { name: 'Details' }).click();
+		await expect(page.getByTestId('detail-myday-toggle')).toHaveText('My Day');
+		await expect(page.getByLabel('Due date')).toHaveValue(today);
+		await expect(page.getByLabel('Recurrence')).toHaveValue('weekly');
+		await expect(page.getByLabel('Notes')).toHaveValue(notes);
+		await page.getByRole('button', { name: '×' }).click();
 	});
 
 	test('keeps alphabetical sort mode and direction after reload', async ({ page }) => {
