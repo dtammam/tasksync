@@ -26,6 +26,7 @@ export interface TaskImportInput {
 export interface TaskImportResult {
 	created: number;
 	skipped: number;
+	reactivated: number;
 }
 
 const makeLocalTask = (
@@ -158,14 +159,20 @@ export const tasks = {
 		void repo.saveTasks(get(tasksStore));
 		return task;
 	},
-	importBatch(items: TaskImportInput[], fallbackListId: string): TaskImportResult {
-		const existingKeys = new Set(
-			get(tasksStore).map((task) => normalizedImportKey(task.title, task.list_id))
+	importBatch(
+		items: TaskImportInput[],
+		fallbackListId: string,
+		opts?: { ownerUserId?: string }
+	): TaskImportResult {
+		const existingByKey = new Map(
+			get(tasksStore).map((task) => [normalizedImportKey(task.title, task.list_id), task])
 		);
 		const batchKeys = new Set<string>();
 		let created = 0;
 		let skipped = 0;
+		let reactivated = 0;
 		const currentUserId = auth.get().user?.user_id;
+		const ownerUserId = opts?.ownerUserId;
 
 		tasksStore.update((list) => {
 			const next = [...list];
@@ -174,7 +181,29 @@ export const tasks = {
 				if (!title) continue;
 				const list_id = (item.list_id ?? fallbackListId ?? '').trim() || fallbackListId;
 				const key = normalizedImportKey(title, list_id);
-				if (existingKeys.has(key) || batchKeys.has(key)) {
+				const existing = existingByKey.get(key);
+				if (existing) {
+					const canEditExisting =
+						!ownerUserId || !existing.created_by_user_id || existing.created_by_user_id === ownerUserId;
+					if (canEditExisting && existing.status === 'done') {
+						const updated = {
+							...existing,
+							status: 'pending' as Task['status'],
+							completed_ts: undefined,
+							updated_ts: Date.now(),
+							dirty: true
+						};
+						const index = next.findIndex((task) => task.id === existing.id);
+						if (index >= 0) {
+							next[index] = updated;
+						}
+						existingByKey.set(key, updated);
+						reactivated += 1;
+					}
+					skipped += 1;
+					continue;
+				}
+				if (batchKeys.has(key)) {
 					skipped += 1;
 					continue;
 				}
@@ -190,13 +219,13 @@ export const tasks = {
 				}
 				next.push(task);
 				batchKeys.add(key);
-				existingKeys.add(key);
+				existingByKey.set(key, task);
 				created += 1;
 			}
 			return next;
 		});
 		void repo.saveTasks(get(tasksStore));
-		return { created, skipped };
+		return { created, skipped, reactivated };
 	},
 	uncheckAllInList(listId: string, opts?: { ownerUserId?: string }): number {
 		const now = Date.now();

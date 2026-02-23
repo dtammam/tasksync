@@ -528,18 +528,42 @@ describe('tasks store helpers', () => {
 		const result = tasks.importBatch(
 			[
 				{ title: 'Buy milk', status: 'pending', list_id: 'goal-management' },
-				{ title: 'Buy eggs', status: 'done', list_id: 'goal-management' },
 				{ title: 'Buy eggs', status: 'pending', list_id: 'goal-management' },
+				{ title: 'Buy eggs', status: 'pending', list_id: 'goal-management' },
+				{ title: 'Buy carrots', status: 'done', list_id: 'goal-management' },
 				{ title: 'Buy bread', status: 'pending', list_id: 'goal-management' }
 			],
 			'goal-management'
 		);
 
-		expect(result).toEqual({ created: 2, skipped: 2 });
+		expect(result).toEqual({ created: 3, skipped: 2, reactivated: 0 });
 		const all = tasks.getAll();
 		expect(all.filter((task) => task.title === 'Buy eggs')).toHaveLength(1);
-		expect(all.find((task) => task.title === 'Buy eggs')?.status).toBe('done');
+		expect(all.find((task) => task.title === 'Buy eggs')?.status).toBe('pending');
+		expect(all.find((task) => task.title === 'Buy carrots')?.status).toBe('done');
 		expect(all.find((task) => task.title === 'Buy bread')?.status).toBe('pending');
+	});
+
+	it('reactivates matching completed tasks when duplicates are imported', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'done-duplicate',
+				title: 'Refill pantry',
+				list_id: 'goal-management',
+				status: 'done'
+			})
+		]);
+
+		const result = tasks.importBatch(
+			[{ title: 'Refill pantry', status: 'pending', list_id: 'goal-management' }],
+			'goal-management'
+		);
+
+		expect(result).toEqual({ created: 0, skipped: 1, reactivated: 1 });
+		const updated = tasks.getAll().find((task) => task.id === 'done-duplicate');
+		expect(updated?.status).toBe('pending');
+		expect(updated?.completed_ts).toBeUndefined();
+		expect(updated?.dirty).toBe(true);
 	});
 
 	it('unchecks completed tasks in a list while leaving other lists untouched', () => {

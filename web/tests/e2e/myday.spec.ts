@@ -631,14 +631,25 @@ test.describe('List view', () => {
 		const completedOne = `${marker} Eggs`;
 		const pendingTwo = `${marker} Bread`;
 
+		await page.getByTestId('new-task-input').fill(pendingOne);
+		await page.getByTestId('new-task-submit').click();
+		const existingRow = page.getByTestId('task-row').filter({ hasText: pendingOne });
+		await existingRow.getByTestId('task-toggle').click();
+		await expect(
+			page
+				.locator('[data-testid="completed-section"] [data-testid="task-row"]')
+				.filter({ hasText: pendingOne })
+		).toHaveCount(1);
+
 		await page.getByTestId('list-import-open').click();
 		await expect(page.getByTestId('list-import-modal')).toBeVisible();
 		await page.getByTestId('list-import-input').fill(
 			`- [ ] ${pendingOne}\n- [x] ${completedOne}\n${pendingTwo}\n- [ ] ${pendingOne}`
 		);
 		await page.getByTestId('list-import-apply').click();
-		await expect(page.getByTestId('list-import-message')).toContainText(
-			'Imported 3 tasks, skipped 1 duplicate.'
+		await expect(page.getByTestId('list-import-modal')).toHaveCount(0);
+		await expect(page.getByTestId('list-action-message')).toContainText(
+			'Imported 2 tasks, reopened 1 duplicate, skipped 2 duplicates.'
 		);
 
 		const pendingSection = page.locator('section.block', {

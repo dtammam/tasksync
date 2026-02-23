@@ -48,6 +48,7 @@ Within `web/src/lib/`:
   - `Uncheck all` (resets completed tasks in the active list back to pending)
 - Parsing contract lives in `web/src/lib/markdown/import.ts`; parser must remain deterministic line-by-line and skip non-task markdown noise.
 - Bulk mutations must go through `web/src/lib/stores/tasks.ts` helpers (`importBatch`, `uncheckAllInList`) so offline behavior and sync queue semantics stay consistent.
+- Duplicate imports are deterministic: existing completed duplicates are reopened (set back to pending) instead of creating another row.
 
 ## Target layered model (directional dependencies)
 

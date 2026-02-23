@@ -189,17 +189,25 @@
 					my_day: item.my_day
 				})
 			),
-			listId
+			listId,
+			contributorUserId ? { ownerUserId: contributorUserId } : undefined
 		);
-		if (result.created === 0) {
+		if (result.created === 0 && result.reactivated === 0) {
 			importError = 'No new tasks imported. Everything matched existing tasks.';
 			return;
 		}
+		const importedLabel = result.created
+			? `Imported ${result.created} task${result.created === 1 ? '' : 's'}`
+			: '';
+		const reactivatedLabel = result.reactivated
+			? `${importedLabel ? ', ' : ''}reopened ${result.reactivated} duplicate${result.reactivated === 1 ? '' : 's'}`
+			: '';
 		const skippedLabel = result.skipped
 			? `, skipped ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'}`
 			: '';
-		importMessage = `Imported ${result.created} task${result.created === 1 ? '' : 's'}${skippedLabel}.`;
+		listActionMessage = `${importedLabel}${reactivatedLabel}${skippedLabel}.`;
 		resetImportDraft();
+		closeImport();
 	};
 
 	const uncheckAllCompleted = () => {
@@ -339,10 +347,14 @@
 			<textarea
 				rows="8"
 				data-testid="list-import-input"
-				placeholder="- [ ] Buy milk&#10;- [x] Done item&#10;Plain task line"
+				placeholder="- [ ] Buy milk"
 				bind:value={importText}
 			></textarea>
 		</label>
+		<p class="example-label">Examples</p>
+		<pre class="import-example" data-testid="list-import-example">- [ ] Buy milk
+- [x] Done item
+Plain task line</pre>
 
 		<div class="import-controls">
 			<label class="file-btn">
@@ -623,6 +635,26 @@
 		background: color-mix(in oklab, var(--surface-1) 95%, white 5%);
 		color: var(--app-text);
 		resize: vertical;
+	}
+
+	.example-label {
+		margin: 0;
+		font-size: 11px;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--app-muted);
+	}
+
+	.import-example {
+		margin: 0;
+		padding: 8px 10px;
+		border-radius: 10px;
+		border: 1px dashed var(--border-1);
+		background: color-mix(in oklab, var(--surface-2) 94%, black 6%);
+		color: var(--app-muted);
+		font-size: 12px;
+		line-height: 1.5;
+		white-space: pre-wrap;
 	}
 
 	.import-controls {
