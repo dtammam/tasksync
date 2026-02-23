@@ -71,10 +71,9 @@
 	let backupError = '';
 	let backupMessage = '';
 	const appThemes = [
-		{ value: 'default', label: 'Default Blue' },
-		{ value: 'light', label: 'Light' },
-		{ value: 'dark', label: 'Dark' },
-		{ value: 'demo-theme', label: 'Demo Theme' },
+		{ value: 'default', label: 'To-Do Blue' },
+		{ value: 'light', label: 'Plain White Light' },
+		{ value: 'dark', label: 'Discernable Dark' },
 		{ value: 'shades-of-coffee', label: 'Shades of Coffee' },
 		{ value: 'miami-beach', label: 'Miami Beach' },
 		{ value: 'simple-dark', label: 'Simple Dark' },

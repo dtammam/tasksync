@@ -34,7 +34,6 @@ const validThemes: UiTheme[] = [
 	'default',
 	'dark',
 	'light',
-	'demo-theme',
 	'shades-of-coffee',
 	'miami-beach',
 	'simple-dark',

@@ -518,19 +518,6 @@
 		--focus: #1d4ed8;
 	}
 
-
-	:global(html[data-ui-theme='demo-theme']) {
-		--app-bg: #f5f1e8;
-		--app-bg-mobile: #f5f1e8;
-		--app-text: #4a3f2e;
-		--app-muted: #5a4a38;
-		--surface-1: #fffef9;
-		--surface-2: #f5f1e8;
-		--surface-3: #d4b896;
-		--surface-accent: #b8956a;
-		--border-1: #d4b896;
-		--border-2: #b8956a;
-	}
 	:global(html[data-ui-theme='shades-of-coffee']) { --app-bg:#e2d8cf; --app-bg-mobile:#e2d8cf; --app-text:#1a0c00; --app-muted:#604b39; --surface-1:#f5f2ef; --surface-2:#e2d8cf; --surface-3:#c29670; --surface-accent:#cfb3ff; --border-1:#c29670; --border-2:#604b39; }
 	:global(html[data-ui-theme='miami-beach']) { --app-bg:#d095ca; --app-bg-mobile:#d095ca; --app-text:#5e2a91; --app-muted:#1e9484; --surface-1:#f9deb8; --surface-2:#c5ece4; --surface-3:#24b2a0; --surface-accent:#5e2a91; --border-1:#24b2a0; --border-2:#1e9484; }
 	:global(html[data-ui-theme='simple-dark']) { --app-bg:#222222; --app-bg-mobile:#222222; --app-text:#d9e2ec; --app-muted:#edbe5e; --surface-1:#063446; --surface-2:#222222; --surface-3:#434343; --surface-accent:#14aeeb; --border-1:#434343; --border-2:#14aeeb; }

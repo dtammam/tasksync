@@ -191,11 +191,10 @@ const SOUND_THEMES: [&str; 8] = [
     "custom_file",
 ];
 
-const UI_THEMES: [&str; 18] = [
+const UI_THEMES: [&str; 17] = [
     "default",
     "dark",
     "light",
-    "demo-theme",
     "shades-of-coffee",
     "miami-beach",
     "simple-dark",
