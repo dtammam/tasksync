@@ -50,6 +50,15 @@ Within `web/src/lib/`:
 - Bulk mutations must go through `web/src/lib/stores/tasks.ts` helpers (`importBatch`, `uncheckAllInList`) so offline behavior and sync queue semantics stay consistent.
 - Duplicate imports are deterministic: existing completed duplicates are reopened (set back to pending) instead of creating another row.
 
+## Task visual affordances
+
+- `TaskRow` and `TaskDetailDrawer` must render punt state with a theme-aware right-arrow glyph (non-emoji) so icon colors stay consistent across themes.
+- Punt actions in the details drawer are visibility-gated by the same rule as row quick actions:
+  - pending status
+  - due today
+  - non-daily recurrence
+- If a task is already punted for the current cycle, details shows a disabled `Punted` state control instead of an active punt button.
+
 ## Target layered model (directional dependencies)
 
 Within a domain, dependencies should flow:

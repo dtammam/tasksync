@@ -63,6 +63,12 @@ $: showPuntedTodayIndicator =
 	task.due_date > todayKey &&
 	task.punted_on_date === todayKey &&
 	!!task?.punted_from_due_date;
+$: canPunt =
+	canEditTask &&
+	task?.status === 'pending' &&
+	task?.recurrence_id !== 'daily' &&
+	task?.due_date === todayKey;
+$: showPuntedBadge = showPuntedArrivalIndicator || showPuntedTodayIndicator;
 
 const save = () => {
 	if (!task || !canEditTask) return;
@@ -96,6 +102,11 @@ const toggleStar = () => {
 	priority = priority > 0 ? 0 : 1;
 };
 
+const punt = () => {
+	if (!task || !canPunt) return;
+	tasks.punt(task.id);
+};
+
 const skip = () => {
 	if (!task || !canEditTask) return;
 	tasks.skip(task.id);
@@ -120,10 +131,10 @@ const memberAvatar = (member) => {
 					<p class="star-pill" data-testid="detail-star-indicator">★ Starred</p>
 				{/if}
 				{#if showPuntedArrivalIndicator}
-					<p class="punt-pill" data-testid="detail-punt-indicator">👟 Punted from {task.punted_from_due_date}</p>
+					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">➜</span> Punted from {task.punted_from_due_date}</p>
 				{/if}
 				{#if showPuntedTodayIndicator}
-					<p class="punt-pill" data-testid="detail-punt-indicator">👟 Punted today to {task.due_date}</p>
+					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">➜</span> Punted today to {task.due_date}</p>
 				{/if}
 				<p class="muted">
 					Created {new Date(task.created_ts).toLocaleString()} • Updated {new Date(task.updated_ts).toLocaleString()}
@@ -161,6 +172,21 @@ const memberAvatar = (member) => {
 						{priority > 0 ? '★ Starred' : '☆ Star'}
 					</button>
 				</label>
+				{#if canPunt || showPuntedBadge}
+					<label>
+						Punt
+						<button
+							class={`ghost punt-toggle ${showPuntedBadge && !canPunt ? 'active' : ''}`}
+							type="button"
+							data-testid="detail-punt-toggle"
+							on:click={punt}
+							disabled={!canPunt}
+						>
+							<span class="punt-glyph" aria-hidden="true">➜</span>
+							{canPunt ? 'Punt' : 'Punted'}
+						</button>
+					</label>
+				{/if}
 			</div>
 
 			<div class="row two">
@@ -253,6 +279,15 @@ const memberAvatar = (member) => {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
 	}
+	button.ghost.punt-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	button.ghost.punt-toggle.active {
+		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
+		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
+	}
 	button.primary:hover, .status:hover, button.ghost:hover { transform: translateY(-1px); }
 	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
 	.star-pill {
@@ -261,8 +296,18 @@ const memberAvatar = (member) => {
 		color: var(--app-text);
 	}
 	.punt-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 		margin: 6px 0 0;
 		font-size: 12px;
 		color: var(--app-text);
+	}
+	.punt-glyph {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 700;
+		color: color-mix(in oklab, var(--surface-accent) 64%, var(--app-text) 36%);
 	}
 </style>
