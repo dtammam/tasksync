@@ -16,6 +16,19 @@ const isServerId = (id: string) =>
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 const todayIso = () => toLocalIsoDate(new Date());
 
+export interface TaskImportInput {
+	title: string;
+	status?: Task['status'];
+	list_id?: string;
+	my_day?: boolean;
+}
+
+export interface TaskImportResult {
+	created: number;
+	skipped: number;
+	reactivated: number;
+}
+
 const makeLocalTask = (
 	title: string,
 	list_id: string,
@@ -59,6 +72,9 @@ const makeLocalTask = (
 	};
 	return task;
 };
+
+const normalizedImportKey = (title: string, listId: string) =>
+	`${listId.trim().toLowerCase()}::${title.trim().replace(/\s+/g, ' ').toLowerCase()}`;
 
 const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.title !== sent.title ||
@@ -142,6 +158,96 @@ export const tasks = {
 		tasksStore.update((list) => [...list, task]);
 		void repo.saveTasks(get(tasksStore));
 		return task;
+	},
+	importBatch(
+		items: TaskImportInput[],
+		fallbackListId: string,
+		opts?: { ownerUserId?: string }
+	): TaskImportResult {
+		const existingByKey = new Map(
+			get(tasksStore).map((task) => [normalizedImportKey(task.title, task.list_id), task])
+		);
+		const batchKeys = new Set<string>();
+		let created = 0;
+		let skipped = 0;
+		let reactivated = 0;
+		const currentUserId = auth.get().user?.user_id;
+		const ownerUserId = opts?.ownerUserId;
+
+		tasksStore.update((list) => {
+			const next = [...list];
+			for (const item of items) {
+				const title = item.title?.trim();
+				if (!title) continue;
+				const list_id = (item.list_id ?? fallbackListId ?? '').trim() || fallbackListId;
+				const key = normalizedImportKey(title, list_id);
+				const existing = existingByKey.get(key);
+				if (existing) {
+					const canEditExisting =
+						!ownerUserId || !existing.created_by_user_id || existing.created_by_user_id === ownerUserId;
+					if (canEditExisting && existing.status === 'done') {
+						const updated = {
+							...existing,
+							status: 'pending' as Task['status'],
+							completed_ts: undefined,
+							updated_ts: Date.now(),
+							dirty: true
+						};
+						const index = next.findIndex((task) => task.id === existing.id);
+						if (index >= 0) {
+							next[index] = updated;
+						}
+						existingByKey.set(key, updated);
+						reactivated += 1;
+					}
+					skipped += 1;
+					continue;
+				}
+				if (batchKeys.has(key)) {
+					skipped += 1;
+					continue;
+				}
+				const task = makeLocalTask(title, list_id, {
+					status: item.status === 'done' ? 'done' : 'pending',
+					my_day: !!item.my_day
+				});
+				if (task.status === 'done') {
+					task.completed_ts = task.updated_ts;
+				}
+				if (!task.assignee_user_id) {
+					task.assignee_user_id = currentUserId;
+				}
+				next.push(task);
+				batchKeys.add(key);
+				existingByKey.set(key, task);
+				created += 1;
+			}
+			return next;
+		});
+		void repo.saveTasks(get(tasksStore));
+		return { created, skipped, reactivated };
+	},
+	uncheckAllInList(listId: string, opts?: { ownerUserId?: string }): number {
+		const now = Date.now();
+		let changed = 0;
+		tasksStore.update((list) =>
+			list.map((task) => {
+				if (task.list_id !== listId || task.status !== 'done') return task;
+				if (opts?.ownerUserId && task.created_by_user_id !== opts.ownerUserId) return task;
+				changed += 1;
+				return {
+					...task,
+					status: 'pending',
+					completed_ts: undefined,
+					updated_ts: now,
+					dirty: true
+				};
+			})
+		);
+		if (changed > 0) {
+			void repo.saveTasks(get(tasksStore));
+		}
+		return changed;
 	},
 	setAll(next: Task[]) {
 		tasksStore.set(next);

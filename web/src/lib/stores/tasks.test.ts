@@ -514,4 +514,96 @@ describe('tasks store helpers', () => {
 		await tasks.deleteRemote('local-temp');
 		expect(tasks.getAll()).toEqual([]);
 	});
+
+	it('imports tasks in batch and skips duplicates from existing and import payload', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'existing',
+				title: 'Buy milk',
+				list_id: 'goal-management',
+				status: 'pending'
+			})
+		]);
+
+		const result = tasks.importBatch(
+			[
+				{ title: 'Buy milk', status: 'pending', list_id: 'goal-management' },
+				{ title: 'Buy eggs', status: 'pending', list_id: 'goal-management' },
+				{ title: 'Buy eggs', status: 'pending', list_id: 'goal-management' },
+				{ title: 'Buy carrots', status: 'done', list_id: 'goal-management' },
+				{ title: 'Buy bread', status: 'pending', list_id: 'goal-management' }
+			],
+			'goal-management'
+		);
+
+		expect(result).toEqual({ created: 3, skipped: 2, reactivated: 0 });
+		const all = tasks.getAll();
+		expect(all.filter((task) => task.title === 'Buy eggs')).toHaveLength(1);
+		expect(all.find((task) => task.title === 'Buy eggs')?.status).toBe('pending');
+		expect(all.find((task) => task.title === 'Buy carrots')?.status).toBe('done');
+		expect(all.find((task) => task.title === 'Buy bread')?.status).toBe('pending');
+	});
+
+	it('reactivates matching completed tasks when duplicates are imported', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'done-duplicate',
+				title: 'Refill pantry',
+				list_id: 'goal-management',
+				status: 'done'
+			})
+		]);
+
+		const result = tasks.importBatch(
+			[{ title: 'Refill pantry', status: 'pending', list_id: 'goal-management' }],
+			'goal-management'
+		);
+
+		expect(result).toEqual({ created: 0, skipped: 1, reactivated: 1 });
+		const updated = tasks.getAll().find((task) => task.id === 'done-duplicate');
+		expect(updated?.status).toBe('pending');
+		expect(updated?.completed_ts).toBeUndefined();
+		expect(updated?.dirty).toBe(true);
+	});
+
+	it('unchecks completed tasks in a list while leaving other lists untouched', () => {
+		tasks.setAll([
+			baseTask({ id: 'l1-done', title: 'Done A', list_id: 'goal-management', status: 'done' }),
+			baseTask({ id: 'l1-pending', title: 'Pending A', list_id: 'goal-management', status: 'pending' }),
+			baseTask({ id: 'l2-done', title: 'Done B', list_id: 'daily-management', status: 'done' })
+		]);
+
+		const changed = tasks.uncheckAllInList('goal-management');
+
+		expect(changed).toBe(1);
+		const all = tasks.getAll();
+		expect(all.find((task) => task.id === 'l1-done')?.status).toBe('pending');
+		expect(all.find((task) => task.id === 'l1-done')?.dirty).toBe(true);
+		expect(all.find((task) => task.id === 'l2-done')?.status).toBe('done');
+	});
+
+	it('only unchecks owned tasks when owner filter is provided', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'mine',
+				title: 'Mine',
+				list_id: 'goal-management',
+				status: 'done',
+				created_by_user_id: 'u-me'
+			}),
+			baseTask({
+				id: 'theirs',
+				title: 'Theirs',
+				list_id: 'goal-management',
+				status: 'done',
+				created_by_user_id: 'u-other'
+			})
+		]);
+
+		const changed = tasks.uncheckAllInList('goal-management', { ownerUserId: 'u-me' });
+
+		expect(changed).toBe(1);
+		expect(tasks.getAll().find((task) => task.id === 'mine')?.status).toBe('pending');
+		expect(tasks.getAll().find((task) => task.id === 'theirs')?.status).toBe('done');
+	});
 });

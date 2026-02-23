@@ -41,6 +41,15 @@ Within `web/src/lib/`:
   - status-code checks must use `apiErrorStatus(...)` instead of brittle string parsing
   - user copy can change, but retry/auth/offline branching must remain status-driven.
 
+## List utilities (import + reset)
+
+- List route utility actions live in `web/src/routes/list/[id]/+page.svelte`:
+  - `Import` (plain text + markdown/Joplin checkbox support)
+  - `Uncheck all` (resets completed tasks in the active list back to pending)
+- Parsing contract lives in `web/src/lib/markdown/import.ts`; parser must remain deterministic line-by-line and skip non-task markdown noise.
+- Bulk mutations must go through `web/src/lib/stores/tasks.ts` helpers (`importBatch`, `uncheckAllInList`) so offline behavior and sync queue semantics stay consistent.
+- Duplicate imports are deterministic: existing completed duplicates are reopened (set back to pending) instead of creating another row.
+
 ## Target layered model (directional dependencies)
 
 Within a domain, dependencies should flow:

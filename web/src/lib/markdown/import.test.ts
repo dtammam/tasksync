@@ -32,4 +32,35 @@ describe('parseMarkdownTasks', () => {
 		expect(result[0].list_id).toBe('goal-management');
 		expect(result[0].title).toBe('Spaced title');
 	});
+
+	it('parses plain-text and numbered lines as pending tasks', () => {
+		const md = `
+		Buy milk
+		1. Buy eggs
+		- Buy bread
+		`;
+		const result = parseMarkdownTasks(md, 'goal-management');
+		expect(result).toEqual([
+			{ title: 'Buy milk', status: 'pending', list_id: 'goal-management', my_day: false },
+			{ title: 'Buy eggs', status: 'pending', list_id: 'goal-management', my_day: false },
+			{ title: 'Buy bread', status: 'pending', list_id: 'goal-management', my_day: false }
+		]);
+	});
+
+	it('skips markdown headings and fenced-code markers from note exports', () => {
+		const md = `
+		# Grocery note
+		- [ ] Apples
+		\`\`\`
+		- [x] Not a task here
+		\`\`\`
+		- [x] Bananas
+		`;
+		const result = parseMarkdownTasks(md, 'tasks');
+		expect(result).toEqual([
+			{ title: 'Apples', status: 'pending', list_id: 'tasks', my_day: false },
+			{ title: 'Not a task here', status: 'done', list_id: 'tasks', my_day: false },
+			{ title: 'Bananas', status: 'done', list_id: 'tasks', my_day: false }
+		]);
+	});
 });
