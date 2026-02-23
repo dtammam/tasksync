@@ -33,6 +33,14 @@ Within `web/src/lib/`:
 - `web/src/routes/+layout.svelte` is the single owner of `--mobile-keyboard-offset` and updates it from `visualViewport` + focus events.
 - Do not duplicate keyboard-offset logic inside route components.
 
+## User-facing API errors
+
+- `web/src/lib/api/client.ts` throws structured `ApiError` objects with HTTP status preserved.
+- UI-facing stores/runtimes (`auth`, `sync`) must convert raw transport/server failures into plain-English messages.
+- Preserve deterministic behavior:
+  - status-code checks must use `apiErrorStatus(...)` instead of brittle string parsing
+  - user copy can change, but retry/auth/offline branching must remain status-driven.
+
 ## Target layered model (directional dependencies)
 
 Within a domain, dependencies should flow:

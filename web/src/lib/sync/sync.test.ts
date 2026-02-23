@@ -12,6 +12,13 @@ vi.mock('$lib/api/client', () => {
 		api: {
 			syncPull: vi.fn(),
 			syncPush: vi.fn()
+		},
+		apiErrorStatus: (err: unknown) => {
+			const message = err instanceof Error ? err.message : String(err);
+			const match = /^API\s+(\d{3})\b/.exec(message);
+			if (!match) return null;
+			const parsed = Number.parseInt(match[1], 10);
+			return Number.isFinite(parsed) ? parsed : null;
 		}
 	};
 });
@@ -306,6 +313,9 @@ describe('syncFromServer', () => {
 
 		expect(result.error).toBe(true);
 		expect(readStatus().pull).toBe('error');
+		expect(readStatus().lastError).toBe(
+			'Server sync is unavailable (500). Local changes are preserved and will retry.'
+		);
 	});
 
 	it('hydrates priority and punt metadata from remote tasks', async () => {
@@ -549,6 +559,24 @@ describe('pushPendingToServer', () => {
 		expect(result.rejected).toBe(1);
 		expect(tasks.getAll().find((item) => item.id === task.id)?.dirty).toBe(false);
 		expect(readStatus().push).toBe('error');
+		expect(readStatus().lastError).toBe(
+			'Sync update was denied (403). Your access changed; local edit was cleared.'
+		);
+	});
+
+	it('reports friendly push error when network is unavailable', async () => {
+		const local = tasks.createLocal('offline-only', 'goal-management');
+		expect(local).toBeTruthy();
+		mockedApi.syncPush.mockRejectedValue(new Error('TypeError: Failed to fetch'));
+
+		const result = await pushPendingToServer();
+
+		expect(result.error).toBe(true);
+		expect(readStatus().push).toBe('error');
+		expect(readStatus().lastError).toBe(
+			'Cannot reach the server. Local changes are safe and will retry automatically.'
+		);
+		expect(tasks.getAll().find((task) => task.id === local?.id)?.dirty).toBe(true);
 	});
 
 	it('uses sync push cursor as next pull boundary', async () => {

@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { api } from '$lib/api/client';
+import { api, apiErrorStatus } from '$lib/api/client';
 import { getAuthMode, getAuthToken, setAuthMode, setAuthToken, type AuthMode } from '$lib/api/headers';
 import type { AuthUpdateProfileRequest, AuthUser } from '$shared/types/auth';
 
@@ -69,16 +69,47 @@ const persistUser = (user: AuthUser | null) => {
 };
 
 const authError = (err: unknown) => (err instanceof Error ? err.message : String(err));
-const apiStatusCode = (err: unknown): number | null => {
-	const message = authError(err);
-	const match = /^API\s+(\d{3})\b/.exec(message);
-	if (!match) return null;
-	const parsed = Number.parseInt(match[1], 10);
-	return Number.isFinite(parsed) ? parsed : null;
+const isLikelyNetworkError = (err: unknown) => /failed to fetch|networkerror|network request failed/i.test(authError(err));
+
+const formatHydrateError = (err: unknown): string => {
+	const code = apiErrorStatus(err);
+	if (code === 401 || code === 403) {
+		return 'Your session expired or is not valid. Please sign in again.';
+	}
+	if (code === 404) {
+		return 'Auth endpoint was not found (404). Check that web and server versions match.';
+	}
+	if (code && code >= 500) {
+		return `Server auth is unavailable right now (${code}). Please try again shortly.`;
+	}
+	if (isLikelyNetworkError(err)) {
+		return 'Cannot reach the server right now. You can continue local use and retry sign-in later.';
+	}
+	return `Could not verify your session: ${authError(err)}`;
+};
+
+const formatLoginError = (err: unknown): string => {
+	const code = apiErrorStatus(err);
+	if (code === 400) {
+		return 'Sign in request is invalid. Check email, password, and space ID.';
+	}
+	if (code === 401 || code === 403) {
+		return 'Sign in failed. Check your email, password, and space ID.';
+	}
+	if (code === 404) {
+		return 'Sign in endpoint was not found (404). Check the API URL and server version.';
+	}
+	if (code && code >= 500) {
+		return `Sign in is temporarily unavailable (${code}). Please try again shortly.`;
+	}
+	if (isLikelyNetworkError(err)) {
+		return 'Cannot reach the server. Check your connection and API URL.';
+	}
+	return `Sign in failed: ${authError(err)}`;
 };
 
 const isAuthFailure = (err: unknown) => {
-	const code = apiStatusCode(err);
+	const code = apiErrorStatus(err);
 	return code === 401 || code === 403;
 };
 
@@ -134,7 +165,7 @@ export const auth = {
 					mode,
 					source: null,
 					user: null,
-					error: authError(err)
+					error: formatHydrateError(err)
 				});
 				return;
 			}
@@ -145,7 +176,7 @@ export const auth = {
 					mode,
 					source: 'token',
 					user: cachedUser,
-					error: authError(err)
+					error: formatHydrateError(err)
 				});
 				return;
 			}
@@ -159,7 +190,7 @@ export const auth = {
 				mode,
 				source: null,
 				user: null,
-				error: authError(err)
+				error: formatHydrateError(err)
 			});
 		}
 	},
@@ -201,7 +232,7 @@ export const auth = {
 				mode: 'token',
 				source: null,
 				user: null,
-				error: authError(err)
+				error: formatLoginError(err)
 			});
 			throw err;
 		}

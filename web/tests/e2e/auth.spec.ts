@@ -267,3 +267,26 @@ test('can change password from account panel', async ({ page }) => {
 	await expect.poll(() => capturedBody?.current_password).toBe('tasksync');
 	await expect.poll(() => capturedBody?.new_password).toBe('tasksync-new');
 });
+
+test('shows clear sign-in guidance when login endpoint returns 404', async ({ page }) => {
+	await page.addInitScript(() => {
+		localStorage.setItem('tasksync:auth-mode', 'token');
+		localStorage.removeItem('tasksync:auth-token');
+		localStorage.removeItem('tasksync:auth-user');
+	});
+
+	await page.route('**/auth/login', async (route) => {
+		await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+	});
+
+	await page.goto('/');
+	await ensureAccountPanelOpen(page, { requireEmail: true });
+	await page.getByTestId('auth-email').fill('admin@example.com');
+	await page.getByTestId('auth-password').fill('tasksync');
+	await page.getByTestId('auth-space').fill('s1');
+	await page.getByTestId('auth-signin').click();
+
+	await expect(
+		page.getByText('Sign in endpoint was not found (404). Check the API URL and server version.')
+	).toBeVisible();
+});
