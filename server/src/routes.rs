@@ -1141,6 +1141,11 @@ async fn auth_restore_backup(
         .execute(&mut *tx)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query("delete from task_tombstone where space_id = ?1")
+        .bind(&ctx.space_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     sqlx::query("delete from list_grant where space_id = ?1")
         .bind(&ctx.space_id)
         .execute(&mut *tx)
@@ -1691,6 +1696,12 @@ struct TaskRow {
     created_by_user_id: Option<String>,
 }
 
+#[derive(Serialize, FromRow)]
+struct DeletedTaskRow {
+    id: String,
+    deleted_ts: i64,
+}
+
 #[derive(Deserialize)]
 struct CreateTask {
     id: Option<String>,
@@ -1831,6 +1842,13 @@ async fn create_task(
         }
     };
 
+    sqlx::query("delete from task_tombstone where task_id = ?1 and space_id = ?2")
+        .bind(&rec.id)
+        .bind(&ctx.space_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     Ok((status, Json(rec)))
 }
 
@@ -1868,6 +1886,7 @@ struct SyncPullResponse {
     cursor_ts: i64,
     lists: Vec<ListRow>,
     tasks: Vec<TaskRow>,
+    deleted_tasks: Vec<DeletedTaskRow>,
 }
 
 #[derive(Deserialize)]
@@ -1913,21 +1932,61 @@ fn headers_for_ctx(ctx: &RequestCtx) -> Result<HeaderMap, StatusCode> {
 
 async fn sync_cursor_for_ctx(state: &AppState, ctx: &RequestCtx) -> Result<i64, StatusCode> {
     if ctx.role == Role::Admin {
-        return sqlx::query_scalar(
-            "select coalesce(max(updated_ts), 0) from task where space_id = ?1",
+        let task_cursor: i64 =
+            sqlx::query_scalar("select coalesce(max(updated_ts), 0) from task where space_id = ?1")
+                .bind(&ctx.space_id)
+                .fetch_one(&state.pool)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let tombstone_cursor: i64 = sqlx::query_scalar(
+            "select coalesce(max(deleted_ts), 0) from task_tombstone where space_id = ?1",
         )
         .bind(&ctx.space_id)
         .fetch_one(&state.pool)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        return Ok(task_cursor.max(tombstone_cursor));
     }
 
-    sqlx::query_scalar(
+    let task_cursor: i64 = sqlx::query_scalar(
         "select coalesce(max(t.updated_ts), 0) from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2",
     )
     .bind(&ctx.space_id)
     .bind(&ctx.user_id)
     .fetch_one(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tombstone_cursor: i64 = sqlx::query_scalar(
+        "select coalesce(max(t.deleted_ts), 0) from task_tombstone t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2",
+    )
+    .bind(&ctx.space_id)
+    .bind(&ctx.user_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(task_cursor.max(tombstone_cursor))
+}
+
+async fn deleted_tasks_for_ctx(
+    state: &AppState,
+    ctx: &RequestCtx,
+) -> Result<Vec<DeletedTaskRow>, StatusCode> {
+    if ctx.role == Role::Admin {
+        return sqlx::query_as::<_, DeletedTaskRow>(
+            "select task_id as id, deleted_ts from task_tombstone where space_id = ?1 order by deleted_ts asc",
+        )
+        .bind(&ctx.space_id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    sqlx::query_as::<_, DeletedTaskRow>(
+        "select t.task_id as id, t.deleted_ts from task_tombstone t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.deleted_ts asc",
+    )
+    .bind(&ctx.space_id)
+    .bind(&ctx.user_id)
+    .fetch_all(&state.pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
@@ -1942,12 +2001,14 @@ async fn sync_pull(
 
     let lists = get_lists(State(state.clone()), scoped_headers.clone()).await?.0;
     let mut tasks = get_tasks(State(state.clone()), scoped_headers).await?.0;
+    let mut deleted_tasks = deleted_tasks_for_ctx(&state, &ctx).await?;
     if let Some(since_ts) = body.since_ts {
         tasks.retain(|task| task.updated_ts >= since_ts);
+        deleted_tasks.retain(|entry| entry.deleted_ts >= since_ts);
     }
 
     let cursor_ts = sync_cursor_for_ctx(&state, &ctx).await?;
-    Ok(Json(SyncPullResponse { protocol: "delta-v1", cursor_ts, lists, tasks }))
+    Ok(Json(SyncPullResponse { protocol: "delta-v1", cursor_ts, lists, tasks, deleted_tasks }))
 }
 
 async fn sync_push(
@@ -2084,15 +2145,30 @@ async fn delete_task(
         }
     }
 
-    let result = sqlx::query("delete from task where id = ?1 and space_id = ?2")
-        .bind(&id)
-        .bind(&ctx.space_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if result.rows_affected() == 0 {
+    let now = chrono::Utc::now().timestamp_millis();
+    let mut tx = state.pool.begin().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let deleted_list_id: Option<String> =
+        sqlx::query_scalar("delete from task where id = ?1 and space_id = ?2 returning list_id")
+            .bind(&id)
+            .bind(&ctx.space_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let Some(list_id) = deleted_list_id else {
         return Err(StatusCode::NOT_FOUND);
-    }
+    };
+    sqlx::query(
+        "insert into task_tombstone (task_id, space_id, list_id, deleted_ts) values (?1, ?2, ?3, ?4) on conflict(task_id, space_id) do update set list_id = excluded.list_id, deleted_ts = excluded.deleted_ts",
+    )
+    .bind(&id)
+    .bind(&ctx.space_id)
+    .bind(&list_id)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    tx.commit().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -3411,6 +3487,40 @@ mod tests {
         assert_eq!(response.lists[0].id, "goal-management");
         assert_eq!(response.tasks.len(), 1);
         assert_eq!(response.tasks[0].id, "t-new");
+        assert!(response.deleted_tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_pull_includes_task_tombstones_after_delete() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-deleted', 's1', 'Delete sync', 'pending', 'goal-management', 0, 'a', 100, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert task");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let status =
+            delete_task(State(state.clone()), headers.clone(), Path("t-deleted".to_string()))
+                .await
+                .expect("delete task should work");
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let response = sync_pull(State(state), headers, Json(SyncPullBody { since_ts: Some(0) }))
+            .await
+            .expect("sync pull should include tombstone")
+            .0;
+
+        assert_eq!(response.tasks.len(), 0);
+        assert_eq!(response.deleted_tasks.len(), 1);
+        assert_eq!(response.deleted_tasks[0].id, "t-deleted");
+        assert!(response.deleted_tasks[0].deleted_ts >= 100);
+        assert!(response.cursor_ts >= response.deleted_tasks[0].deleted_ts);
     }
 
     #[tokio::test]

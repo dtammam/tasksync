@@ -34,11 +34,17 @@ export interface SyncPullRequest {
 	since_ts?: number;
 }
 
+export interface SyncDeletedTask {
+	id: string;
+	deleted_ts: number;
+}
+
 export interface SyncPullResponse {
 	protocol: 'delta-v1';
 	cursor_ts: number;
 	lists: SyncList[];
 	tasks: SyncTask[];
+	deleted_tasks?: SyncDeletedTask[];
 }
 
 export interface SyncCreateTaskChange {
