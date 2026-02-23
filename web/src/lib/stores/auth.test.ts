@@ -4,6 +4,13 @@ vi.mock('$lib/api/client', () => ({
 	api: {
 		login: vi.fn(),
 		me: vi.fn()
+	},
+	apiErrorStatus: (err: unknown) => {
+		const message = err instanceof Error ? err.message : String(err);
+		const match = /^API\s+(\d{3})\b/.exec(message);
+		if (!match) return null;
+		const parsed = Number.parseInt(match[1], 10);
+		return Number.isFinite(parsed) ? parsed : null;
 	}
 }));
 
@@ -73,7 +80,9 @@ describe('auth store', () => {
 		expect(auth.get().status).toBe('authenticated');
 		expect(auth.get().source).toBe('token');
 		expect(auth.get().user?.user_id).toBe('admin');
-		expect(auth.get().error).toContain('Failed to fetch');
+		expect(auth.get().error).toBe(
+			'Cannot reach the server right now. You can continue local use and retry sign-in later.'
+		);
 	});
 
 	it('clears token auth session when /auth/me returns unauthorized', async () => {
@@ -88,6 +97,26 @@ describe('auth store', () => {
 		expect(auth.get().status).toBe('anonymous');
 		expect(auth.get().source).toBeNull();
 		expect(auth.get().user).toBeNull();
+	});
+
+	it('maps login 404 to actionable sign-in error', async () => {
+		mockedApi.login.mockRejectedValue(new Error('API 404 Not Found'));
+
+		await expect(auth.login('admin@example.com', 'tasksync', 's1')).rejects.toThrow();
+
+		expect(auth.get().status).toBe('anonymous');
+		expect(auth.get().error).toBe(
+			'Sign in endpoint was not found (404). Check the API URL and server version.'
+		);
+	});
+
+	it('maps login unauthorized to credential guidance', async () => {
+		mockedApi.login.mockRejectedValue(new Error('API 401 Unauthorized'));
+
+		await expect(auth.login('admin@example.com', 'wrong', 's1')).rejects.toThrow();
+
+		expect(auth.get().status).toBe('anonymous');
+		expect(auth.get().error).toBe('Sign in failed. Check your email, password, and space ID.');
 	});
 
 	it('clears token on logout', async () => {

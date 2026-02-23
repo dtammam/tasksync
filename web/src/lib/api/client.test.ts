@@ -8,10 +8,11 @@ vi.mock('./headers', () => ({
 	buildHeaders: mocks.buildHeaders
 }));
 
-const jsonResponse = (status: number, body = '{}') => ({
+const jsonResponse = (status: number, body = '{}', statusText?: string) => ({
 	ok: status >= 200 && status < 300,
 	status,
-	statusText: status === 500 ? 'Internal Server Error' : status === 204 ? 'No Content' : 'OK',
+	statusText:
+		statusText ?? (status === 500 ? 'Internal Server Error' : status === 204 ? 'No Content' : 'OK'),
 	text: vi.fn().mockResolvedValue(body)
 });
 
@@ -90,6 +91,17 @@ describe('api client', () => {
 		const { api } = await import('./client');
 
 		await expect(api.me()).rejects.toThrow('API 500 Internal Server Error');
+	});
+
+	it('includes parsed API error detail text when provided', async () => {
+		(fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+			jsonResponse(400, '{"message":"Password is required"}', 'Bad Request')
+		);
+		const { api } = await import('./client');
+
+		await expect(api.login({ email: 'admin@example.com', password: '' })).rejects.toThrow(
+			'API 400 Bad Request: Password is required'
+		);
 	});
 
 	it('covers endpoint wrappers for auth, lists, tasks, sync, and backup', async () => {

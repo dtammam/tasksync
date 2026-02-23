@@ -1,4 +1,4 @@
-import { api } from '$lib/api/client';
+import { api, apiErrorStatus } from '$lib/api/client';
 import { lists } from '$lib/stores/lists';
 import { tasks } from '$lib/stores/tasks';
 import { repo } from '$lib/data/repo';
@@ -132,7 +132,41 @@ const toPushChange = (
 };
 
 const rejectMessage = (rejected: SyncPushRejected) =>
-	`sync push rejected (${rejected.status}): ${rejected.error}`;
+	(() => {
+		if (rejected.status === 403) {
+			return 'Sync update was denied (403). Your access changed; local edit was cleared.';
+		}
+		if (rejected.status === 404) {
+			return 'Sync target no longer exists (404). Local stale copy was removed.';
+		}
+		if (rejected.status >= 500) {
+			return `Sync push failed due to server error (${rejected.status}).`;
+		}
+		return `Sync push rejected (${rejected.status}): ${rejected.error}`;
+	})();
+
+const isLikelyNetworkError = (err: unknown) =>
+	/failed to fetch|networkerror|network request failed/i.test(
+		err instanceof Error ? err.message : String(err)
+	);
+
+const formatSyncRuntimeError = (err: unknown, phase: 'pull' | 'push') => {
+	const code = apiErrorStatus(err);
+	if (code === 401 || code === 403) {
+		return 'Sync authorization failed. Please sign in again.';
+	}
+	if (code === 404) {
+		return 'Sync endpoint not found (404). Check client/server version compatibility.';
+	}
+	if (code && code >= 500) {
+		return `Server sync is unavailable (${code}). Local changes are preserved and will retry.`;
+	}
+	if (isLikelyNetworkError(err)) {
+		return 'Cannot reach the server. Local changes are safe and will retry automatically.';
+	}
+	const message = err instanceof Error ? err.message : String(err);
+	return `Sync ${phase} failed: ${message}`;
+};
 
 export const syncFromServer = async () => {
 	syncStatus.setPull('running');
@@ -161,7 +195,7 @@ export const syncFromServer = async () => {
 		return { lists: toLists.length, tasks: toTasks.length };
 	} catch (err) {
 		console.warn('sync failed', err);
-		syncStatus.setPull('error', err instanceof Error ? err.message : String(err));
+		syncStatus.setPull('error', formatSyncRuntimeError(err, 'pull'));
 		return { lists: 0, tasks: 0, error: true };
 	}
 };
@@ -252,7 +286,7 @@ export const pushPendingToServer = async () => {
 		return { pushed, created, rejected: response.rejected.length };
 	} catch (err) {
 		console.warn('push failed', err);
-		const msg = err instanceof Error ? err.message : String(err);
+		const msg = formatSyncRuntimeError(err, 'push');
 		syncStatus.setPush('error', msg);
 		syncStatus.setQueueDepth(tasks.getAll().filter((task) => task.dirty).length);
 		return { pushed, created, rejected: 0, error: true };

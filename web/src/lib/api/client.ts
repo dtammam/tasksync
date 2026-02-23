@@ -43,6 +43,55 @@ const runtimeApiUrl = () => {
 
 const baseUrl = runtimeApiUrl() ?? import.meta.env.VITE_API_URL ?? defaultApiUrl();
 
+export class ApiError extends Error {
+	status: number;
+	statusText: string;
+	detail?: string;
+
+	constructor(status: number, statusText: string, detail?: string) {
+		const base = `API ${status} ${statusText}`;
+		super(detail ? `${base}: ${detail}` : base);
+		this.name = 'ApiError';
+		this.status = status;
+		this.statusText = statusText;
+		this.detail = detail;
+	}
+}
+
+const parseErrorDetail = (raw: string): string | undefined => {
+	const trimmed = raw.trim();
+	if (!trimmed) return undefined;
+	try {
+		const parsed = JSON.parse(trimmed);
+		if (typeof parsed === 'string' && parsed.trim()) {
+			return parsed.trim();
+		}
+		if (parsed && typeof parsed === 'object') {
+			const candidate = parsed as Record<string, unknown>;
+			const message = candidate.message;
+			if (typeof message === 'string' && message.trim()) {
+				return message.trim();
+			}
+			const error = candidate.error;
+			if (typeof error === 'string' && error.trim()) {
+				return error.trim();
+			}
+		}
+	} catch {
+		// Fall back to short plain-text payloads when server sends non-JSON errors.
+	}
+	return trimmed.length <= 160 ? trimmed : undefined;
+};
+
+export const apiErrorStatus = (err: unknown): number | null => {
+	if (err instanceof ApiError) return err.status;
+	const message = err instanceof Error ? err.message : String(err);
+	const match = /^API\s+(\d{3})\b/.exec(message);
+	if (!match) return null;
+	const parsed = Number.parseInt(match[1], 10);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
 export interface ApiList {
 	id: string;
 	space_id: string;
@@ -84,13 +133,14 @@ const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> =>
 			...(opts.headers ?? {})
 		}
 	});
+	const raw = await res.text();
 	if (!res.ok) {
-		throw new Error(`API ${res.status} ${res.statusText}`);
+		const detail = parseErrorDetail(raw);
+		throw new ApiError(res.status, res.statusText, detail);
 	}
 	if (res.status === 204) {
 		return undefined as T;
 	}
-	const raw = await res.text();
 	if (!raw.trim()) {
 		return undefined as T;
 	}
