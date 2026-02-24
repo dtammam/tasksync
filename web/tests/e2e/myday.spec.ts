@@ -362,6 +362,25 @@ test.describe('My Day', () => {
 		await page.getByRole('button', { name: '×' }).click();
 	});
 
+	test('shows Marked Done state in details immediately after status toggle', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('Detail mark done');
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+
+		const statusToggle = page.locator('button.status-toggle').first();
+		await expect(statusToggle).toHaveText('Mark Done');
+		await statusToggle.click();
+		await expect(statusToggle).toHaveText('Marked Done');
+		await expect(statusToggle).toHaveClass(/active/);
+		await page.getByRole('button', { name: '×' }).click();
+	});
+
 	test('keeps alphabetical sort mode and direction after reload', async ({ page }) => {
 		await resetClientState(page);
 		const marker = makeTitle('Sort marker');
@@ -443,6 +462,8 @@ test.describe('My Day', () => {
 		await expect(puntToggle).toHaveText(/Punt/);
 		await expect(puntToggle).toBeEnabled();
 		await puntToggle.click();
+		await expect(puntToggle).toHaveText(/Punted/);
+		await expect(puntToggle).toBeDisabled();
 		await page.getByRole('button', { name: '×' }).click();
 		await expect
 			.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null)
@@ -659,7 +680,9 @@ test.describe('List view', () => {
 		await expect(rowB.getByTestId('task-star-indicator')).toHaveCount(1);
 
 		await rowB.getByRole('button', { name: 'Details' }).click();
-		await expect(page.getByTestId('detail-star-indicator')).toBeVisible();
+		const detailStarToggle = page.getByTestId('detail-star-toggle');
+		await expect(detailStarToggle).toHaveText(/Starred/);
+		await expect(detailStarToggle).toHaveClass(/active/);
 		await page.getByRole('button', { name: '×' }).click();
 
 		const pendingSection = page.locator('section.block', {

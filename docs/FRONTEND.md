@@ -57,7 +57,11 @@ Within `web/src/lib/`:
 
 ## Task visual affordances
 
-- `TaskRow` and `TaskDetailDrawer` must render punt state with a theme-aware right-arrow glyph (non-emoji) so icon colors stay consistent across themes.
+- `TaskRow` and `TaskDetailDrawer` must render punt state with a theme-aware shift glyph style:
+  - inactive/actionable punt uses `▷`
+  - active/punted state uses `▶`
+- Task detail status controls (`Mark Done`, `My Day`, `Star`, `Punt`) should share consistent button sizing, text sizing, and centering.
+- Task detail starred state should be conveyed by the star control itself (`☆ Star` / `★ Starred`), not by a separate starred pill above metadata.
 - Punt actions in the details drawer are visibility-gated by the same rule as row quick actions:
   - pending status
   - due today

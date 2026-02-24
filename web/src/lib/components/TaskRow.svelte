@@ -211,7 +211,7 @@ $: isRecurringCompletedToday =
 				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
 			{/if}
 			{#if showPuntIndicator}
-				<span class="punt-indicator" data-testid="task-punt-indicator" aria-label="Punted">➜</span>
+				<span class="punt-indicator" data-testid="task-punt-indicator" aria-label="Punted">▶</span>
 			{/if}
 			{#if task.url}
 				<a class="title-text link" href={task.url} target="_blank" rel="noreferrer" data-testid="task-title">{task.title}</a>

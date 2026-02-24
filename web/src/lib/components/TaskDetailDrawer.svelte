@@ -21,6 +21,10 @@ let priority = 0;
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
+let statusValue = 'pending';
+let recurringCompletionAck = false;
+let puntedFromDrawer = false;
+let lastHydratedTaskId = '';
 const recurrenceOptions = recurrenceRules.map((rule) => ({
 	value: rule,
 	label: recurrenceRuleLabels[rule]
@@ -33,6 +37,10 @@ onMount(() => {
 $: if (task) hydrate(task);
 
 function hydrate(t) {
+	if (t.id !== lastHydratedTaskId) {
+		puntedFromDrawer = false;
+		lastHydratedTaskId = t.id;
+	}
 	title = t.title ?? '';
 	due = t.due_date ?? '';
 	recur = t.recurrence_id ?? '';
@@ -42,9 +50,17 @@ function hydrate(t) {
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
+	statusValue = t.status ?? 'pending';
+	recurringCompletionAck =
+		!!t.recurrence_id && statusValue === 'pending' && isTodayTs(t.completed_ts);
 }
 
-const close = () => dispatch('close');
+const close = () => {
+	puntedFromDrawer = false;
+	dispatch('close');
+};
+const isTodayTs = (ts) =>
+	typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayKey;
 $: isContributor = $auth.user?.role === 'contributor';
 $: isOwner = !!$auth.user?.user_id && task?.created_by_user_id === $auth.user.user_id;
 $: canEditTask = !isContributor || isOwner;
@@ -69,6 +85,12 @@ $: canPunt =
 	task?.recurrence_id !== 'daily' &&
 	task?.due_date === todayKey;
 $: showPuntedBadge = showPuntedArrivalIndicator || showPuntedTodayIndicator;
+$: isRecurringCompletedToday =
+	!!task?.recurrence_id && statusValue === 'pending' && recurringCompletionAck;
+$: isStatusAcknowledged = statusValue === 'done' || isRecurringCompletedToday;
+$: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
+$: puntGlyph = isPuntedControlActive ? '▶' : '▷';
+$: starGlyph = priority > 0 ? '★' : '☆';
 
 const save = () => {
 	if (!task || !canEditTask) return;
@@ -88,7 +110,19 @@ const save = () => {
 
 const toggleStatus = () => {
 	if (!task || !canEditTask) return;
+	if (task.recurrence_id && recurringCompletionAck) {
+		tasks.undoRecurringCompletion(task.id);
+		recurringCompletionAck = false;
+		return;
+	}
 	tasks.toggle(task.id);
+	if (task.recurrence_id) {
+		recurringCompletionAck = true;
+		statusValue = 'pending';
+		return;
+	}
+	statusValue = statusValue === 'done' ? 'pending' : 'done';
+	recurringCompletionAck = false;
 };
 
 const toggleStar = () => {
@@ -104,6 +138,7 @@ const toggleMyDay = () => {
 const punt = () => {
 	if (!task || !canPunt) return;
 	tasks.punt(task.id);
+	puntedFromDrawer = true;
 };
 
 const skip = () => {
@@ -126,39 +161,41 @@ const memberAvatar = (member) => {
 			<div>
 				<p class="eyebrow">Details</p>
 				<h2>{title}</h2>
-				{#if priority > 0}
-					<p class="star-pill" data-testid="detail-star-indicator">★ Starred</p>
-				{/if}
 				{#if showPuntedArrivalIndicator}
-					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">➜</span> Punted from {task.punted_from_due_date}</p>
+					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">▶</span> Punted from {task.punted_from_due_date}</p>
 				{/if}
 				{#if showPuntedTodayIndicator}
-					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">➜</span> Punted today to {task.due_date}</p>
+					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">▶</span> Punted today to {task.due_date}</p>
 				{/if}
 				<p class="muted">
 					Created {new Date(task.created_ts).toLocaleString()} • Updated {new Date(task.updated_ts).toLocaleString()}
 				</p>
 			</div>
-			<button class="ghost" on:click={close}>×</button>
+			<button class="ghost close-btn" on:click={close}>×</button>
 		</header>
 
 		<div class="form">
 			<label>
 				Title
-				<input type="text" bind:value={title} disabled={!canEditTask} />
+				<input class="title-input" type="text" bind:value={title} disabled={!canEditTask} />
 			</label>
 
 			<div class="row">
 				<label>
 					Status
-					<button class="status" type="button" on:click={toggleStatus} disabled={!canEditTask}>
-						{task.status === 'done' ? 'Mark pending' : 'Mark done'}
+					<button
+						class={`ghost detail-toggle status-toggle ${isStatusAcknowledged ? 'active' : ''}`}
+						type="button"
+						on:click={toggleStatus}
+						disabled={!canEditTask}
+					>
+						{isStatusAcknowledged ? 'Marked Done' : 'Mark Done'}
 					</button>
 				</label>
 				<label>
 					My Day
 					<button
-						class={`ghost myday-toggle ${myDay ? 'active' : ''}`}
+						class={`ghost detail-toggle myday-toggle ${myDay ? 'active' : ''}`}
 						type="button"
 						data-testid="detail-myday-toggle"
 						on:click={toggleMyDay}
@@ -170,27 +207,28 @@ const memberAvatar = (member) => {
 				<label>
 					Starred
 					<button
-						class={`ghost star-toggle ${priority > 0 ? 'active' : ''}`}
+						class={`ghost detail-toggle star-toggle ${priority > 0 ? 'active' : ''}`}
 						type="button"
 						data-testid="detail-star-toggle"
 						on:click={toggleStar}
 						disabled={!canEditTask}
 					>
-						{priority > 0 ? '★ Starred' : '☆ Star'}
+						<span class="star-glyph" aria-hidden="true">{starGlyph}</span>
+						{priority > 0 ? 'Starred' : 'Star'}
 					</button>
 				</label>
-				{#if canPunt || showPuntedBadge}
+				{#if canPunt || showPuntedBadge || puntedFromDrawer}
 					<label>
 						Punt
 						<button
-							class={`ghost punt-toggle ${showPuntedBadge && !canPunt ? 'active' : ''}`}
+							class={`ghost detail-toggle punt-toggle ${isPuntedControlActive ? 'active' : ''}`}
 							type="button"
 							data-testid="detail-punt-toggle"
 							on:click={punt}
-							disabled={!canPunt}
+							disabled={!canPunt || isPuntedControlActive}
 						>
-							<span class="punt-glyph" aria-hidden="true">➜</span>
-							{canPunt ? 'Punt' : 'Punted'}
+							<span class="punt-glyph" aria-hidden="true">{puntGlyph}</span>
+							{isPuntedControlActive ? 'Punted' : 'Punt'}
 						</button>
 					</label>
 				{/if}
@@ -199,7 +237,7 @@ const memberAvatar = (member) => {
 			<div class="row two">
 				<label>
 					Due date
-					<input type="date" bind:value={due} disabled={!canEditTask} />
+					<input class="due-input" type="date" bind:value={due} disabled={!canEditTask} />
 				</label>
 				<label>
 					Recurrence
@@ -234,21 +272,21 @@ const memberAvatar = (member) => {
 
 			<label>
 				URL
-				<input type="url" bind:value={url} placeholder="https://..." disabled={!canEditTask} />
+				<input class="url-input" type="url" bind:value={url} placeholder="https://..." disabled={!canEditTask} />
 			</label>
 
 			<label>
 				Notes
-				<textarea rows="4" bind:value={notes} disabled={!canEditTask}></textarea>
+				<textarea rows="3" bind:value={notes} disabled={!canEditTask}></textarea>
 			</label>
 
 			<div class="row buttons">
 				{#if !canEditTask}
 					<p class="muted">This task is owned by another member and is read-only for contributors.</p>
 				{:else}
-					<button class="primary" type="button" on:click={save}>Save</button>
+					<button class="primary action-size" type="button" on:click={save}>Save</button>
 					{#if task.recurrence_id}
-						<button class="ghost" type="button" on:click={skip}>Skip occurrence</button>
+						<button class="ghost action-size" type="button" on:click={skip}>Skip Occurrence</button>
 					{/if}
 				{/if}
 			</div>
@@ -262,34 +300,62 @@ const memberAvatar = (member) => {
 		position: fixed; top: 0; right: 0; height: 100vh; width: min(420px, 92vw);
 		background: color-mix(in oklab, var(--surface-2) 94%, white 6%);
 		border-left: 1px solid var(--border-2); box-shadow: -20px 0 46px rgba(0, 0, 0, 0.46);
-		padding: 16px; z-index: 99; display:flex; flex-direction:column; gap:12px;
+		padding: 12px; z-index: 99; display:flex; flex-direction:column; gap:8px;
 	}
 	header { display:flex; justify-content:space-between; align-items:flex-start; }
 	.eyebrow { text-transform:uppercase; color:var(--app-muted); font-size:11px; letter-spacing:0.06em; margin:0 0 2px; }
 	h2 { margin:0; font-size:20px; letter-spacing:-0.01em; }
-	.muted { color:var(--app-muted); margin:4px 0 0; font-size:13px; }
-	.form { display:flex; flex-direction:column; gap:10px; overflow:auto; padding-bottom:12px; }
-	label { display:flex; flex-direction:column; gap:4px; color:var(--app-text); font-size:13px; }
+	.muted { color:var(--app-muted); margin:2px 0 0; font-size:13px; }
+	.form { display:flex; flex-direction:column; gap:7px; overflow:auto; padding-bottom:6px; }
+	label { display:flex; flex-direction:column; gap:3px; color:var(--app-text); font-size:13px; }
 	input, select, textarea {
 		background: linear-gradient(180deg, var(--surface-1), var(--surface-2)); border:1px solid var(--border-1);
-		color:var(--app-text); border-radius:9px; padding:8px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+		color:var(--app-text); border-radius:9px; padding:7px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+		font-size: 13px;
+		line-height: 1.2;
 	}
-	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:center; }
+	input, select {
+		min-height: 36px;
+		height: 36px;
+	}
+	textarea {
+		min-height: 84px;
+		resize: vertical;
+	}
+	.title-input {
+		min-height: 32px;
+		height: 32px;
+	}
+	.due-input,
+	.url-input {
+		min-height: 34px;
+		height: 34px;
+	}
+	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:6px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(120px, auto)); }
-	button.primary, .status {
+	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+	button.primary {
 		background: linear-gradient(180deg, #1d4ed8, #1e40af); border:1px solid rgba(147,197,253,0.4);
-		color:#fff; padding:10px 12px; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
+		color:#fff; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
 	}
-	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); padding:8px 10px; border-radius:9px; cursor:pointer; }
+	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); border-radius:9px; cursor:pointer; }
+	.detail-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		width: 100%;
+		min-height: 38px;
+		height: 38px;
+		padding: 8px 10px;
+		font-size: 13px;
+		font-weight: 600;
+		text-align: center;
+	}
+	.status-toggle.active,
 	button.ghost.star-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
-	}
-	button.ghost.punt-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
 	}
 	button.ghost.punt-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
@@ -299,13 +365,27 @@ const memberAvatar = (member) => {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
 	}
-	button.primary:hover, .status:hover, button.ghost:hover { transform: translateY(-1px); }
-	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
-	.star-pill {
-		margin: 6px 0 0;
-		font-size: 12px;
-		color: var(--app-text);
+	.action-size {
+		min-height: 40px;
+		height: 40px;
+		width: 100%;
+		padding: 10px 12px;
+		font-size: 13px;
+		font-weight: 600;
 	}
+	.close-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		padding: 0;
+		font-size: 28px;
+		line-height: 1;
+		border-radius: 10px;
+	}
+	button.primary:hover, button.ghost:hover { transform: translateY(-1px); }
+	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
 	.punt-pill {
 		display: inline-flex;
 		align-items: center;
@@ -318,7 +398,17 @@ const memberAvatar = (member) => {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		font-weight: 700;
+		font-weight: 800;
+		font-size: 13px;
 		color: color-mix(in oklab, var(--surface-accent) 64%, var(--app-text) 36%);
+	}
+	.star-glyph {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 14px;
+		font-size: 13px;
+		font-weight: 700;
+		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
 	}
 </style>
