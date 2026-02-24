@@ -21,7 +21,10 @@ let priority = 0;
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
+let statusValue = 'pending';
+let recurringCompletionAck = false;
 let puntedFromDrawer = false;
+let lastHydratedTaskId = '';
 const recurrenceOptions = recurrenceRules.map((rule) => ({
 	value: rule,
 	label: recurrenceRuleLabels[rule]
@@ -34,6 +37,10 @@ onMount(() => {
 $: if (task) hydrate(task);
 
 function hydrate(t) {
+	if (t.id !== lastHydratedTaskId) {
+		puntedFromDrawer = false;
+		lastHydratedTaskId = t.id;
+	}
 	title = t.title ?? '';
 	due = t.due_date ?? '';
 	recur = t.recurrence_id ?? '';
@@ -43,10 +50,17 @@ function hydrate(t) {
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
-	puntedFromDrawer = false;
+	statusValue = t.status ?? 'pending';
+	recurringCompletionAck =
+		!!t.recurrence_id && statusValue === 'pending' && isTodayTs(t.completed_ts);
 }
 
-const close = () => dispatch('close');
+const close = () => {
+	puntedFromDrawer = false;
+	dispatch('close');
+};
+const isTodayTs = (ts) =>
+	typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayKey;
 $: isContributor = $auth.user?.role === 'contributor';
 $: isOwner = !!$auth.user?.user_id && task?.created_by_user_id === $auth.user.user_id;
 $: canEditTask = !isContributor || isOwner;
@@ -71,7 +85,9 @@ $: canPunt =
 	task?.recurrence_id !== 'daily' &&
 	task?.due_date === todayKey;
 $: showPuntedBadge = showPuntedArrivalIndicator || showPuntedTodayIndicator;
-$: statusDone = task?.status === 'done';
+$: isRecurringCompletedToday =
+	!!task?.recurrence_id && statusValue === 'pending' && recurringCompletionAck;
+$: isStatusAcknowledged = statusValue === 'done' || isRecurringCompletedToday;
 $: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
 $: puntGlyph = isPuntedControlActive ? '▶' : '▷';
 
@@ -93,7 +109,19 @@ const save = () => {
 
 const toggleStatus = () => {
 	if (!task || !canEditTask) return;
+	if (task.recurrence_id && recurringCompletionAck) {
+		tasks.undoRecurringCompletion(task.id);
+		recurringCompletionAck = false;
+		return;
+	}
 	tasks.toggle(task.id);
+	if (task.recurrence_id) {
+		recurringCompletionAck = true;
+		statusValue = 'pending';
+		return;
+	}
+	statusValue = statusValue === 'done' ? 'pending' : 'done';
+	recurringCompletionAck = false;
 };
 
 const toggleStar = () => {
@@ -145,7 +173,7 @@ const memberAvatar = (member) => {
 					Created {new Date(task.created_ts).toLocaleString()} • Updated {new Date(task.updated_ts).toLocaleString()}
 				</p>
 			</div>
-			<button class="ghost" on:click={close}>×</button>
+			<button class="ghost close-btn" on:click={close}>×</button>
 		</header>
 
 		<div class="form">
@@ -158,12 +186,12 @@ const memberAvatar = (member) => {
 				<label>
 					Status
 					<button
-						class={`ghost detail-toggle status-toggle ${statusDone ? 'active' : ''}`}
+						class={`ghost detail-toggle status-toggle ${isStatusAcknowledged ? 'active' : ''}`}
 						type="button"
 						on:click={toggleStatus}
 						disabled={!canEditTask}
 					>
-						{statusDone ? 'Marked Done' : 'Mark Done'}
+						{isStatusAcknowledged ? 'Marked Done' : 'Mark Done'}
 					</button>
 				</label>
 				<label>
@@ -288,7 +316,8 @@ const memberAvatar = (member) => {
 		line-height: 1.25;
 	}
 	input, select {
-		min-height: 40px;
+		min-height: 42px;
+		height: 42px;
 	}
 	textarea {
 		min-height: 124px;
@@ -296,7 +325,7 @@ const memberAvatar = (member) => {
 	}
 	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(120px, auto)); }
+	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	button.primary {
 		background: linear-gradient(180deg, #1d4ed8, #1e40af); border:1px solid rgba(147,197,253,0.4);
 		color:#fff; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
@@ -308,7 +337,8 @@ const memberAvatar = (member) => {
 		justify-content: center;
 		gap: 6px;
 		width: 100%;
-		min-height: 40px;
+		min-height: 42px;
+		height: 42px;
 		padding: 8px 10px;
 		font-size: 14px;
 		font-weight: 600;
@@ -328,10 +358,23 @@ const memberAvatar = (member) => {
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
 	}
 	.action-size {
-		min-height: 42px;
+		min-height: 44px;
+		height: 44px;
+		width: 100%;
 		padding: 10px 12px;
 		font-size: 14px;
 		font-weight: 600;
+	}
+	.close-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 38px;
+		height: 38px;
+		padding: 0;
+		font-size: 24px;
+		line-height: 1;
+		border-radius: 10px;
 	}
 	button.primary:hover, button.ghost:hover { transform: translateY(-1px); }
 	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
