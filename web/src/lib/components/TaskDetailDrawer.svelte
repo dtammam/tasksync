@@ -237,7 +237,7 @@ const memberAvatar = (member) => {
 			<div class="row two">
 				<label>
 					Due date
-					<input type="date" bind:value={due} disabled={!canEditTask} />
+					<input class="due-input" type="date" bind:value={due} disabled={!canEditTask} />
 				</label>
 				<label>
 					Recurrence
@@ -272,7 +272,7 @@ const memberAvatar = (member) => {
 
 			<label>
 				URL
-				<input type="url" bind:value={url} placeholder="https://..." disabled={!canEditTask} />
+				<input class="url-input" type="url" bind:value={url} placeholder="https://..." disabled={!canEditTask} />
 			</label>
 
 			<label>
@@ -300,33 +300,38 @@ const memberAvatar = (member) => {
 		position: fixed; top: 0; right: 0; height: 100vh; width: min(420px, 92vw);
 		background: color-mix(in oklab, var(--surface-2) 94%, white 6%);
 		border-left: 1px solid var(--border-2); box-shadow: -20px 0 46px rgba(0, 0, 0, 0.46);
-		padding: 14px; z-index: 99; display:flex; flex-direction:column; gap:10px;
+		padding: 12px; z-index: 99; display:flex; flex-direction:column; gap:8px;
 	}
 	header { display:flex; justify-content:space-between; align-items:flex-start; }
 	.eyebrow { text-transform:uppercase; color:var(--app-muted); font-size:11px; letter-spacing:0.06em; margin:0 0 2px; }
 	h2 { margin:0; font-size:20px; letter-spacing:-0.01em; }
-	.muted { color:var(--app-muted); margin:4px 0 0; font-size:13px; }
-	.form { display:flex; flex-direction:column; gap:8px; overflow:auto; padding-bottom:10px; }
-	label { display:flex; flex-direction:column; gap:4px; color:var(--app-text); font-size:13px; }
+	.muted { color:var(--app-muted); margin:2px 0 0; font-size:13px; }
+	.form { display:flex; flex-direction:column; gap:7px; overflow:auto; padding-bottom:6px; }
+	label { display:flex; flex-direction:column; gap:3px; color:var(--app-text); font-size:13px; }
 	input, select, textarea {
 		background: linear-gradient(180deg, var(--surface-1), var(--surface-2)); border:1px solid var(--border-1);
-		color:var(--app-text); border-radius:9px; padding:8px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+		color:var(--app-text); border-radius:9px; padding:7px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 		font-size: 13px;
 		line-height: 1.2;
 	}
 	input, select {
-		min-height: 38px;
-		height: 38px;
+		min-height: 36px;
+		height: 36px;
 	}
 	textarea {
-		min-height: 96px;
+		min-height: 84px;
 		resize: vertical;
 	}
 	.title-input {
+		min-height: 32px;
+		height: 32px;
+	}
+	.due-input,
+	.url-input {
 		min-height: 34px;
 		height: 34px;
 	}
-	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:7px; align-items:center; }
+	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:6px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	button.primary {
