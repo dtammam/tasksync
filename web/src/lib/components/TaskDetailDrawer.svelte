@@ -297,10 +297,19 @@ const memberAvatar = (member) => {
 <style>
 	.backdrop { all: unset; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); z-index: 90; }
 	.drawer {
-		position: fixed; top: 0; right: 0; height: 100vh; width: min(420px, 92vw);
+		position: fixed; top: 0; right: 0; height: 100vh; width: min(420px, 100vw);
+		box-sizing: border-box;
 		background: color-mix(in oklab, var(--surface-2) 94%, white 6%);
-		border-left: 1px solid var(--border-2); box-shadow: -20px 0 46px rgba(0, 0, 0, 0.46);
+		border-left: 1px solid var(--border-2);
+		box-shadow: -20px 0 46px rgba(0, 0, 0, 0.46);
 		padding: 12px; z-index: 99; display:flex; flex-direction:column; gap:8px;
+	}
+	@media (max-width: 640px) {
+		.drawer {
+			width: 100vw;
+			border-left: 0;
+			box-shadow: none;
+		}
 	}
 	header { display:flex; justify-content:space-between; align-items:flex-start; }
 	.eyebrow { text-transform:uppercase; color:var(--app-muted); font-size:11px; letter-spacing:0.06em; margin:0 0 2px; }
@@ -336,7 +345,7 @@ const memberAvatar = (member) => {
 	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	button.primary {
 		background: linear-gradient(180deg, #1d4ed8, #1e40af); border:1px solid rgba(147,197,253,0.4);
-		color:#fff; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
+		color:#fff; border-radius:9px; cursor:pointer;
 	}
 	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); border-radius:9px; cursor:pointer; }
 	.detail-toggle {
