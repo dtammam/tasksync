@@ -680,7 +680,9 @@ test.describe('List view', () => {
 		await expect(rowB.getByTestId('task-star-indicator')).toHaveCount(1);
 
 		await rowB.getByRole('button', { name: 'Details' }).click();
-		await expect(page.getByTestId('detail-star-indicator')).toBeVisible();
+		const detailStarToggle = page.getByTestId('detail-star-toggle');
+		await expect(detailStarToggle).toHaveText(/Starred/);
+		await expect(detailStarToggle).toHaveClass(/active/);
 		await page.getByRole('button', { name: '×' }).click();
 
 		const pendingSection = page.locator('section.block', {

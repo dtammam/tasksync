@@ -90,6 +90,7 @@ $: isRecurringCompletedToday =
 $: isStatusAcknowledged = statusValue === 'done' || isRecurringCompletedToday;
 $: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
 $: puntGlyph = isPuntedControlActive ? '▶' : '▷';
+$: starGlyph = priority > 0 ? '★' : '☆';
 
 const save = () => {
 	if (!task || !canEditTask) return;
@@ -160,9 +161,6 @@ const memberAvatar = (member) => {
 			<div>
 				<p class="eyebrow">Details</p>
 				<h2>{title}</h2>
-				{#if priority > 0}
-					<p class="star-pill" data-testid="detail-star-indicator">★ Starred</p>
-				{/if}
 				{#if showPuntedArrivalIndicator}
 					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">▶</span> Punted from {task.punted_from_due_date}</p>
 				{/if}
@@ -179,7 +177,7 @@ const memberAvatar = (member) => {
 		<div class="form">
 			<label>
 				Title
-				<input type="text" bind:value={title} disabled={!canEditTask} />
+				<input class="title-input" type="text" bind:value={title} disabled={!canEditTask} />
 			</label>
 
 			<div class="row">
@@ -215,6 +213,7 @@ const memberAvatar = (member) => {
 						on:click={toggleStar}
 						disabled={!canEditTask}
 					>
+						<span class="star-glyph" aria-hidden="true">{starGlyph}</span>
 						{priority > 0 ? 'Starred' : 'Star'}
 					</button>
 				</label>
@@ -278,7 +277,7 @@ const memberAvatar = (member) => {
 
 			<label>
 				Notes
-				<textarea rows="4" bind:value={notes} disabled={!canEditTask}></textarea>
+				<textarea rows="3" bind:value={notes} disabled={!canEditTask}></textarea>
 			</label>
 
 			<div class="row buttons">
@@ -301,29 +300,33 @@ const memberAvatar = (member) => {
 		position: fixed; top: 0; right: 0; height: 100vh; width: min(420px, 92vw);
 		background: color-mix(in oklab, var(--surface-2) 94%, white 6%);
 		border-left: 1px solid var(--border-2); box-shadow: -20px 0 46px rgba(0, 0, 0, 0.46);
-		padding: 16px; z-index: 99; display:flex; flex-direction:column; gap:12px;
+		padding: 14px; z-index: 99; display:flex; flex-direction:column; gap:10px;
 	}
 	header { display:flex; justify-content:space-between; align-items:flex-start; }
 	.eyebrow { text-transform:uppercase; color:var(--app-muted); font-size:11px; letter-spacing:0.06em; margin:0 0 2px; }
 	h2 { margin:0; font-size:20px; letter-spacing:-0.01em; }
 	.muted { color:var(--app-muted); margin:4px 0 0; font-size:13px; }
-	.form { display:flex; flex-direction:column; gap:10px; overflow:auto; padding-bottom:12px; }
-	label { display:flex; flex-direction:column; gap:4px; color:var(--app-text); font-size:14px; }
+	.form { display:flex; flex-direction:column; gap:8px; overflow:auto; padding-bottom:10px; }
+	label { display:flex; flex-direction:column; gap:4px; color:var(--app-text); font-size:13px; }
 	input, select, textarea {
 		background: linear-gradient(180deg, var(--surface-1), var(--surface-2)); border:1px solid var(--border-1);
 		color:var(--app-text); border-radius:9px; padding:8px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
-		font-size: 14px;
-		line-height: 1.25;
+		font-size: 13px;
+		line-height: 1.2;
 	}
 	input, select {
-		min-height: 42px;
-		height: 42px;
+		min-height: 38px;
+		height: 38px;
 	}
 	textarea {
-		min-height: 124px;
+		min-height: 96px;
 		resize: vertical;
 	}
-	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:center; }
+	.title-input {
+		min-height: 34px;
+		height: 34px;
+	}
+	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:7px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	button.primary {
@@ -337,10 +340,10 @@ const memberAvatar = (member) => {
 		justify-content: center;
 		gap: 6px;
 		width: 100%;
-		min-height: 42px;
-		height: 42px;
+		min-height: 38px;
+		height: 38px;
 		padding: 8px 10px;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 600;
 		text-align: center;
 	}
@@ -358,31 +361,26 @@ const memberAvatar = (member) => {
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
 	}
 	.action-size {
-		min-height: 44px;
-		height: 44px;
+		min-height: 40px;
+		height: 40px;
 		width: 100%;
 		padding: 10px 12px;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 600;
 	}
 	.close-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 38px;
-		height: 38px;
+		width: 40px;
+		height: 40px;
 		padding: 0;
-		font-size: 24px;
+		font-size: 28px;
 		line-height: 1;
 		border-radius: 10px;
 	}
 	button.primary:hover, button.ghost:hover { transform: translateY(-1px); }
 	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
-	.star-pill {
-		margin: 6px 0 0;
-		font-size: 12px;
-		color: var(--app-text);
-	}
 	.punt-pill {
 		display: inline-flex;
 		align-items: center;
@@ -398,5 +396,14 @@ const memberAvatar = (member) => {
 		font-weight: 800;
 		font-size: 13px;
 		color: color-mix(in oklab, var(--surface-accent) 64%, var(--app-text) 36%);
+	}
+	.star-glyph {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 14px;
+		font-size: 13px;
+		font-weight: 700;
+		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
 	}
 </style>

@@ -61,6 +61,7 @@ Within `web/src/lib/`:
   - inactive/actionable punt uses `▷`
   - active/punted state uses `▶`
 - Task detail status controls (`Mark Done`, `My Day`, `Star`, `Punt`) should share consistent button sizing, text sizing, and centering.
+- Task detail starred state should be conveyed by the star control itself (`☆ Star` / `★ Starred`), not by a separate starred pill above metadata.
 - Punt actions in the details drawer are visibility-gated by the same rule as row quick actions:
   - pending status
   - due today
