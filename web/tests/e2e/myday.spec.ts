@@ -443,6 +443,8 @@ test.describe('My Day', () => {
 		await expect(puntToggle).toHaveText(/Punt/);
 		await expect(puntToggle).toBeEnabled();
 		await puntToggle.click();
+		await expect(puntToggle).toHaveText(/Punted/);
+		await expect(puntToggle).toBeDisabled();
 		await page.getByRole('button', { name: '×' }).click();
 		await expect
 			.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null)

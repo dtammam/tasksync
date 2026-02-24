@@ -21,6 +21,7 @@ let priority = 0;
 let myDay = false;
 let listId = '';
 let assigneeUserId = '';
+let puntedFromDrawer = false;
 const recurrenceOptions = recurrenceRules.map((rule) => ({
 	value: rule,
 	label: recurrenceRuleLabels[rule]
@@ -42,6 +43,7 @@ function hydrate(t) {
 	myDay = t.my_day ?? false;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
+	puntedFromDrawer = false;
 }
 
 const close = () => dispatch('close');
@@ -69,6 +71,9 @@ $: canPunt =
 	task?.recurrence_id !== 'daily' &&
 	task?.due_date === todayKey;
 $: showPuntedBadge = showPuntedArrivalIndicator || showPuntedTodayIndicator;
+$: statusDone = task?.status === 'done';
+$: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
+$: puntGlyph = isPuntedControlActive ? '▶' : '▷';
 
 const save = () => {
 	if (!task || !canEditTask) return;
@@ -104,6 +109,7 @@ const toggleMyDay = () => {
 const punt = () => {
 	if (!task || !canPunt) return;
 	tasks.punt(task.id);
+	puntedFromDrawer = true;
 };
 
 const skip = () => {
@@ -130,10 +136,10 @@ const memberAvatar = (member) => {
 					<p class="star-pill" data-testid="detail-star-indicator">★ Starred</p>
 				{/if}
 				{#if showPuntedArrivalIndicator}
-					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">➜</span> Punted from {task.punted_from_due_date}</p>
+					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">▶</span> Punted from {task.punted_from_due_date}</p>
 				{/if}
 				{#if showPuntedTodayIndicator}
-					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">➜</span> Punted today to {task.due_date}</p>
+					<p class="punt-pill" data-testid="detail-punt-indicator"><span class="punt-glyph" aria-hidden="true">▶</span> Punted today to {task.due_date}</p>
 				{/if}
 				<p class="muted">
 					Created {new Date(task.created_ts).toLocaleString()} • Updated {new Date(task.updated_ts).toLocaleString()}
@@ -151,14 +157,19 @@ const memberAvatar = (member) => {
 			<div class="row">
 				<label>
 					Status
-					<button class="status" type="button" on:click={toggleStatus} disabled={!canEditTask}>
-						{task.status === 'done' ? 'Mark pending' : 'Mark done'}
+					<button
+						class={`ghost detail-toggle status-toggle ${statusDone ? 'active' : ''}`}
+						type="button"
+						on:click={toggleStatus}
+						disabled={!canEditTask}
+					>
+						{statusDone ? 'Marked Done' : 'Mark Done'}
 					</button>
 				</label>
 				<label>
 					My Day
 					<button
-						class={`ghost myday-toggle ${myDay ? 'active' : ''}`}
+						class={`ghost detail-toggle myday-toggle ${myDay ? 'active' : ''}`}
 						type="button"
 						data-testid="detail-myday-toggle"
 						on:click={toggleMyDay}
@@ -170,27 +181,27 @@ const memberAvatar = (member) => {
 				<label>
 					Starred
 					<button
-						class={`ghost star-toggle ${priority > 0 ? 'active' : ''}`}
+						class={`ghost detail-toggle star-toggle ${priority > 0 ? 'active' : ''}`}
 						type="button"
 						data-testid="detail-star-toggle"
 						on:click={toggleStar}
 						disabled={!canEditTask}
 					>
-						{priority > 0 ? '★ Starred' : '☆ Star'}
+						{priority > 0 ? 'Starred' : 'Star'}
 					</button>
 				</label>
-				{#if canPunt || showPuntedBadge}
+				{#if canPunt || showPuntedBadge || puntedFromDrawer}
 					<label>
 						Punt
 						<button
-							class={`ghost punt-toggle ${showPuntedBadge && !canPunt ? 'active' : ''}`}
+							class={`ghost detail-toggle punt-toggle ${isPuntedControlActive ? 'active' : ''}`}
 							type="button"
 							data-testid="detail-punt-toggle"
 							on:click={punt}
-							disabled={!canPunt}
+							disabled={!canPunt || isPuntedControlActive}
 						>
-							<span class="punt-glyph" aria-hidden="true">➜</span>
-							{canPunt ? 'Punt' : 'Punted'}
+							<span class="punt-glyph" aria-hidden="true">{puntGlyph}</span>
+							{isPuntedControlActive ? 'Punted' : 'Punt'}
 						</button>
 					</label>
 				{/if}
@@ -246,9 +257,9 @@ const memberAvatar = (member) => {
 				{#if !canEditTask}
 					<p class="muted">This task is owned by another member and is read-only for contributors.</p>
 				{:else}
-					<button class="primary" type="button" on:click={save}>Save</button>
+					<button class="primary action-size" type="button" on:click={save}>Save</button>
 					{#if task.recurrence_id}
-						<button class="ghost" type="button" on:click={skip}>Skip occurrence</button>
+						<button class="ghost action-size" type="button" on:click={skip}>Skip Occurrence</button>
 					{/if}
 				{/if}
 			</div>
@@ -269,27 +280,44 @@ const memberAvatar = (member) => {
 	h2 { margin:0; font-size:20px; letter-spacing:-0.01em; }
 	.muted { color:var(--app-muted); margin:4px 0 0; font-size:13px; }
 	.form { display:flex; flex-direction:column; gap:10px; overflow:auto; padding-bottom:12px; }
-	label { display:flex; flex-direction:column; gap:4px; color:var(--app-text); font-size:13px; }
+	label { display:flex; flex-direction:column; gap:4px; color:var(--app-text); font-size:14px; }
 	input, select, textarea {
 		background: linear-gradient(180deg, var(--surface-1), var(--surface-2)); border:1px solid var(--border-1);
 		color:var(--app-text); border-radius:9px; padding:8px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+		font-size: 14px;
+		line-height: 1.25;
+	}
+	input, select {
+		min-height: 40px;
+	}
+	textarea {
+		min-height: 124px;
+		resize: vertical;
 	}
 	.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:center; }
 	.row.two { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 	.row.buttons { grid-template-columns: repeat(auto-fit, minmax(120px, auto)); }
-	button.primary, .status {
+	button.primary {
 		background: linear-gradient(180deg, #1d4ed8, #1e40af); border:1px solid rgba(147,197,253,0.4);
-		color:#fff; padding:10px 12px; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
+		color:#fff; border-radius:9px; cursor:pointer; box-shadow: 0 8px 18px rgba(37,99,235,0.3);
 	}
-	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); padding:8px 10px; border-radius:9px; cursor:pointer; }
+	button.ghost { background:var(--surface-1); border:1px solid var(--border-1); color:var(--app-text); border-radius:9px; cursor:pointer; }
+	.detail-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		width: 100%;
+		min-height: 40px;
+		padding: 8px 10px;
+		font-size: 14px;
+		font-weight: 600;
+		text-align: center;
+	}
+	.status-toggle.active,
 	button.ghost.star-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
-	}
-	button.ghost.punt-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
 	}
 	button.ghost.punt-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
@@ -299,7 +327,13 @@ const memberAvatar = (member) => {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
 	}
-	button.primary:hover, .status:hover, button.ghost:hover { transform: translateY(-1px); }
+	.action-size {
+		min-height: 42px;
+		padding: 10px 12px;
+		font-size: 14px;
+		font-weight: 600;
+	}
+	button.primary:hover, button.ghost:hover { transform: translateY(-1px); }
 	input:disabled, select:disabled, textarea:disabled, button:disabled { opacity:0.65; cursor:not-allowed; }
 	.star-pill {
 		margin: 6px 0 0;
@@ -318,7 +352,8 @@ const memberAvatar = (member) => {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		font-weight: 700;
+		font-weight: 800;
+		font-size: 13px;
 		color: color-mix(in oklab, var(--surface-accent) 64%, var(--app-text) 36%);
 	}
 </style>
