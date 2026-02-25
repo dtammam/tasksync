@@ -34,6 +34,7 @@ server/data/
 *.swo
 .idea/
 .vscode/
+tasksync.code-workspace
 
 # misc
 *.log
