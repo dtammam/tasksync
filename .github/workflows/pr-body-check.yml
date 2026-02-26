@@ -13,7 +13,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - name: Validate PR body sections
+      - name: Validate required change note
         uses: actions/github-script@v7
         with:
           script: |
@@ -31,36 +31,17 @@ jobs:
               sections.set(title, body.slice(start, end).trim());
             }
 
-            const requiredSections = [
-              { title: 'Summary', minChars: 12 },
-              { title: 'Test Plan', minChars: 8 },
-              { title: 'Risks', minChars: 4 },
-              { title: 'Docs Impact', minChars: 1 },
-              { title: 'Rollout Notes', minChars: 4 }
-            ];
-
-            const failures = [];
-
-            for (const requirement of requiredSections) {
-              const key = requirement.title.toLowerCase();
-              if (!sections.has(key)) {
-                failures.push(`Missing section: "${requirement.title}"`);
-                continue;
-              }
-              const cleaned = stripComments(sections.get(key));
-              if (cleaned.length < requirement.minChars) {
-                failures.push(`Section "${requirement.title}" is empty or too short.`);
-              }
-            }
-
-            const docsImpact = sections.get('docs impact') ?? '';
-            if (!/-\s*\[[xX]\]\s+/.test(docsImpact)) {
-              failures.push('Docs Impact must have at least one checked checkbox (`- [x] ...`).');
-            }
-
-            if (failures.length) {
-              core.setFailed(`PR body validation failed:\n- ${failures.join('\n- ')}`);
+            if (!sections.has('change note')) {
+              core.setFailed('PR body must include a "## Change Note" section with one sentence.');
               return;
             }
 
-            core.notice('PR body sections look good.');
+            const note = stripComments(sections.get('change note'));
+            if (!note || note.length < 12 || /^(none|n\/a|na)$/i.test(note)) {
+              core.setFailed(
+                'PR body "Change Note" must include at least one meaningful sentence (12+ characters).'
+              );
+              return;
+            }
+
+            core.notice('PR body includes a valid change note.');
