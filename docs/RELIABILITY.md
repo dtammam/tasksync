@@ -56,6 +56,7 @@ Gate intent (do not remove gates):
 - pre-commit: fastest correctness loop (lint, type/check, unit-level confidence)
 - pre-push: deterministic smoke confidence before remote push
 - pre-merge CI: full confidence matrix (cross-browser E2E + complete server checks)
+- PR body gate: require structured change rationale/test/risks/docs impact before merge (`pr-body` check)
 
 Execution strategy:
 - Keep local and CI responsibilities complementary, not duplicated.
@@ -65,6 +66,8 @@ Execution strategy:
   - local pre-push Playwright: Chromium-only `@smoke` subset (`npm run test:e2e:smoke`)
   - CI on branch push: lint/check/unit + Chromium smoke
   - CI on pull request (pre-merge): full Playwright suite across `chromium`, `firefox`, and `webkit`
+- Branch protection baseline for `main`:
+  - require status checks: `pr-body`, `web`, `server`, and `web-e2e-matrix` for each browser (`chromium`, `firefox`, `webkit`)
 - Test selection must remain invariant-driven (offline-first, sync idempotency, role enforcement, deterministic task mutations).
 
 Cost controls:
