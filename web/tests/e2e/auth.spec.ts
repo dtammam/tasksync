@@ -97,7 +97,7 @@ const mockAuthenticatedBootstrap = async (page: Page) => {
 	});
 };
 
-test('can sign in with token mode and restore session after reload', async ({ page }) => {
+test('@smoke can sign in with token mode and restore session after reload', async ({ page }) => {
 	await page.addInitScript(() => {
 		if (sessionStorage.getItem('pw-auth-init') === '1') return;
 		sessionStorage.setItem('pw-auth-init', '1');
