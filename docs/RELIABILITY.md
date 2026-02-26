@@ -56,7 +56,7 @@ Gate intent (do not remove gates):
 - pre-commit: fastest correctness loop (lint, type/check, unit-level confidence)
 - pre-push: deterministic smoke confidence before remote push
 - pre-merge CI: full confidence matrix (cross-browser E2E + complete server checks)
-- PR body gate: require structured change rationale/test/risks/docs impact before merge (`pr-body` check)
+- PR body gate: require a one-line human-authored `Summary` before merge (`pr-body` check)
 
 Execution strategy:
 - Keep local and CI responsibilities complementary, not duplicated.
