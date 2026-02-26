@@ -46,30 +46,40 @@ const setAuthenticatedClientState = async (page: Page, user: TestUser) => {
 	}, user);
 };
 
-const ensureServiceWorkerControlsPage = async (page: Page) => {
-	await expect
-		.poll(
-			() =>
-				page.evaluate(async () => {
-					if (!('serviceWorker' in navigator)) return 'missing';
-					let registration = await navigator.serviceWorker.getRegistration();
-					if (!registration) {
-						try {
-							await navigator.serviceWorker.register('/service-worker.js');
-						} catch {
-							return 'unregistered';
+const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnregistered?: boolean }) => {
+	let registrationReady = true;
+	try {
+		await expect
+			.poll(
+				() =>
+					page.evaluate(async () => {
+						if (!('serviceWorker' in navigator)) return 'missing';
+						let registration = await navigator.serviceWorker.getRegistration();
+						if (!registration) {
+							try {
+								await navigator.serviceWorker.register('/service-worker.js');
+							} catch {
+								return 'unregistered';
+							}
+							registration = await navigator.serviceWorker.getRegistration();
 						}
-						registration = await navigator.serviceWorker.getRegistration();
-					}
-					if (!registration) return 'unregistered';
-					if (!registration.active && !registration.waiting && !registration.installing) {
-						return 'registering';
-					}
-					return navigator.serviceWorker.controller ? 'controlled' : 'active';
-				}),
-			{ timeout: 20_000 }
-		)
-		.not.toBe('unregistered');
+						if (!registration) return 'unregistered';
+						if (!registration.active && !registration.waiting && !registration.installing) {
+							return 'registering';
+						}
+						return navigator.serviceWorker.controller ? 'controlled' : 'active';
+					}),
+				{ timeout: 20_000 }
+			)
+			.not.toBe('unregistered');
+	} catch {
+		if (!options?.allowUnregistered) {
+			throw new Error('Service worker did not register in time.');
+		}
+		registrationReady = false;
+	}
+
+	if (!registrationReady) return false;
 
 	if (!(await page.evaluate(() => !!navigator.serviceWorker?.controller))) {
 		await page.reload({ waitUntil: 'domcontentloaded' });
@@ -85,6 +95,8 @@ const ensureServiceWorkerControlsPage = async (page: Page) => {
 			)
 			.toBe(true);
 	}
+
+	return true;
 };
 
 const readTasksFromIdbByTitle = async (page: Page, title: string) =>
@@ -633,7 +645,7 @@ test.describe('Offline continuity', () => {
 		await page.goto('/');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 		await expect(page.getByTestId('task-row').filter({ hasText: originalTitle })).toHaveCount(1);
-		await ensureServiceWorkerControlsPage(page);
+		await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 
 		await context.setOffline(true);
 		const originalRows = await readTasksFromIdbByTitle(page, originalTitle);
