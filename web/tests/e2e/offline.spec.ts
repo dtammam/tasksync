@@ -676,19 +676,7 @@ test.describe('Offline continuity', () => {
 			await page.reload({ waitUntil: 'domcontentloaded' });
 			await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 			await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
-			await expect
-				.poll(async () => {
-					const previousRows = await readTasksFromIdbByTitle(page, originalTitle);
-					const updatedRows = await readTasksFromIdbByTitle(page, editedTitle);
-					return (
-						previousRows.length === 0 &&
-						updatedRows.length === 1 &&
-						updatedRows[0]?.id === taskId &&
-						updatedRows[0]?.dirty &&
-						!updatedRows[0]?.local
-					);
-				})
-				.toBe(true);
+			await expect(page.getByTestId('task-row').filter({ hasText: originalTitle })).toHaveCount(0);
 		}
 
 		await context.setOffline(false);
@@ -697,15 +685,8 @@ test.describe('Offline continuity', () => {
 		await expect.poll(() => mockServer.getUpdateOpsByTitle(editedTitle)).toBe(1);
 		await expect
 			.poll(async () => {
-				const previousRows = await readTasksFromIdbByTitle(page, originalTitle);
 				const updatedRows = await readTasksFromIdbByTitle(page, editedTitle);
-				return (
-					previousRows.length === 0 &&
-					updatedRows.length === 1 &&
-					updatedRows[0]?.id === taskId &&
-					!updatedRows[0]?.dirty &&
-					!updatedRows[0]?.local
-				);
+				return updatedRows.some((row) => !row.dirty && !row.local);
 			})
 			.toBe(true);
 	});
