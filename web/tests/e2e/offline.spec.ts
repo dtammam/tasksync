@@ -596,7 +596,7 @@ test.describe('Offline continuity', () => {
 			.toBe(true);
 	});
 
-	test('offline title edit survives reload and syncs once after reconnect', async ({ page, context }) => {
+	test('@smoke offline title edit survives reload and syncs once after reconnect', async ({ page, context }) => {
 		const user = {
 			user_id: 'admin',
 			email: 'admin@example.com',
