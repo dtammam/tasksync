@@ -283,7 +283,7 @@ const seedSuggestions = async (page: Page) => {
 };
 
 test.describe('My Day', () => {
-	test('shows tasks and moves to completed when toggled', async ({ page }) => {
+	test('@smoke shows tasks and moves to completed when toggled', async ({ page }) => {
 		await resetClientState(page);
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 
@@ -303,7 +303,7 @@ test.describe('My Day', () => {
 		await expect(completedRows).toHaveCount(1);
 	});
 
-	test('can create a new task and persist after reload', async ({ page }) => {
+	test('@smoke can create a new task and persist after reload', async ({ page }) => {
 		await resetClientState(page);
 		const title = makeTitle('Playwright-added task');
 		await page.getByTestId('new-task-input').fill(title);
@@ -316,7 +316,7 @@ test.describe('My Day', () => {
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 	});
 
-	test('persists first detail save deterministically with recurrence and My Day button state', async ({
+	test('@smoke persists first detail save deterministically with recurrence and My Day button state', async ({
 		page
 	}) => {
 		await resetClientState(page);

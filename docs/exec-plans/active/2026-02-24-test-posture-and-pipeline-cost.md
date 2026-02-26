@@ -1,7 +1,7 @@
 # Test Posture And Pipeline Cost
 
 Date: 2026-02-24
-Status: Draft
+Status: In Progress
 Owner: Codex + project maintainer
 
 ## Goal
@@ -97,6 +97,22 @@ Assess and improve project-wide testing posture so confidence stays high while l
 - Demonstrate measurable improvement in median pipeline cost (local and/or CI) without increased escape defects.
 - Keep all required hooks and CI quality gates active.
 
+## Assessment snapshot (2026-02-26)
+
+- Posture rating: `adequate` overall, with `overdone` local/branch-push E2E breadth.
+- Invariant coverage (current owners):
+  - offline-first + sync idempotency: `web/src/lib/sync/*.test.ts`, `web/src/lib/sync/coordinator.test.ts`, `server/src/routes.rs` sync/idempotency tests.
+  - deterministic task mutation and recurrence/punt/my-day: `web/src/lib/stores/tasks.test.ts`, `web/tests/e2e/myday.spec.ts` smoke-tagged determinism checks.
+  - role/security enforcement: `server/src/routes.rs` contributor/admin authorization tests, `web/tests/e2e/auth.spec.ts` smoke-tagged sign-in flow.
+- Baseline execution shape before change:
+  - local pre-push Playwright command executed all projects (`chromium`, `firefox`, `webkit`) with retries.
+  - local run in this environment took `~4m06s` before failing due missing Linux browser runtime libs (so wall-time baseline reflects gate breadth, not pass latency).
+- Updated target split implemented:
+  - local pre-push Playwright now runs Chromium-only `@smoke` subset (`6` tests currently selected).
+  - CI branch push runs lint/check/unit + Chromium smoke.
+  - CI pull request runs full Playwright suite in a browser matrix (`chromium`, `firefox`, `webkit`) with per-browser caching/install.
+- Measured local smoke gate command in this environment: `~18s` wall time before failing at browser launch due missing libs.
+
 ## Test plan
 
 - Validation of the test-strategy change itself:
@@ -118,7 +134,13 @@ Assess and improve project-wide testing posture so confidence stays high while l
 ## Progress log (append-only, dated)
 
 - 2026-02-24: Intake completed and plan created. Implementation blocked pending approval of this plan.
+- 2026-02-26: Baseline inventory captured for web unit, web e2e, and server authorization/sync tests; posture rated `adequate` with over-broad local E2E gate.
+- 2026-02-26: Implemented two-tier E2E gate split (local/branch-push smoke vs PR full matrix), plus Playwright cache/install refinements in CI.
+- 2026-02-26: Updated reliability policy doc with explicit gate split and command ownership.
 
 ## Decision log (append-only, dated)
 
 - 2026-02-24: Chosen approach is optimize-by-mapping (coverage matrix + runtime baseline) before changing gates.
+- 2026-02-26: Keep all required hooks/gates but reduce local pre-push E2E to deterministic Chromium smoke via `@smoke` tagging.
+- 2026-02-26: Keep full cross-browser validation in pre-merge CI by running Playwright as a browser matrix on pull requests only.
+- 2026-02-26: Cache Playwright browser assets in CI and install only needed browser per job to reduce repeated setup cost.

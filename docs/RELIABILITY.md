@@ -61,6 +61,10 @@ Execution strategy:
 - Keep local and CI responsibilities complementary, not duplicated.
 - Pre-push E2E should prioritize deterministic smoke paths over full matrix breadth.
 - Full cross-browser validation belongs in pre-merge CI where cost is acceptable.
+- Current gate split:
+  - local pre-push Playwright: Chromium-only `@smoke` subset (`npm run test:e2e:smoke`)
+  - CI on branch push: lint/check/unit + Chromium smoke
+  - CI on pull request (pre-merge): full Playwright suite across `chromium`, `firefox`, and `webkit`
 - Test selection must remain invariant-driven (offline-first, sync idempotency, role enforcement, deterministic task mutations).
 
 Cost controls:

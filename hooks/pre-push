@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 set -euo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
@@ -9,8 +9,8 @@ echo "🧪 pre-push: running web tests (unit) ..."
 if [ "${SKIP_PLAYWRIGHT:-0}" = "1" ]; then
   echo "⏩ skipping Playwright (SKIP_PLAYWRIGHT=1)"
 else
-  echo "🎭 pre-push: Playwright smoke ..."
-  (cd web && npx playwright test --workers=2 --retries=1)
+  echo "🎭 pre-push: Playwright smoke gate ..."
+  (cd web && npm run test:e2e:smoke)
 fi
 
 echo "🦀 pre-push: cargo test ..."

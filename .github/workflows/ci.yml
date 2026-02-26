@@ -34,10 +34,60 @@ jobs:
       - run: npm run lint
       - run: npm run check
       - run: npm run test
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-      - name: Playwright smoke
-        run: npx playwright test
+      - name: Cache Playwright browsers (chromium)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}-chromium
+          restore-keys: |
+            ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}-
+            ${{ runner.os }}-playwright-
+      - name: Install Playwright Chromium (push smoke gate)
+        if: github.event_name == 'push'
+        run: npx playwright install --with-deps chromium
+      - name: Playwright smoke gate (push)
+        if: github.event_name == 'push'
+        run: npm run test:e2e:smoke
+
+  web-e2e-matrix:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            web/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Cache Playwright browsers (${{ matrix.browser }})
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}-${{ matrix.browser }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}-
+            ${{ runner.os }}-playwright-
+      - name: Install Playwright browser (${{ matrix.browser }})
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Playwright full suite (${{ matrix.browser }})
+        run: npx playwright test --project=${{ matrix.browser }}
 
   server:
     runs-on: ubuntu-latest
