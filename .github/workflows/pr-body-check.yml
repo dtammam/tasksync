@@ -13,7 +13,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - name: Validate required change note
+      - name: Validate required summary
         uses: actions/github-script@v7
         with:
           script: |
@@ -31,17 +31,17 @@ jobs:
               sections.set(title, body.slice(start, end).trim());
             }
 
-            if (!sections.has('change note')) {
-              core.setFailed('PR body must include a "## Change Note" section with one sentence.');
+            if (!sections.has('summary')) {
+              core.setFailed('PR body must include a "## Summary" section with one sentence.');
               return;
             }
 
-            const note = stripComments(sections.get('change note'));
+            const note = stripComments(sections.get('summary'));
             if (!note || note.length < 12 || /^(none|n\/a|na)$/i.test(note)) {
               core.setFailed(
-                'PR body "Change Note" must include at least one meaningful sentence (12+ characters).'
+                'PR body "Summary" must include at least one meaningful sentence (12+ characters).'
               );
               return;
             }
 
-            core.notice('PR body includes a valid change note.');
+            core.notice('PR body includes a valid summary.');
