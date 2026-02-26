@@ -52,7 +52,15 @@ const ensureServiceWorkerControlsPage = async (page: Page) => {
 			() =>
 				page.evaluate(async () => {
 					if (!('serviceWorker' in navigator)) return 'missing';
-					const registration = await navigator.serviceWorker.getRegistration();
+					let registration = await navigator.serviceWorker.getRegistration();
+					if (!registration) {
+						try {
+							await navigator.serviceWorker.register('/service-worker.js');
+						} catch {
+							return 'unregistered';
+						}
+						registration = await navigator.serviceWorker.getRegistration();
+					}
 					if (!registration) return 'unregistered';
 					if (!registration.active && !registration.waiting && !registration.installing) {
 						return 'registering';
