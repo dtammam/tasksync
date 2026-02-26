@@ -9,6 +9,19 @@ const seededLists = [
 	{ id: 'health', name: 'Health', icon: '💪', order: 'e' },
 	{ id: 'tech', name: 'Tech Ideas', icon: '💻', order: 'f' }
 ];
+interface TestUser {
+	user_id: string;
+	email: string;
+	display: string;
+	space_id: string;
+}
+
+interface SeedTask {
+	title: string;
+	list_id: string;
+	my_day?: boolean;
+	status?: 'pending' | 'done';
+}
 
 const resetClientState = async (page: Page) => {
 	await page.addInitScript(() => {
@@ -19,7 +32,7 @@ const resetClientState = async (page: Page) => {
 	});
 };
 
-const setAuthenticatedClientState = async (page: Page, user: { user_id: string; email: string; display: string; space_id: string }) => {
+const setAuthenticatedClientState = async (page: Page, user: TestUser) => {
 	await page.addInitScript((initialUser) => {
 		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.setItem('tasksync:auth-token', 'test-token');
@@ -106,14 +119,34 @@ const readTasksFromIdbByTitle = async (page: Page, title: string) =>
 		return all
 			.filter((task) => !!task && typeof task === 'object' && (task as { title?: unknown }).title === taskTitle)
 			.map((task) => {
-				const candidate = task as { id?: unknown; dirty?: unknown; local?: unknown };
+				const candidate = task as {
+					id?: unknown;
+					title?: unknown;
+					list_id?: unknown;
+					status?: unknown;
+					dirty?: unknown;
+					local?: unknown;
+				};
 				return {
 					id: typeof candidate.id === 'string' ? candidate.id : '',
+					title: typeof candidate.title === 'string' ? candidate.title : '',
+					list_id: typeof candidate.list_id === 'string' ? candidate.list_id : '',
+					status: typeof candidate.status === 'string' ? candidate.status : '',
 					dirty: !!candidate.dirty,
 					local: !!candidate.local
 				};
 			});
 	}, title);
+
+const openTaskDetailsForTitle = async (page: Page, title: string) => {
+	const row = page.getByTestId('task-row').filter({ hasText: title });
+	await expect(row).toHaveCount(1);
+	await row.locator('button.actions-chip').click();
+	await row.getByRole('button', { name: 'Details' }).click();
+	const drawer = page.getByRole('dialog', { name: 'Task details' });
+	await expect(drawer).toBeVisible();
+	return drawer;
+};
 
 const seedScopedTaskForUser = async (
 	page: Page,
@@ -123,7 +156,7 @@ const seedScopedTaskForUser = async (
 		listId,
 		myDay
 	}: {
-		user: { user_id: string; email: string; display: string; space_id: string };
+		user: TestUser;
 		title: string;
 		listId: string;
 		myDay: boolean;
@@ -137,7 +170,7 @@ const seedScopedTaskForUser = async (
 			taskMyDay,
 			defaultLists
 		}: {
-			seedUser: { user_id: string; email: string; display: string; space_id: string };
+			seedUser: TestUser;
 			taskTitle: string;
 			taskListId: string;
 			taskMyDay: boolean;
@@ -218,10 +251,15 @@ const seedScopedTaskForUser = async (
 		}
 	);
 
-const mockAuthenticatedSyncServer = async (page: Page, user: { user_id: string; email: string; display: string; space_id: string }) => {
+const mockAuthenticatedSyncServer = async (
+	page: Page,
+	user: TestUser,
+	options?: { seedTasks?: SeedTask[] }
+) => {
 	let serverClock = Date.now();
 	let serverTaskCounter = 0;
 	const createOpsByTitle = new Map<string, number>();
+	const updateOpsByTitle = new Map<string, number>();
 	const serverLists = seededLists.map((list) => ({
 		...list,
 		space_id: user.space_id
@@ -248,6 +286,25 @@ const mockAuthenticatedSyncServer = async (page: Page, user: { user_id: string; 
 		serverTaskCounter += 1;
 		return `10000000-0000-4000-8000-${String(serverTaskCounter).padStart(12, '0')}`;
 	};
+
+	for (const seedTask of options?.seedTasks ?? []) {
+		const now = ++serverClock;
+		const id = nextServerTaskId();
+		serverTasks.set(id, {
+			id,
+			space_id: user.space_id,
+			title: seedTask.title,
+			status: seedTask.status ?? 'pending',
+			list_id: seedTask.list_id,
+			my_day: seedTask.my_day ? 1 : 0,
+			priority: 0,
+			order: `seed-${now}`,
+			created_ts: now,
+			updated_ts: now,
+			assignee_user_id: user.user_id,
+			created_by_user_id: user.user_id
+		});
+	}
 
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
@@ -398,6 +455,7 @@ const mockAuthenticatedSyncServer = async (page: Page, user: { user_id: string; 
 					updated_ts: serverClock,
 					assignee_user_id: change.body?.assignee_user_id ?? existing.assignee_user_id
 				};
+				updateOpsByTitle.set(updated.title, (updateOpsByTitle.get(updated.title) ?? 0) + 1);
 				serverTasks.set(existing.id, updated);
 				applied.push(updated);
 			}
@@ -416,7 +474,8 @@ const mockAuthenticatedSyncServer = async (page: Page, user: { user_id: string; 
 	});
 
 	return {
-		getCreateOpsByTitle: (title: string) => createOpsByTitle.get(title) ?? 0
+		getCreateOpsByTitle: (title: string) => createOpsByTitle.get(title) ?? 0,
+		getUpdateOpsByTitle: (title: string) => updateOpsByTitle.get(title) ?? 0
 	};
 };
 
@@ -483,6 +542,213 @@ test.describe('Offline continuity', () => {
 			.poll(async () => {
 				const rows = await readTasksFromIdbByTitle(page, title);
 				return rows.length === 1 && !rows[0]?.dirty && !rows[0]?.local && !rows[0]?.id.startsWith('local-');
+			})
+			.toBe(true);
+	});
+
+	test('offline complete survives reload and syncs once after reconnect', async ({ page, context }) => {
+		const user = {
+			user_id: 'admin',
+			email: 'admin@example.com',
+			display: 'Admin',
+			space_id: 's1'
+		};
+		const title = makeTitle('Offline complete');
+		await setAuthenticatedClientState(page, user);
+		const mockServer = await mockAuthenticatedSyncServer(page, user, {
+			seedTasks: [{ title, list_id: 'my-day', my_day: true, status: 'pending' }]
+		});
+
+		await page.goto('/');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await ensureServiceWorkerControlsPage(page);
+
+		await context.setOffline(true);
+		await page.getByTestId('task-row').filter({ hasText: title }).getByTestId('task-toggle').click();
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return rows.length === 1 && rows[0]?.status === 'done' && rows[0]?.dirty && !rows[0]?.local;
+			})
+			.toBe(true);
+
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return rows.length === 1 && rows[0]?.status === 'done' && rows[0]?.dirty && !rows[0]?.local;
+			})
+			.toBe(true);
+
+		await context.setOffline(false);
+		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+		await expect.poll(() => mockServer.getUpdateOpsByTitle(title)).toBe(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return rows.length === 1 && rows[0]?.status === 'done' && !rows[0]?.dirty && !rows[0]?.local;
+			})
+			.toBe(true);
+	});
+
+	test('offline title edit survives reload and syncs once after reconnect', async ({ page, context }) => {
+		const user = {
+			user_id: 'admin',
+			email: 'admin@example.com',
+			display: 'Admin',
+			space_id: 's1'
+		};
+		const originalTitle = makeTitle('Offline title edit');
+		const editedTitle = `${originalTitle} updated`;
+		await setAuthenticatedClientState(page, user);
+		const mockServer = await mockAuthenticatedSyncServer(page, user, {
+			seedTasks: [{ title: originalTitle, list_id: 'my-day', my_day: true, status: 'pending' }]
+		});
+
+		await page.goto('/');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: originalTitle })).toHaveCount(1);
+		await ensureServiceWorkerControlsPage(page);
+
+		await context.setOffline(true);
+		const originalRows = await readTasksFromIdbByTitle(page, originalTitle);
+		expect(originalRows).toHaveLength(1);
+		const taskId = originalRows[0]?.id ?? '';
+		expect(taskId).not.toBe('');
+
+		const drawer = await openTaskDetailsForTitle(page, originalTitle);
+		await drawer.locator('input.title-input').fill(editedTitle);
+		await drawer.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
+
+		await expect
+			.poll(async () => {
+				const previousRows = await readTasksFromIdbByTitle(page, originalTitle);
+				const updatedRows = await readTasksFromIdbByTitle(page, editedTitle);
+				return (
+					previousRows.length === 0 &&
+					updatedRows.length === 1 &&
+					updatedRows[0]?.id === taskId &&
+					updatedRows[0]?.dirty &&
+					!updatedRows[0]?.local
+				);
+			})
+			.toBe(true);
+
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
+		await expect
+			.poll(async () => {
+				const previousRows = await readTasksFromIdbByTitle(page, originalTitle);
+				const updatedRows = await readTasksFromIdbByTitle(page, editedTitle);
+				return (
+					previousRows.length === 0 &&
+					updatedRows.length === 1 &&
+					updatedRows[0]?.id === taskId &&
+					updatedRows[0]?.dirty &&
+					!updatedRows[0]?.local
+				);
+			})
+			.toBe(true);
+
+		await context.setOffline(false);
+		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+		await expect.poll(() => mockServer.getUpdateOpsByTitle(editedTitle)).toBe(1);
+		await expect
+			.poll(async () => {
+				const previousRows = await readTasksFromIdbByTitle(page, originalTitle);
+				const updatedRows = await readTasksFromIdbByTitle(page, editedTitle);
+				return (
+					previousRows.length === 0 &&
+					updatedRows.length === 1 &&
+					updatedRows[0]?.id === taskId &&
+					!updatedRows[0]?.dirty &&
+					!updatedRows[0]?.local
+				);
+			})
+			.toBe(true);
+	});
+
+	test('offline list edit survives reload and syncs once after reconnect', async ({ page, context }) => {
+		const user = {
+			user_id: 'admin',
+			email: 'admin@example.com',
+			display: 'Admin',
+			space_id: 's1'
+		};
+		const title = makeTitle('Offline list edit');
+		const destinationListId = 'goal-management';
+		await setAuthenticatedClientState(page, user);
+		const mockServer = await mockAuthenticatedSyncServer(page, user, {
+			seedTasks: [{ title, list_id: 'my-day', my_day: true, status: 'pending' }]
+		});
+
+		await page.goto('/');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await ensureServiceWorkerControlsPage(page);
+
+		await context.setOffline(true);
+		const baselineRows = await readTasksFromIdbByTitle(page, title);
+		expect(baselineRows).toHaveLength(1);
+		const taskId = baselineRows[0]?.id ?? '';
+		expect(taskId).not.toBe('');
+
+		const drawer = await openTaskDetailsForTitle(page, title);
+		await drawer.getByLabel('List').selectOption(destinationListId);
+		await drawer.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return (
+					rows.length === 1 &&
+					rows[0]?.id === taskId &&
+					rows[0]?.list_id === destinationListId &&
+					rows[0]?.dirty &&
+					!rows[0]?.local
+				);
+			})
+			.toBe(true);
+
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return (
+					rows.length === 1 &&
+					rows[0]?.id === taskId &&
+					rows[0]?.list_id === destinationListId &&
+					rows[0]?.dirty &&
+					!rows[0]?.local
+				);
+			})
+			.toBe(true);
+
+		await context.setOffline(false);
+		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+		await expect.poll(() => mockServer.getUpdateOpsByTitle(title)).toBe(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return (
+					rows.length === 1 &&
+					rows[0]?.id === taskId &&
+					rows[0]?.list_id === destinationListId &&
+					!rows[0]?.dirty &&
+					!rows[0]?.local
+				);
 			})
 			.toBe(true);
 	});
