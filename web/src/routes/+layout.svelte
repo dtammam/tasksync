@@ -329,11 +329,16 @@
 		await auth.hydrate();
 		syncCoordinator.setAuthenticated(auth.isAuthenticated());
 		await hydrateScopedStores();
-		await soundSettings.hydrateFromServer();
-		await uiPreferences.hydrateFromServer();
-		await members.hydrateFromServer();
 		lastScopeKey = storageScopeFromAuth(auth.get());
 		appReady = true;
+
+		// Do not block first paint on best-effort remote preference/member refresh.
+		void (async () => {
+			await soundSettings.hydrateFromServer();
+			await uiPreferences.hydrateFromServer();
+			await members.hydrateFromServer();
+		})();
+
 		if (auth.isAuthenticated()) {
 			requestSync('startup');
 		}
@@ -369,9 +374,14 @@
 		void (async () => {
 			resetSyncCursor();
 			await hydrateScopedStores();
-			await soundSettings.hydrateFromServer();
-			await uiPreferences.hydrateFromServer();
-			await members.hydrateFromServer();
+
+			// Local scope hydration should complete before remote best-effort refresh.
+			void (async () => {
+				await soundSettings.hydrateFromServer();
+				await uiPreferences.hydrateFromServer();
+				await members.hydrateFromServer();
+			})();
+
 			if (auth.isAuthenticated()) {
 				requestSync('scope-change');
 			}

@@ -1,7 +1,7 @@
 # Offline-First Shell And Sync Continuity
 
 Date: 2026-02-26
-Status: Draft
+Status: In Progress
 Owner: Codex + project maintainer
 
 ## Goal
@@ -119,6 +119,8 @@ Confidence note:
 - 2026-02-26: Branch created (`feat/offline-local-cache-ux`) and planning artifact drafted.
 - 2026-02-26: External reference review (Actual Budget docs) captured as local-first benchmark input.
 - 2026-02-26: Corrected Actual reference scope to docs-backed behavior only; deep protocol specifics remain unclaimed pending code review.
+- 2026-02-26: Phase 1 started: added SvelteKit service worker shell/runtime caching scaffold and Playwright offline hard-reload continuity coverage.
+- 2026-02-26: Startup bootstrap updated so app readiness is driven by local hydration, while remote preferences/member refresh runs best-effort in background.
 
 ## Decision log (append-only, dated)
 
