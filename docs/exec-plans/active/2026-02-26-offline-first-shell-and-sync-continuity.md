@@ -122,6 +122,7 @@ Confidence note:
 - 2026-02-26: Phase 1 started: added SvelteKit service worker shell/runtime caching scaffold and Playwright offline hard-reload continuity coverage.
 - 2026-02-26: Startup bootstrap updated so app readiness is driven by local hydration, while remote preferences/member refresh runs best-effort in background.
 - 2026-02-26: Added authenticated offline->reload->reconnect E2E convergence coverage (single replayed create, no local duplication after sync).
+- 2026-02-26: Added offline auth-scope continuity E2E coverage to ensure cached token+user hydrates scoped local data (and avoids token-anonymous fallback) when network is unavailable.
 
 ## Decision log (append-only, dated)
 

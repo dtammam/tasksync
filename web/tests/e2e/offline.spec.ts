@@ -115,6 +115,109 @@ const readTasksFromIdbByTitle = async (page: Page, title: string) =>
 			});
 	}, title);
 
+const seedScopedTaskForUser = async (
+	page: Page,
+	{
+		user,
+		title,
+		listId,
+		myDay
+	}: {
+		user: { user_id: string; email: string; display: string; space_id: string };
+		title: string;
+		listId: string;
+		myDay: boolean;
+	}
+) =>
+	page.evaluate(
+		async ({
+			seedUser,
+			taskTitle,
+			taskListId,
+			taskMyDay,
+			defaultLists
+		}: {
+			seedUser: { user_id: string; email: string; display: string; space_id: string };
+			taskTitle: string;
+			taskListId: string;
+			taskMyDay: boolean;
+			defaultLists: { id: string; name: string; icon?: string; order: string }[];
+		}) => {
+			const sanitizeScope = (scope: string) =>
+				scope
+					.toLowerCase()
+					.replace(/[^a-z0-9_-]/g, '_')
+					.slice(0, 80) || 'legacy';
+			const scopedDbName = `tasksync_${sanitizeScope(`space:${seedUser.space_id}:user:${seedUser.user_id}`)}`;
+			const anonymousDbName = `tasksync_${sanitizeScope('token-anonymous')}`;
+			const now = Date.now();
+			const buildTask = (id: string, taskText: string, assigneeUserId: string) => ({
+				id,
+				title: taskText,
+				status: 'pending',
+				list_id: taskListId,
+				my_day: taskMyDay,
+				priority: 0,
+				tags: [],
+				checklist: [],
+				order: `seed-${now}`,
+				created_ts: now,
+				updated_ts: now,
+				assignee_user_id: assigneeUserId,
+				created_by_user_id: assigneeUserId,
+				dirty: false,
+				local: false
+			});
+
+			const putSeedData = async (dbName: string, taskText: string, assigneeUserId: string) =>
+				await new Promise<void>((resolve, reject) => {
+					const req = indexedDB.open(dbName, 2);
+					req.onupgradeneeded = () => {
+						const db = req.result;
+						if (!db.objectStoreNames.contains('lists')) {
+							db.createObjectStore('lists', { keyPath: 'id' });
+						}
+						if (!db.objectStoreNames.contains('tasks')) {
+							const tasks = db.createObjectStore('tasks', { keyPath: 'id' });
+							tasks.createIndex('by-list', 'list_id');
+						}
+						if (!db.objectStoreNames.contains('settings')) {
+							db.createObjectStore('settings', { keyPath: 'id' });
+						}
+					};
+					req.onerror = () => reject(req.error ?? new Error(`open failed for ${dbName}`));
+					req.onsuccess = () => {
+						const db = req.result;
+						const tx = db.transaction(['lists', 'tasks'], 'readwrite');
+						const listStore = tx.objectStore('lists');
+						const taskStore = tx.objectStore('tasks');
+						for (const list of defaultLists) {
+							listStore.put(list);
+						}
+						taskStore.put(buildTask(`seed-${dbName}-task`, taskText, assigneeUserId));
+						tx.oncomplete = () => {
+							db.close();
+							resolve();
+						};
+						tx.onerror = () => {
+							db.close();
+							reject(tx.error ?? new Error(`write failed for ${dbName}`));
+						};
+					};
+				});
+
+			await putSeedData(scopedDbName, taskTitle, seedUser.user_id);
+			await putSeedData(anonymousDbName, 'Anonymous scope task', 'anonymous-user');
+		},
+		{
+			seedUser: user,
+			taskTitle: title,
+			taskListId: listId,
+			taskMyDay: myDay,
+			defaultLists: seededLists
+		}
+	);
+
 const mockAuthenticatedSyncServer = async (page: Page, user: { user_id: string; email: string; display: string; space_id: string }) => {
 	let serverClock = Date.now();
 	let serverTaskCounter = 0;
@@ -382,5 +485,46 @@ test.describe('Offline continuity', () => {
 				return rows.length === 1 && !rows[0]?.dirty && !rows[0]?.local && !rows[0]?.id.startsWith('local-');
 			})
 			.toBe(true);
+	});
+
+	test('offline boot keeps cached authenticated scope instead of anonymous fallback', async ({ page, context }) => {
+		await resetClientState(page);
+		await page.goto('/');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await ensureServiceWorkerControlsPage(page);
+
+		const user = {
+			user_id: 'admin',
+			email: 'admin@example.com',
+			display: 'Admin',
+			space_id: 's1'
+		};
+		const scopedTaskTitle = makeTitle('Scoped offline');
+		await seedScopedTaskForUser(page, {
+			user,
+			title: scopedTaskTitle,
+			listId: 'goal-management',
+			myDay: true
+		});
+
+		await page.evaluate((nextUser) => {
+			localStorage.setItem('tasksync:auth-mode', 'token');
+			localStorage.setItem('tasksync:auth-token', 'test-token');
+			localStorage.setItem(
+				'tasksync:auth-user',
+				JSON.stringify({
+					...nextUser,
+					role: 'admin'
+				})
+			);
+		}, user);
+
+		await context.setOffline(true);
+		await page.reload({ waitUntil: 'domcontentloaded' });
+
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
+		await expect(page.getByTestId('task-row').filter({ hasText: scopedTaskTitle })).toHaveCount(1);
+		await expect(page.getByTestId('task-row').filter({ hasText: 'Anonymous scope task' })).toHaveCount(0);
 	});
 });
