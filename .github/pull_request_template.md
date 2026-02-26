@@ -1,15 +1,18 @@
 ## Summary
-- [ ] Feature/bugfix described briefly
+<!-- What changed and why. Call out user-facing behavior changes explicitly. -->
 
-## Tests
-- [ ] `npm run lint`
-- [ ] `npm run check`
-- [ ] `npm run test`
-- [ ] `npx playwright test` (or `SKIP_PLAYWRIGHT=1` justification)
-- [ ] `cargo fmt -- --check`
-- [ ] `cargo clippy -D warnings`
-- [ ] `cargo test`
+## Test Plan
+<!-- Reference CI results and any additional local verification that adds signal. -->
 
-## Notes
-- Budgets respected (AGENTS.md)
-- Migrations reversible (if added)
+## Risks
+<!-- List reliability/security/performance/determinism risks and mitigations, or "None". -->
+
+## Docs Impact
+- [ ] No authoritative doc updates required.
+- [ ] Updated `docs/RELIABILITY.md`.
+- [ ] Updated `docs/FRONTEND.md`.
+- [ ] Updated `docs/ARCHITECTURE.md`.
+- [ ] Updated `docs/exec-plans/tech-debt-tracker.md`.
+
+## Rollout Notes
+<!-- Rollout/migration/monitoring notes, or "None". -->
