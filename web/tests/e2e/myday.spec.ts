@@ -756,25 +756,30 @@ test.describe('List view', () => {
 		await page.getByTestId('new-task-input').fill(secondTitle);
 		await page.getByTestId('new-task-submit').click();
 
-		await page.getByTestId('task-row').filter({ hasText: firstTitle }).getByTestId('task-toggle').click();
-		await page.getByTestId('task-row').filter({ hasText: secondTitle }).getByTestId('task-toggle').click();
+		const pendingSection = page.locator('section.block', {
+			has: page.locator('.section-title', { hasText: 'Pending' }),
+		});
+		const completedSectionRows = page
+			.locator('[data-testid="completed-section"] [data-testid="task-row"]');
+
+		const firstPendingRow = pendingSection.getByTestId('task-row').filter({ hasText: firstTitle });
+		await expect(firstPendingRow).toHaveCount(1);
+		await firstPendingRow.getByTestId('task-toggle').click();
+		await expect(completedSectionRows.filter({ hasText: firstTitle })).toHaveCount(1);
+
+		const secondPendingRow = pendingSection.getByTestId('task-row').filter({ hasText: secondTitle });
+		await expect(secondPendingRow).toHaveCount(1);
+		await secondPendingRow.getByTestId('task-toggle').click();
+		await expect(completedSectionRows.filter({ hasText: secondTitle })).toHaveCount(1);
+
 		await expect(
-			page
-				.locator('[data-testid="completed-section"] [data-testid="task-row"]')
-				.filter({ hasText: marker })
+			completedSectionRows.filter({ hasText: marker })
 		).toHaveCount(2);
 
 		await page.getByTestId('list-uncheck-all').click();
 		await expect(page.getByTestId('list-action-message')).toContainText('Unchecked 2 completed tasks.');
-		await expect(
-			page
-				.locator('[data-testid="completed-section"] [data-testid="task-row"]')
-				.filter({ hasText: marker })
-		).toHaveCount(0);
+		await expect(completedSectionRows.filter({ hasText: marker })).toHaveCount(0);
 
-		const pendingSection = page.locator('section.block', {
-			has: page.locator('.section-title', { hasText: 'Pending' }),
-		});
 		await expect(pendingSection.getByTestId('task-row').filter({ hasText: marker })).toHaveCount(2);
 	});
 });
