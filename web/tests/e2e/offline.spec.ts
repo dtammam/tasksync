@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const seededLists = [
 	{ id: 'my-day', name: 'My Day', icon: '🌅', order: 'a' },
 	{ id: 'goal-management', name: 'Goal Management', icon: '🎯', order: 'b' },
@@ -676,7 +677,9 @@ test.describe('Offline continuity', () => {
 			await page.reload({ waitUntil: 'domcontentloaded' });
 			await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 			await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
-			await expect(page.getByTestId('task-row').filter({ hasText: originalTitle })).toHaveCount(0);
+			await expect(
+				page.getByTestId('task-title').filter({ hasText: new RegExp(`^${escapeRegex(originalTitle)}$`) })
+			).toHaveCount(0);
 		}
 
 		await context.setOffline(false);
