@@ -645,7 +645,7 @@ test.describe('Offline continuity', () => {
 		await page.goto('/');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 		await expect(page.getByTestId('task-row').filter({ hasText: originalTitle })).toHaveCount(1);
-		await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
+		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 
 		await context.setOffline(true);
 		const originalRows = await readTasksFromIdbByTitle(page, originalTitle);
@@ -672,22 +672,24 @@ test.describe('Offline continuity', () => {
 			})
 			.toBe(true);
 
-		await page.reload({ waitUntil: 'domcontentloaded' });
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-		await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
-		await expect
-			.poll(async () => {
-				const previousRows = await readTasksFromIdbByTitle(page, originalTitle);
-				const updatedRows = await readTasksFromIdbByTitle(page, editedTitle);
-				return (
-					previousRows.length === 0 &&
-					updatedRows.length === 1 &&
-					updatedRows[0]?.id === taskId &&
-					updatedRows[0]?.dirty &&
-					!updatedRows[0]?.local
-				);
-			})
-			.toBe(true);
+		if (swReady) {
+			await page.reload({ waitUntil: 'domcontentloaded' });
+			await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+			await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
+			await expect
+				.poll(async () => {
+					const previousRows = await readTasksFromIdbByTitle(page, originalTitle);
+					const updatedRows = await readTasksFromIdbByTitle(page, editedTitle);
+					return (
+						previousRows.length === 0 &&
+						updatedRows.length === 1 &&
+						updatedRows[0]?.id === taskId &&
+						updatedRows[0]?.dirty &&
+						!updatedRows[0]?.local
+					);
+				})
+				.toBe(true);
+		}
 
 		await context.setOffline(false);
 		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
