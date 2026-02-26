@@ -3,7 +3,6 @@
 declare const self: ServiceWorkerGlobalScope;
 
 import { build, files, version } from '$service-worker';
-import { base } from '$app/paths';
 
 const SHELL_CACHE = `tasksync-shell-${version}`;
 const RUNTIME_CACHE = `tasksync-runtime-${version}`;
@@ -21,7 +20,19 @@ const CACHEABLE_DESTINATIONS = new Set([
 const API_ROUTE_PREFIXES = ['/api', '/auth', '/sync', '/tasks', '/lists', '/members', '/backup'];
 
 const normalizeUrlPath = (value: string) => (value.endsWith('/') && value.length > 1 ? value.slice(0, -1) : value);
-const withBase = (value: string) => `${base}${value}`.replace(/\/\/{2,}/g, '/');
+const scopeBasePath = (() => {
+	const pathname = normalizeUrlPath(new URL(self.registration.scope).pathname);
+	return pathname === '/' ? '' : pathname;
+})();
+
+const withBase = (value: string) => {
+	const prefixed = value.startsWith('/') ? value : `/${value}`;
+	if (!scopeBasePath) return prefixed;
+	if (prefixed === scopeBasePath || prefixed.startsWith(`${scopeBasePath}/`)) {
+		return prefixed;
+	}
+	return `${scopeBasePath}${prefixed}`.replace(/\/\/{2,}/g, '/');
+};
 
 const isApiRequest = (url: URL) => {
 	const pathname = normalizeUrlPath(url.pathname);
