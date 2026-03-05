@@ -125,6 +125,7 @@ Confidence note:
 - 2026-02-26: Added offline auth-scope continuity E2E coverage to ensure cached token+user hydrates scoped local data (and avoids token-anonymous fallback) when network is unavailable.
 - 2026-02-26: Added offline completion continuity E2E coverage (offline done-state survives reload and replays as a single update on reconnect).
 - 2026-02-26: Added offline edit continuity E2E coverage for detail-title and detail-list updates (both survive reload and replay once on reconnect).
+- 2026-03-05: Added @smoke tag to hard-reload offline continuity test so the core offline invariant gates pre-push. Logged missing offline boot timing measurement as tech debt (TD-004).
 
 ## Decision log (append-only, dated)
 

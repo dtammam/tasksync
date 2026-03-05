@@ -515,7 +515,7 @@ const mockAuthenticatedSyncServer = async (
 test.describe('Offline continuity', () => {
 	test.use({ serviceWorkers: 'allow' });
 
-	test('hard reload offline keeps cached shell and local data', async ({ page, context }) => {
+	test('@smoke hard reload offline keeps cached shell and local data', async ({ page, context }) => {
 		await resetClientState(page);
 		await page.goto('/');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
