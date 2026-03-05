@@ -389,6 +389,105 @@ describe('pushPendingToServer', () => {
 		expect(all.find((task) => task.id === local?.id)).toBeUndefined();
 	});
 
+	it('replays an offline task burst once and does not duplicate on retry', async () => {
+		const first = tasks.createLocal('offline burst one', 'goal-management');
+		const second = tasks.createLocal('offline burst two', 'goal-management');
+		const third = tasks.createLocal('offline burst three', 'goal-management');
+		expect(first && second && third).toBeTruthy();
+
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 21,
+			applied: [
+				{
+					id: 'srv-burst-1',
+					space_id: 's1',
+					title: 'offline burst one',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'a',
+					created_ts: 1,
+					updated_ts: 21
+				},
+				{
+					id: 'srv-burst-2',
+					space_id: 's1',
+					title: 'offline burst two',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'b',
+					created_ts: 1,
+					updated_ts: 21
+				},
+				{
+					id: 'srv-burst-3',
+					space_id: 's1',
+					title: 'offline burst three',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'c',
+					created_ts: 1,
+					updated_ts: 21
+				}
+			],
+			rejected: []
+		});
+
+		const firstReplay = await pushPendingToServer();
+		const secondReplay = await pushPendingToServer();
+
+		expect(firstReplay).toMatchObject({ pushed: 3, created: 3, rejected: 0 });
+		expect(secondReplay).toMatchObject({ pushed: 0, created: 0, rejected: 0 });
+		expect(mockedApi.syncPush).toHaveBeenCalledTimes(1);
+
+		const all = tasks.getAll();
+		expect(all).toHaveLength(3);
+		expect(new Set(all.map((task) => task.id)).size).toBe(3);
+		expect(all.every((task) => !task.dirty && !task.local)).toBe(true);
+	});
+
+	it('remains converged after replay when pull returns same server tasks', async () => {
+		const created = tasks.createLocal('offline converge', 'goal-management');
+		expect(created).toBeTruthy();
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 30,
+			applied: [
+				{
+					id: 'srv-converge',
+					space_id: 's1',
+					title: 'offline converge',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'a',
+					created_ts: 1,
+					updated_ts: 30
+				}
+			],
+			rejected: []
+		});
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 31,
+			lists: [],
+			tasks: [remoteTask({ id: 'srv-converge', title: 'offline converge', updated_ts: 31 })]
+		});
+
+		await pushPendingToServer();
+		await syncFromServer();
+
+		const all = tasks.getAll();
+		expect(all).toHaveLength(1);
+		expect(all[0]?.id).toBe('srv-converge');
+		expect(all[0]?.title).toBe('offline converge');
+		expect(all[0]?.dirty).toBe(false);
+		expect(all[0]?.local).toBe(false);
+	});
+
 	it('keeps local edits made while push request is in flight', async () => {
 		const local = tasks.createLocal('race task', 'goal-management');
 		let resolvePush: (

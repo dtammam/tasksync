@@ -11,6 +11,7 @@ const ignores = [
 	'dist',
 	'node_modules',
 	'playwright-report',
+	'src/service-worker.ts',
 	'static/runtime-config.js',
 	'eslint.config.js',
 	'playwright.config.ts',

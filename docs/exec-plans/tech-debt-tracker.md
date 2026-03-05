@@ -14,6 +14,7 @@ Rules:
 | 001 | Docs | Med | Replace monolithic agent guidance with map + structured docs | Reduces drift; improves agent reliability | Land new `AGENTS.md` + docs tree | unassigned | (add PR) |
 | 002 | Perf | High | Make latency budgets mechanically enforced in CI | Prevent silent regressions | Add benchmarks + CI gates | unassigned | (add plan) |
 | 003 | Arch | Med | Enforce frontend layer boundaries with lints | Prevent coupling & drift | Add ESLint boundary rules | unassigned | (add plan) |
+| 004 | Test | Low | Add offline boot timing measurement | Exec plan called for startup timing capture on offline launch path to catch latency regressions; never implemented | Add lightweight Playwright timing assertion to offline hard-reload test | unassigned | feat/offline-local-cache-ux |
 
 ## Closed
 

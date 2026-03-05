@@ -16,6 +16,7 @@ These budgets must be backed by:
 ## Offline-first invariants
 
 - If the server is down, the app still supports:
+  - opening the app shell from local cache after a prior online load (including hard reload)
   - viewing cached tasks/lists
   - creating/editing tasks locally
   - queueing changes for later sync
@@ -41,6 +42,8 @@ Minimum set:
 - E2E smoke for core flows:
   - sign in → add task → complete → refresh → state stable
   - offline add/complete → back online → converges
+- E2E offline continuity:
+  - hard reload while offline still renders cached shell + local task data
 - Perf checks:
   - search benchmark at 10k
   - optional: key interaction timing in Playwright
