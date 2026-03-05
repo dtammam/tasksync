@@ -291,6 +291,7 @@ const mockAuthenticatedSyncServer = async (
 ) => {
 	let serverClock = Date.now();
 	let serverTaskCounter = 0;
+	let simulateOffline = false;
 	const createOpsByTitle = new Map<string, number>();
 	const updateOpsByTitle = new Map<string, number>();
 	const serverLists = seededLists.map((list) => ({
@@ -400,6 +401,7 @@ const mockAuthenticatedSyncServer = async (
 	});
 
 	await page.route('**/sync/pull', async (route) => {
+		if (simulateOffline) { await route.abort('failed'); return; }
 		serverClock += 1;
 		await route.fulfill({
 			status: 200,
@@ -415,6 +417,7 @@ const mockAuthenticatedSyncServer = async (
 	});
 
 	await page.route('**/sync/push', async (route) => {
+		if (simulateOffline) { await route.abort('failed'); return; }
 		const payload = route.request().postDataJSON() as {
 			changes?: {
 				kind?: string;
@@ -507,6 +510,7 @@ const mockAuthenticatedSyncServer = async (
 	});
 
 	return {
+		setOffline: (val: boolean) => { simulateOffline = val; },
 		getCreateOpsByTitle: (title: string) => createOpsByTitle.get(title) ?? 0,
 		getUpdateOpsByTitle: (title: string) => updateOpsByTitle.get(title) ?? 0
 	};
@@ -551,6 +555,7 @@ test.describe('Offline continuity', () => {
 		await ensureServiceWorkerControlsPage(page);
 
 		const title = makeTitle('Offline replay');
+		mockServer.setOffline(true);
 		await context.setOffline(true);
 		await page.getByTestId('new-task-input').fill(title);
 		await page.getByTestId('new-task-submit').click();
@@ -566,6 +571,7 @@ test.describe('Offline continuity', () => {
 			})
 			.toBe(true);
 
+		mockServer.setOffline(false);
 		await context.setOffline(false);
 		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 
@@ -597,6 +603,7 @@ test.describe('Offline continuity', () => {
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 		await ensureServiceWorkerControlsPage(page);
 
+		mockServer.setOffline(true);
 		await context.setOffline(true);
 		await page.getByTestId('task-row').filter({ hasText: title }).getByTestId('task-toggle').click();
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
@@ -617,6 +624,7 @@ test.describe('Offline continuity', () => {
 			})
 			.toBe(true);
 
+		mockServer.setOffline(false);
 		await context.setOffline(false);
 		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 
@@ -713,6 +721,7 @@ test.describe('Offline continuity', () => {
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 		await ensureServiceWorkerControlsPage(page);
 
+		mockServer.setOffline(true);
 		await context.setOffline(true);
 		const baselineRows = await readTasksFromIdbByTitle(page, title);
 		expect(baselineRows).toHaveLength(1);
@@ -753,6 +762,7 @@ test.describe('Offline continuity', () => {
 			})
 			.toBe(true);
 
+		mockServer.setOffline(false);
 		await context.setOffline(false);
 		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 
@@ -791,6 +801,20 @@ test.describe('Offline continuity', () => {
 			myDay: true
 		});
 
+		// Register as addInitScript so auth persists through the offline reload
+		// (resetClientState's addInitScript clears on every navigation; this overwrites it).
+		await page.addInitScript((nextUser) => {
+			localStorage.setItem('tasksync:auth-mode', 'token');
+			localStorage.setItem('tasksync:auth-token', 'test-token');
+			localStorage.setItem(
+				'tasksync:auth-user',
+				JSON.stringify({
+					...nextUser,
+					role: 'admin'
+				})
+			);
+		}, user);
+		// Also set for the current page context.
 		await page.evaluate((nextUser) => {
 			localStorage.setItem('tasksync:auth-mode', 'token');
 			localStorage.setItem('tasksync:auth-token', 'test-token');
