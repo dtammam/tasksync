@@ -518,6 +518,9 @@ const mockAuthenticatedSyncServer = async (
 
 test.describe('Offline continuity', () => {
 	test.use({ serviceWorkers: 'allow' });
+	// WebKit in CI does not reliably support offline reload (throws internal error) or
+	// mock-server hydration via page.route. Offline invariants are covered by chromium + firefox.
+	test.skip(({ browserName }) => browserName === 'webkit');
 
 	test('@smoke hard reload offline keeps cached shell and local data', async ({ page, context }) => {
 		await resetClientState(page);
