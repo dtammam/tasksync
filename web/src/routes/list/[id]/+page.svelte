@@ -2,7 +2,7 @@
 	// @ts-nocheck
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
-	import { fade } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { auth } from '$lib/stores/auth';
@@ -302,7 +302,7 @@
 	<div class="stack">
 		{#if pendingTasks.length}
 			{#each pendingTasks as task (task.id)}
-				<div transition:fade={{ duration: 150 }}>
+				<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
 					<TaskRow {task} on:openDetail={openDetail} />
 				</div>
 			{/each}

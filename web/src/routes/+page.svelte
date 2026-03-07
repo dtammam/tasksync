@@ -6,7 +6,16 @@
 	import { lists } from '$lib/stores/lists';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { onDestroy } from 'svelte';
-	import { fade } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
+
+	const blissMessages = [
+		'You\'re clear.',
+		'That\'s everything today.',
+		'All done for today.',
+		'Nothing left.',
+		'Clean slate.',
+	];
+	let blissMessage = blissMessages[Math.floor(Math.random() * blissMessages.length)];
 
 	const listsStore = lists;
 	let quickTitle = '';
@@ -244,12 +253,18 @@
 		<div class="stack">
 				{#if sortedPending.length}
 				{#each sortedPending as task (task.id)}
-					<div transition:fade={{ duration: 150 }}>
+					<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
 						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
 					</div>
 				{/each}
+			{:else if $myDayCompleted?.length}
+				<div class="bliss" data-testid="bliss-state" in:fly={{ y: -4, duration: 200 }}>
+					<span class="bliss-icon">✓</span>
+					<span class="bliss-headline">{blissMessage}</span>
+					<span class="bliss-sub">That's everything for today.</span>
+				</div>
 			{:else}
-				<p class="empty">Nothing scheduled. Add a task to My Day.</p>
+				<p class="empty" data-testid="planned-empty">Nothing scheduled. Add a task to My Day.</p>
 			{/if}
 		</div>
 	</section>
@@ -545,6 +560,37 @@
 
 	.empty.subtle {
 		color: #64748b;
+	}
+
+	.bliss {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		padding: 20px 14px;
+		background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 96%, #22c55e 4%), color-mix(in oklab, var(--surface-2) 88%, black 12%));
+		border: 1px dashed color-mix(in oklab, var(--border-1) 60%, #22c55e 40%);
+		border-radius: 12px;
+		text-align: center;
+		animation: bliss-arrive 200ms ease-out;
+	}
+	@keyframes bliss-arrive {
+		from { transform: scale(0.97); opacity: 0; }
+		to { transform: scale(1); opacity: 1; }
+	}
+	.bliss-icon {
+		font-size: 20px;
+		color: #4ade80;
+		line-height: 1;
+	}
+	.bliss-headline {
+		font-size: var(--text-md, 14px);
+		font-weight: 500;
+		color: var(--app-text);
+	}
+	.bliss-sub {
+		font-size: var(--text-sm, 12px);
+		color: var(--app-muted);
 	}
 
 	.sorter {
