@@ -96,7 +96,19 @@ docker compose down
 
 ## Local Dev (Optional)
 
-If you want to run from source instead of Docker:
+### Prerequisites
+
+Before running from source or using the git hooks, install:
+
+- **Node.js 22+** — [nodejs.org](https://nodejs.org) or via [nvm](https://github.com/nvm-sh/nvm)
+- **Rust (stable)** — [rustup.rs](https://rustup.rs) (installs `cargo`, `rustfmt`, `clippy`)
+- **Playwright browsers** (for E2E tests) — run once after `npm install`:
+
+```bash
+cd web && npx playwright install --with-deps chromium
+```
+
+### Running from source
 
 ```bash
 cd server
@@ -108,6 +120,21 @@ cd web
 npm install
 npm run dev
 ```
+
+### Git hooks (new host setup)
+
+The repo ships pre-commit and pre-push hooks in `hooks/`. They are not installed automatically — run this once after cloning on each new machine:
+
+```bash
+ln -sf ../../hooks/pre-commit .git/hooks/pre-commit
+ln -sf ../../hooks/pre-push .git/hooks/pre-push
+chmod +x .git/hooks/pre-commit .git/hooks/pre-push
+```
+
+The hooks source `~/.profile` and `~/.cargo/env` automatically to pick up `npm`/`node` and `cargo`. Install the prerequisites above first — the hooks will fail with `command not found` if either tool is missing.
+
+- **pre-commit:** lint, TypeScript check, Vitest units, `cargo fmt`, `cargo clippy`
+- **pre-push:** Vitest units, Playwright smoke (Chromium), `cargo test` — set `SKIP_PLAYWRIGHT=1` to bypass E2E locally
 
 ## Project History
 

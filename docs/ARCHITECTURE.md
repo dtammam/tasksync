@@ -145,6 +145,7 @@ create table if not exists change (
 - Include: overdue, due today, scheduled today, and instances from recurring templates.
 - Score: priority weight + overdue bucket + pins; order with fractional keys.
 - Rollover behavior: overdue pending items are surfaced in a dedicated **Missed** bucket with direct resolve actions (skip next recurrence, mark done, delete).
+- Due date / My Day membership rule: setting a future due date on a task removes it from My Day (`my_day = false`). Setting today's date or a past date (overdue) leaves My Day membership unchanged. This rule is enforced in `setDueDate` (store) and via a reactive guard in `TaskDetailDrawer`.
 - Recurring completion behavior: when a recurring task is completed, it can appear in **Completed** for the current day while the next due instance is already materialized.
 - Recurring completion undo behavior: from **Completed**, users can undo a same-day recurring completion, restoring the prior due date/occurrence count instead of creating another future roll-forward.
 - Recurring sync behavior: explicit completion timestamps are preserved even when the rolled-forward task remains `pending`, so same-day completion acknowledgment survives sync and naturally clears at day rollover.
@@ -154,7 +155,7 @@ create table if not exists change (
 - Built‑ins: `chime_soft`, `click_pop`, `sparkle_short`, `wood_tick` (≤150KB each).
 - User settings: enable/mute, volume, theme, optional custom upload (single or multi-file playlist with randomized playback when using `custom_file`).
 - Performance: **<20 ms** input→audio onset (pre‑decoded buffers).
-- Reliability: playback path rebuilds stale/suspended WebAudio contexts when resume fails (notably mobile/WebKit PWA lifecycle interruptions).
+- Reliability: playback path rebuilds stale/suspended WebAudio contexts when resume fails (notably iOS/macOS/WebKit PWA lifecycle interruptions); standalone PWA contexts (iOS and macOS) are aggressively recycled after 2 minutes of idle.
 
 ## Performance Budgets
 - Startup (cold PWA): **<800 ms** TTI; first list render **<300 ms** (1k tasks).

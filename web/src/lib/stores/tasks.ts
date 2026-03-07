@@ -404,12 +404,14 @@ export const tasks = {
 	},
 	setDueDate(id: string, due_date?: string) {
 		const now = Date.now();
+		const isFuture = !!due_date && due_date > todayIso();
 		tasksStore.update((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
 							...clearPuntState(t),
 							due_date,
+							...(isFuture ? { my_day: false } : {}),
 							dirty: true,
 							updated_ts: now
 						}

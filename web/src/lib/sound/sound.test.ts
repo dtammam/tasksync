@@ -186,6 +186,38 @@ describe('playCompletion audio-context resilience', () => {
 		expect(FakeAudioContext.instances[1].state).toBe('running');
 	});
 
+	it('recycles long-lived contexts in macOS (non-iOS) standalone PWA mode', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-02-09T00:00:00Z'));
+		// macOS PWA: nav.standalone is undefined, display-mode matches standalone
+		Object.defineProperty(window.navigator, 'standalone', {
+			configurable: true,
+			get: () => undefined
+		});
+		Object.defineProperty(window, 'matchMedia', {
+			configurable: true,
+			value: (query: string) => ({
+				matches: query === '(display-mode: standalone)',
+				media: query,
+				onchange: null,
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn().mockReturnValue(false)
+			})
+		});
+		const { playCompletion } = await import('./sound');
+
+		await playCompletion(settings);
+		expect(FakeAudioContext.instances).toHaveLength(1);
+
+		vi.advanceTimersByTime(120001);
+		await playCompletion(settings);
+		expect(FakeAudioContext.instances).toHaveLength(2);
+		expect(FakeAudioContext.instances[1].state).toBe('running');
+	});
+
 	it('plays each built-in theme without custom file flow', async () => {
 		const { playCompletion } = await import('./sound');
 		const themes: SoundSettings['theme'][] = [

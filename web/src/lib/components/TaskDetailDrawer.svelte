@@ -37,10 +37,12 @@ onMount(() => {
 $: if (task) hydrate(task);
 
 function hydrate(t) {
-	if (t.id !== lastHydratedTaskId) {
-		puntedFromDrawer = false;
-		lastHydratedTaskId = t.id;
+	if (t.id === lastHydratedTaskId) {
+		// Same task is already loaded — do not overwrite user edits in progress.
+		return;
 	}
+	puntedFromDrawer = false;
+	lastHydratedTaskId = t.id;
 	title = t.title ?? '';
 	due = t.due_date ?? '';
 	recur = t.recurrence_id ?? '';
@@ -57,6 +59,7 @@ function hydrate(t) {
 
 const close = () => {
 	puntedFromDrawer = false;
+	lastHydratedTaskId = '';
 	dispatch('close');
 };
 const isTodayTs = (ts) =>
@@ -91,6 +94,7 @@ $: isStatusAcknowledged = statusValue === 'done' || isRecurringCompletedToday;
 $: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
 $: puntGlyph = isPuntedControlActive ? '▶' : '▷';
 $: starGlyph = priority > 0 ? '★' : '☆';
+$: if (canEditMyDay && due && due > todayKey) myDay = false;
 
 const save = () => {
 	if (!task || !canEditTask) return;

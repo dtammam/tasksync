@@ -2,10 +2,8 @@
 	// @ts-nocheck
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import { auth } from '$lib/stores/auth';
-	import { myDayCompleted, myDayMissed, myDayPending, tasks } from '$lib/stores/tasks';
+	import { myDayCompleted, myDayMissed, myDayPending, tasks, myDaySuggestions } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
-	import { getTask } from '$lib/stores/tasks';
-	import { myDaySuggestions } from '$lib/stores/tasks';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { onDestroy } from 'svelte';
 
@@ -38,7 +36,7 @@
 		if (leftStarred === rightStarred) return 0;
 		return leftStarred ? -1 : 1;
 	};
-	$: detailTask = detailId ? getTask(detailId) : null;
+	$: detailTask = detailId ? ($tasks.find((t) => t.id === detailId) ?? null) : null;
 	const today = new Date();
 	const dateLabel = today.toLocaleDateString(undefined, {
 		weekday: 'long',

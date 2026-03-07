@@ -5,7 +5,7 @@
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { auth } from '$lib/stores/auth';
-	import { tasks, tasksByList, getTask } from '$lib/stores/tasks';
+	import { tasks, tasksByList } from '$lib/stores/tasks';
 	import { lists, findListName } from '$lib/stores/lists';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { parseMarkdownTasks } from '$lib/markdown/import';
@@ -23,7 +23,7 @@
 	let listTasks = tasksByList(listId);
 	$: listTasks = tasksByList(listId);
 	$: listName = findListName(listId);
-	$: detailTask = detailId ? getTask(detailId) : null;
+	$: detailTask = detailId ? ($tasks.find((t) => t.id === detailId) ?? null) : null;
 
 	const normalizeImportKey = (title, targetListId) =>
 		`${targetListId.trim().toLowerCase()}::${title.trim().replace(/\s+/g, ' ').toLowerCase()}`;

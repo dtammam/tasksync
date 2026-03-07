@@ -16,14 +16,6 @@ interface CustomSoundFileEntry {
 const contextState = (ctx: AudioContext | null) =>
 	ctx ? String((ctx as AudioContext & { state?: string }).state ?? '') : 'closed';
 
-const isIosDevice = () => {
-	if (typeof window === 'undefined') return false;
-	const nav = window.navigator;
-	const ua = nav.userAgent ?? '';
-	if (/\b(iPad|iPhone|iPod)\b/i.test(ua)) return true;
-	return nav.platform === 'MacIntel' && nav.maxTouchPoints > 1;
-};
-
 const isStandaloneDisplayMode = () => {
 	if (typeof window === 'undefined') return false;
 	const nav = window.navigator as Navigator & { standalone?: boolean };
@@ -40,7 +32,9 @@ const shouldAggressivelyRecycleContext = () => {
 	if (typeof window === 'undefined') return false;
 	const nav = window.navigator as Navigator & { standalone?: boolean };
 	if (typeof nav.standalone === 'boolean') return nav.standalone;
-	return isIosDevice() && isStandaloneDisplayMode();
+	// Cover any standalone PWA (macOS, Android, etc.) where the OS may silently
+	// suspend an idle AudioContext without reliably firing onstatechange.
+	return isStandaloneDisplayMode();
 };
 
 const markContextStale = () => {
