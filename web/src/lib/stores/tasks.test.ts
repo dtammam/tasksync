@@ -486,6 +486,29 @@ describe('tasks store helpers', () => {
 		expect(updated?.dirty).toBe(true);
 	});
 
+	it('clears my_day when setDueDate is called with clearMyDay option', () => {
+		tasks.setAll([baseTask({ id: 'md-1', my_day: true, due_date: '2026-02-02', status: 'pending' })]);
+		expect(get(myDayPending).map((t) => t.id)).toContain('md-1');
+
+		tasks.setDueDate('md-1', '2026-02-03', { clearMyDay: true });
+
+		const updated = tasks.getAll().find((t) => t.id === 'md-1');
+		expect(updated?.my_day).toBe(false);
+		expect(updated?.due_date).toBe('2026-02-03');
+		expect(updated?.dirty).toBe(true);
+		expect(get(myDayPending).map((t) => t.id)).not.toContain('md-1');
+	});
+
+	it('keeps my_day when setDueDate is called without clearMyDay', () => {
+		tasks.setAll([baseTask({ id: 'md-2', my_day: true, due_date: '2026-02-02', status: 'pending' })]);
+
+		tasks.setDueDate('md-2', '2026-02-03');
+
+		const updated = tasks.getAll().find((t) => t.id === 'md-2');
+		expect(updated?.my_day).toBe(true);
+		expect(updated?.due_date).toBe('2026-02-03');
+	});
+
 	it('plays completion sound only when task moves to done', () => {
 		tasks.setAll([baseTask({ id: 'sound-1', status: 'pending' })]);
 
