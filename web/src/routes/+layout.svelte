@@ -69,7 +69,10 @@
 		syncInFlight = (async () => {
 			try {
 				syncStatus.resetError();
-				await syncFromServer();
+				const pullResult = await syncFromServer();
+				if (pullResult.newFromOthers?.length) {
+					showRemoteTaskToast(pullResult.newFromOthers);
+				}
 				const pushResult = await pushPendingToServer();
 				// Re-pull after successful push to persist server IDs and avoid repeat creations on refresh.
 				if (pushResult.pushed || pushResult.created || pushResult.rejected) {
@@ -263,6 +266,26 @@
 	let keyboardOffsetCleanup = null;
 	let copyLabel = 'Copy';
 	let lastScopeKey = '';
+	let remoteTaskToast = null;
+	let remoteTaskToastTimer = null;
+
+	const showRemoteTaskToast = (newTasks) => {
+		if (remoteTaskToastTimer) clearTimeout(remoteTaskToastTimer);
+		remoteTaskToast = {
+			count: newTasks.length,
+			titles: newTasks.slice(0, 2).map((t) => t.title)
+		};
+		remoteTaskToastTimer = setTimeout(() => {
+			remoteTaskToast = null;
+			remoteTaskToastTimer = null;
+		}, 6000);
+	};
+
+	const dismissRemoteTaskToast = () => {
+		if (remoteTaskToastTimer) clearTimeout(remoteTaskToastTimer);
+		remoteTaskToast = null;
+		remoteTaskToastTimer = null;
+	};
 
 	const storageScopeFromAuth = (state) => {
 		if (state.status === 'authenticated' && state.user) {
@@ -360,6 +383,7 @@
 	onDestroy(() => {
 		if (retryTimer) clearInterval(retryTimer);
 		if (copyResetTimer) clearTimeout(copyResetTimer);
+		if (remoteTaskToastTimer) clearTimeout(remoteTaskToastTimer);
 		if (visibilityListener) {
 			document.removeEventListener('visibilitychange', visibilityListener);
 		}
@@ -434,6 +458,16 @@
 	</div>
 	{#if navOpen && !navPinned}
 		<button class="drawer-backdrop" type="button" aria-label="Close navigation" on:click={closeNav}></button>
+	{/if}
+	{#if remoteTaskToast}
+		<div class="remote-task-toast" role="status" data-testid="remote-task-toast">
+			<span>
+				{remoteTaskToast.count === 1
+					? `New task added: "${remoteTaskToast.titles[0]}"`
+					: `${remoteTaskToast.count} new tasks added by a team member`}
+			</span>
+			<button type="button" class="toast-dismiss" aria-label="Dismiss" on:click={dismissRemoteTaskToast}>×</button>
+		</div>
 	{/if}
 	<main>
 		<header class="app-header">
@@ -770,6 +804,43 @@
 		backdrop-filter: blur(3px);
 		border: none;
 		z-index: 9;
+	}
+
+	.remote-task-toast {
+		position: fixed;
+		bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		background: color-mix(in oklab, var(--surface-3) 92%, white 8%);
+		border: 1px solid var(--border-2);
+		border-radius: 999px;
+		padding: 8px 14px 8px 16px;
+		font-size: 13px;
+		color: var(--app-text);
+		box-shadow: var(--soft-shadow);
+		z-index: 50;
+		white-space: nowrap;
+		max-width: calc(100vw - 28px);
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.toast-dismiss {
+		background: none;
+		border: none;
+		color: var(--app-muted);
+		cursor: pointer;
+		font-size: 18px;
+		line-height: 1;
+		padding: 0 2px;
+		flex-shrink: 0;
+	}
+
+	.toast-dismiss:hover {
+		color: var(--app-text);
 	}
 
 	@media (max-width: 900px) {

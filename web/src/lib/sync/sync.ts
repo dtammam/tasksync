@@ -1,6 +1,7 @@
 import { api, apiErrorStatus } from '$lib/api/client';
 import { lists } from '$lib/stores/lists';
 import { tasks } from '$lib/stores/tasks';
+import { auth } from '$lib/stores/auth';
 import { repo } from '$lib/data/repo';
 import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
@@ -170,6 +171,11 @@ const formatSyncRuntimeError = (err: unknown, phase: 'pull' | 'push') => {
 
 export const syncFromServer = async () => {
 	syncStatus.setPull('running');
+	// Snapshot state before the pull to detect genuinely new remote tasks.
+	const isIncrementalPull = typeof lastPullCursorTs === 'number';
+	const existingIdsBefore = isIncrementalPull
+		? new Set(tasks.getAll().map((t) => t.id))
+		: null;
 	try {
 		const pull = await api.syncPull({
 			since_ts: typeof lastPullCursorTs === 'number' ? lastPullCursorTs : undefined
@@ -185,6 +191,18 @@ export const syncFromServer = async () => {
 		}));
 		const deletedTasks: SyncDeletedTask[] = pull.deleted_tasks ?? [];
 
+		// Identify tasks created by other users that weren't in the local store.
+		const currentUserId = auth.get().user?.user_id;
+		const newFromOthers: Task[] =
+			existingIdsBefore && currentUserId
+				? toTasks.filter(
+						(t) =>
+							!existingIdsBefore.has(t.id) &&
+							t.created_by_user_id &&
+							t.created_by_user_id !== currentUserId
+					)
+				: [];
+
 		lists.setAll(toLists);
 		tasks.mergeRemote(toTasks);
 		tasks.applyRemoteDeletes(deletedTasks);
@@ -192,11 +210,11 @@ export const syncFromServer = async () => {
 		await repo.saveTasks(tasks.getAll());
 		syncStatus.setQueueDepth(tasks.getAll().filter((t) => t.dirty).length);
 		syncStatus.setPull('idle');
-		return { lists: toLists.length, tasks: toTasks.length };
+		return { lists: toLists.length, tasks: toTasks.length, newFromOthers };
 	} catch (err) {
 		console.warn('sync failed', err);
 		syncStatus.setPull('error', formatSyncRuntimeError(err, 'pull'));
-		return { lists: 0, tasks: 0, error: true };
+		return { lists: 0, tasks: 0, error: true, newFromOthers: [] as Task[] };
 	}
 };
 
