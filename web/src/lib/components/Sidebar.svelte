@@ -745,13 +745,13 @@
 				{#if list.id === 'my-day'}
 					<a class:selected={$page.url.pathname === '/'} href="/">
 						<span class="icon">🌅</span>
-						<span>{list.name}</span>
+						<span class="list-name">{list.name}</span>
 						<span class="count">{$myDayPending?.length ?? 0}</span>
 					</a>
 				{:else}
 					<a class:selected={$page.url.pathname === `/list/${list.id}`} href={`/list/${list.id}`}>
 						<span class="icon">{list.icon ?? '•'}</span>
-						<span>{list.name}</span>
+						<span class="list-name">{list.name}</span>
 						<span class="count">{$listCounts?.[list.id]?.pending ?? 0}</span>
 					</a>
 				{/if}
@@ -1393,6 +1393,15 @@
 		color: var(--app-text);
 		font-size: 24px;
 		line-height: 1.1;
+		font-family:
+			-apple-system,
+			BlinkMacSystemFont,
+			'SF Pro Text',
+			'Segoe UI',
+			Roboto,
+			'Helvetica Neue',
+			Arial,
+			sans-serif;
 	}
 
 	.pin {
@@ -1516,6 +1525,15 @@
 
 	.icon {
 		font-size: 15px;
+		flex-shrink: 0;
+	}
+
+	.list-name {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.count {
