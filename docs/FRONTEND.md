@@ -32,6 +32,13 @@ Within `web/src/lib/`:
   - `dark` = `Discernable Dark`
   - `demo-theme` is retired and must not appear in selectable theme options.
 
+## In-app notifications
+
+- `web/src/routes/+layout.svelte` is the single owner of ephemeral in-app toasts.
+- Currently one toast type: remote task added — fires when an incremental sync pull surfaces tasks created by another user. Not shown on initial boot load.
+- Toast behavior: auto-dismisses after 6 seconds; manually dismissable; state is ephemeral (not persisted to store or IDB).
+- Do not add persistent or queued notification state without a corresponding store and IDB backing.
+
 ## Mobile quick-add positioning
 
 - Route-level quick-add bars (`.mobile-add`) rely on `var(--mobile-keyboard-offset, 0px)` in their `bottom` offset.
