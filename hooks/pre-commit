@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Load user tool paths (nvm, cargo, etc.) — hooks run with a stripped environment
+[ -f "$HOME/.profile" ]   && . "$HOME/.profile"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
 echo "🧹 pre-commit: linting web client..."
-cd "$(dirname "$0")/.." || exit 1
+cd "$(git rev-parse --show-toplevel)" || exit 1
 
 if [ -d "web" ]; then
   (cd web && npm run lint && npm run check && npm run test)
