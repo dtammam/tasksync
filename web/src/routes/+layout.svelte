@@ -441,6 +441,9 @@
 	<meta name="apple-mobile-web-app-title" content="tasksync" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 	<title>tasksync</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 </svelte:head>
 
 <div
@@ -476,7 +479,7 @@
 					☰
 				</button>
 				<img src={favicon} alt="logo" />
-				<span>tasksync</span>
+				<span class="brand-name">tasksync</span>
 			</div>
 			<div class="sync">
 				{#if showSyncBadge}
@@ -597,9 +600,9 @@
 		background: var(--app-bg);
 		color: var(--app-text);
 		font-family:
+			'Inter',
 			-apple-system,
 			BlinkMacSystemFont,
-			'SF Pro Text',
 			'Segoe UI',
 			Roboto,
 			'Helvetica Neue',
@@ -746,6 +749,18 @@
 	}
 
 	.brand img { width: 28px; height: 28px; }
+
+	.brand-name {
+		font-family:
+			-apple-system,
+			BlinkMacSystemFont,
+			'SF Pro Text',
+			'Segoe UI',
+			Roboto,
+			'Helvetica Neue',
+			Arial,
+			sans-serif;
+	}
 
 	.nav-toggle,
 	.refresh-btn {
