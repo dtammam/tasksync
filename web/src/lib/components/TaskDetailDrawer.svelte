@@ -94,6 +94,7 @@ $: isStatusAcknowledged = statusValue === 'done' || isRecurringCompletedToday;
 $: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
 $: puntGlyph = isPuntedControlActive ? '▶' : '▷';
 $: starGlyph = priority > 0 ? '★' : '☆';
+$: if (canEditMyDay && due && due > todayKey) myDay = false;
 
 const save = () => {
 	if (!task || !canEditTask) return;
