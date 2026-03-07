@@ -941,4 +941,25 @@ test.describe('Navigation', () => {
 		await expect(page).toHaveURL('/');
 		await expect(drawer).not.toHaveClass(/open/);
 	});
+
+	test('shows planned-empty state when no tasks exist', async ({ page }) => {
+		await resetClientState(page);
+		await expect(page.getByTestId('planned-empty')).toBeVisible();
+		await expect(page.getByTestId('bliss-state')).not.toBeVisible();
+	});
+
+	test('shows bliss state after completing the only planned task', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('Bliss test task');
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+
+		const toggle = page.getByTestId('task-row').filter({ hasText: title }).getByTestId('task-toggle');
+		await toggle.click();
+		await expect(toggle).toHaveAttribute('data-acknowledged', 'true');
+
+		await expect(page.getByTestId('bliss-state')).toBeVisible();
+		await expect(page.getByTestId('planned-empty')).not.toBeVisible();
+	});
 });

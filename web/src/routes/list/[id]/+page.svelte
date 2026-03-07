@@ -2,6 +2,7 @@
 	// @ts-nocheck
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
+	import { fade, fly } from 'svelte/transition';
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { auth } from '$lib/stores/auth';
@@ -301,7 +302,9 @@
 	<div class="stack">
 		{#if pendingTasks.length}
 			{#each pendingTasks as task (task.id)}
-				<TaskRow {task} on:openDetail={openDetail} />
+				<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
+					<TaskRow {task} on:openDetail={openDetail} />
+				</div>
 			{/each}
 		{:else}
 			<p class="empty">No pending tasks.</p>
@@ -314,7 +317,9 @@
 	<div class="stack" data-testid="completed-section">
 		{#if completedTasks.length}
 			{#each completedTasks as task (task.id)}
-				<TaskRow {task} on:openDetail={openDetail} />
+				<div transition:fade={{ duration: 150 }}>
+					<TaskRow {task} on:openDetail={openDetail} />
+				</div>
 			{/each}
 		{:else}
 			<p class="empty subtle">No completed tasks yet.</p>
@@ -537,7 +542,7 @@
 	}
 
 	.block {
-		margin-top: 14px;
+		margin-top: 16px;
 	}
 
 	.section-title {
@@ -551,7 +556,7 @@
 
 	.stack {
 		display: grid;
-		gap: 10px;
+		gap: 12px;
 	}
 
 	.empty {
