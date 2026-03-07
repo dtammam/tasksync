@@ -402,15 +402,16 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
-	setDueDate(id: string, due_date?: string, opts?: { clearMyDay?: boolean }) {
+	setDueDate(id: string, due_date?: string) {
 		const now = Date.now();
+		const isFuture = !!due_date && due_date > todayIso();
 		tasksStore.update((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
 							...clearPuntState(t),
 							due_date,
-							...(opts?.clearMyDay ? { my_day: false } : {}),
+							...(isFuture ? { my_day: false } : {}),
 							dirty: true,
 							updated_ts: now
 						}

@@ -47,11 +47,11 @@ const nextWeekIso = () => {
 
 const addTomorrow = () => {
 	if (!canEditTask) return;
-	tasks.setDueDate(task.id, tomorrowIso(), { clearMyDay: true });
+	tasks.setDueDate(task.id, tomorrowIso());
 };
 const addNextWeek = () => {
 	if (!canEditTask) return;
-	tasks.setDueDate(task.id, nextWeekIso(), { clearMyDay: true });
+	tasks.setDueDate(task.id, nextWeekIso());
 };
 
 const isTodayTs = (ts) => {
