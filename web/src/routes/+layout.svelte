@@ -534,6 +534,21 @@
 		--focus: #60a5fa;
 		--ring-shadow: 0 0 0 1px rgba(148, 163, 184, 0.18), 0 8px 20px rgba(2, 6, 23, 0.34);
 		--soft-shadow: 0 16px 34px rgba(2, 6, 23, 0.34);
+		/* Spacing scale: multiples of 4px */
+		--sp-1: 4px;
+		--sp-2: 8px;
+		--sp-3: 12px;
+		--sp-4: 16px;
+		--sp-5: 24px;
+		--sp-6: 32px;
+		/* Type scale: Perfect Fourth (×1.333) from 12px base */
+		--text-xs: 10px;
+		--text-sm: 12px;
+		--text-base: 13px;
+		--text-md: 14px;
+		--text-lg: 20px;
+		--text-xl: 28px;
+		--text-2xl: 34px;
 	}
 
 	:global(html[data-ui-theme='dark']) {

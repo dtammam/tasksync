@@ -286,7 +286,7 @@ $: isRecurringCompletedToday =
 		border: 1px solid var(--list-accent, var(--border-1));
 		box-shadow: inset 2px 0 0 var(--list-accent, #334155), 0 6px 18px rgba(2,6,23,0.22);
 		border-radius: 12px;
-		padding: 11px 12px;
+		padding: 12px;
 		align-items: start;
 		border-radius: 14px;
 		border: 1px solid var(--list-accent, var(--border-1));
@@ -335,7 +335,7 @@ $: isRecurringCompletedToday =
 		overflow: visible;
 		white-space: normal;
 		overflow-wrap: anywhere;
-		font-size: 15px;
+		font-size: var(--text-md, 14px);
 		line-height: 1.2;
 	}
 	.meta-inline {
@@ -345,13 +345,13 @@ $: isRecurringCompletedToday =
 	.list-name {
 		font-weight: 500;
 	}
-	.sub { display:flex; flex-wrap:wrap; gap:6px; color:var(--app-muted); font-size:12px; margin-top:4px; align-items:center; }
+	.sub { display:flex; flex-wrap:wrap; gap:8px; color:var(--app-muted); font-size:12px; margin-top:4px; align-items:center; }
 	.chip {
 		display:inline-flex;
 		align-items:center;
-		gap:5px;
+		gap:4px;
 		min-height:24px;
-		padding:3px 8px;
+		padding:4px 8px;
 		border-radius:999px;
 		background:var(--surface-3);
 		color:var(--app-text);
@@ -397,7 +397,7 @@ $: isRecurringCompletedToday =
 	.list-chip select:focus-visible { outline:none; }
 	input[type='checkbox'] { accent-color:#38bdf8; cursor:pointer; }
 	input[type='checkbox']:disabled, .list-chip select:disabled { cursor:not-allowed; opacity:0.65; }
-	.quick { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-top:6px; }
+	.quick { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-top:8px; }
 	.quick button {
 		background: color-mix(in oklab, var(--surface-1) 94%, white 4%);
 		border: 1px solid var(--border-1); color: var(--app-text); border-radius:9px; padding:8px 10px; cursor:pointer;
@@ -413,7 +413,7 @@ $: isRecurringCompletedToday =
 		.status { width:40px; height:40px; min-width:40px; min-height:40px; font-size:16px; }
 		.task.compact .status { width:36px; height:36px; min-width:36px; min-height:36px; font-size:15px; }
 		.task.compact .sub { gap: 6px; margin-top: 5px; }
-		.title-text { font-size: 14px; line-height: 1.18; }
+		.title-text { font-size: var(--text-md, 14px); line-height: 1.18; }
 			.task.compact .chip { min-height: 22px; padding: 2px 7px; }
 	}
 </style>

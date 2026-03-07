@@ -6,6 +6,7 @@
 	import { lists } from '$lib/stores/lists';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { onDestroy } from 'svelte';
+	import { fade } from 'svelte/transition';
 
 	const listsStore = lists;
 	let quickTitle = '';
@@ -204,7 +205,7 @@
 			<div class="section-title">Missed ({sortedMissed.length})</div>
 			<div class="stack" data-testid="missed-section">
 				{#each sortedMissed as task (task.id)}
-					<div class="missed-item">
+					<div class="missed-item" transition:fade={{ duration: 150 }}>
 						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
 						<div class="missed-actions">
 							{#if task.recurrence_id}
@@ -243,7 +244,9 @@
 		<div class="stack">
 				{#if sortedPending.length}
 				{#each sortedPending as task (task.id)}
-					<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
+					<div transition:fade={{ duration: 150 }}>
+						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
+					</div>
 				{/each}
 			{:else}
 				<p class="empty">Nothing scheduled. Add a task to My Day.</p>
@@ -256,7 +259,9 @@
 		<div class="stack" data-testid="completed-section">
 				{#if sortedCompleted.length}
 				{#each sortedCompleted as task (task.id)}
-					<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
+					<div transition:fade={{ duration: 150 }}>
+						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
+					</div>
 				{/each}
 			{:else}
 				<p class="empty subtle">No completed tasks yet.</p>
@@ -387,7 +392,7 @@
 	}
 
 	.block {
-		margin-top: 14px;
+		margin-top: 16px;
 		padding: 12px;
 		border-radius: 16px;
 		border: 1px solid var(--border-1);
@@ -397,7 +402,7 @@
 
 	.section-title { color: var(--app-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
 	.missed-block .section-title { color: #fbbf24; }
-	.stack { display: grid; gap: 10px; }
+	.stack { display: grid; gap: 12px; }
 
 	.missed-item {
 		display: grid;
