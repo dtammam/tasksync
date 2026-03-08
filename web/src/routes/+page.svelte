@@ -448,6 +448,11 @@
 		margin-bottom: 12px;
 	}
 
+	.page-header > div:first-child {
+		min-width: 0;
+		flex: 1;
+	}
+
 	.eyebrow {
 		text-transform: uppercase;
 		letter-spacing: 0.12em;
