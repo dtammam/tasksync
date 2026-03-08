@@ -64,8 +64,8 @@
 	let easterTitleIndex = -1;
 	let dayTitle = 'My Day';
 	let dayTitleShiver = false;
-	let easterRevertTimer: ReturnType<typeof setTimeout> | null = null;
-	let holdTimer: ReturnType<typeof setTimeout> | null = null;
+	let easterRevertTimer = null;
+	let holdTimer = null;
 	let holdStartPos = { x: 0, y: 0 };
 
 	function triggerEasterTitle() {
@@ -81,13 +81,13 @@
 		}, 7000);
 	}
 
-	function onTitlePointerDown(e: PointerEvent) {
+	function onTitlePointerDown(e) {
 		e.preventDefault();
 		holdStartPos = { x: e.clientX, y: e.clientY };
 		holdTimer = setTimeout(triggerEasterTitle, 1500);
 	}
 
-	function cancelHold(e?: PointerEvent) {
+	function cancelHold(e = undefined) {
 		if (!holdTimer) return;
 		if (e) {
 			const dx = e.clientX - holdStartPos.x;
