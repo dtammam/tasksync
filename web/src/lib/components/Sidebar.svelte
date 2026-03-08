@@ -985,7 +985,7 @@
 											>
 												↓
 											</button>
-											<button type="button" class="ghost tiny" on:click={() => renameList(list.id)} disabled={busy}>
+											<button type="button" class="primary" on:click={() => renameList(list.id)} disabled={busy}>
 												Save
 											</button>
 											<button
@@ -1228,6 +1228,18 @@
 					{:else if settingsActiveSection === 'appearance'}
 						<div class="card appearance" data-testid="appearance-panel">
 							<label>
+								App theme
+								<select
+									data-testid="ui-theme"
+									value={$uiPreferences.theme}
+									on:change={(e) => uiPreferences.setTheme(e.target.value)}
+								>
+									{#each appThemes as option}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							</label>
+							<label>
 								App font
 								<select
 									data-testid="ui-font"
@@ -1273,18 +1285,6 @@
 						</div>
 					{:else}
 						<div class="card account" data-testid="auth-panel">
-							<label>
-								App theme
-								<select
-									data-testid="ui-theme"
-									value={$uiPreferences.theme}
-									on:change={(e) => uiPreferences.setTheme(e.target.value)}
-								>
-									{#each appThemes as option}
-										<option value={option.value}>{option.label}</option>
-									{/each}
-								</select>
-							</label>
 							{#if $auth.status === 'loading'}
 								<p class="muted-note">Checking session...</p>
 							{:else if $auth.status === 'authenticated' && $auth.user}
@@ -1839,10 +1839,11 @@
 
 	.manager label,
 	.account label,
-	.team label,
+	.team label:not(.grant-row),
 	.sound label,
 	.profile-editor label,
-	.quotes label {
+	.quotes label,
+	.appearance label {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
@@ -2148,7 +2149,7 @@
 	}
 
 	.sound input[type='checkbox'] {
-		accent-color: #1d4ed8;
+		accent-color: var(--surface-accent);
 	}
 
 	.sound .volume {
@@ -2164,8 +2165,8 @@
 		width: 100%;
 		height: 8px;
 		border-radius: 999px;
-		border: 1px solid #334155;
-		background: #0f1622;
+		border: 1px solid var(--border-1);
+		background: var(--surface-2);
 		padding: 0;
 	}
 
@@ -2175,8 +2176,8 @@
 		width: 15px;
 		height: 15px;
 		border-radius: 50%;
-		background: #f8fafc;
-		border: 1px solid #1d4ed8;
+		background: var(--app-text);
+		border: 1px solid var(--surface-accent);
 		cursor: pointer;
 	}
 
@@ -2184,14 +2185,14 @@
 		width: 15px;
 		height: 15px;
 		border-radius: 50%;
-		background: #f8fafc;
-		border: 1px solid #1d4ed8;
+		background: var(--app-text);
+		border: 1px solid var(--surface-accent);
 		cursor: pointer;
 	}
 
 	.sound .volume span {
-		color: #94a3b8;
-		font-size: 12px;
+		color: var(--app-muted);
+		font-size: var(--text-sm);
 		min-width: 38px;
 		text-align: right;
 	}
