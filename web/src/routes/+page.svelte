@@ -7,25 +7,13 @@
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
+	import { uiPreferences, DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
 
-	const blissMessages = [
-		'You\'re clear.',
-		'That\'s everything today.',
-		'All done for today.',
-		'Nothing left.',
-		'Clean slate.',
-		'Failing to plan is planning to fail.',
-		'You did it!',
-		'Mission complete.',
-		'Take a breather.',
-		'🦆',
-		'ᕕ( ͡° ͜ʖ ͡°)ᕗ',
-		'Did you drink enough water?',
-		'(ง ͡ʘ ͜ʖ ͡ʘ)ง',
-		'Well would ya look at that!',
-		'That\'s all, folks!',
-	];
-	let blissMessage = blissMessages[Math.floor(Math.random() * blissMessages.length)];
+	$: activeQuotes = $uiPreferences.completionQuotes?.length
+		? $uiPreferences.completionQuotes
+		: DEFAULT_COMPLETION_QUOTES;
+	let blissMessage = DEFAULT_COMPLETION_QUOTES[Math.floor(Math.random() * DEFAULT_COMPLETION_QUOTES.length)];
+	$: blissMessage = activeQuotes[Math.floor(Math.random() * activeQuotes.length)];
 
 	const listsStore = lists;
 	let quickTitle = '';

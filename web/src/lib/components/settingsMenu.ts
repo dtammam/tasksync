@@ -1,4 +1,4 @@
-export type SettingsSectionId = 'account' | 'sound' | 'lists' | 'members' | 'backups';
+export type SettingsSectionId = 'account' | 'appearance' | 'quotes' | 'sound' | 'lists' | 'members' | 'backups';
 
 export interface SettingsSection {
 	id: SettingsSectionId;
@@ -12,6 +12,18 @@ const baseSections: SettingsSection[] = [
 		id: 'account',
 		label: 'Account',
 		description: 'Theme, sign-in, and profile controls',
+		adminOnly: false,
+	},
+	{
+		id: 'appearance',
+		label: 'Appearance',
+		description: 'Font and visual preferences',
+		adminOnly: false,
+	},
+	{
+		id: 'quotes',
+		label: 'Quotes',
+		description: 'Messages shown when all tasks are done',
 		adminOnly: false,
 	},
 	{

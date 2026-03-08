@@ -12,6 +12,7 @@
 	import { playCompletion } from '$lib/sound/sound';
 	import { BACKUP_SCHEMA_V1 } from '$shared/types/backup';
 	import { getSettingsSections, pickSettingsSection } from '$lib/components/settingsMenu';
+	import { DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
 
 	export let navPinned = false;
 
@@ -70,6 +71,36 @@
 	let backupBusy = false;
 	let backupError = '';
 	let backupMessage = '';
+	let completionQuotesDraft = '';
+	let quotesMessage = '';
+	let quotesMessageTimer = null;
+	let prevSettingsSection = '';
+	const appFonts = [
+		{ value: 'sora', label: 'Sora' },
+		{ value: 'sono', label: 'Sono' },
+		{ value: 'inter', label: 'Inter' },
+		{ value: 'inter-tight', label: 'Inter Tight' },
+		{ value: 'jetbrains-mono', label: 'JetBrains Mono' },
+		{ value: 'atkinson-hyperlegible', label: 'Atkinson Hyperlegible' },
+		{ value: 'atkinson-hyperlegible-next', label: 'Atkinson Hyperlegible Next' },
+		{ value: 'ibm-plex-sans', label: 'IBM Plex Sans' },
+		{ value: 'ibm-plex-mono', label: 'IBM Plex Mono' },
+		{ value: 'ibm-plex-serif', label: 'IBM Plex Serif' },
+		{ value: 'roboto', label: 'Roboto' },
+		{ value: 'roboto-slab', label: 'Roboto Slab' },
+		{ value: 'roboto-mono', label: 'Roboto Mono' },
+		{ value: 'dm-mono', label: 'DM Mono' },
+		{ value: 'comfortaa', label: 'Comfortaa' },
+		{ value: 'poppins', label: 'Poppins' },
+		{ value: 'victor-mono', label: 'Victor Mono' },
+		{ value: 'pt-sans', label: 'PT Sans' },
+		{ value: 'pt-serif', label: 'PT Serif' },
+		{ value: 'pt-mono', label: 'PT Mono' },
+		{ value: 'georgia', label: 'Georgia' },
+		{ value: 'sf-pro', label: 'SF Pro (Apple devices)' },
+		{ value: 'system', label: 'System Default' },
+	];
+
 	const appThemes = [
 		{ value: 'default', label: 'To-Do Blue' },
 		{ value: 'light', label: 'Plain White Light' },
@@ -701,6 +732,32 @@
 	$: if (typeof localStorage !== 'undefined' && listSortLoaded) {
 		localStorage.setItem(LIST_SORT_KEY, listSortMode);
 	}
+	$: if (settingsActiveSection !== prevSettingsSection) {
+		prevSettingsSection = settingsActiveSection;
+		if (settingsActiveSection === 'quotes') {
+			completionQuotesDraft = ($uiPreferences.completionQuotes ?? []).join('\n');
+		}
+	}
+
+	const saveCompletionQuotes = () => {
+		const quotes = completionQuotesDraft
+			.split('\n')
+			.map((s) => s.trim())
+			.filter(Boolean);
+		uiPreferences.setCompletionQuotes(quotes);
+		quotesMessage = 'Saved.';
+		if (quotesMessageTimer) clearTimeout(quotesMessageTimer);
+		quotesMessageTimer = setTimeout(() => { quotesMessage = ''; quotesMessageTimer = null; }, 2000);
+	};
+
+	const resetCompletionQuotes = () => {
+		uiPreferences.setCompletionQuotes([]);
+		completionQuotesDraft = '';
+		quotesMessage = 'Reset to defaults.';
+		if (quotesMessageTimer) clearTimeout(quotesMessageTimer);
+		quotesMessageTimer = setTimeout(() => { quotesMessage = ''; quotesMessageTimer = null; }, 2000);
+	};
+
 	$: sidebarLists = [...($lists ?? [])].sort((a, b) => {
 		if (a.id === 'my-day') return -1;
 		if (b.id === 'my-day') return 1;
@@ -1167,6 +1224,52 @@
 							{/if}
 							{#if backupError}
 								<p class="error">{backupError}</p>
+							{/if}
+						</div>
+					{:else if settingsActiveSection === 'appearance'}
+						<div class="card appearance" data-testid="appearance-panel">
+							<label>
+								App font
+								<select
+									data-testid="ui-font"
+									value={$uiPreferences.font}
+									on:change={(e) => uiPreferences.setFont(e.target.value)}
+								>
+									{#each appFonts as option}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							</label>
+						</div>
+					{:else if settingsActiveSection === 'quotes'}
+						<div class="card quotes" data-testid="quotes-panel">
+							<p class="muted-note">
+								One quote per line. Shown when all tasks are done for the day.
+								Leave empty to use the {DEFAULT_COMPLETION_QUOTES.length} built-in defaults.
+							</p>
+							<label>
+								Custom quotes
+								<textarea
+									rows="10"
+									placeholder={DEFAULT_COMPLETION_QUOTES.slice(0, 4).join('\n') + '\n…'}
+									bind:value={completionQuotesDraft}
+								></textarea>
+							</label>
+							<div class="quotes-actions">
+								<button type="button" class="primary" on:click={saveCompletionQuotes}>
+									Save
+								</button>
+								<button
+									type="button"
+									class="ghost"
+									on:click={resetCompletionQuotes}
+									disabled={!$uiPreferences.completionQuotes?.length}
+								>
+									Reset to defaults
+								</button>
+							</div>
+							{#if quotesMessage}
+								<p class="ok">{quotesMessage}</p>
 							{/if}
 						</div>
 					{:else}
@@ -2097,6 +2200,21 @@
 		display: grid;
 		grid-template-columns: 1fr;
 		gap: 8px;
+	}
+
+	.quotes textarea {
+		width: 100%;
+		min-height: 160px;
+		resize: vertical;
+		font-family: inherit;
+		font-size: var(--text-sm);
+		box-sizing: border-box;
+	}
+
+	.quotes-actions {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
 	}
 
 	.backup .file-btn {

@@ -19,6 +19,31 @@ export interface SoundSettings {
 	profileAttachmentsJson?: string;
 }
 
+export type UiFont =
+	| 'sora'
+	| 'sono'
+	| 'inter'
+	| 'inter-tight'
+	| 'jetbrains-mono'
+	| 'atkinson-hyperlegible'
+	| 'atkinson-hyperlegible-next'
+	| 'ibm-plex-sans'
+	| 'ibm-plex-mono'
+	| 'ibm-plex-serif'
+	| 'roboto'
+	| 'roboto-slab'
+	| 'roboto-mono'
+	| 'dm-mono'
+	| 'comfortaa'
+	| 'poppins'
+	| 'victor-mono'
+	| 'pt-sans'
+	| 'pt-serif'
+	| 'pt-mono'
+	| 'georgia'
+	| 'sf-pro'
+	| 'system';
+
 export type UiTheme =
 	| 'default'
 	| 'dark'
@@ -55,12 +80,16 @@ export interface SidebarPanelState {
 
 export interface UiPreferences {
 	theme: UiTheme;
+	font: UiFont;
+	completionQuotes: string[];
 	sidebarPanels: SidebarPanelState;
 	listSort: ListSortPreference;
 }
 
 export interface UiPreferencesWire {
 	theme: UiTheme;
+	font?: string;
+	completionQuotesJson?: string;
 	sidebarPanelsJson?: string;
 	listSortJson?: string;
 }

@@ -6,10 +6,29 @@ import type {
 	ListSortMode,
 	ListSortPreference,
 	SidebarPanelState,
+	UiFont,
 	UiPreferences,
 	UiPreferencesWire,
 	UiTheme
 } from '$shared/types/settings';
+
+export const DEFAULT_COMPLETION_QUOTES: string[] = [
+	"You're clear.",
+	"That's everything today.",
+	'All done for today.',
+	'Nothing left.',
+	'Clean slate.',
+	'Failing to plan is planning to fail.',
+	'You did it!',
+	'Mission complete.',
+	'Take a breather.',
+	'🦆',
+	'ᕕ( ͡° ͜ʖ ͡°)ᕗ',
+	'Did you drink enough water?',
+	'(ง ͡ʘ ͜ʖ ͡ʘ)ง',
+	'Well would ya look at that!',
+	"That's all, folks!",
+];
 
 const defaultPanels = (): SidebarPanelState => ({
 	lists: false,
@@ -24,8 +43,20 @@ const defaultListSort = (): ListSortPreference => ({
 	direction: 'asc'
 });
 
+const validFonts: UiFont[] = [
+	'sora', 'sono', 'inter', 'inter-tight', 'jetbrains-mono',
+	'atkinson-hyperlegible', 'atkinson-hyperlegible-next',
+	'ibm-plex-sans', 'ibm-plex-mono', 'ibm-plex-serif',
+	'roboto', 'roboto-slab', 'roboto-mono',
+	'dm-mono', 'comfortaa', 'poppins', 'victor-mono',
+	'pt-sans', 'pt-serif', 'pt-mono',
+	'georgia', 'sf-pro', 'system'
+];
+
 const defaultPreferences = (): UiPreferences => ({
 	theme: 'default',
+	font: 'sora',
+	completionQuotes: [],
 	sidebarPanels: defaultPanels(),
 	listSort: defaultListSort()
 });
@@ -52,6 +83,10 @@ const validThemes: UiTheme[] = [
 
 const normalizeTheme = (theme?: string): UiTheme =>
 	validThemes.includes(theme as UiTheme) ? (theme as UiTheme) : 'default';
+const normalizeFont = (font?: string): UiFont =>
+	validFonts.includes(font as UiFont) ? (font as UiFont) : 'sora';
+const normalizeCompletionQuotes = (raw?: string[]): string[] =>
+	Array.isArray(raw) ? raw.filter((q): q is string => typeof q === 'string') : [];
 const normalizeListSortMode = (mode?: string): ListSortMode =>
 	mode === 'alpha' || mode === 'due_date' || mode === 'created' ? mode : 'created';
 const normalizeListSortDirection = (direction?: string): ListSortDirection =>
@@ -93,14 +128,32 @@ const parseListSortJson = (raw?: string): ListSortPreference => {
 	}
 };
 
+const parseCompletionQuotesJson = (raw?: string): string[] => {
+	if (!raw?.trim()) return [];
+	try {
+		const parsed = JSON.parse(raw);
+		return Array.isArray(parsed)
+			? parsed.filter((q): q is string => typeof q === 'string')
+			: [];
+	} catch {
+		return [];
+	}
+};
+
 const toWire = (prefs: UiPreferences): UiPreferencesWire => ({
 	theme: prefs.theme,
+	font: prefs.font,
+	completionQuotesJson: JSON.stringify(prefs.completionQuotes),
 	sidebarPanelsJson: JSON.stringify(prefs.sidebarPanels),
 	listSortJson: JSON.stringify(prefs.listSort)
 });
 
 const fromWire = (wire: Partial<UiPreferencesWire>): UiPreferences => ({
 	theme: normalizeTheme(wire.theme),
+	font: normalizeFont(wire.font),
+	completionQuotes: parseCompletionQuotesJson(
+		typeof wire.completionQuotesJson === 'string' ? wire.completionQuotesJson : undefined
+	),
 	sidebarPanels: parsePanelsJson(
 		typeof wire.sidebarPanelsJson === 'string' ? wire.sidebarPanelsJson : undefined
 	),
@@ -125,6 +178,8 @@ const readLocal = (): UiPreferences | null => {
 		const parsed = JSON.parse(raw) as Partial<UiPreferences>;
 		return {
 			theme: normalizeTheme(parsed.theme as string | undefined),
+			font: normalizeFont(parsed.font as string | undefined),
+			completionQuotes: normalizeCompletionQuotes(parsed.completionQuotes),
 			sidebarPanels: normalizePanels(parsed.sidebarPanels),
 			listSort: normalizeListSort(parsed.listSort as Partial<ListSortPreference> | undefined)
 		};
@@ -143,8 +198,16 @@ const applyThemeToDocument = (theme: UiTheme) => {
 	document.documentElement.setAttribute('data-ui-theme', theme);
 };
 
+const applyFontToDocument = (font: UiFont) => {
+	if (typeof document === 'undefined') return;
+	document.documentElement.setAttribute('data-ui-font', font);
+};
+
 const preferencesStore = writable<UiPreferences>(defaultPreferences());
-preferencesStore.subscribe((prefs) => applyThemeToDocument(prefs.theme));
+preferencesStore.subscribe((prefs) => {
+	applyThemeToDocument(prefs.theme);
+	applyFontToDocument(prefs.font);
+});
 
 let prefsMutationVersion = 0;
 let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -229,9 +292,30 @@ export const uiPreferences = {
 			return next;
 		});
 	},
+	setFont(font: UiFont) {
+		const nextFont = normalizeFont(font);
+		prefsMutationVersion += 1;
+		preferencesStore.update((current) => {
+			const next = { ...current, font: nextFont };
+			persist(next);
+			queueRemoteSave(next);
+			return next;
+		});
+	},
+	setCompletionQuotes(quotes: string[]) {
+		prefsMutationVersion += 1;
+		preferencesStore.update((current) => {
+			const next = { ...current, completionQuotes: normalizeCompletionQuotes(quotes) };
+			persist(next);
+			queueRemoteSave(next);
+			return next;
+		});
+	},
 	setAll(next: Partial<UiPreferences>, options?: { queueRemote?: boolean }) {
 		const normalized = {
 			theme: normalizeTheme(next.theme as string | undefined),
+			font: normalizeFont(next.font as string | undefined),
+			completionQuotes: normalizeCompletionQuotes(next.completionQuotes),
 			sidebarPanels: normalizePanels(next.sidebarPanels),
 			listSort: normalizeListSort(next.listSort)
 		};

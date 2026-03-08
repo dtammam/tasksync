@@ -443,7 +443,7 @@
 	<title>tasksync</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" />
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@400;700&family=Comfortaa:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=PT+Mono&family=PT+Sans:wght@400;700&family=PT+Serif:wght@400;700&family=Roboto:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600;700&family=Roboto+Slab:wght@400;500;600;700&family=Sono:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&family=Victor+Mono:wght@400;500;600;700&display=swap" />
 </svelte:head>
 
 <div
@@ -595,19 +595,37 @@
 	:global(html[data-ui-theme='you-need-a-dark-mode']) { --app-bg:#121212; --app-bg-mobile:#121212; --app-text:#D4D4D4; --app-muted:#00B3C4; --surface-1:#1E1E1E; --surface-2:#121212; --surface-3:#333333; --surface-accent:#00B3C4; --border-1:#333333; --border-2:#006A84; }
 	:global(html[data-ui-theme='butterfly']) { --app-bg:#12110F; --app-bg-mobile:#12110F; --app-text:#E5E7EB; --app-muted:#F35B16; --surface-1:#22201D; --surface-2:#12110F; --surface-3:#3D261C; --surface-accent:#1B8366; --border-1:#3D261C; --border-2:#F35B16; }
 
+	/* Font mappings — driven by data-ui-font on <html> set by preferences store */
+	:global(:root) { --ui-font: 'Sora', system-ui, sans-serif; }
+	:global(html[data-ui-font='sora'])                    { --ui-font: 'Sora', system-ui, sans-serif; }
+	:global(html[data-ui-font='sono'])                    { --ui-font: 'Sono', system-ui, sans-serif; }
+	:global(html[data-ui-font='inter'])                   { --ui-font: 'Inter', system-ui, sans-serif; }
+	:global(html[data-ui-font='inter-tight'])             { --ui-font: 'Inter Tight', system-ui, sans-serif; }
+	:global(html[data-ui-font='jetbrains-mono'])          { --ui-font: 'JetBrains Mono', monospace; }
+	:global(html[data-ui-font='atkinson-hyperlegible'])   { --ui-font: 'Atkinson Hyperlegible', system-ui, sans-serif; }
+	:global(html[data-ui-font='atkinson-hyperlegible-next']) { --ui-font: 'Atkinson Hyperlegible Next', system-ui, sans-serif; }
+	:global(html[data-ui-font='ibm-plex-sans'])           { --ui-font: 'IBM Plex Sans', system-ui, sans-serif; }
+	:global(html[data-ui-font='ibm-plex-mono'])           { --ui-font: 'IBM Plex Mono', monospace; }
+	:global(html[data-ui-font='ibm-plex-serif'])          { --ui-font: 'IBM Plex Serif', Georgia, serif; }
+	:global(html[data-ui-font='roboto'])                  { --ui-font: 'Roboto', system-ui, sans-serif; }
+	:global(html[data-ui-font='roboto-slab'])             { --ui-font: 'Roboto Slab', Georgia, serif; }
+	:global(html[data-ui-font='roboto-mono'])             { --ui-font: 'Roboto Mono', monospace; }
+	:global(html[data-ui-font='dm-mono'])                 { --ui-font: 'DM Mono', monospace; }
+	:global(html[data-ui-font='comfortaa'])               { --ui-font: 'Comfortaa', system-ui, sans-serif; }
+	:global(html[data-ui-font='poppins'])                 { --ui-font: 'Poppins', system-ui, sans-serif; }
+	:global(html[data-ui-font='victor-mono'])             { --ui-font: 'Victor Mono', monospace; }
+	:global(html[data-ui-font='pt-sans'])                 { --ui-font: 'PT Sans', system-ui, sans-serif; }
+	:global(html[data-ui-font='pt-serif'])                { --ui-font: 'PT Serif', Georgia, serif; }
+	:global(html[data-ui-font='pt-mono'])                 { --ui-font: 'PT Mono', monospace; }
+	:global(html[data-ui-font='georgia'])                 { --ui-font: Georgia, 'Times New Roman', serif; }
+	:global(html[data-ui-font='sf-pro'])                  { --ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
+	:global(html[data-ui-font='system'])                  { --ui-font: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+
 	:global(body) {
 		margin: 0;
 		background: var(--app-bg);
 		color: var(--app-text);
-		font-family:
-			'Sora',
-			-apple-system,
-			BlinkMacSystemFont,
-			'Segoe UI',
-			Roboto,
-			'Helvetica Neue',
-			Arial,
-			sans-serif;
+		font-family: var(--ui-font);
 		text-rendering: geometricPrecision;
 		-webkit-font-smoothing: antialiased;
 		overflow: hidden;
