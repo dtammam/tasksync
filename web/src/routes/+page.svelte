@@ -94,7 +94,7 @@
 		if (!titleEl) return;
 		titleEl.style.fontSize = '';
 		let size = 34;
-		while (titleEl.scrollWidth > titleEl.clientWidth && size > 10) {
+		while (titleEl.scrollWidth > titleEl.clientWidth && size > 8) {
 			size--;
 			titleEl.style.fontSize = size + 'px';
 		}
