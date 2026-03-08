@@ -52,6 +52,59 @@
 		day: 'numeric'
 	});
 
+	const EASTER_TITLES = [
+		'My Fun Day',
+		'My Hectic Day',
+		'My Hell of a Day',
+		'My Messy Day',
+		'My Favorite Day',
+		'My Awesome Day',
+		'Goddamn, What a Day',
+	];
+	let easterTitleIndex = -1;
+	let dayTitle = 'My Day';
+	let dayTitleShiver = false;
+	let easterRevertTimer: ReturnType<typeof setTimeout> | null = null;
+	let holdTimer: ReturnType<typeof setTimeout> | null = null;
+	let holdStartPos = { x: 0, y: 0 };
+
+	function triggerEasterTitle() {
+		easterTitleIndex = (easterTitleIndex + 1) % EASTER_TITLES.length;
+		dayTitle = EASTER_TITLES[easterTitleIndex];
+		dayTitleShiver = false;
+		// Restart shiver by toggling off then on next tick
+		requestAnimationFrame(() => { dayTitleShiver = true; });
+		if (easterRevertTimer) clearTimeout(easterRevertTimer);
+		easterRevertTimer = setTimeout(() => {
+			dayTitle = 'My Day';
+			dayTitleShiver = false;
+		}, 7000);
+	}
+
+	function onTitlePointerDown(e: PointerEvent) {
+		e.preventDefault();
+		holdStartPos = { x: e.clientX, y: e.clientY };
+		holdTimer = setTimeout(triggerEasterTitle, 1500);
+	}
+
+	function cancelHold(e?: PointerEvent) {
+		if (!holdTimer) return;
+		if (e) {
+			const dx = e.clientX - holdStartPos.x;
+			const dy = e.clientY - holdStartPos.y;
+			if (Math.sqrt(dx * dx + dy * dy) < 8) {
+				// Small movement — still cancel (pointer up)
+			}
+		}
+		clearTimeout(holdTimer);
+		holdTimer = null;
+	}
+
+	onDestroy(() => {
+		if (holdTimer) clearTimeout(holdTimer);
+		if (easterRevertTimer) clearTimeout(easterRevertTimer);
+	});
+
 	$: defaultListId =
 		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
 
@@ -184,7 +237,14 @@
 	<header class="page-header">
 		<div>
 			<p class="eyebrow">{dateLabel}</p>
-			<h1>My Day</h1>
+			<h1
+				class:shiver={dayTitleShiver}
+				on:pointerdown={onTitlePointerDown}
+				on:pointerup={cancelHold}
+				on:pointercancel={cancelHold}
+				on:pointermove={cancelHold}
+				style="user-select: none; -webkit-user-select: none;"
+			>{dayTitle}</h1>
 			<p class="sub">Tasks you’ve chosen for today.</p>
 		</div>
 		<div class="actions">
@@ -367,6 +427,22 @@
 		line-height: 1.02;
 		letter-spacing: -0.04em;
 		font-weight: 640;
+		cursor: default;
+	}
+
+	@keyframes shiver {
+		0%   { transform: translateX(0); }
+		15%  { transform: translateX(-4px); }
+		30%  { transform: translateX(4px); }
+		45%  { transform: translateX(-3px); }
+		60%  { transform: translateX(3px); }
+		75%  { transform: translateX(-2px); }
+		90%  { transform: translateX(2px); }
+		100% { transform: translateX(0); }
+	}
+
+	h1.shiver {
+		animation: shiver 0.35s ease;
 	}
 
 	.sub {
