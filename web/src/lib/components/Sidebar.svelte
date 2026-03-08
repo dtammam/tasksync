@@ -948,23 +948,23 @@
 											bind:value={renameDraft[list.id]}
 											on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 										/>
-										<input
-											class="icon-input"
-											type="text"
-											placeholder={list.icon ?? 'emoji'}
-											maxlength="24"
-											autocapitalize="off"
-											spellcheck="false"
-											bind:value={iconDraft[list.id]}
-											on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
-										/>
-										<input
-											class="color-input"
-											type="color"
-											value={colorDraft[list.id] ?? list.color ?? '#3b82f6'}
-											on:input={(e) => (colorDraft[list.id] = e.currentTarget.value)}
-										/>
-										<div class="row-actions">
+										<div class="row-line-2">
+											<input
+												class="icon-input"
+												type="text"
+												placeholder={list.icon ?? 'emoji'}
+												maxlength="24"
+												autocapitalize="off"
+												spellcheck="false"
+												bind:value={iconDraft[list.id]}
+												on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
+											/>
+											<input
+												class="color-input"
+												type="color"
+												value={colorDraft[list.id] ?? list.color ?? '#3b82f6'}
+												on:input={(e) => (colorDraft[list.id] = e.currentTarget.value)}
+											/>
 											<button
 												type="button"
 												class="ghost tiny"
@@ -985,12 +985,12 @@
 											>
 												↓
 											</button>
-											<button type="button" on:click={() => renameList(list.id)} disabled={busy}>
+											<button type="button" class="ghost tiny" on:click={() => renameList(list.id)} disabled={busy}>
 												Save
 											</button>
 											<button
 												type="button"
-												class="ghost"
+												class="ghost tiny danger"
 												on:click={() => deleteList(list.id)}
 												disabled={busy}
 											>
@@ -1003,57 +1003,56 @@
 						</div>
 					{:else if settingsActiveSection === 'members' && adminMode}
 						<div class="card team">
-							<div class="create-member">
-								<p class="team-helper">Create a member, then toggle list access below.</p>
-								<div class="field-row">
-									<label>
-										Display
-										<input type="text" placeholder="Name" bind:value={newMemberDisplay} />
-									</label>
-									<label>
-										Email
-										<input
-											type="email"
-											placeholder="person@example.com"
-											bind:value={newMemberEmail}
-										/>
-									</label>
-								</div>
-								<div class="field-row">
-									<label>
-										Role
-										<select bind:value={newMemberRole}>
-											<option value="contributor">Contributor</option>
-											<option value="admin">Admin</option>
-										</select>
-									</label>
-									<label>
-										Password
-										<input
-											type="password"
-											placeholder="min 8 chars"
-											autocomplete="new-password"
-											bind:value={newMemberPassword}
-										/>
-									</label>
-									<label>
-										Icon
-										<input type="text" placeholder="AA" maxlength="4" bind:value={newMemberIcon} />
-									</label>
-								</div>
-								<button
-									type="button"
-									class="primary"
-									on:click={createMember}
-									disabled={teamBusy ||
-										!newMemberDisplay.trim() ||
-										!newMemberEmail.trim() ||
-										newMemberPassword.trim().length < 8}
-								>
-									Add member
-								</button>
+							<p class="subsection-label">Add member</p>
+							<p class="muted-note">Create a member, then toggle list access below.</p>
+							<div class="field-row">
+								<label>
+									Display
+									<input type="text" placeholder="Name" bind:value={newMemberDisplay} />
+								</label>
+								<label>
+									Email
+									<input
+										type="email"
+										placeholder="person@example.com"
+										bind:value={newMemberEmail}
+									/>
+								</label>
 							</div>
-
+							<div class="field-row">
+								<label>
+									Role
+									<select bind:value={newMemberRole}>
+										<option value="contributor">Contributor</option>
+										<option value="admin">Admin</option>
+									</select>
+								</label>
+								<label>
+									Password
+									<input
+										type="password"
+										placeholder="min 8 chars"
+										autocomplete="new-password"
+										bind:value={newMemberPassword}
+									/>
+								</label>
+								<label>
+									Icon
+									<input type="text" placeholder="AA" maxlength="4" bind:value={newMemberIcon} />
+								</label>
+							</div>
+							<button
+								type="button"
+								class="primary"
+								on:click={createMember}
+								disabled={teamBusy ||
+									!newMemberDisplay.trim() ||
+									!newMemberEmail.trim() ||
+									newMemberPassword.trim().length < 8}
+							>
+								Add member
+							</button>
+							<div class="team-separator"></div>
 							{#if grantsLoading}
 								<p class="muted-note">Loading access matrix...</p>
 							{:else}
@@ -1149,6 +1148,22 @@
 								</select>
 							</label>
 							<label>
+								Volume
+								<div class="volume">
+									<input
+										data-testid="sound-volume"
+										type="range"
+										min="0"
+										max="100"
+										step="1"
+										value={$soundSettings.volume}
+										style={`--range-pct:${$soundSettings.volume}%`}
+										on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+									/>
+									<span>{$soundSettings.volume}%</span>
+								</div>
+							</label>
+							<label>
 								Custom sounds (mp3/wav)
 								<input
 									type="file"
@@ -1183,22 +1198,6 @@
 							{#if soundError}
 								<p class="error">{soundError}</p>
 							{/if}
-							<label>
-								Volume
-								<div class="volume">
-									<input
-										data-testid="sound-volume"
-										type="range"
-										min="0"
-										max="100"
-										step="1"
-										value={$soundSettings.volume}
-										style={`--range-pct:${$soundSettings.volume}%`}
-										on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
-									/>
-									<span>{$soundSettings.volume}%</span>
-								</div>
-							</label>
 						</div>
 					{:else if settingsActiveSection === 'backups' && adminMode && $auth.status === 'authenticated'}
 						<div class="card backup" data-testid="backup-panel">
@@ -1700,10 +1699,10 @@
 
 	.settings-kicker {
 		margin: 0;
-		font-size: 11px;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		color: #8fb1d6;
+		color: var(--app-muted);
 	}
 
 	.settings-header h2 {
@@ -1757,14 +1756,14 @@
 
 	.settings-nav-item small,
 	.settings-mobile-item small {
-		font-size: 11px;
-		color: #91a3bf;
+		font-size: var(--text-xs);
+		color: var(--app-muted);
 		line-height: 1.35;
 	}
 
 	.settings-nav-item:hover,
 	.settings-mobile-item:hover {
-		background: #111c31;
+		background: var(--surface-3);
 		transform: translateX(2px);
 	}
 
@@ -1841,11 +1840,12 @@
 	.account label,
 	.team label,
 	.sound label,
-	.profile-editor label {
+	.profile-editor label,
+	.quotes label {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		font-size: 12px;
+		font-size: var(--text-sm);
 		color: var(--app-text);
 	}
 
@@ -1889,17 +1889,12 @@
 	}
 
 	.manager .row {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(74px, 86px) 44px;
+		display: flex;
+		flex-direction: column;
 		gap: 6px;
-		align-items: start;
 	}
 
 	.manager .row .name-input {
-		grid-column: 1 / -1;
-	}
-
-	.manager .row .icon-input {
 		width: 100%;
 	}
 
@@ -1908,23 +1903,19 @@
 		height: 36px;
 		padding: 3px;
 		border-radius: 8px;
+		flex-shrink: 0;
 	}
 
-	.manager .row .row-actions {
-		grid-column: 1 / -1;
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+	.row-line-2 {
+		display: flex;
+		align-items: center;
 		gap: 6px;
+		flex-wrap: wrap;
 	}
 
-	.manager .row .row-actions button {
-		min-width: 0;
-		padding: 7px 8px;
-	}
-
-	.manager .row .row-actions .tiny {
-		width: 28px;
-		padding: 6px 0;
+	.row-line-2 .icon-input {
+		flex: 1;
+		min-width: 60px;
 	}
 
 	.manager .existing {
@@ -1934,33 +1925,29 @@
 		margin-top: 4px;
 	}
 
-	.team .create-member {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		padding: 8px;
-		border: 1px solid #25344f;
-		border-radius: 10px;
-		background: rgba(11, 19, 36, 0.7);
-		overflow: hidden;
-	}
-
-	.team .create-member .field-row {
+	.team .field-row {
 		display: grid;
 		grid-template-columns: 1fr;
 		gap: 7px;
 		min-width: 0;
 	}
 
-	.team .create-member label {
+	.team label {
 		min-width: 0;
 	}
 
-	.team-helper {
+	.team-separator {
+		border: none;
+		border-top: 1px solid var(--border-1);
+		margin: 4px 0;
+	}
+
+	.subsection-label {
 		margin: 0;
-		font-size: 11px;
-		color: #8fa1bc;
-		line-height: 1.3;
+		font-size: var(--text-sm);
+		font-weight: 650;
+		color: var(--app-text);
+		letter-spacing: 0.01em;
 	}
 
 	.member-list {
@@ -1970,8 +1957,8 @@
 	}
 
 	.member-row {
-		border: 1px solid #25344f;
-		background: rgba(9, 15, 28, 0.75);
+		border: 1px solid var(--border-1);
+		background: color-mix(in oklab, var(--surface-2) 80%, transparent);
 		border-radius: 10px;
 		padding: 8px;
 		display: flex;
@@ -1987,22 +1974,22 @@
 	}
 
 	.member-head strong {
-		color: #e2e8f0;
-		font-size: 13px;
+		color: var(--app-text);
+		font-size: var(--text-base);
 	}
 
 	.member-head span {
-		color: #94a3b8;
-		font-size: 11px;
+		color: var(--app-muted);
+		font-size: var(--text-sm);
 	}
 
 	.member-head .role-chip {
-		color: #bfdbfe;
-		font-size: 10px;
+		color: var(--app-text);
+		font-size: var(--text-xs);
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
-		border: 1px solid #32507e;
-		background: rgba(37, 99, 235, 0.22);
+		border: 1px solid var(--border-2);
+		background: color-mix(in oklab, var(--surface-accent) 18%, transparent);
 		padding: 4px 6px;
 		border-radius: 999px;
 	}
@@ -2010,6 +1997,7 @@
 	.member-tools {
 		display: flex;
 		justify-content: flex-end;
+		gap: 6px;
 	}
 
 	.grant-grid {
@@ -2023,18 +2011,18 @@
 		grid-template-columns: 1fr auto;
 		align-items: center;
 		gap: 10px;
-		border: 1px solid #25344f;
+		border: 1px solid var(--border-1);
 		border-radius: 10px;
 		padding: 7px 10px;
-		font-size: 12px;
-		color: #bfd0e7;
-		background: #0b1324;
+		font-size: var(--text-sm);
+		color: var(--app-muted);
+		background: color-mix(in oklab, var(--surface-2) 60%, transparent);
 	}
 
 	.grant-row.on {
-		border-color: #2563eb;
-		background: rgba(37, 99, 235, 0.18);
-		color: #dbeafe;
+		border-color: var(--surface-accent);
+		background: color-mix(in oklab, var(--surface-accent) 18%, transparent);
+		color: var(--app-text);
 	}
 
 	.grant-name {
@@ -2051,16 +2039,16 @@
 	}
 
 	.grant-state {
-		font-size: 10px;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: #94a3b8;
+		color: var(--app-muted);
 		min-width: 24px;
 		text-align: right;
 	}
 
 	.grant-row.on .grant-state {
-		color: #dbeafe;
+		color: var(--app-text);
 	}
 
 	.grant-row input {
@@ -2081,11 +2069,11 @@
 		display: grid;
 		place-items: center;
 		border-radius: 50%;
-		background: #0f1622;
-		color: white;
+		background: var(--surface-1);
+		color: var(--app-text);
 		font-size: 16px;
 		font-weight: 700;
-		border: 1px solid rgba(191, 219, 254, 0.45);
+		border: 1px solid var(--border-2);
 	}
 
 	.avatar.small {
@@ -2101,19 +2089,19 @@
 	}
 
 	.account .who strong {
-		color: #eef2ff;
+		color: var(--app-text);
 		line-height: 1.2;
 	}
 
 	.account .who span {
-		color: #9fb0c8;
-		font-size: 12px;
+		color: var(--app-muted);
+		font-size: var(--text-sm);
 		line-height: 1.2;
 	}
 
 	.account .meta {
-		color: #7c94b3;
-		font-size: 11px;
+		color: var(--app-muted);
+		font-size: var(--text-xs);
 	}
 
 	.account-actions {
@@ -2128,7 +2116,7 @@
 	}
 
 	.profile-editor {
-		border-top: 1px solid #23314b;
+		border-top: 1px solid var(--border-1);
 		padding-top: 8px;
 		display: flex;
 		flex-direction: column;
@@ -2142,9 +2130,9 @@
 	}
 
 	.sound .sound-actions {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
+		display: flex;
 		gap: 6px;
+		flex-wrap: wrap;
 	}
 
 	.sound input[type='checkbox'] {
@@ -2222,13 +2210,13 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		background: #0b1221;
-		border: 1px solid #27344f;
-		color: #cbd5e1;
+		background: var(--surface-2);
+		border: 1px solid var(--border-1);
+		color: var(--app-text);
 		padding: 8px 10px;
 		border-radius: 8px;
 		cursor: pointer;
-		font-size: 13px;
+		font-size: var(--text-base);
 	}
 
 	.backup .file-btn input {
@@ -2244,8 +2232,8 @@
 
 	.muted-note {
 		margin: 0;
-		color: #94a3b8;
-		font-size: 12px;
+		color: var(--app-muted);
+		font-size: var(--text-sm);
 	}
 
 	.error {
@@ -2274,10 +2262,6 @@
 			padding: 7px 8px;
 			gap: 6px;
 			font-size: 13px;
-		}
-
-		.team .create-member {
-			padding: 7px;
 		}
 
 		.settings-window {
