@@ -1093,18 +1093,14 @@
 																class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}
 															>
 																<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
-																<span class="grant-controls">
-																	<span class="grant-state"
-																		>{hasGrant(member.user_id, list.id) ? 'On' : 'Off'}</span
-																	>
-																	<input
-																		type="checkbox"
-																		checked={hasGrant(member.user_id, list.id)}
-																		disabled={teamBusy}
-																		on:change={(e) =>
-																			setGrant(member.user_id, list.id, e.currentTarget.checked)}
-																	/>
-																</span>
+																<input
+																	type="checkbox"
+																	class="grant-checkbox"
+																	checked={hasGrant(member.user_id, list.id)}
+																	disabled={teamBusy}
+																	on:change={(e) =>
+																		setGrant(member.user_id, list.id, e.currentTarget.checked)}
+																/>
 															</label>
 														{/each}
 													</div>
@@ -1187,10 +1183,14 @@
 								</button>
 							</div>
 							{#if loadedCustomSoundNames.length}
-								<p class="muted-note">
-									Loaded:
-									{loadedCustomSoundNames.join(', ')}
-								</p>
+								<div class="loaded-sounds">
+									<p class="muted-note">Loaded:</p>
+									<ul class="sound-file-list">
+										{#each loadedCustomSoundNames as name}
+											<li>{name}</li>
+										{/each}
+									</ul>
+								</div>
 							{/if}
 							{#if soundMessage}
 								<p class="ok">{soundMessage}</p>
@@ -1828,12 +1828,13 @@
 		gap: 8px;
 	}
 
-	.card input,
+	.card input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
 	.card select {
 		width: 100%;
 		max-width: 100%;
 		min-width: 0;
 		box-sizing: border-box;
+		font-size: var(--text-base);
 	}
 
 	.manager label,
@@ -1859,14 +1860,15 @@
 	}
 
 	button.primary {
-		background: #0f1622;
+		background: var(--surface-accent);
 		border: none;
 		color: #fff;
 		padding: 8px 10px;
 		border-radius: 10px;
 		cursor: pointer;
 		font-weight: 650;
-		box-shadow: 0 8px 22px rgba(29, 78, 216, 0.35);
+		font-size: var(--text-sm);
+		box-shadow: 0 4px 12px color-mix(in oklab, var(--surface-accent) 45%, transparent);
 	}
 
 	button.ghost {
@@ -1876,6 +1878,7 @@
 		padding: 8px 10px;
 		border-radius: 8px;
 		cursor: pointer;
+		font-size: var(--text-sm);
 	}
 
 	button.ghost.danger {
@@ -1911,6 +1914,8 @@
 		align-items: center;
 		gap: 6px;
 		flex-wrap: wrap;
+		border-top: 1px solid var(--border-1);
+		padding-top: 6px;
 	}
 
 	.row-line-2 .icon-input {
@@ -1996,7 +2001,7 @@
 
 	.member-tools {
 		display: flex;
-		justify-content: flex-end;
+		justify-content: flex-start;
 		gap: 6px;
 	}
 
@@ -2032,28 +2037,17 @@
 		white-space: nowrap;
 	}
 
-	.grant-controls {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.grant-state {
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--app-muted);
-		min-width: 24px;
-		text-align: right;
-	}
-
-	.grant-row.on .grant-state {
-		color: var(--app-text);
-	}
-
-	.grant-row input {
+	.grant-checkbox {
+		width: 16px;
+		height: 16px;
 		margin: 0;
-		accent-color: #3b82f6;
+		cursor: pointer;
+		accent-color: var(--surface-accent);
+		flex-shrink: 0;
+	}
+
+	.grant-checkbox:disabled {
+		cursor: not-allowed;
 	}
 
 	.account .user-head {
@@ -2133,6 +2127,24 @@
 		display: flex;
 		gap: 6px;
 		flex-wrap: wrap;
+	}
+
+	.loaded-sounds {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.sound-file-list {
+		margin: 0;
+		padding-left: 16px;
+		list-style: disc;
+	}
+
+	.sound-file-list li {
+		font-size: var(--text-sm);
+		color: var(--app-muted);
+		line-height: 1.5;
 	}
 
 	.sound input[type='checkbox'] {
