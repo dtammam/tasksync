@@ -101,7 +101,7 @@
 	}
 
 	function triggerEasterTitle() {
-		easterTitleIndex = (easterTitleIndex + 1) % EASTER_TITLES.length;
+		easterTitleIndex = Math.floor(Math.random() * EASTER_TITLES.length);
 		dayTitle = EASTER_TITLES[easterTitleIndex];
 		dayTitleShiver = false;
 		requestAnimationFrame(() => {
