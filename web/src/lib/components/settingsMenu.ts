@@ -11,13 +11,13 @@ const baseSections: SettingsSection[] = [
 	{
 		id: 'account',
 		label: 'Account',
-		description: 'Theme, sign-in, and profile controls',
+		description: 'Sign-in and profile controls',
 		adminOnly: false,
 	},
 	{
 		id: 'appearance',
 		label: 'Appearance',
-		description: 'Font and visual preferences',
+		description: 'Theme and font preferences',
 		adminOnly: false,
 	},
 	{

@@ -14,20 +14,8 @@ import type {
 
 export const DEFAULT_COMPLETION_QUOTES: string[] = [
 	"You're clear.",
-	"That's everything today.",
-	'All done for today.',
 	'Nothing left.',
 	'Clean slate.',
-	'Failing to plan is planning to fail.',
-	'You did it!',
-	'Mission complete.',
-	'Take a breather.',
-	'🦆',
-	'ᕕ( ͡° ͜ʖ ͡°)ᕗ',
-	'Did you drink enough water?',
-	'(ง ͡ʘ ͜ʖ ͡ʘ)ง',
-	'Well would ya look at that!',
-	"That's all, folks!",
 ];
 
 const defaultPanels = (): SidebarPanelState => ({
