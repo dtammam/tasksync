@@ -53,13 +53,33 @@
 	});
 
 	const EASTER_TITLES = [
-		'My Fun Day',
-		'My Hectic Day',
-		'My Hell of a Day',
-		'My Messy Day',
-		'My Favorite Day',
-		'My Awesome Day',
-		'Goddamn, What a Day',
+		'My Fun Day 🎉',
+		'My Hectic Day 🌀',
+		'My Hell of a Day 🔥',
+		'My Messy Day 🌪️',
+		'My Favorite Day ⭐',
+		'My Awesome Day 🚀',
+		'Goddamn, What a Day 😤',
+		'My Chaotic Day 🐉',
+		'My Absolutely Normal Day 🙃',
+		'Day of Infinite Tasks ♾️',
+		'My Barely Coping Day 😅',
+		'My Surprisingly Good Day 🌤️',
+		'My "Just Five More Minutes" Day ⏰',
+		'My Sending It Day 💥',
+		'My Deeply Caffeinated Day ☕',
+		'My No Meetings Day 🙌',
+		'My Actually Focused Day 🎯',
+		'My Running on Fumes Day 🪫',
+		'My Pretending to Have It Together Day 🎭',
+		'My Villain Arc Day 😈',
+		'My Magnum Opus Day 🏆',
+		'My "We Do This Now" Day ⚡',
+		'My Everything Is Fine Day 🫠',
+		'My Legendary Day 👑',
+		'My Chaotic Good Day 🎲',
+		'My Plot Twist Day 🌀',
+		'My Send Help Day 🚨',
 	];
 	let easterTitleIndex = -1;
 	let dayTitle = 'My Day';
@@ -78,13 +98,13 @@
 		easterRevertTimer = setTimeout(() => {
 			dayTitle = 'My Day';
 			dayTitleShiver = false;
-		}, 7000);
+		}, 15000);
 	}
 
 	function onTitlePointerDown(e) {
 		e.preventDefault();
 		holdStartPos = { x: e.clientX, y: e.clientY };
-		holdTimer = setTimeout(triggerEasterTitle, 1500);
+		holdTimer = setTimeout(triggerEasterTitle, 1000);
 	}
 
 	function cancelHold(e = undefined) {
