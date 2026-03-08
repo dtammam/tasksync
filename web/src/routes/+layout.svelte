@@ -9,6 +9,7 @@
 	import { members } from '$lib/stores/members';
 	import { tasks } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
+	import { playCompletion } from '$lib/sound/sound';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { setDbScope } from '$lib/data/idb';
 	import { auth } from '$lib/stores/auth';
@@ -478,7 +479,7 @@
 				<button class="nav-toggle" aria-label="Toggle navigation" on:click={toggleNav}>
 					☰
 				</button>
-				<img src={favicon} alt="logo" />
+				<img src={favicon} alt="logo" class="logo-easter-egg" on:click={() => playCompletion(soundSettings.get())} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && playCompletion(soundSettings.get())} />
 				<span class="brand-name">tasksync</span>
 			</div>
 			<div class="sync">
@@ -767,6 +768,8 @@
 	}
 
 	.brand img { width: 28px; height: 28px; }
+	.logo-easter-egg { cursor: pointer; transition: transform 0.15s ease; }
+	.logo-easter-egg:active { transform: scale(0.88); }
 
 	.brand-name {
 		font-family:
