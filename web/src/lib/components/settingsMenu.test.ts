@@ -3,12 +3,19 @@ import { getSettingsSections, pickSettingsSection } from './settingsMenu';
 
 describe('settings menu helpers', () => {
 	it('returns account and sound for non-admin users', () => {
-		expect(getSettingsSections(false).map((section) => section.id)).toEqual(['account', 'sound']);
+		expect(getSettingsSections(false).map((section) => section.id)).toEqual([
+			'account',
+			'appearance',
+			'quotes',
+			'sound',
+		]);
 	});
 
 	it('returns all sections for admins', () => {
 		expect(getSettingsSections(true).map((section) => section.id)).toEqual([
 			'account',
+			'appearance',
+			'quotes',
 			'sound',
 			'lists',
 			'members',

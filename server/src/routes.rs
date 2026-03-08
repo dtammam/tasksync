@@ -191,6 +191,32 @@ const SOUND_THEMES: [&str; 8] = [
     "custom_file",
 ];
 
+const UI_FONTS: [&str; 23] = [
+    "sora",
+    "sono",
+    "inter",
+    "inter-tight",
+    "jetbrains-mono",
+    "atkinson-hyperlegible",
+    "atkinson-hyperlegible-next",
+    "ibm-plex-sans",
+    "ibm-plex-mono",
+    "ibm-plex-serif",
+    "roboto",
+    "roboto-slab",
+    "roboto-mono",
+    "dm-mono",
+    "comfortaa",
+    "poppins",
+    "victor-mono",
+    "pt-sans",
+    "pt-serif",
+    "pt-mono",
+    "georgia",
+    "sf-pro",
+    "system",
+];
+
 const UI_THEMES: [&str; 17] = [
     "default",
     "dark",
@@ -312,6 +338,34 @@ fn normalize_profile_attachments(raw: Option<String>) -> Result<Option<String>, 
         return Err(StatusCode::BAD_REQUEST);
     }
     serde_json::from_str::<serde_json::Value>(trimmed).map_err(|_| StatusCode::BAD_REQUEST)?;
+    Ok(Some(trimmed.to_string()))
+}
+
+fn normalize_ui_font(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if UI_FONTS.contains(&trimmed) {
+        return Ok(Some(trimmed.to_string()));
+    }
+    Err(StatusCode::BAD_REQUEST)
+}
+
+fn normalize_completion_quotes_json(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > 8_000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     Ok(Some(trimmed.to_string()))
 }
 
@@ -479,6 +533,8 @@ struct SoundSettingsResponse {
 #[serde(rename_all = "camelCase")]
 struct UiPreferencesResponse {
     theme: String,
+    font: Option<String>,
+    completion_quotes_json: Option<String>,
     sidebar_panels_json: Option<String>,
     list_sort_json: Option<String>,
 }
@@ -501,6 +557,8 @@ struct UpdateSoundSettingsBody {
 #[serde(rename_all = "camelCase")]
 struct UpdateUiPreferencesBody {
     theme: Option<String>,
+    font: Option<String>,
+    completion_quotes_json: Option<String>,
     sidebar_panels_json: Option<String>,
     list_sort_json: Option<String>,
 }
@@ -529,6 +587,8 @@ struct BackupUserRow {
     ui_theme: Option<String>,
     ui_sidebar_panels: Option<String>,
     ui_list_sort: Option<String>,
+    ui_font: Option<String>,
+    ui_completion_quotes: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -886,7 +946,7 @@ async fn load_ui_preferences_for_user(
     user_id: &str,
 ) -> Result<UiPreferencesResponse, StatusCode> {
     sqlx::query_as::<_, UiPreferencesResponse>(
-        "select coalesce(ui_theme, 'default') as theme, ui_sidebar_panels as sidebar_panels_json, ui_list_sort as list_sort_json from user where id = ?1 limit 1",
+        "select coalesce(ui_theme, 'default') as theme, ui_font as font, ui_completion_quotes as completion_quotes_json, ui_sidebar_panels as sidebar_panels_json, ui_list_sort as list_sort_json from user where id = ?1 limit 1",
     )
     .bind(user_id)
     .fetch_optional(pool)
@@ -913,6 +973,12 @@ async fn auth_update_preferences(
     let current = load_ui_preferences_for_user(&state.pool, &ctx.user_id).await?;
 
     let next_theme = normalize_ui_theme(body.theme)?.unwrap_or_else(|| current.theme.clone());
+    let next_font = if body.font.is_some() { normalize_ui_font(body.font)? } else { current.font };
+    let next_completion_quotes_json = if body.completion_quotes_json.is_some() {
+        normalize_completion_quotes_json(body.completion_quotes_json)?
+    } else {
+        current.completion_quotes_json
+    };
     let next_sidebar_panels_json = if body.sidebar_panels_json.is_some() {
         normalize_ui_sidebar_panels(body.sidebar_panels_json)?
     } else {
@@ -925,11 +991,13 @@ async fn auth_update_preferences(
     };
 
     sqlx::query(
-        "update user set ui_theme = ?1, ui_sidebar_panels = ?2, ui_list_sort = ?3 where id = ?4",
+        "update user set ui_theme = ?1, ui_sidebar_panels = ?2, ui_list_sort = ?3, ui_font = ?4, ui_completion_quotes = ?5 where id = ?6",
     )
     .bind(&next_theme)
     .bind(&next_sidebar_panels_json)
     .bind(&next_list_sort_json)
+    .bind(&next_font)
+    .bind(&next_completion_quotes_json)
     .bind(&ctx.user_id)
     .execute(&state.pool)
     .await
@@ -952,7 +1020,7 @@ async fn load_space_backup(
             .ok_or(StatusCode::NOT_FOUND)?;
 
     let users = sqlx::query_as::<_, BackupUserRow>(
-        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.custom_sound_files_json, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels, u.ui_list_sort from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
+        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.custom_sound_files_json, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels, u.ui_list_sort, u.ui_font, u.ui_completion_quotes from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -1051,6 +1119,8 @@ async fn auth_restore_backup(
             || normalize_ui_theme(user.ui_theme.clone()).is_err()
             || normalize_ui_sidebar_panels(user.ui_sidebar_panels.clone()).is_err()
             || normalize_ui_list_sort(user.ui_list_sort.clone()).is_err()
+            || normalize_ui_font(user.ui_font.clone()).is_err()
+            || normalize_completion_quotes_json(user.ui_completion_quotes.clone()).is_err()
         {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -1108,11 +1178,16 @@ async fn auth_restore_backup(
             .map_err(|_| StatusCode::BAD_REQUEST)?;
         let next_ui_list_sort = normalize_ui_list_sort(user.ui_list_sort.clone())
             .map_err(|_| StatusCode::BAD_REQUEST)?;
+        let next_ui_font =
+            normalize_ui_font(user.ui_font.clone()).map_err(|_| StatusCode::BAD_REQUEST)?;
+        let next_ui_completion_quotes =
+            normalize_completion_quotes_json(user.ui_completion_quotes.clone())
+                .map_err(|_| StatusCode::BAD_REQUEST)?;
         let next_custom_sound_files_json =
             normalize_custom_sound_files_json(user.custom_sound_files_json.clone())
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
         sqlx::query(
-            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments, ui_theme, ui_sidebar_panels, ui_list_sort) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, custom_sound_files_json = excluded.custom_sound_files_json, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels, ui_list_sort = excluded.ui_list_sort",
+            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments, ui_theme, ui_sidebar_panels, ui_list_sort, ui_font, ui_completion_quotes) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, custom_sound_files_json = excluded.custom_sound_files_json, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels, ui_list_sort = excluded.ui_list_sort, ui_font = excluded.ui_font, ui_completion_quotes = excluded.ui_completion_quotes",
         )
         .bind(&user.id)
         .bind(&user.email)
@@ -1130,6 +1205,8 @@ async fn auth_restore_backup(
         .bind(&next_ui_theme)
         .bind(&next_ui_sidebar_panels)
         .bind(&next_ui_list_sort)
+        .bind(&next_ui_font)
+        .bind(&next_ui_completion_quotes)
         .execute(&mut *tx)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2586,6 +2663,8 @@ mod tests {
             headers.clone(),
             Json(UpdateUiPreferencesBody {
                 theme: Some("butterfly".to_string()),
+                font: None,
+                completion_quotes_json: None,
                 sidebar_panels_json: Some(
                     "{\"lists\":true,\"members\":false,\"sound\":true,\"backups\":false,\"account\":true}"
                         .to_string(),
@@ -2621,6 +2700,61 @@ mod tests {
             headers,
             Json(UpdateUiPreferencesBody {
                 theme: Some("unknown-theme".to_string()),
+                font: None,
+                completion_quotes_json: None,
+                sidebar_panels_json: None,
+                list_sort_json: None,
+            }),
+        )
+        .await;
+
+        assert_eq!(result.err(), Some(StatusCode::BAD_REQUEST));
+    }
+
+    #[tokio::test]
+    async fn user_can_update_font_and_completion_quotes() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let updated = auth_update_preferences(
+            State(state),
+            headers,
+            Json(UpdateUiPreferencesBody {
+                theme: None,
+                font: Some("jetbrains-mono".to_string()),
+                completion_quotes_json: Some("[\"Nice work.\",\"All done!\"]".to_string()),
+                sidebar_panels_json: None,
+                list_sort_json: None,
+            }),
+        )
+        .await
+        .expect("update should succeed");
+
+        assert_eq!(updated.font.as_deref(), Some("jetbrains-mono"));
+        assert_eq!(
+            updated.completion_quotes_json.as_deref(),
+            Some("[\"Nice work.\",\"All done!\"]")
+        );
+    }
+
+    #[tokio::test]
+    async fn user_preferences_reject_unknown_ui_font() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let result = auth_update_preferences(
+            State(state),
+            headers,
+            Json(UpdateUiPreferencesBody {
+                theme: None,
+                font: Some("comic-sans".to_string()),
+                completion_quotes_json: None,
                 sidebar_panels_json: None,
                 list_sort_json: None,
             }),
@@ -2640,6 +2774,51 @@ mod tests {
         assert_eq!(
             server_themes, shared_themes,
             "ui theme mismatch: keep server UI_THEMES aligned with shared/types/settings.ts UiTheme"
+        );
+    }
+
+    fn shared_ui_fonts_from_contract() -> Vec<String> {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("../shared/types/settings.ts");
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
+
+        let mut in_ui_font_block = false;
+        let mut fonts = Vec::new();
+        for line in source.lines() {
+            let trimmed = line.trim();
+            if !in_ui_font_block {
+                if trimmed.starts_with("export type UiFont") {
+                    in_ui_font_block = true;
+                }
+                continue;
+            }
+
+            if let Some(start) = trimmed.find('\'') {
+                let rest = &trimmed[start + 1..];
+                if let Some(end) = rest.find('\'') {
+                    fonts.push(rest[..end].to_string());
+                }
+            }
+
+            if trimmed.ends_with(';') {
+                break;
+            }
+        }
+
+        assert!(!fonts.is_empty(), "no UiFont entries parsed from {}", path.display());
+        fonts
+    }
+
+    #[test]
+    fn server_ui_font_allow_list_matches_shared_contract() {
+        let server_fonts: BTreeSet<String> =
+            UI_FONTS.iter().map(|font| (*font).to_string()).collect();
+        let shared_fonts: BTreeSet<String> = shared_ui_fonts_from_contract().into_iter().collect();
+
+        assert_eq!(
+            server_fonts, shared_fonts,
+            "ui font mismatch: keep server UI_FONTS aligned with shared/types/settings.ts UiFont"
         );
     }
 
