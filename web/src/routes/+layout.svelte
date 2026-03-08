@@ -479,7 +479,9 @@
 				<button class="nav-toggle" aria-label="Toggle navigation" on:click={toggleNav}>
 					☰
 				</button>
-				<img src={favicon} alt="logo" class="logo-easter-egg" on:click={() => playCompletion(soundSettings.get())} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && playCompletion(soundSettings.get())} />
+				<button class="logo-easter-egg" aria-label="Play sound" on:click={() => playCompletion(soundSettings.get())}>
+					<img src={favicon} alt="logo" />
+				</button>
 				<span class="brand-name">tasksync</span>
 			</div>
 			<div class="sync">
@@ -768,7 +770,7 @@
 	}
 
 	.brand img { width: 28px; height: 28px; }
-	.logo-easter-egg { cursor: pointer; transition: transform 0.15s ease; }
+	.logo-easter-egg { background: none; border: none; padding: 0; cursor: pointer; transition: transform 0.15s ease; }
 	.logo-easter-egg:active { transform: scale(0.88); }
 
 	.brand-name {
