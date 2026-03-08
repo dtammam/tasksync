@@ -113,7 +113,7 @@
 			dayTitle = 'My Day';
 			dayTitleShiver = false;
 			if (titleEl) titleEl.style.fontSize = '';
-		}, 15000);
+		}, 67000);
 	}
 
 	function onTitlePointerDown(e) {
