@@ -80,6 +80,7 @@
 		'My Chaotic Good Day 🎲',
 		'My Plot Twist Day 🌀',
 		'My Send Help Day 🚨',
+		'My I Should Fight You Every Day 🥊',
 	];
 	let easterTitleIndex = -1;
 	let dayTitle = 'My Day';
@@ -87,18 +88,32 @@
 	let easterRevertTimer = null;
 	let holdTimer = null;
 	let holdStartPos = { x: 0, y: 0 };
+	let titleEl = null;
+
+	function fitTitleFont() {
+		if (!titleEl) return;
+		titleEl.style.fontSize = '';
+		let size = 34;
+		while (titleEl.scrollWidth > titleEl.clientWidth && size > 8) {
+			size--;
+			titleEl.style.fontSize = size + 'px';
+		}
+	}
 
 	function triggerEasterTitle() {
-		easterTitleIndex = (easterTitleIndex + 1) % EASTER_TITLES.length;
+		easterTitleIndex = Math.floor(Math.random() * EASTER_TITLES.length);
 		dayTitle = EASTER_TITLES[easterTitleIndex];
 		dayTitleShiver = false;
-		// Restart shiver by toggling off then on next tick
-		requestAnimationFrame(() => { dayTitleShiver = true; });
+		requestAnimationFrame(() => {
+			fitTitleFont();
+			dayTitleShiver = true;
+		});
 		if (easterRevertTimer) clearTimeout(easterRevertTimer);
 		easterRevertTimer = setTimeout(() => {
 			dayTitle = 'My Day';
 			dayTitleShiver = false;
-		}, 15000);
+			if (titleEl) titleEl.style.fontSize = '';
+		}, 67000);
 	}
 
 	function onTitlePointerDown(e) {
@@ -258,6 +273,7 @@
 		<div>
 			<p class="eyebrow">{dateLabel}</p>
 			<h1
+				bind:this={titleEl}
 				class:shiver={dayTitleShiver}
 				on:pointerdown={onTitlePointerDown}
 				on:pointerup={cancelHold}
@@ -432,6 +448,11 @@
 		margin-bottom: 12px;
 	}
 
+	.page-header > div:first-child {
+		min-width: 0;
+		flex: 1;
+	}
+
 	.eyebrow {
 		text-transform: uppercase;
 		letter-spacing: 0.12em;
@@ -448,6 +469,8 @@
 		letter-spacing: -0.04em;
 		font-weight: 640;
 		cursor: default;
+		white-space: nowrap;
+		overflow: hidden;
 	}
 
 	@keyframes shiver {
