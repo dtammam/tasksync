@@ -182,11 +182,13 @@ interface ThemeManifest {
 	streakWord: string;
 	announcer: string[];
 	judgment: string[];
+	drop: string[];
 }
 
 const manifestCache: Record<string, ThemeManifest> = {};
 const announcerFileLists: Record<string, string[]> = {};
 const judgmentFileLists: Record<string, string[]> = {};
+const dropFileLists: Record<string, string[]> = {};
 
 // Writable store so the component can reactively get the streak word URL.
 const streakWordUrlStore = writable<string>('');
@@ -204,7 +206,8 @@ const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 		const fallback: ThemeManifest = {
 			streakWord: `/streak/${theme}/streak/streak-word.png`,
 			announcer: [],
-			judgment: []
+			judgment: [],
+			drop: []
 		};
 		manifestCache[theme] = fallback;
 		return fallback;
@@ -303,6 +306,14 @@ export const streak = {
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 
 		if (hadCount) {
+			// Play a random combo-drop sound if any are loaded for this theme
+			if (soundSettings.get().enabled) {
+				const theme = uiPreferences.get().streakSettings.theme;
+				const drops = dropFileLists[theme] ?? [];
+				if (drops.length) {
+					void playUrl(drops[Math.floor(Math.random() * drops.length)], soundSettings.get().volume);
+				}
+			}
 			if (fadeTimer) {
 				clearTimeout(fadeTimer);
 				fadeTimer = null;
@@ -391,6 +402,7 @@ export const streak = {
 		const manifest = await loadManifest(theme);
 		announcerFileLists[theme] = manifest.announcer;
 		judgmentFileLists[theme] = manifest.judgment;
+		dropFileLists[theme] = manifest.drop ?? [];
 		streakWordUrlStore.set(manifest.streakWord);
 	}
 };

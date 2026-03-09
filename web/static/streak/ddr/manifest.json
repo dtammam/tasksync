@@ -10,5 +10,10 @@
     "/streak/ddr/judgment/great.png",
     "/streak/ddr/judgment/marvellous.png",
     "/streak/ddr/judgment/perfect.png"
+  ],
+  "drop": [
+    "/streak/ddr/drop/always a tomorrow.mp3",
+    "/streak/ddr/drop/use your feet.mp3",
+    "/streak/ddr/drop/wha wha what.mp3"
   ]
 }
