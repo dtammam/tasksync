@@ -1,18 +1,30 @@
 {
   "streakWord": "/streak/ddr/streak/combo.png",
   "announcer": [
-    "/streak/ddr/announcer/keep on goin.mp3",
-    "/streak/ddr/announcer/p-p-p-perfect.mp3",
-    "/streak/ddr/announcer/you are supreme.mp3"
+    "/streak/ddr/announcer/Absolutely wonderful!.mp3",
+    "/streak/ddr/announcer/Everybody's watchin' you!.mp3",
+    "/streak/ddr/announcer/G-g-g-great!.mp3",
+    "/streak/ddr/announcer/Great!.mp3",
+    "/streak/ddr/announcer/Keep steady 'till the end!.mp3",
+    "/streak/ddr/announcer/P-p-p-perfect!.mp3",
+    "/streak/ddr/announcer/Perfect combo!.mp3",
+    "/streak/ddr/announcer/Perfect!.mp3",
+    "/streak/ddr/announcer/Watari!.mp3",
+    "/streak/ddr/announcer/Wow!.mp3",
+    "/streak/ddr/announcer/Yeees.mp3",
+    "/streak/ddr/announcer/You're doin' pretty good.mp3"
   ],
   "judgment": [
     "/streak/ddr/judgment/marvellous.png",
     "/streak/ddr/judgment/perfect.png"
   ],
   "drop": [
-    "/streak/ddr/drop/always a tomorrow.mp3",
-    "/streak/ddr/drop/use your feet.mp3",
-    "/streak/ddr/drop/wha wha what.mp3"
+    "/streak/ddr/drop/Boo!.mp3",
+    "/streak/ddr/drop/NG.mp3",
+    "/streak/ddr/drop/Nnno good.mp3",
+    "/streak/ddr/drop/Nooooo!.mp3",
+    "/streak/ddr/drop/Oh my god!.mp3",
+    "/streak/ddr/drop/Oh no!.mp3"
   ],
   "missed": [
     "/streak/ddr/missed/boo.png",
