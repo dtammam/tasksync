@@ -2,6 +2,7 @@
 	// @ts-nocheck
 	import favicon from '$lib/assets/favicon.svg';
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import StreakDisplay from '$lib/components/StreakDisplay.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
 	import { afterNavigate } from '$app/navigation';
@@ -11,6 +12,7 @@
 	import { soundSettings } from '$lib/stores/settings';
 	import { playCompletion } from '$lib/sound/sound';
 	import { uiPreferences } from '$lib/stores/preferences';
+	import { streak } from '$lib/stores/streak';
 	import { setDbScope } from '$lib/data/idb';
 	import { auth } from '$lib/stores/auth';
 	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
@@ -304,6 +306,12 @@
 			soundSettings.hydrateFromDb(),
 			uiPreferences.hydrateFromLocal()
 		]);
+		streak.hydrateFromLocal();
+		// Load theme assets non-blocking after local hydration
+		const prefs = uiPreferences.get();
+		if (prefs.streakSettings.enabled) {
+			void streak.loadThemeAssets(prefs.streakSettings.theme);
+		}
 	};
 
 	onMount(async () => {
@@ -359,7 +367,11 @@
 		// Do not block first paint on best-effort remote preference/member refresh.
 		void (async () => {
 			await soundSettings.hydrateFromServer();
-			await uiPreferences.hydrateFromServer();
+			const wire = await uiPreferences.hydrateFromServer();
+			streak.hydrateFromServer(wire?.streakStateJson);
+			if (uiPreferences.get().streakSettings.enabled) {
+				void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
+			}
 			await members.hydrateFromServer();
 		})();
 
@@ -403,7 +415,11 @@
 			// Local scope hydration should complete before remote best-effort refresh.
 			void (async () => {
 				await soundSettings.hydrateFromServer();
-				await uiPreferences.hydrateFromServer();
+				const wire = await uiPreferences.hydrateFromServer();
+				streak.hydrateFromServer(wire?.streakStateJson);
+				if (uiPreferences.get().streakSettings.enabled) {
+					void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
+				}
 				await members.hydrateFromServer();
 			})();
 
@@ -473,6 +489,7 @@
 			<button type="button" class="toast-dismiss" aria-label="Dismiss" on:click={dismissRemoteTaskToast}>×</button>
 		</div>
 	{/if}
+	<StreakDisplay />
 	<main>
 		<header class="app-header">
 			<div class="brand">

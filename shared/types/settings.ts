@@ -84,6 +84,23 @@ export interface UiPreferences {
 	completionQuotes: string[];
 	sidebarPanels: SidebarPanelState;
 	listSort: ListSortPreference;
+	streakSettings: StreakSettings;
+}
+
+export type StreakTheme = 'ddr';
+
+export type StreakResetMode = 'daily' | 'endless';
+
+export interface StreakSettings {
+	enabled: boolean;
+	theme: StreakTheme;
+	resetMode: StreakResetMode;
+}
+
+export interface StreakState {
+	count: number;
+	countedTaskIds: string[];
+	lastResetDate: string | null; // ISO date string (YYYY-MM-DD)
 }
 
 export interface UiPreferencesWire {
@@ -92,4 +109,6 @@ export interface UiPreferencesWire {
 	completionQuotesJson?: string;
 	sidebarPanelsJson?: string;
 	listSortJson?: string;
+	streakSettingsJson?: string;
+	streakStateJson?: string;
 }

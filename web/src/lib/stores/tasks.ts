@@ -5,6 +5,7 @@ import { playCompletion } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
 import { auth } from '$lib/stores/auth';
 import { api } from '$lib/api/client';
+import { streak } from '$lib/stores/streak';
 import {
 	nextDueForRecurrence,
 	prevDueForRecurrence,
@@ -291,6 +292,8 @@ export const tasks = {
 	},
 	toggle(id: string) {
 		let shouldPlayCompletion = false;
+		let didComplete = false;
+		let didUncomplete = false;
 		tasksStore.update((list) =>
 			list.map((task) =>
 				task.id === id
@@ -298,6 +301,7 @@ export const tasks = {
 							const now = Date.now();
 							if (task.recurrence_id && task.status !== 'done') {
 								shouldPlayCompletion = true;
+								didComplete = true;
 								const next = nextRecurringDueAfterCurrent(task);
 								return {
 									...clearPuntState(task),
@@ -312,6 +316,9 @@ export const tasks = {
 							const nextStatus = task.status === 'done' ? 'pending' : 'done';
 							if (nextStatus === 'done') {
 								shouldPlayCompletion = true;
+								didComplete = true;
+							} else {
+								didUncomplete = true;
 							}
 							return {
 								...task,
@@ -330,6 +337,11 @@ export const tasks = {
 		if (shouldPlayCompletion) {
 			void playCompletion(soundSettings.get());
 		}
+		if (didComplete) {
+			streak.increment(id);
+		} else if (didUncomplete) {
+			streak.undoCompletion(id);
+		}
 	},
 	getAll() {
 		return get(tasksStore);
@@ -347,6 +359,7 @@ export const tasks = {
 	async deleteRemote(id: string) {
 		const existing = tasks.getAll().find((task) => task.id === id);
 		if (!existing) return;
+		streak.break();
 		if (existing.local || !isServerId(existing.id)) {
 			tasks.remove(id);
 			return;
@@ -471,6 +484,7 @@ export const tasks = {
 	punt(id: string) {
 		const now = Date.now();
 		const today = todayIso();
+		let didPunt = false;
 		tasksStore.update((list) =>
 			list.map((task) => {
 				if (
@@ -484,6 +498,7 @@ export const tasks = {
 				if (task.recurrence_id === 'daily') return task;
 				const tomorrow = nextDueForRecurrence(task.due_date, 'daily');
 				if (!tomorrow) return task;
+				didPunt = true;
 				return {
 					...task,
 					my_day: false,
@@ -496,6 +511,9 @@ export const tasks = {
 			})
 		);
 		void repo.saveTasks(get(tasksStore));
+		if (didPunt) {
+			streak.break();
+		}
 	},
 	undoRecurringCompletion(id: string) {
 		const now = Date.now();

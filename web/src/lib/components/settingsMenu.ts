@@ -1,4 +1,4 @@
-export type SettingsSectionId = 'account' | 'appearance' | 'quotes' | 'sound' | 'lists' | 'members' | 'backups';
+export type SettingsSectionId = 'account' | 'appearance' | 'quotes' | 'sound' | 'streak' | 'lists' | 'members' | 'backups';
 
 export interface SettingsSection {
 	id: SettingsSectionId;
@@ -30,6 +30,12 @@ const baseSections: SettingsSection[] = [
 		id: 'sound',
 		label: 'Sound',
 		description: 'Completion sound, uploads, and volume',
+		adminOnly: false,
+	},
+	{
+		id: 'streak',
+		label: 'Streak',
+		description: 'DDR-style combo meter for task completions',
 		adminOnly: false,
 	},
 	{
