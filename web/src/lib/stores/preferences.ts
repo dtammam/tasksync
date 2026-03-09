@@ -6,6 +6,9 @@ import type {
 	ListSortMode,
 	ListSortPreference,
 	SidebarPanelState,
+	StreakResetMode,
+	StreakSettings,
+	StreakTheme,
 	UiFont,
 	UiPreferences,
 	UiPreferencesWire,
@@ -46,7 +49,8 @@ const defaultPreferences = (): UiPreferences => ({
 	font: 'sora',
 	completionQuotes: [],
 	sidebarPanels: defaultPanels(),
-	listSort: defaultListSort()
+	listSort: defaultListSort(),
+	streakSettings: defaultStreakSettings()
 });
 
 const validThemes: UiTheme[] = [
@@ -96,6 +100,36 @@ const normalizeListSort = (candidate?: Partial<ListSortPreference>): ListSortPre
 	direction: normalizeListSortDirection(candidate?.direction)
 });
 
+const validStreakThemes: StreakTheme[] = ['ddr'];
+const validStreakResetModes: StreakResetMode[] = ['daily', 'endless'];
+
+const defaultStreakSettings = (): StreakSettings => ({
+	enabled: false,
+	theme: 'ddr',
+	resetMode: 'daily'
+});
+
+const normalizeStreakTheme = (theme?: string): StreakTheme =>
+	validStreakThemes.includes(theme as StreakTheme) ? (theme as StreakTheme) : 'ddr';
+const normalizeStreakResetMode = (mode?: string): StreakResetMode =>
+	validStreakResetModes.includes(mode as StreakResetMode) ? (mode as StreakResetMode) : 'daily';
+
+const normalizeStreakSettings = (candidate?: Partial<StreakSettings>): StreakSettings => ({
+	enabled: typeof candidate?.enabled === 'boolean' ? candidate.enabled : false,
+	theme: normalizeStreakTheme(candidate?.theme as string | undefined),
+	resetMode: normalizeStreakResetMode(candidate?.resetMode as string | undefined)
+});
+
+const parseStreakSettingsJson = (raw?: string): StreakSettings => {
+	if (!raw) return defaultStreakSettings();
+	try {
+		const parsed = JSON.parse(raw) as Partial<StreakSettings>;
+		return normalizeStreakSettings(parsed);
+	} catch {
+		return defaultStreakSettings();
+	}
+};
+
 const parsePanelsJson = (raw?: string): SidebarPanelState => {
 	if (!raw) return defaultPanels();
 	try {
@@ -133,7 +167,8 @@ const toWire = (prefs: UiPreferences): UiPreferencesWire => ({
 	font: prefs.font,
 	completionQuotesJson: JSON.stringify(prefs.completionQuotes),
 	sidebarPanelsJson: JSON.stringify(prefs.sidebarPanels),
-	listSortJson: JSON.stringify(prefs.listSort)
+	listSortJson: JSON.stringify(prefs.listSort),
+	streakSettingsJson: JSON.stringify(prefs.streakSettings)
 });
 
 const fromWire = (wire: Partial<UiPreferencesWire>): UiPreferences => ({
@@ -145,7 +180,10 @@ const fromWire = (wire: Partial<UiPreferencesWire>): UiPreferences => ({
 	sidebarPanels: parsePanelsJson(
 		typeof wire.sidebarPanelsJson === 'string' ? wire.sidebarPanelsJson : undefined
 	),
-	listSort: parseListSortJson(typeof wire.listSortJson === 'string' ? wire.listSortJson : undefined)
+	listSort: parseListSortJson(typeof wire.listSortJson === 'string' ? wire.listSortJson : undefined),
+	streakSettings: parseStreakSettingsJson(
+		typeof wire.streakSettingsJson === 'string' ? wire.streakSettingsJson : undefined
+	)
 });
 
 const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;
@@ -169,7 +207,8 @@ const readLocal = (): UiPreferences | null => {
 			font: normalizeFont(parsed.font as string | undefined),
 			completionQuotes: normalizeCompletionQuotes(parsed.completionQuotes),
 			sidebarPanels: normalizePanels(parsed.sidebarPanels),
-			listSort: normalizeListSort(parsed.listSort as Partial<ListSortPreference> | undefined)
+			listSort: normalizeListSort(parsed.listSort as Partial<ListSortPreference> | undefined),
+			streakSettings: normalizeStreakSettings(parsed.streakSettings)
 		};
 	} catch {
 		return null;
@@ -290,6 +329,16 @@ export const uiPreferences = {
 			return next;
 		});
 	},
+	setStreakSettings(next: Partial<StreakSettings>) {
+		prefsMutationVersion += 1;
+		preferencesStore.update((current) => {
+			const merged = normalizeStreakSettings({ ...current.streakSettings, ...next });
+			const updated = { ...current, streakSettings: merged };
+			persist(updated);
+			queueRemoteSave(updated);
+			return updated;
+		});
+	},
 	setCompletionQuotes(quotes: string[]) {
 		prefsMutationVersion += 1;
 		preferencesStore.update((current) => {
@@ -305,7 +354,8 @@ export const uiPreferences = {
 			font: normalizeFont(next.font as string | undefined),
 			completionQuotes: normalizeCompletionQuotes(next.completionQuotes),
 			sidebarPanels: normalizePanels(next.sidebarPanels),
-			listSort: normalizeListSort(next.listSort)
+			listSort: normalizeListSort(next.listSort),
+			streakSettings: normalizeStreakSettings(next.streakSettings)
 		};
 		prefsMutationVersion += 1;
 		preferencesStore.set(normalized);
@@ -322,18 +372,20 @@ export const uiPreferences = {
 		}
 		preferencesStore.set(stored);
 	},
-	async hydrateFromServer() {
-		if (!canSyncRemote()) return;
+	async hydrateFromServer(): Promise<UiPreferencesWire | null> {
+		if (!canSyncRemote()) return null;
 		const hydrateStartVersion = prefsMutationVersion;
 		try {
 			const remote = await api.getUiPreferences();
-			if (prefsMutationVersion !== hydrateStartVersion) return;
+			if (prefsMutationVersion !== hydrateStartVersion) return null;
 			const normalized = fromWire(remote);
 			prefsMutationVersion += 1;
 			preferencesStore.set(normalized);
 			persist(normalized);
+			return remote;
 		} catch {
 			// Keep local preferences when server is unavailable.
+			return null;
 		}
 	}
 };

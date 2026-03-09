@@ -441,6 +441,40 @@ fn normalize_ui_list_sort(raw: Option<String>) -> Result<Option<String>, StatusC
     .map_err(|_| StatusCode::BAD_REQUEST)
 }
 
+fn normalize_streak_settings_json(raw: Option<String>) -> Result<Option<String>, StatusCode> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > 512 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let parsed =
+        serde_json::from_str::<serde_json::Value>(trimmed).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let Some(obj) = parsed.as_object() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    let enabled = obj.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+    let theme = obj.get("theme").and_then(|v| v.as_str()).unwrap_or("ddr");
+    let reset_mode = obj.get("resetMode").and_then(|v| v.as_str()).unwrap_or("daily");
+    if !matches!(theme, "ddr") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !matches!(reset_mode, "daily" | "endless") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    serde_json::to_string(&serde_json::json!({
+        "enabled": enabled,
+        "theme": theme,
+        "resetMode": reset_mode,
+    }))
+    .map(Some)
+    .map_err(|_| StatusCode::BAD_REQUEST)
+}
+
 fn is_unique_violation(err: &sqlx::Error) -> bool {
     match err {
         sqlx::Error::Database(db_err) => db_err.message().contains("UNIQUE constraint failed"),
@@ -537,6 +571,8 @@ struct UiPreferencesResponse {
     completion_quotes_json: Option<String>,
     sidebar_panels_json: Option<String>,
     list_sort_json: Option<String>,
+    streak_settings_json: Option<String>,
+    streak_state_json: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -561,6 +597,8 @@ struct UpdateUiPreferencesBody {
     completion_quotes_json: Option<String>,
     sidebar_panels_json: Option<String>,
     list_sort_json: Option<String>,
+    streak_settings_json: Option<String>,
+    streak_state_json: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -589,6 +627,8 @@ struct BackupUserRow {
     ui_list_sort: Option<String>,
     ui_font: Option<String>,
     ui_completion_quotes: Option<String>,
+    streak_settings_json: Option<String>,
+    streak_state_json: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, FromRow)]
@@ -946,7 +986,7 @@ async fn load_ui_preferences_for_user(
     user_id: &str,
 ) -> Result<UiPreferencesResponse, StatusCode> {
     sqlx::query_as::<_, UiPreferencesResponse>(
-        "select coalesce(ui_theme, 'default') as theme, ui_font as font, ui_completion_quotes as completion_quotes_json, ui_sidebar_panels as sidebar_panels_json, ui_list_sort as list_sort_json from user where id = ?1 limit 1",
+        "select coalesce(ui_theme, 'default') as theme, ui_font as font, ui_completion_quotes as completion_quotes_json, ui_sidebar_panels as sidebar_panels_json, ui_list_sort as list_sort_json, streak_settings_json, streak_state_json from user where id = ?1 limit 1",
     )
     .bind(user_id)
     .fetch_optional(pool)
@@ -989,15 +1029,27 @@ async fn auth_update_preferences(
     } else {
         current.list_sort_json
     };
+    let next_streak_settings_json = if body.streak_settings_json.is_some() {
+        normalize_streak_settings_json(body.streak_settings_json)?
+    } else {
+        current.streak_settings_json
+    };
+    let next_streak_state_json = if body.streak_state_json.is_some() {
+        body.streak_state_json
+    } else {
+        current.streak_state_json
+    };
 
     sqlx::query(
-        "update user set ui_theme = ?1, ui_sidebar_panels = ?2, ui_list_sort = ?3, ui_font = ?4, ui_completion_quotes = ?5 where id = ?6",
+        "update user set ui_theme = ?1, ui_sidebar_panels = ?2, ui_list_sort = ?3, ui_font = ?4, ui_completion_quotes = ?5, streak_settings_json = ?6, streak_state_json = ?7 where id = ?8",
     )
     .bind(&next_theme)
     .bind(&next_sidebar_panels_json)
     .bind(&next_list_sort_json)
     .bind(&next_font)
     .bind(&next_completion_quotes_json)
+    .bind(&next_streak_settings_json)
+    .bind(&next_streak_state_json)
     .bind(&ctx.user_id)
     .execute(&state.pool)
     .await
@@ -1020,7 +1072,7 @@ async fn load_space_backup(
             .ok_or(StatusCode::NOT_FOUND)?;
 
     let users = sqlx::query_as::<_, BackupUserRow>(
-        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.custom_sound_files_json, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels, u.ui_list_sort, u.ui_font, u.ui_completion_quotes from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
+        "select u.id, u.email, u.display, u.avatar_icon, u.password_hash, coalesce(u.sound_enabled, 1) as sound_enabled, coalesce(u.sound_volume, 60) as sound_volume, coalesce(u.sound_theme, 'chime_soft') as sound_theme, u.custom_sound_file_id, u.custom_sound_file_name, u.custom_sound_data_url, u.custom_sound_files_json, u.profile_attachments, u.ui_theme, u.ui_sidebar_panels, u.ui_list_sort, u.ui_font, u.ui_completion_quotes, u.streak_settings_json, u.streak_state_json from user u join membership m on m.user_id = u.id where m.space_id = ?1 order by u.id asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -1121,6 +1173,7 @@ async fn auth_restore_backup(
             || normalize_ui_list_sort(user.ui_list_sort.clone()).is_err()
             || normalize_ui_font(user.ui_font.clone()).is_err()
             || normalize_completion_quotes_json(user.ui_completion_quotes.clone()).is_err()
+            || normalize_streak_settings_json(user.streak_settings_json.clone()).is_err()
         {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -1186,8 +1239,11 @@ async fn auth_restore_backup(
         let next_custom_sound_files_json =
             normalize_custom_sound_files_json(user.custom_sound_files_json.clone())
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
+        let next_streak_settings_json =
+            normalize_streak_settings_json(user.streak_settings_json.clone())
+                .map_err(|_| StatusCode::BAD_REQUEST)?;
         sqlx::query(
-            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments, ui_theme, ui_sidebar_panels, ui_list_sort, ui_font, ui_completion_quotes) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, custom_sound_files_json = excluded.custom_sound_files_json, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels, ui_list_sort = excluded.ui_list_sort, ui_font = excluded.ui_font, ui_completion_quotes = excluded.ui_completion_quotes",
+            "insert into user (id, email, display, avatar_icon, password_hash, sound_enabled, sound_volume, sound_theme, custom_sound_file_id, custom_sound_file_name, custom_sound_data_url, custom_sound_files_json, profile_attachments, ui_theme, ui_sidebar_panels, ui_list_sort, ui_font, ui_completion_quotes, streak_settings_json, streak_state_json) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20) on conflict(id) do update set email = excluded.email, display = excluded.display, avatar_icon = excluded.avatar_icon, password_hash = excluded.password_hash, sound_enabled = excluded.sound_enabled, sound_volume = excluded.sound_volume, sound_theme = excluded.sound_theme, custom_sound_file_id = excluded.custom_sound_file_id, custom_sound_file_name = excluded.custom_sound_file_name, custom_sound_data_url = excluded.custom_sound_data_url, custom_sound_files_json = excluded.custom_sound_files_json, profile_attachments = excluded.profile_attachments, ui_theme = excluded.ui_theme, ui_sidebar_panels = excluded.ui_sidebar_panels, ui_list_sort = excluded.ui_list_sort, ui_font = excluded.ui_font, ui_completion_quotes = excluded.ui_completion_quotes, streak_settings_json = excluded.streak_settings_json, streak_state_json = excluded.streak_state_json",
         )
         .bind(&user.id)
         .bind(&user.email)
@@ -1207,6 +1263,8 @@ async fn auth_restore_backup(
         .bind(&next_ui_list_sort)
         .bind(&next_ui_font)
         .bind(&next_ui_completion_quotes)
+        .bind(&next_streak_settings_json)
+        .bind(&user.streak_state_json)
         .execute(&mut *tx)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2670,6 +2728,8 @@ mod tests {
                         .to_string(),
                 ),
                 list_sort_json: Some("{\"mode\":\"due_date\",\"direction\":\"desc\"}".to_string()),
+                streak_settings_json: None,
+                streak_state_json: None,
             }),
         )
         .await
@@ -2704,6 +2764,8 @@ mod tests {
                 completion_quotes_json: None,
                 sidebar_panels_json: None,
                 list_sort_json: None,
+                streak_settings_json: None,
+                streak_state_json: None,
             }),
         )
         .await;
@@ -2728,6 +2790,8 @@ mod tests {
                 completion_quotes_json: Some("[\"Nice work.\",\"All done!\"]".to_string()),
                 sidebar_panels_json: None,
                 list_sort_json: None,
+                streak_settings_json: None,
+                streak_state_json: None,
             }),
         )
         .await
@@ -2757,6 +2821,8 @@ mod tests {
                 completion_quotes_json: None,
                 sidebar_panels_json: None,
                 list_sort_json: None,
+                streak_settings_json: None,
+                streak_state_json: None,
             }),
         )
         .await;

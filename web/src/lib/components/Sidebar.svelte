@@ -6,6 +6,7 @@
 	import { listCounts, myDayPending } from '$lib/stores/tasks';
 	import { soundSettings, soundThemes } from '$lib/stores/settings';
 	import { uiPreferences } from '$lib/stores/preferences';
+	import { streak, streakState } from '$lib/stores/streak';
 	import { auth } from '$lib/stores/auth';
 	import { members } from '$lib/stores/members';
 	import { api } from '$lib/api/client';
@@ -1199,6 +1200,59 @@
 								<p class="error">{soundError}</p>
 							{/if}
 						</div>
+					{:else if settingsActiveSection === 'streak'}
+						<div class="card streak-settings">
+							<label class="toggle" for="streak-enabled">
+								<input
+									id="streak-enabled"
+									data-testid="streak-enabled"
+									type="checkbox"
+									checked={$uiPreferences.streakSettings.enabled}
+									on:change={(e) => {
+										uiPreferences.setStreakSettings({ enabled: e.target.checked });
+										if (e.target.checked) {
+											void streak.loadThemeAssets($uiPreferences.streakSettings.theme);
+										}
+									}}
+								/>
+								Enable Streak
+							</label>
+							<label>
+								Theme
+								<select
+									data-testid="streak-theme"
+									value={$uiPreferences.streakSettings.theme}
+									on:change={(e) => {
+										uiPreferences.setStreakSettings({ theme: e.target.value });
+										void streak.loadThemeAssets(e.target.value);
+									}}
+								>
+									<option value="ddr">DDR</option>
+								</select>
+							</label>
+							<label>
+								Reset mode
+								<select
+									data-testid="streak-reset-mode"
+									value={$uiPreferences.streakSettings.resetMode}
+									on:change={(e) => uiPreferences.setStreakSettings({ resetMode: e.target.value })}
+								>
+									<option value="daily">Daily (DDR) — resets at midnight</option>
+									<option value="endless">Endless (ITG) — never resets automatically</option>
+								</select>
+							</label>
+							<p class="muted-note">Current streak: <strong>{$streakState.count}</strong></p>
+							<div class="streak-actions">
+								<button
+									type="button"
+									class="ghost tiny"
+									on:click={() => streak.reset()}
+									disabled={$streakState.count === 0}
+								>
+									Reset streak
+								</button>
+							</div>
+						</div>
 					{:else if settingsActiveSection === 'backups' && adminMode && $auth.status === 'authenticated'}
 						<div class="card backup" data-testid="backup-panel">
 							<p class="muted-note">
@@ -2308,5 +2362,20 @@
 		.settings-mobile-menu {
 			padding-top: 4px;
 		}
+	}
+
+	.streak-settings {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.streak-settings input[type='checkbox'] {
+		accent-color: var(--surface-accent);
+	}
+
+	.streak-settings .streak-actions {
+		display: flex;
+		gap: 6px;
 	}
 </style>

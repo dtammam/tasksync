@@ -393,6 +393,22 @@ const playCustomFileWithHtmlAudio = async (src: string, volume: number) => {
 	}
 };
 
+/**
+ * Play an audio file at a given URL (e.g. a static asset path) using the shared
+ * WebAudio context, with HTML Audio fallback. Used by the streak announcer.
+ */
+export const playUrl = async (src: string, volume: number) => {
+	if (volume <= 0.0001) return;
+	const gain = toPerceptualGain(clampVolume(volume));
+	if (gain <= 0.0001) return;
+	const ctx = await ensureRunningContext();
+	if (ctx) {
+		const played = await playCustomFileWithWebAudio(ctx, src, gain);
+		if (played) return;
+	}
+	await playCustomFileWithHtmlAudio(src, gain);
+};
+
 export const playCompletion = async (settings: SoundSettings) => {
 	if (!settings.enabled) return;
 	const volume = toPerceptualGain(clampVolume(settings.volume));

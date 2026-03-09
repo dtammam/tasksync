@@ -8,6 +8,7 @@ describe('settings menu helpers', () => {
 			'appearance',
 			'quotes',
 			'sound',
+			'streak',
 		]);
 	});
 
@@ -17,6 +18,7 @@ describe('settings menu helpers', () => {
 			'appearance',
 			'quotes',
 			'sound',
+			'streak',
 			'lists',
 			'members',
 			'backups',

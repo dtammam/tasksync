@@ -67,7 +67,8 @@ package "tasksync Server" {
 - **Search:** MiniSearch (in‑memory) for MVP; upgrade to SQLite WASM + FTS5 in V1 if needed.
 - **Task references (MVP):** Tasks support `url` references only; binary task attachments were reviewed and retired due low product demand and long-term maintenance cost.
 - **Audio:** Web Audio API with pre‑decoded buffers and custom-file buffer playback (gain-controlled for mobile/WebKit consistency); user settings control theme, volume, enable.
-- **UI preferences:** per-user preferences (app theme + sidebar panel collapse state) are cached locally and synced via authenticated profile endpoints.
+- **Streak (combo meter):** Optional DDR-style task-completion streak. Increments on completion, breaks on punt/delete. Supports DDR (daily reset) and Endless modes. State + settings persisted cross-device via `/auth/preferences`; theme assets (digit PNGs, streak-word PNG, judgment PNGs, announcer MP3s) declared in a per-theme `manifest.json` under `web/static/streak/{theme}/`. Announcer fires at count 5 and then probabilistically every 10–20 completions; at milestones the announcer replaces the regular completion sound for that event.
+- **UI preferences:** per-user preferences (app theme, font, streak settings, sidebar state, etc.) are cached locally and synced via authenticated profile endpoints.
 - **PWA install metadata:** static `manifest.webmanifest` + `apple-touch-icon`/PNG icon set in `web/static` so installed shortcuts use branded artwork on iOS/Android.
 
 ## Server Architecture
@@ -95,6 +96,7 @@ Space { id, name }
 Membership { id, space_id, user_id, role:('admin'|'contributor') }
 ListGrant { id, space_id, list_id, user_id }
 UserSettings { user_id PK, sound_enabled bool, sound_volume 0..100, sound_theme, custom_sound_file_id?, custom_sound_file_name?, custom_sound_data_url?, profile_attachments_json? }
+UserPreferences { user_id PK, ui_theme, ui_font?, ui_sidebar_panels?, ui_list_sort?, ui_completion_quotes?, streak_settings_json?, streak_state_json? }
 ```
 
 ### Key Tables (SQL snippets)
