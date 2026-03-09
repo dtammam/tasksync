@@ -100,6 +100,18 @@ const clearPuntState = (task: Task) => ({
 	punted_on_date: undefined
 });
 
+// Strip punt state from a task received from the server when it is stale.
+// Punt state is valid only when due_date === punted_on_date + 1 calendar day.
+// If due_date has advanced further, the task was completed and rolled to the
+// next occurrence but punt fields were not cleared (the server-side COALESCE
+// bug). Sanitizing here prevents the stale state from re-entering the local cache.
+const sanitizeIncomingPuntState = (task: Task): Task => {
+	if (!task.punted_on_date || !task.punted_from_due_date || !task.due_date) return task;
+	const expectedDue = nextDueForRecurrence(task.punted_on_date, 'daily');
+	if (task.due_date === expectedDue) return task;
+	return { ...task, punted_from_due_date: undefined, punted_on_date: undefined };
+};
+
 const nextRecurringDueAfterCurrent = (task: Task) => {
 	const anchor = task.punted_from_due_date ?? task.due_date;
 	let next = nextDueForRecurrence(anchor, task.recurrence_id);
@@ -125,6 +137,14 @@ const preservePuntState = (incoming: Task, existing?: Task) => {
 		incoming.status !== 'pending' ||
 		existing.due_date !== incoming.due_date
 	) {
+		return incoming;
+	}
+	// Only preserve punt state that satisfies the invariant: due_date must equal
+	// punted_on_date + 1 calendar day. If existing has stale punt (due_date has
+	// advanced further, meaning the task was completed and rolled to the next
+	// occurrence without clearing punt fields), do not copy it onto incoming.
+	const expectedDue = nextDueForRecurrence(existing.punted_on_date, 'daily');
+	if (existing.due_date !== expectedDue) {
 		return incoming;
 	}
 	return {
@@ -264,7 +284,7 @@ export const tasks = {
 			for (const task of remote) {
 				const existing = merged.get(task.id);
 				if (existing?.dirty) continue;
-				merged.set(task.id, preservePuntState(task, existing));
+				merged.set(task.id, preservePuntState(sanitizeIncomingPuntState(task), existing));
 			}
 			return Array.from(merged.values());
 		});
@@ -639,7 +659,7 @@ export const tasks = {
 								local: false,
 								dirty: true
 							}
-						: preservePuntState({ ...remote, dirty: false, local: false }, task)
+						: preservePuntState(sanitizeIncomingPuntState({ ...remote, dirty: false, local: false }), task)
 					: task.id === remote.id
 						? task
 						: task

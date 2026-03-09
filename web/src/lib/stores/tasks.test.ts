@@ -362,6 +362,59 @@ describe('tasks store helpers', () => {
 		expect(updated?.punted_on_date).toBeUndefined();
 	});
 
+	it('clears punt state when missed punted recurring task is completed and next occurrence is today', () => {
+		// Simulate: weekly task punted Mon→Tue, never completed on Tue.
+		// One week later (next Monday = today) user completes from missed bucket.
+		// next_occurrence = nextDueForRecurrence(punted_from = Mon, weekly) = next Mon = TODAY.
+		// The next occurrence landing today should NOT show punt state.
+		vi.setSystemTime(new Date('2026-02-09T12:00:00Z')); // "today" = next Monday
+		tasks.setAll([
+			baseTask({
+				id: 'missed-punt',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03', // punted-to Tuesday, now missed
+				status: 'pending',
+				punted_from_due_date: '2026-02-02', // original Monday
+				punted_on_date: '2026-02-02',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		tasks.toggle('missed-punt');
+
+		const updated = tasks.getAll().find((t) => t.id === 'missed-punt')!;
+		expect(updated.due_date).toBe('2026-02-09'); // next Monday = today
+		expect(updated.punted_from_due_date).toBeUndefined();
+		expect(updated.punted_on_date).toBeUndefined();
+	});
+
+	it('clears punt state when missed punted weekdays recurring task is completed and next occurrence is today', () => {
+		// Simulate: weekdays task punted Mon→Tue, never completed on Tue.
+		// Next weekday Wednesday = today: user completes from missed bucket.
+		// anchor = Mon, nextDueForRecurrence = Tue = task.due_date → while advances to Wed = today.
+		vi.setSystemTime(new Date('2026-02-04T12:00:00Z')); // Wednesday = today
+		tasks.setAll([
+			baseTask({
+				id: 'missed-weekday-punt',
+				recurrence_id: 'weekdays',
+				due_date: '2026-02-03', // Tuesday (punted-to), now missed
+				status: 'pending',
+				punted_from_due_date: '2026-02-02', // Monday
+				punted_on_date: '2026-02-02',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		tasks.toggle('missed-weekday-punt');
+
+		const updated = tasks.getAll().find((t) => t.id === 'missed-weekday-punt')!;
+		expect(updated.due_date).toBe('2026-02-04'); // Wednesday = today
+		expect(updated.punted_from_due_date).toBeUndefined();
+		expect(updated.punted_on_date).toBeUndefined();
+	});
+
 	it('preserves punt metadata when remote merge matches the same pending occurrence', () => {
 		const local = baseTask({
 			id: 'remote-punt',
@@ -420,6 +473,186 @@ describe('tasks store helpers', () => {
 		const updated = tasks.getAll().find((t) => t.id === 'replace-punt');
 		expect(updated?.punted_from_due_date).toBe('2026-02-02');
 		expect(updated?.punted_on_date).toBe('2026-02-02');
+	});
+
+	it('does not carry punt state to next occurrence after completing a punted recurring task via sync round-trip', () => {
+		// Simulate a full punt → sync → complete → sync cycle.
+		// Set up: weekly task synced in punted state (dirty:false after push).
+		tasks.setAll([
+			baseTask({
+				id: 'punted-roundtrip',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03',
+				status: 'pending',
+				punted_from_due_date: '2026-02-02',
+				punted_on_date: '2026-02-02',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		// Pull comes in with same punted state from server — punt state preserved.
+		tasks.mergeRemote([
+			baseTask({
+				id: 'punted-roundtrip',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03',
+				status: 'pending',
+				punted_from_due_date: '2026-02-02',
+				punted_on_date: '2026-02-02',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		// Day advances to the punted-to date; user completes the task.
+		vi.setSystemTime(new Date('2026-02-03T12:00:00Z'));
+		tasks.toggle('punted-roundtrip');
+
+		let t = tasks.getAll().find((x) => x.id === 'punted-roundtrip')!;
+		expect(t.due_date).toBe('2026-02-09');
+		expect(t.punted_from_due_date).toBeUndefined();
+		expect(t.punted_on_date).toBeUndefined();
+		expect(t.dirty).toBe(true);
+
+		// Push response arrives — server returns updated task at next occurrence, no punt state.
+		const serverResponseAfterCompletion = baseTask({
+			id: 'punted-roundtrip',
+			recurrence_id: 'weekly',
+			due_date: '2026-02-09',
+			status: 'pending',
+			dirty: false,
+			local: false
+		});
+		tasks.replaceWithRemote('punted-roundtrip', serverResponseAfterCompletion, { ...t });
+
+		t = tasks.getAll().find((x) => x.id === 'punted-roundtrip')!;
+		expect(t.due_date).toBe('2026-02-09');
+		expect(t.punted_from_due_date).toBeUndefined();
+		expect(t.punted_on_date).toBeUndefined();
+		expect(t.dirty).toBe(false);
+
+		// Re-pull: server returns same state — must not resurrect punt state.
+		tasks.mergeRemote([serverResponseAfterCompletion]);
+
+		t = tasks.getAll().find((x) => x.id === 'punted-roundtrip')!;
+		expect(t.due_date).toBe('2026-02-09');
+		expect(t.punted_from_due_date).toBeUndefined();
+		expect(t.punted_on_date).toBeUndefined();
+	});
+
+	it('does not carry punt state to next occurrence when server pull lags behind local completion', () => {
+		// Simulates the case where a pull arrives AFTER the completion push,
+		// but the server still returns old punted state (stale pull). The local
+		// dirty flag should protect the completion from being overwritten.
+		tasks.setAll([
+			baseTask({
+				id: 'lagged-punt',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03',
+				status: 'pending',
+				punted_from_due_date: '2026-02-02',
+				punted_on_date: '2026-02-02',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		vi.setSystemTime(new Date('2026-02-03T12:00:00Z'));
+		tasks.toggle('lagged-punt');
+
+		// Task is now dirty with next occurrence details.
+		let t = tasks.getAll().find((x) => x.id === 'lagged-punt')!;
+		expect(t.due_date).toBe('2026-02-09');
+		expect(t.dirty).toBe(true);
+
+		// Stale pull arrives: server has old punted state. Dirty flag must protect.
+		tasks.mergeRemote([
+			baseTask({
+				id: 'lagged-punt',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03',
+				status: 'pending',
+				punted_from_due_date: '2026-02-02',
+				punted_on_date: '2026-02-02',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		t = tasks.getAll().find((x) => x.id === 'lagged-punt')!;
+		expect(t.due_date).toBe('2026-02-09');
+		expect(t.punted_from_due_date).toBeUndefined();
+		expect(t.punted_on_date).toBeUndefined();
+	});
+
+	it('does not preserve stale punt state when due_date has advanced past punted_on + 1 day', () => {
+		// Regression: the server's COALESCE bug left stale punt fields on tasks after
+		// completion. Local cache (IDB) also held this stale state. On each pull,
+		// preservePuntState re-applied the stale punt from existing onto the incoming
+		// server task, making the "Punted" arrival chip perpetually appear.
+		//
+		// The fix: reject preservation when due_date > punted_on_date + 1 day.
+		vi.setSystemTime(new Date('2026-02-09T12:00:00Z')); // next Monday = today
+
+		// Stale server state: completed on 2026-02-03 (Tue) but punt fields not cleared;
+		// task rolled to next_week (2026-02-09 = today) with old punt still attached.
+		const staleServerTask = baseTask({
+			id: 'stale-punt',
+			recurrence_id: 'weekly',
+			due_date: '2026-02-09', // next Monday (today) — should have no punt
+			status: 'pending',
+			punted_from_due_date: '2026-02-02', // Monday of previous week
+			punted_on_date: '2026-02-02', // punted on that Monday
+			dirty: false,
+			local: false
+		});
+
+		// Local IDB also holds the same stale state (picked up from a previous pull).
+		tasks.setAll([{ ...staleServerTask }]);
+
+		// Pull arrives with server task that also has stale punt (server not yet migrated).
+		tasks.mergeRemote([staleServerTask]);
+
+		const afterMerge = tasks.getAll().find((t) => t.id === 'stale-punt')!;
+		// stale punt (punted_on = Mon, due = next Mon = 7 days later) must be stripped
+		expect(afterMerge.punted_from_due_date).toBeUndefined();
+		expect(afterMerge.punted_on_date).toBeUndefined();
+	});
+
+	it('still preserves valid punt state when due_date is exactly punted_on + 1 day', () => {
+		// Ensure the stale-punt guard does not break normal punt preservation.
+		// A task punted Mon→Tue should still show the arrival chip on Tuesday.
+		vi.setSystemTime(new Date('2026-02-03T12:00:00Z')); // Tuesday = today
+
+		const local = baseTask({
+			id: 'valid-punt',
+			recurrence_id: 'weekly',
+			due_date: '2026-02-03', // Tuesday (punted-to date)
+			status: 'pending',
+			punted_from_due_date: '2026-02-02', // Monday
+			punted_on_date: '2026-02-02', // punted on Monday
+			dirty: false,
+			local: false
+		});
+		tasks.setAll([local]);
+
+		// Pull comes in without punt (e.g., server hasn't received the punt push yet).
+		tasks.mergeRemote([
+			baseTask({
+				id: 'valid-punt',
+				recurrence_id: 'weekly',
+				due_date: '2026-02-03',
+				status: 'pending',
+				dirty: false,
+				local: false
+			})
+		]);
+
+		const updated = tasks.getAll().find((t) => t.id === 'valid-punt')!;
+		// Valid punt (due = punted_on + 1) must be preserved
+		expect(updated.punted_from_due_date).toBe('2026-02-02');
+		expect(updated.punted_on_date).toBe('2026-02-02');
 	});
 
 	it('removes local tasks when remote tombstones arrive', () => {
