@@ -219,7 +219,7 @@ const streakWordUrlStore = writable<string>('');
 const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	if (manifestCache[theme]) return manifestCache[theme];
 	try {
-		const res = await fetch(`/streak/${theme}/manifest.json`);
+		const res = await fetch(`/streak/${theme}/manifest.json`, { cache: 'no-store' });
 		if (!res.ok) throw new Error('manifest not found');
 		const data = await res.json() as ThemeManifest;
 		manifestCache[theme] = data;
@@ -353,9 +353,11 @@ export const streak = {
 				}
 			}
 
-			// Show break overlay with missed image (or null) for the same 5s as a combo increment.
+			// Show break overlay. Keep the pre-break count visible so the combo number
+			// stays on screen with the break animation (DDR style: count freezes, then clears).
+			// This also ensures something is visible even when no missed image is configured.
 			const judgmentSrc = getRandomMissedImage(theme);
-			displayStore.update((d) => ({ ...d, count: 0, visible: true, breaking: true, judgmentSrc }));
+			displayStore.update((d) => ({ ...d, count: current.count, visible: true, breaking: true, judgmentSrc }));
 
 			// Remove the red CSS class after a short flash, but keep the overlay visible.
 			if (typeof window !== 'undefined') {
