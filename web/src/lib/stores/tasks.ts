@@ -294,6 +294,7 @@ export const tasks = {
 		let shouldPlayCompletion = false;
 		let didComplete = false;
 		let didUncomplete = false;
+		let isRecurring = false;
 		tasksStore.update((list) =>
 			list.map((task) =>
 				task.id === id
@@ -302,6 +303,7 @@ export const tasks = {
 							if (task.recurrence_id && task.status !== 'done') {
 								shouldPlayCompletion = true;
 								didComplete = true;
+								isRecurring = true;
 								const next = nextRecurringDueAfterCurrent(task);
 								return {
 									...clearPuntState(task),
@@ -334,11 +336,17 @@ export const tasks = {
 			)
 		);
 		void repo.saveTasks(get(tasksStore));
-		if (shouldPlayCompletion) {
-			void playCompletion(soundSettings.get());
-		}
 		if (didComplete) {
-			streak.increment(id);
+			const willAnnounce = streak.increment(id);
+			// Recurring tasks reuse the same ID for every occurrence — remove it from
+			// countedTaskIds so the NEXT occurrence can count too.
+			if (isRecurring) {
+				streak.undoCompletion(id);
+			}
+			// Announcer takes over audio duty for this completion; skip the regular sound.
+			if (shouldPlayCompletion && !willAnnounce) {
+				void playCompletion(soundSettings.get());
+			}
 		} else if (didUncomplete) {
 			streak.undoCompletion(id);
 		}

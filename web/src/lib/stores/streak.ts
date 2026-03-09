@@ -10,7 +10,8 @@ import type { StreakState } from '$shared/types/settings';
 // Constants
 // ---------------------------------------------------------------------------
 
-const ANNOUNCER_MILESTONES = [5, 25, 50, 75, 100, 125, 150, 175, 200, 250, 300];
+// Always fire at count=5. After that, fire randomly every 10–20 completions.
+const FIRST_ANNOUNCER_AT = 5;
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -146,35 +147,31 @@ const applyResetRuleIfNeeded = (state: StreakState): StreakState => {
 };
 
 // ---------------------------------------------------------------------------
-// Announcer
+// Announcer — probabilistic trigger
 // ---------------------------------------------------------------------------
 
-let lastAnnouncedMilestone = -1;
+// Next count at which the announcer fires. Starts at FIRST_ANNOUNCER_AT,
+// then jumps randomly 10–20 completions after each firing.
+let nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 
-const maybePlayAnnouncer = async (newCount: number) => {
-	const prefs = uiPreferences.get();
-	if (!prefs.streakSettings.enabled) return;
-	const theme = prefs.streakSettings.theme;
+const randomInterval = () => 10 + Math.floor(Math.random() * 11); // 10–20
 
-	// Find if we just crossed a milestone
-	const crossed = ANNOUNCER_MILESTONES.filter(
-		(m) => newCount >= m && m > lastAnnouncedMilestone
-	);
-	if (!crossed.length) return;
-	lastAnnouncedMilestone = crossed[crossed.length - 1];
+/**
+ * Synchronously determine whether the announcer should fire at this count,
+ * and advance the next-trigger pointer if so. Returns true when it should fire.
+ */
+const checkAndAdvanceAnnouncer = (count: number): boolean => {
+	if (count < nextAnnouncerAt) return false;
+	nextAnnouncerAt = count + randomInterval();
+	return true;
+};
 
-	// Pick a random announcer file from /streak/{theme}/announcer/
-	// We don't know how many files exist at runtime; we rely on a manifest or try numbered files.
-	// Strategy: attempt up to MAX_ANNOUNCER_FILES numbered files; the caller pre-loads the count.
-	// For simplicity, we use the preloaded list if available, otherwise derive from theme manifest.
+const playAnnouncer = (theme: string) => {
 	const list = announcerFileLists[theme] ?? [];
 	if (!list.length) return;
 	const src = list[Math.floor(Math.random() * list.length)];
 	const vol = soundSettings.get().volume;
-	// Only play if sound is enabled globally
-	if (soundSettings.get().enabled) {
-		void playUrl(src, vol);
-	}
+	void playUrl(src, vol);
 };
 
 // ---------------------------------------------------------------------------
@@ -214,10 +211,18 @@ const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	}
 };
 
+// Track last judgment shown per theme to avoid consecutive repeats
+const lastJudgmentByTheme: Record<string, string> = {};
+
 export const getRandomJudgmentImage = (theme: string): string | null => {
 	const list = judgmentFileLists[theme] ?? [];
 	if (!list.length) return null;
-	return list[Math.floor(Math.random() * list.length)];
+	if (list.length === 1) return list[0];
+	const last = lastJudgmentByTheme[theme];
+	const candidates = last ? list.filter((url) => url !== last) : list;
+	const pick = candidates[Math.floor(Math.random() * candidates.length)];
+	lastJudgmentByTheme[theme] = pick;
+	return pick;
 };
 
 export const streakWordUrl = { subscribe: streakWordUrlStore.subscribe };
@@ -228,12 +233,14 @@ export const streakWordUrl = { subscribe: streakWordUrlStore.subscribe };
 
 export const streak = {
 	/**
-	 * Call when a task is marked done. If the task was already counted in this
-	 * combo run, the call is a no-op (prevents double-counting).
+	 * Call when a task is marked done. Returns true if the announcer will fire
+	 * for this increment (so the caller can suppress the regular completion sound).
+	 * If the task was already counted in this combo run, this is a no-op and
+	 * returns false.
 	 */
-	increment(taskId: string) {
+	increment(taskId: string): boolean {
 		const prefs = uiPreferences.get();
-		if (!prefs.streakSettings.enabled) return;
+		if (!prefs.streakSettings.enabled) return false;
 
 		let newCount = 0;
 		stateStore.update((current) => {
@@ -249,16 +256,21 @@ export const streak = {
 			return next;
 		});
 
-		if (newCount > 0) {
-			displayStore.update((d) => ({
-				count: newCount,
-				visible: true,
-				pulse: d.pulse + 1,
-				breaking: false
-			}));
-			scheduleHide();
-			void maybePlayAnnouncer(newCount);
+		if (newCount === 0) return false;
+
+		displayStore.update((d) => ({
+			count: newCount,
+			visible: true,
+			pulse: d.pulse + 1,
+			breaking: false
+		}));
+		scheduleHide();
+
+		const willAnnounce = soundSettings.get().enabled && checkAndAdvanceAnnouncer(newCount);
+		if (willAnnounce) {
+			playAnnouncer(prefs.streakSettings.theme);
 		}
+		return willAnnounce;
 	},
 
 	/**
@@ -288,7 +300,7 @@ export const streak = {
 		stateStore.set(next);
 		writeLocalState(next);
 		queueStateSync(next);
-		lastAnnouncedMilestone = -1;
+		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 
 		if (hadCount) {
 			if (fadeTimer) {
@@ -311,7 +323,7 @@ export const streak = {
 		stateStore.set(next);
 		writeLocalState(next);
 		queueStateSync(next);
-		lastAnnouncedMilestone = -1;
+		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
 	},
 
@@ -334,9 +346,13 @@ export const streak = {
 			writeLocalState(checked);
 			queueStateSync(checked);
 		}
-		lastAnnouncedMilestone = checked.count > 0
-			? (ANNOUNCER_MILESTONES.filter((m) => m <= checked.count).pop() ?? -1)
-			: -1;
+		// Position the next announcer trigger past the already-achieved count
+		// so we don't fire immediately on load.
+		if (checked.count > 0) {
+			nextAnnouncerAt = checked.count + randomInterval();
+		} else {
+			nextAnnouncerAt = FIRST_ANNOUNCER_AT;
+		}
 	},
 
 	/**
@@ -357,9 +373,11 @@ export const streak = {
 			const checked = applyResetRuleIfNeeded(remote);
 			stateStore.set(checked);
 			writeLocalState(checked);
-			lastAnnouncedMilestone = checked.count > 0
-				? (ANNOUNCER_MILESTONES.filter((m) => m <= checked.count).pop() ?? -1)
-				: -1;
+			if (checked.count > 0) {
+				nextAnnouncerAt = checked.count + randomInterval();
+			} else {
+				nextAnnouncerAt = FIRST_ANNOUNCER_AT;
+			}
 		} catch {
 			// malformed — keep local state
 		}

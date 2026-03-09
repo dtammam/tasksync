@@ -195,7 +195,7 @@ describe('streak store — DDR daily reset', () => {
 	});
 });
 
-describe('streak store — milestone detection', () => {
+describe('streak store — announcer trigger', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		localStorage.clear();
@@ -206,28 +206,67 @@ describe('streak store — milestone detection', () => {
 		streak.reset();
 	});
 
-	it('plays announcer at milestone 5', async () => {
+	it('increment() returns true (will announce) exactly at count 5', () => {
+		let announced = false;
 		for (let i = 0; i < 5; i++) {
-			streak.increment(`task-${i}`);
+			const result = streak.increment(`task-${i}`);
+			if (i === 4) announced = result; // 5th completion = count 5
+			else expect(result).toBe(false);
 		}
-		await Promise.resolve(); // flush microtasks
-		// playUrl would only be called if there are announcer files loaded; since we probe via fetch
-		// (which isn't set up in tests), the list is empty and no sound fires.
-		// What we can verify is that the count is correct and no error is thrown.
+		expect(announced).toBe(true);
 		expect(get(streakState).count).toBe(5);
 	});
 
-	it('does not throw at milestones 25, 50, 100, 300', () => {
-		const milestones = [25, 50, 100, 300];
-		let taskIdx = 0;
-		for (const milestone of milestones) {
-			const current = get(streakState).count;
-			const needed = milestone - current;
-			for (let i = 0; i < needed; i++) {
-				streak.increment(`task-${taskIdx++}`);
-			}
-			expect(get(streakState).count).toBe(milestone);
+	it('increment() returns false when sound is disabled, even at trigger count', () => {
+		mocks.soundSettings.get.mockReturnValue({ enabled: false, volume: 60 });
+		for (let i = 0; i < 4; i++) streak.increment(`task-${i}`);
+		const result = streak.increment('task-4'); // count=5, would normally announce
+		expect(result).toBe(false);
+	});
+
+	it('next trigger is at least 10 away after first trigger', () => {
+		// Complete 5 tasks to fire the first announcer
+		for (let i = 0; i < 5; i++) streak.increment(`task-${i}`);
+		// The 6th completion should NOT trigger again (next trigger is 10–20 away)
+		const result = streak.increment('task-5');
+		expect(result).toBe(false);
+	});
+
+	it('count increments correctly across many completions without throwing', () => {
+		for (let i = 0; i < 50; i++) {
+			streak.increment(`task-${i}`);
 		}
+		expect(get(streakState).count).toBe(50);
+	});
+});
+
+describe('streak store — recurring task re-count pattern', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		localStorage.clear();
+		vi.clearAllMocks();
+		mocks.auth.get.mockReturnValue(defaultAuth());
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs());
+		mocks.soundSettings.get.mockReturnValue({ enabled: false, volume: 60 });
+		streak.reset();
+	});
+
+	it('increment then undoCompletion (recurring pattern) allows the same ID to count again', () => {
+		// Simulate: recurring task completes, then same ID becomes available again
+		streak.increment('recurring-task-1');
+		streak.undoCompletion('recurring-task-1'); // mimic what tasks.ts does for recurring
+		expect(get(streakState).count).toBe(1);
+		// Same ID should count again on next occurrence
+		streak.increment('recurring-task-1');
+		expect(get(streakState).count).toBe(2);
+	});
+
+	it('same recurring task can count on every occurrence', () => {
+		for (let i = 0; i < 4; i++) {
+			streak.increment('daily-task');
+			streak.undoCompletion('daily-task'); // recurring pattern
+		}
+		expect(get(streakState).count).toBe(4);
 	});
 });
 

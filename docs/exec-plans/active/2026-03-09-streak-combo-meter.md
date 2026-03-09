@@ -246,6 +246,8 @@ Settings panel contains:
 ## Progress log
 
 - 2026-03-09: Plan drafted. Design decisions finalized through Q&A. No code written yet.
+- 2026-03-09: All phases implemented and committed to `feat/streak-combo-meter`. Pre-commit + pre-push hooks pass (143 web tests, 8 E2E smoke, 36 server tests). Real DDR theme assets wired in via manifest system.
+- 2026-03-09: Post-first-test fixes: (1) recurring tasks now re-count on every occurrence (increment + immediate undoCompletion pattern); (2) judgment images use anti-repeat logic to avoid consecutive duplicates; (3) announcer replaces completion sound at trigger points rather than doubling up; (4) announcer trigger replaced fixed milestone schedule with probabilistic system (fires at 5, then every 10–20 completions). ARCHITECTURE.md updated to document Streak and UserPreferences data model.
 
 ## Decision log
 
@@ -261,3 +263,7 @@ Settings panel contains:
 - 2026-03-09: Streak display is `position: fixed` at top of content area (sidebar-aware), not center-screen. Works on any page, matches My Day header whitespace visually.
 - 2026-03-09: Fade-out uses slight upward float + opacity (300 ms), consistent with app's `fly+fade` exit pattern.
 - 2026-03-09: Streak state and settings included in backup export/restore, matching treatment of other per-user data (sound settings, UI preferences).
+- 2026-03-09: Recurring tasks use increment + immediate undoCompletion to allow same task ID to count on every occurrence without breaking the dedup guarantee for same-day done→undo→redo.
+- 2026-03-09: Announcer trigger replaced with probabilistic system: always fires at count=5, then randomly every 10–20 completions. Avoids mechanical feel of fixed milestones.
+- 2026-03-09: Announcer suppresses regular completion sound for that one event (not both sounds playing simultaneously).
+- 2026-03-09: Theme assets use manifest.json (explicitly enumerated) rather than probing, to support arbitrary filenames including spaces.
