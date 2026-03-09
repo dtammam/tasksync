@@ -27,6 +27,8 @@ interface StreakDisplayState {
 	pulse: number;
 	/** true = break animation (flash then hide), false = normal */
 	breaking: boolean;
+	/** judgment image URL for the current event; null = no image */
+	judgmentSrc: string | null;
 }
 
 const defaultState = (): StreakState => ({
@@ -40,7 +42,8 @@ const displayStore = writable<StreakDisplayState>({
 	count: 0,
 	visible: false,
 	pulse: 0,
-	breaking: false
+	breaking: false,
+	judgmentSrc: null
 });
 
 export const streakDisplay = { subscribe: displayStore.subscribe };
@@ -200,12 +203,15 @@ interface ThemeManifest {
 	announcer: string[];
 	judgment: string[];
 	drop: string[];
+	/** Optional images shown when a combo is dropped. If absent or empty, no image is shown on break. */
+	missed?: string[];
 }
 
 const manifestCache: Record<string, ThemeManifest> = {};
 const announcerFileLists: Record<string, string[]> = {};
 const judgmentFileLists: Record<string, string[]> = {};
 const dropFileLists: Record<string, string[]> = {};
+const missedFileLists: Record<string, string[]> = {};
 
 // Writable store so the component can reactively get the streak word URL.
 const streakWordUrlStore = writable<string>('');
@@ -231,17 +237,26 @@ const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	}
 };
 
-// Track last judgment shown per theme to avoid consecutive repeats
+// Track last image shown per theme to avoid consecutive repeats
 const lastJudgmentByTheme: Record<string, string> = {};
+const lastMissedByTheme: Record<string, string> = {};
 
-export const getRandomJudgmentImage = (theme: string): string | null => {
-	const list = judgmentFileLists[theme] ?? [];
+const pickWithoutRepeat = (list: string[], lastPick: string | undefined): string | null => {
 	if (!list.length) return null;
 	if (list.length === 1) return list[0];
-	const last = lastJudgmentByTheme[theme];
-	const candidates = last ? list.filter((url) => url !== last) : list;
-	const pick = candidates[Math.floor(Math.random() * candidates.length)];
-	lastJudgmentByTheme[theme] = pick;
+	const candidates = lastPick ? list.filter((url) => url !== lastPick) : list;
+	return candidates[Math.floor(Math.random() * candidates.length)];
+};
+
+export const getRandomJudgmentImage = (theme: string): string | null => {
+	const pick = pickWithoutRepeat(judgmentFileLists[theme] ?? [], lastJudgmentByTheme[theme]);
+	if (pick) lastJudgmentByTheme[theme] = pick;
+	return pick;
+};
+
+export const getRandomMissedImage = (theme: string): string | null => {
+	const pick = pickWithoutRepeat(missedFileLists[theme] ?? [], lastMissedByTheme[theme]);
+	if (pick) lastMissedByTheme[theme] = pick;
 	return pick;
 };
 
@@ -278,11 +293,14 @@ export const streak = {
 
 		if (newCount === 0) return false;
 
+		// Pick a fresh judgment image on every completion (not just when overlay first appears)
+		const judgmentSrc = getRandomJudgmentImage(prefs.streakSettings.theme);
 		displayStore.update((d) => ({
 			count: newCount,
 			visible: true,
 			pulse: d.pulse + 1,
-			breaking: false
+			breaking: false,
+			judgmentSrc
 		}));
 		scheduleHide();
 
@@ -310,8 +328,10 @@ export const streak = {
 	},
 
 	/**
-	 * Break the streak (punt, cancel, delete). Resets count to 0 and plays the
-	 * break animation if the count was > 0.
+	 * Break the streak (punt, cancel, delete, skip, missed tasks). Resets count
+	 * to 0. If the count was > 0, shows the break graphic for DISPLAY_TIMEOUT_MS
+	 * (same duration as a normal combo increment). Shows a random image from the
+	 * theme's missed/ folder if available; no image if that folder is empty.
 	 */
 	break() {
 		const current = get(stateStore);
@@ -323,25 +343,29 @@ export const streak = {
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 
 		if (hadCount) {
-			// Play a random combo-drop sound if any are loaded for this theme
+			const theme = uiPreferences.get().streakSettings.theme;
+
+			// Play a random combo-drop sound
 			if (soundSettings.get().enabled) {
-				const theme = uiPreferences.get().streakSettings.theme;
 				const drops = dropFileLists[theme] ?? [];
 				if (drops.length) {
 					void playUrl(drops[Math.floor(Math.random() * drops.length)], soundSettings.get().volume);
 				}
 			}
-			if (fadeTimer) {
-				clearTimeout(fadeTimer);
-				fadeTimer = null;
-			}
-			displayStore.update((d) => ({ ...d, count: 0, visible: true, breaking: true }));
-			// Auto-hide after break animation
+
+			// Show break overlay with missed image (or null) for the same 5s as a combo increment.
+			const judgmentSrc = getRandomMissedImage(theme);
+			displayStore.update((d) => ({ ...d, count: 0, visible: true, breaking: true, judgmentSrc }));
+
+			// Remove the red CSS class after a short flash, but keep the overlay visible.
 			if (typeof window !== 'undefined') {
 				window.setTimeout(() => {
-					displayStore.update((d) => ({ ...d, visible: false, breaking: false }));
+					displayStore.update((d) => ({ ...d, breaking: false }));
 				}, 400);
 			}
+
+			// Hide after the same duration as a normal combo increment.
+			scheduleHide();
 		}
 	},
 
@@ -354,7 +378,7 @@ export const streak = {
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 		pendingDailyBreak = false;
 		lastMissedCheckDate = null;
-		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
+		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, judgmentSrc: null }));
 	},
 
 	/**
@@ -470,6 +494,7 @@ export const streak = {
 		announcerFileLists[theme] = manifest.announcer.map(encodeSpaces);
 		judgmentFileLists[theme] = manifest.judgment.map(encodeSpaces);
 		dropFileLists[theme] = (manifest.drop ?? []).map(encodeSpaces);
+		missedFileLists[theme] = (manifest.missed ?? []).map(encodeSpaces);
 		streakWordUrlStore.set(encodeSpaces(manifest.streakWord));
 	}
 };

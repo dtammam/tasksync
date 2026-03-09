@@ -1,7 +1,7 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { fly, fade } from 'svelte/transition';
-	import { streakDisplay, getRandomJudgmentImage, streakWordUrl } from '$lib/stores/streak';
+	import { streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
 	$: settings = $uiPreferences.streakSettings;
@@ -10,19 +10,6 @@
 
 	// Split count into individual digit characters for rendering
 	$: digits = String(Math.min(display.count, 9999)).split('');
-
-	// Pick a random judgment image when the display first becomes visible.
-	// We snapshot it at the moment visibility turns on so it doesn't change
-	// while the overlay is showing.
-	let currentJudgmentSrc = null;
-	let lastVisibleState = false;
-
-	$: {
-		if (display.visible && !lastVisibleState) {
-			currentJudgmentSrc = getRandomJudgmentImage(theme);
-		}
-		lastVisibleState = display.visible;
-	}
 </script>
 
 {#if display.visible && settings.enabled}
@@ -31,46 +18,61 @@
 		class:breaking={display.breaking}
 		aria-live="polite"
 		aria-atomic="true"
-		aria-label={`Streak: ${display.count}`}
+		aria-label={display.breaking ? 'Combo dropped' : `Streak: ${display.count}`}
 		in:fly={{ y: -12, duration: 180, opacity: 0 }}
 		out:fly={{ y: -8, duration: 300, opacity: 0 }}
 	>
-		{#if currentJudgmentSrc}
-			<div class="judgment-layer" in:fade={{ duration: 150 }}>
-				<img
-					src={currentJudgmentSrc}
-					alt=""
-					class="judgment-img"
-					draggable="false"
-				/>
-			</div>
-		{/if}
-
-		{#key display.pulse}
-			<div
-				class="digits-layer"
-				in:fly={{ y: -6, duration: 120, opacity: 0 }}
-			>
-				{#each digits as digit}
+		{#if display.breaking}
+			<!-- Break state: show only the missed image (if one is available) -->
+			{#if display.judgmentSrc}
+				<div class="judgment-layer" in:fade={{ duration: 150 }}>
 					<img
-						src={`/streak/${theme}/digits/${digit}.png`}
-						alt={digit}
-						class="digit-img"
+						src={display.judgmentSrc}
+						alt=""
+						class="judgment-img"
 						draggable="false"
 					/>
-				{/each}
-			</div>
-		{/key}
+				</div>
+			{/if}
+		{:else}
+			<!-- Normal increment state: judgment + digits + word -->
+			{#if display.judgmentSrc}
+				<div class="judgment-layer">
+					<img
+						src={display.judgmentSrc}
+						alt=""
+						class="judgment-img"
+						draggable="false"
+					/>
+				</div>
+			{/if}
 
-		{#if $streakWordUrl}
-			<div class="word-layer">
-				<img
-					src={$streakWordUrl}
-					alt="streak"
-					class="word-img"
-					draggable="false"
-				/>
-			</div>
+			{#key display.pulse}
+				<div
+					class="digits-layer"
+					in:fly={{ y: -6, duration: 120, opacity: 0 }}
+				>
+					{#each digits as digit}
+						<img
+							src={`/streak/${theme}/digits/${digit}.png`}
+							alt={digit}
+							class="digit-img"
+							draggable="false"
+						/>
+					{/each}
+				</div>
+			{/key}
+
+			{#if $streakWordUrl}
+				<div class="word-layer">
+					<img
+						src={$streakWordUrl}
+						alt="streak"
+						class="word-img"
+						draggable="false"
+					/>
+				</div>
+			{/if}
 		{/if}
 	</div>
 {/if}
@@ -132,9 +134,8 @@
 		filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
 	}
 
-	/* Break animation: brief red desaturate flash */
-	.streak-root.breaking .digit-img,
-	.streak-root.breaking .word-img {
+	/* Break animation: brief red desaturate flash on the missed image */
+	.streak-root.breaking .judgment-img {
 		filter: drop-shadow(0 2px 6px rgba(255, 60, 60, 0.8)) saturate(0.2);
 		transition: filter 150ms ease-out;
 	}
