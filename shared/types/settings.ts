@@ -87,7 +87,7 @@ export interface UiPreferences {
 	streakSettings: StreakSettings;
 }
 
-export type StreakTheme = 'ddr';
+export type StreakTheme = 'ddr' | 'thps';
 
 export type StreakResetMode = 'daily' | 'endless';
 

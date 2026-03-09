@@ -1,0 +1,33 @@
+{
+  "streakWord": "/streak/thps/streak/combo.png",
+  "announcer": [
+    "/streak/thps/announcer/Absolutely wonderful!.mp3",
+    "/streak/thps/announcer/Everybody's watchin' you!.mp3",
+    "/streak/thps/announcer/G-g-g-great!.mp3",
+    "/streak/thps/announcer/Great!.mp3",
+    "/streak/thps/announcer/Keep steady 'till the end!.mp3",
+    "/streak/thps/announcer/P-p-p-perfect!.mp3",
+    "/streak/thps/announcer/Perfect combo!.mp3",
+    "/streak/thps/announcer/Perfect!.mp3",
+    "/streak/thps/announcer/Watari!.mp3",
+    "/streak/thps/announcer/Wow!.mp3",
+    "/streak/thps/announcer/Yeees.mp3",
+    "/streak/thps/announcer/You're doin' pretty good.mp3"
+  ],
+  "judgment": [
+    "/streak/thps/judgment/marvellous.png",
+    "/streak/thps/judgment/perfect.png"
+  ],
+  "drop": [
+    "/streak/thps/drop/Boo!.mp3",
+    "/streak/thps/drop/NG.mp3",
+    "/streak/thps/drop/Nnno good.mp3",
+    "/streak/thps/drop/Nooooo!.mp3",
+    "/streak/thps/drop/Oh my god!.mp3",
+    "/streak/thps/drop/Oh no!.mp3"
+  ],
+  "missed": [
+    "/streak/thps/missed/boo.png",
+    "/streak/thps/missed/miss.png"
+  ]
+}
