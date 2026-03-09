@@ -307,11 +307,15 @@
 			uiPreferences.hydrateFromLocal()
 		]);
 		streak.hydrateFromLocal();
-		streak.checkMissedTasks(get(myDayMissed).length);
-		// Load theme assets non-blocking after local hydration
+		// Load theme assets then check missed tasks — checkMissedTasks must run
+		// after loadThemeAssets so missedFileLists is populated before break() fires.
 		const prefs = uiPreferences.get();
 		if (prefs.streakSettings.enabled) {
-			void streak.loadThemeAssets(prefs.streakSettings.theme);
+			void streak.loadThemeAssets(prefs.streakSettings.theme).then(() => {
+				streak.checkMissedTasks(get(myDayMissed).length);
+			});
+		} else {
+			streak.checkMissedTasks(get(myDayMissed).length);
 		}
 	};
 
@@ -370,9 +374,13 @@
 			await soundSettings.hydrateFromServer();
 			const wire = await uiPreferences.hydrateFromServer();
 			streak.hydrateFromServer(wire?.streakStateJson);
-			streak.checkMissedTasks(get(myDayMissed).length);
-			if (uiPreferences.get().streakSettings.enabled) {
-				void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
+			const serverPrefs = uiPreferences.get();
+			if (serverPrefs.streakSettings.enabled) {
+				void streak.loadThemeAssets(serverPrefs.streakSettings.theme).then(() => {
+					streak.checkMissedTasks(get(myDayMissed).length);
+				});
+			} else {
+				streak.checkMissedTasks(get(myDayMissed).length);
 			}
 			await members.hydrateFromServer();
 		})();
@@ -419,9 +427,13 @@
 				await soundSettings.hydrateFromServer();
 				const wire = await uiPreferences.hydrateFromServer();
 				streak.hydrateFromServer(wire?.streakStateJson);
-				streak.checkMissedTasks(get(myDayMissed).length);
-				if (uiPreferences.get().streakSettings.enabled) {
-					void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
+				const scopePrefs = uiPreferences.get();
+				if (scopePrefs.streakSettings.enabled) {
+					void streak.loadThemeAssets(scopePrefs.streakSettings.theme).then(() => {
+						streak.checkMissedTasks(get(myDayMissed).length);
+					});
+				} else {
+					streak.checkMissedTasks(get(myDayMissed).length);
 				}
 				await members.hydrateFromServer();
 			})();

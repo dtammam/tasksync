@@ -8,7 +8,8 @@
 	$: theme = settings.theme;
 	$: display = $streakDisplay;
 
-	// Split count into individual digit characters for rendering
+	// Split count into individual digit characters for rendering.
+	// Only used when count > 0 (normal combo state).
 	$: digits = String(Math.min(display.count, 9999)).split('');
 </script>
 
@@ -18,13 +19,15 @@
 		class:breaking={display.breaking}
 		aria-live="polite"
 		aria-atomic="true"
-		aria-label={display.breaking ? 'Combo dropped' : `Streak: ${display.count}`}
+		aria-label={display.count > 0 ? `Streak: ${display.count}` : 'Combo dropped'}
 		in:fly={{ y: -12, duration: 180, opacity: 0 }}
 		out:fly={{ y: -8, duration: 300, opacity: 0 }}
 	>
-		{#if display.breaking}
-			<!-- Break state: show only the missed image (if one is available) -->
-			{#if display.judgmentSrc}
+		<!-- Judgment / missed image: shown whenever judgmentSrc is set.
+		     During break (count=0): this is the missed image (if any).
+		     During normal combo: this is the judgment image. -->
+		{#if display.judgmentSrc}
+			{#key display.judgmentSrc}
 				<div class="judgment-layer" in:fade={{ duration: 150 }}>
 					<img
 						src={display.judgmentSrc}
@@ -33,20 +36,12 @@
 						draggable="false"
 					/>
 				</div>
-			{/if}
-		{:else}
-			<!-- Normal increment state: judgment + digits + word -->
-			{#if display.judgmentSrc}
-				<div class="judgment-layer">
-					<img
-						src={display.judgmentSrc}
-						alt=""
-						class="judgment-img"
-						draggable="false"
-					/>
-				</div>
-			{/if}
+			{/key}
+		{/if}
 
+		<!-- Digits and combo word only shown during an active combo (count > 0).
+		     Hidden during the break state so the missed image stands alone. -->
+		{#if display.count > 0}
 			{#key display.pulse}
 				<div
 					class="digits-layer"
