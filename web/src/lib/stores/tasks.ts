@@ -367,7 +367,6 @@ export const tasks = {
 	async deleteRemote(id: string) {
 		const existing = tasks.getAll().find((task) => task.id === id);
 		if (!existing) return;
-		streak.break();
 		if (existing.local || !isServerId(existing.id)) {
 			tasks.remove(id);
 			return;
