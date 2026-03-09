@@ -8,7 +8,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
-	import { tasks } from '$lib/stores/tasks';
+	import { tasks, myDayMissed } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
 	import { playCompletion } from '$lib/sound/sound';
 	import { uiPreferences } from '$lib/stores/preferences';
@@ -307,6 +307,7 @@
 			uiPreferences.hydrateFromLocal()
 		]);
 		streak.hydrateFromLocal();
+		streak.checkMissedTasks(get(myDayMissed).length);
 		// Load theme assets non-blocking after local hydration
 		const prefs = uiPreferences.get();
 		if (prefs.streakSettings.enabled) {
@@ -369,6 +370,7 @@
 			await soundSettings.hydrateFromServer();
 			const wire = await uiPreferences.hydrateFromServer();
 			streak.hydrateFromServer(wire?.streakStateJson);
+			streak.checkMissedTasks(get(myDayMissed).length);
 			if (uiPreferences.get().streakSettings.enabled) {
 				void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
 			}
@@ -417,6 +419,7 @@
 				await soundSettings.hydrateFromServer();
 				const wire = await uiPreferences.hydrateFromServer();
 				streak.hydrateFromServer(wire?.streakStateJson);
+				streak.checkMissedTasks(get(myDayMissed).length);
 				if (uiPreferences.get().streakSettings.enabled) {
 					void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
 				}

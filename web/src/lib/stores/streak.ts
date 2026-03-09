@@ -136,12 +136,29 @@ const writeLocalState = (state: StreakState) => {
 // DDR daily-reset check
 // ---------------------------------------------------------------------------
 
+/**
+ * Set to true when a new calendar day is detected in daily reset mode.
+ * The actual zero-out is deferred until checkMissedTasks() runs, so we can
+ * decide whether to show the animated break (missed tasks present) or silently
+ * reset (no missed tasks).
+ */
+let pendingDailyBreak = false;
+
+/**
+ * Tracks the last date on which checkMissedTasks() ran, to prevent it from
+ * firing more than once per day during repeated server-sync calls.
+ */
+let lastMissedCheckDate: string | null = null;
+
 const applyResetRuleIfNeeded = (state: StreakState): StreakState => {
 	const prefs = uiPreferences.get();
 	if (prefs.streakSettings.resetMode !== 'daily') return state;
 	const today = todayIso();
 	if (state.lastResetDate !== null && state.lastResetDate !== today) {
-		return { count: 0, countedTaskIds: [], lastResetDate: today };
+		// New day detected. Defer the actual reset so checkMissedTasks() can
+		// decide whether to animate the break or silently zero out.
+		pendingDailyBreak = true;
+		return state; // keep count intact until checkMissedTasks() runs
 	}
 	return state;
 };
@@ -335,7 +352,55 @@ export const streak = {
 		writeLocalState(next);
 		queueStateSync(next);
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
+		pendingDailyBreak = false;
+		lastMissedCheckDate = null;
 		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
+	},
+
+	/**
+	 * Call after tasks are loaded (local DB or server sync) to break the combo
+	 * when past-due tasks are visible — the DDR equivalent of a MISS judgment.
+	 *
+	 * - In daily reset mode: deferred zeroing from applyResetRuleIfNeeded runs
+	 *   here; shows the animated break if there are missed tasks, silently zeros
+	 *   otherwise.
+	 * - In endless mode: breaks with animation whenever missed tasks exist and
+	 *   the combo count is > 0.
+	 *
+	 * Safe to call multiple times per session; only acts once per calendar day.
+	 */
+	checkMissedTasks(missedCount: number) {
+		const today = todayIso();
+		// Skip if we've already acted today and there's no pending daily break.
+		if (!pendingDailyBreak && lastMissedCheckDate === today) return;
+
+		const current = get(stateStore);
+		const hasMissed = missedCount > 0;
+
+		if (pendingDailyBreak) {
+			pendingDailyBreak = false;
+			lastMissedCheckDate = today;
+			if (hasMissed && current.count > 0) {
+				// New day + missed tasks → animated break
+				streak.break();
+			} else {
+				// New day, no missed tasks → silent reset (same as previous behavior)
+				const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: today };
+				stateStore.set(next);
+				writeLocalState(next);
+				queueStateSync(next);
+				nextAnnouncerAt = FIRST_ANNOUNCER_AT;
+				displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
+			}
+			return;
+		}
+
+		// Endless mode (or same-day check): break if there are missed tasks and
+		// the combo count is still live.
+		lastMissedCheckDate = today;
+		if (hasMissed && current.count > 0) {
+			streak.break();
+		}
 	},
 
 	/** Return the current count for display in settings. */
@@ -400,10 +465,12 @@ export const streak = {
 	 */
 	async loadThemeAssets(theme: string) {
 		const manifest = await loadManifest(theme);
-		announcerFileLists[theme] = manifest.announcer;
-		judgmentFileLists[theme] = manifest.judgment;
-		dropFileLists[theme] = manifest.drop ?? [];
-		streakWordUrlStore.set(manifest.streakWord);
+		// Encode spaces in paths so fetch() doesn't receive bare spaces in URLs.
+		const encodeSpaces = (url: string) => url.replace(/ /g, '%20');
+		announcerFileLists[theme] = manifest.announcer.map(encodeSpaces);
+		judgmentFileLists[theme] = manifest.judgment.map(encodeSpaces);
+		dropFileLists[theme] = (manifest.drop ?? []).map(encodeSpaces);
+		streakWordUrlStore.set(encodeSpaces(manifest.streakWord));
 	}
 };
 

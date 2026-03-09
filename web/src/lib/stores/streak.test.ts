@@ -157,16 +157,18 @@ describe('streak store — DDR daily reset', () => {
 		vi.clearAllMocks();
 		mocks.auth.get.mockReturnValue(defaultAuth());
 		mocks.soundSettings.get.mockReturnValue({ enabled: false, volume: 60 });
+		streak.reset();
 	});
 
-	it('resets count when lastResetDate is a past date in DDR mode', () => {
+	it('silently resets count after hydrateFromLocal + checkMissedTasks(0) on a new day', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
-		// Seed local storage with a stale state from yesterday
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 		const staleState = JSON.stringify({ count: 42, countedTaskIds: ['task-1'], lastResetDate: yesterday });
 		localStorage.setItem('tasksync:streak-state:s1:u1', staleState);
 
 		streak.hydrateFromLocal();
+		// Count is deferred until checkMissedTasks resolves the pending break
+		streak.checkMissedTasks(0); // no missed tasks → silent zero
 
 		expect(get(streakState).count).toBe(0);
 		expect(get(streakState).countedTaskIds).toHaveLength(0);
@@ -192,6 +194,84 @@ describe('streak store — DDR daily reset', () => {
 		streak.hydrateFromLocal();
 
 		expect(get(streakState).count).toBe(99);
+	});
+});
+
+describe('streak store — checkMissedTasks', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		localStorage.clear();
+		vi.clearAllMocks();
+		mocks.auth.get.mockReturnValue(defaultAuth());
+		mocks.soundSettings.get.mockReturnValue({ enabled: false, volume: 60 });
+		streak.reset();
+	});
+
+	it('breaks combo with animation when missed tasks exist and combo is live (endless mode)', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
+		streak.increment('task-1');
+		streak.increment('task-2');
+		expect(get(streakState).count).toBe(2);
+
+		streak.checkMissedTasks(3); // 3 missed tasks from prior day
+
+		expect(get(streakState).count).toBe(0);
+	});
+
+	it('does nothing when count is 0, even with missed tasks (endless mode)', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
+		// count stays at 0
+
+		streak.checkMissedTasks(5);
+
+		expect(get(streakState).count).toBe(0); // no-op, nothing to break
+	});
+
+	it('does nothing when there are no missed tasks (endless mode)', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
+		streak.increment('task-1');
+
+		streak.checkMissedTasks(0);
+
+		expect(get(streakState).count).toBe(1); // unchanged
+	});
+
+	it('only fires once per day — second call with missed tasks is a no-op', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
+		streak.increment('task-1');
+		streak.checkMissedTasks(2); // breaks
+		expect(get(streakState).count).toBe(0);
+
+		// Complete more tasks and call again — should not break again today
+		streak.increment('task-2');
+		streak.increment('task-3');
+		streak.checkMissedTasks(2); // same day, second call → no-op
+
+		expect(get(streakState).count).toBe(2);
+	});
+
+	it('in DDR mode new day: breaks with animation when there are missed tasks', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
+		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+		const staleState = JSON.stringify({ count: 10, countedTaskIds: ['task-1'], lastResetDate: yesterday });
+		localStorage.setItem('tasksync:streak-state:s1:u1', staleState);
+
+		streak.hydrateFromLocal(); // sets pendingDailyBreak
+		streak.checkMissedTasks(2); // new day + missed → animated break
+
+		expect(get(streakState).count).toBe(0);
+	});
+
+	it('in DDR mode new day: silently zeros when no missed tasks', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
+		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+		const staleState = JSON.stringify({ count: 7, countedTaskIds: ['task-1'], lastResetDate: yesterday });
+		localStorage.setItem('tasksync:streak-state:s1:u1', staleState);
+
+		streak.hydrateFromLocal();
+		streak.checkMissedTasks(0); // new day, no missed → silent zero
+
+		expect(get(streakState).count).toBe(0);
 	});
 });
 
