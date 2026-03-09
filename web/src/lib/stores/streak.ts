@@ -53,7 +53,7 @@ export const streakDisplay = { subscribe: displayStore.subscribe };
 // ---------------------------------------------------------------------------
 
 let fadeTimer: ReturnType<typeof setTimeout> | null = null;
-const DISPLAY_TIMEOUT_MS = 5000;
+const DISPLAY_TIMEOUT_MS = 3000;
 
 const scheduleHide = () => {
 	if (fadeTimer) clearTimeout(fadeTimer);
