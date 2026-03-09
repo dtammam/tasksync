@@ -3,7 +3,6 @@
   "announcer": [
     "/streak/ddr/announcer/keep on goin.mp3",
     "/streak/ddr/announcer/p-p-p-perfect.mp3",
-    "/streak/ddr/announcer/wha wha what.mp3",
     "/streak/ddr/announcer/you are supreme.mp3"
   ],
   "judgment": [
@@ -16,5 +15,8 @@
     "/streak/ddr/drop/use your feet.mp3",
     "/streak/ddr/drop/wha wha what.mp3"
   ],
-  "missed": []
+  "missed": [
+    "/streak/ddr/missed/boo.png",
+    "/streak/ddr/missed/miss.png"
+  ]
 }
