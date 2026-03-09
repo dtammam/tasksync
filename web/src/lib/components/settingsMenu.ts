@@ -35,7 +35,7 @@ const baseSections: SettingsSection[] = [
 	{
 		id: 'streak',
 		label: 'Streak',
-		description: 'DDR-style combo meter for task completions',
+		description: 'Video game style combo meter for task completions',
 		adminOnly: false,
 	},
 	{

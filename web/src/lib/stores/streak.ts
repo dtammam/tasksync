@@ -27,6 +27,8 @@ interface StreakDisplayState {
 	pulse: number;
 	/** true = break animation (flash then hide), false = normal */
 	breaking: boolean;
+	/** judgment image URL for the current event; null = no image */
+	judgmentSrc: string | null;
 }
 
 const defaultState = (): StreakState => ({
@@ -40,7 +42,8 @@ const displayStore = writable<StreakDisplayState>({
 	count: 0,
 	visible: false,
 	pulse: 0,
-	breaking: false
+	breaking: false,
+	judgmentSrc: null
 });
 
 export const streakDisplay = { subscribe: displayStore.subscribe };
@@ -50,7 +53,7 @@ export const streakDisplay = { subscribe: displayStore.subscribe };
 // ---------------------------------------------------------------------------
 
 let fadeTimer: ReturnType<typeof setTimeout> | null = null;
-const DISPLAY_TIMEOUT_MS = 5000;
+const DISPLAY_TIMEOUT_MS = 3000;
 
 const scheduleHide = () => {
 	if (fadeTimer) clearTimeout(fadeTimer);
@@ -136,12 +139,29 @@ const writeLocalState = (state: StreakState) => {
 // DDR daily-reset check
 // ---------------------------------------------------------------------------
 
+/**
+ * Set to true when a new calendar day is detected in daily reset mode.
+ * The actual zero-out is deferred until checkMissedTasks() runs, so we can
+ * decide whether to show the animated break (missed tasks present) or silently
+ * reset (no missed tasks).
+ */
+let pendingDailyBreak = false;
+
+/**
+ * Tracks the last date on which checkMissedTasks() ran, to prevent it from
+ * firing more than once per day during repeated server-sync calls.
+ */
+let lastMissedCheckDate: string | null = null;
+
 const applyResetRuleIfNeeded = (state: StreakState): StreakState => {
 	const prefs = uiPreferences.get();
 	if (prefs.streakSettings.resetMode !== 'daily') return state;
 	const today = todayIso();
 	if (state.lastResetDate !== null && state.lastResetDate !== today) {
-		return { count: 0, countedTaskIds: [], lastResetDate: today };
+		// New day detected. Defer the actual reset so checkMissedTasks() can
+		// decide whether to animate the break or silently zero out.
+		pendingDailyBreak = true;
+		return state; // keep count intact until checkMissedTasks() runs
 	}
 	return state;
 };
@@ -183,12 +203,15 @@ interface ThemeManifest {
 	announcer: string[];
 	judgment: string[];
 	drop: string[];
+	/** Optional images shown when a combo is dropped. If absent or empty, no image is shown on break. */
+	missed?: string[];
 }
 
 const manifestCache: Record<string, ThemeManifest> = {};
 const announcerFileLists: Record<string, string[]> = {};
 const judgmentFileLists: Record<string, string[]> = {};
 const dropFileLists: Record<string, string[]> = {};
+const missedFileLists: Record<string, string[]> = {};
 
 // Writable store so the component can reactively get the streak word URL.
 const streakWordUrlStore = writable<string>('');
@@ -196,7 +219,7 @@ const streakWordUrlStore = writable<string>('');
 const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	if (manifestCache[theme]) return manifestCache[theme];
 	try {
-		const res = await fetch(`/streak/${theme}/manifest.json`);
+		const res = await fetch(`/streak/${theme}/manifest.json`, { cache: 'no-store' });
 		if (!res.ok) throw new Error('manifest not found');
 		const data = await res.json() as ThemeManifest;
 		manifestCache[theme] = data;
@@ -214,17 +237,26 @@ const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	}
 };
 
-// Track last judgment shown per theme to avoid consecutive repeats
+// Track last image shown per theme to avoid consecutive repeats
 const lastJudgmentByTheme: Record<string, string> = {};
+const lastMissedByTheme: Record<string, string> = {};
 
-export const getRandomJudgmentImage = (theme: string): string | null => {
-	const list = judgmentFileLists[theme] ?? [];
+const pickWithoutRepeat = (list: string[], lastPick: string | undefined): string | null => {
 	if (!list.length) return null;
 	if (list.length === 1) return list[0];
-	const last = lastJudgmentByTheme[theme];
-	const candidates = last ? list.filter((url) => url !== last) : list;
-	const pick = candidates[Math.floor(Math.random() * candidates.length)];
-	lastJudgmentByTheme[theme] = pick;
+	const candidates = lastPick ? list.filter((url) => url !== lastPick) : list;
+	return candidates[Math.floor(Math.random() * candidates.length)];
+};
+
+export const getRandomJudgmentImage = (theme: string): string | null => {
+	const pick = pickWithoutRepeat(judgmentFileLists[theme] ?? [], lastJudgmentByTheme[theme]);
+	if (pick) lastJudgmentByTheme[theme] = pick;
+	return pick;
+};
+
+export const getRandomMissedImage = (theme: string): string | null => {
+	const pick = pickWithoutRepeat(missedFileLists[theme] ?? [], lastMissedByTheme[theme]);
+	if (pick) lastMissedByTheme[theme] = pick;
 	return pick;
 };
 
@@ -261,11 +293,14 @@ export const streak = {
 
 		if (newCount === 0) return false;
 
+		// Pick a fresh judgment image on every completion (not just when overlay first appears)
+		const judgmentSrc = getRandomJudgmentImage(prefs.streakSettings.theme);
 		displayStore.update((d) => ({
 			count: newCount,
 			visible: true,
 			pulse: d.pulse + 1,
-			breaking: false
+			breaking: false,
+			judgmentSrc
 		}));
 		scheduleHide();
 
@@ -293,8 +328,10 @@ export const streak = {
 	},
 
 	/**
-	 * Break the streak (punt, cancel, delete). Resets count to 0 and plays the
-	 * break animation if the count was > 0.
+	 * Break the streak (punt, cancel, delete, skip, missed tasks). Resets count
+	 * to 0. If the count was > 0, shows the break graphic for DISPLAY_TIMEOUT_MS
+	 * (same duration as a normal combo increment). Shows a random image from the
+	 * theme's missed/ folder if available; no image if that folder is empty.
 	 */
 	break() {
 		const current = get(stateStore);
@@ -306,25 +343,31 @@ export const streak = {
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 
 		if (hadCount) {
-			// Play a random combo-drop sound if any are loaded for this theme
+			const theme = uiPreferences.get().streakSettings.theme;
+
+			// Play a random combo-drop sound
 			if (soundSettings.get().enabled) {
-				const theme = uiPreferences.get().streakSettings.theme;
 				const drops = dropFileLists[theme] ?? [];
 				if (drops.length) {
 					void playUrl(drops[Math.floor(Math.random() * drops.length)], soundSettings.get().volume);
 				}
 			}
-			if (fadeTimer) {
-				clearTimeout(fadeTimer);
-				fadeTimer = null;
-			}
-			displayStore.update((d) => ({ ...d, count: 0, visible: true, breaking: true }));
-			// Auto-hide after break animation
+
+			// Show break overlay. Keep the pre-break count visible so the combo number
+			// stays on screen with the break animation (DDR style: count freezes, then clears).
+			// This also ensures something is visible even when no missed image is configured.
+			const judgmentSrc = getRandomMissedImage(theme);
+			displayStore.update((d) => ({ ...d, count: current.count, visible: true, breaking: true, judgmentSrc }));
+
+			// Remove the red CSS class after a short flash, but keep the overlay visible.
 			if (typeof window !== 'undefined') {
 				window.setTimeout(() => {
-					displayStore.update((d) => ({ ...d, visible: false, breaking: false }));
+					displayStore.update((d) => ({ ...d, breaking: false }));
 				}, 400);
 			}
+
+			// Hide after the same duration as a normal combo increment.
+			scheduleHide();
 		}
 	},
 
@@ -335,7 +378,55 @@ export const streak = {
 		writeLocalState(next);
 		queueStateSync(next);
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
-		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
+		pendingDailyBreak = false;
+		lastMissedCheckDate = null;
+		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, judgmentSrc: null }));
+	},
+
+	/**
+	 * Call after tasks are loaded (local DB or server sync) to break the combo
+	 * when past-due tasks are visible — the DDR equivalent of a MISS judgment.
+	 *
+	 * - In daily reset mode: deferred zeroing from applyResetRuleIfNeeded runs
+	 *   here; shows the animated break if there are missed tasks, silently zeros
+	 *   otherwise.
+	 * - In endless mode: breaks with animation whenever missed tasks exist and
+	 *   the combo count is > 0.
+	 *
+	 * Safe to call multiple times per session; only acts once per calendar day.
+	 */
+	checkMissedTasks(missedCount: number) {
+		const today = todayIso();
+		// Skip if we've already acted today and there's no pending daily break.
+		if (!pendingDailyBreak && lastMissedCheckDate === today) return;
+
+		const current = get(stateStore);
+		const hasMissed = missedCount > 0;
+
+		if (pendingDailyBreak) {
+			pendingDailyBreak = false;
+			lastMissedCheckDate = today;
+			if (hasMissed && current.count > 0) {
+				// New day + missed tasks → animated break
+				streak.break();
+			} else {
+				// New day, no missed tasks → silent reset (same as previous behavior)
+				const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: today };
+				stateStore.set(next);
+				writeLocalState(next);
+				queueStateSync(next);
+				nextAnnouncerAt = FIRST_ANNOUNCER_AT;
+				displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
+			}
+			return;
+		}
+
+		// Endless mode (or same-day check): break if there are missed tasks and
+		// the combo count is still live.
+		lastMissedCheckDate = today;
+		if (hasMissed && current.count > 0) {
+			streak.break();
+		}
 	},
 
 	/** Return the current count for display in settings. */
@@ -400,10 +491,13 @@ export const streak = {
 	 */
 	async loadThemeAssets(theme: string) {
 		const manifest = await loadManifest(theme);
-		announcerFileLists[theme] = manifest.announcer;
-		judgmentFileLists[theme] = manifest.judgment;
-		dropFileLists[theme] = manifest.drop ?? [];
-		streakWordUrlStore.set(manifest.streakWord);
+		// Encode spaces in paths so fetch() doesn't receive bare spaces in URLs.
+		const encodeSpaces = (url: string) => url.replace(/ /g, '%20');
+		announcerFileLists[theme] = manifest.announcer.map(encodeSpaces);
+		judgmentFileLists[theme] = manifest.judgment.map(encodeSpaces);
+		dropFileLists[theme] = (manifest.drop ?? []).map(encodeSpaces);
+		missedFileLists[theme] = (manifest.missed ?? []).map(encodeSpaces);
+		streakWordUrlStore.set(encodeSpaces(manifest.streakWord));
 	}
 };
 

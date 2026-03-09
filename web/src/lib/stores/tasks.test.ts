@@ -8,9 +8,30 @@ vi.mock('$lib/sound/sound', () => ({
 	playCompletion: vi.fn()
 }));
 
+vi.mock('$lib/stores/streak', () => ({
+	streak: {
+		increment: vi.fn().mockReturnValue(false),
+		undoCompletion: vi.fn(),
+		break: vi.fn(),
+		reset: vi.fn(),
+		hydrateFromLocal: vi.fn(),
+		hydrateFromServer: vi.fn(),
+		checkMissedTasks: vi.fn(),
+		loadThemeAssets: vi.fn(),
+		getCount: vi.fn().mockReturnValue(0)
+	},
+	streakDisplay: { subscribe: vi.fn() },
+	streakState: { subscribe: vi.fn() },
+	streakWordUrl: { subscribe: vi.fn() },
+	getRandomJudgmentImage: vi.fn()
+}));
+
 import { myDayCompleted, myDayMissed, myDayPending, myDaySuggestions, tasks } from './tasks';
 import { playCompletion } from '$lib/sound/sound';
+import { streak } from '$lib/stores/streak';
 import type { Task } from '$shared/types/task';
+
+const mockedStreakBreak = vi.mocked(streak.break);
 
 const mockedPlayCompletion = vi.mocked(playCompletion);
 
@@ -249,6 +270,33 @@ describe('tasks store helpers', () => {
 
 		expect(get(myDayMissed)).toEqual([]);
 		expect(get(myDayPending).map((t) => t.id)).toEqual(['missed-recurring']);
+	});
+
+	it('skip() breaks the streak combo', () => {
+		mockedStreakBreak.mockClear();
+		tasks.setAll([
+			baseTask({
+				id: 'skip-me',
+				recurrence_id: 'daily',
+				due_date: '2026-02-01',
+				status: 'pending'
+			})
+		]);
+
+		tasks.skip('skip-me');
+
+		expect(mockedStreakBreak).toHaveBeenCalledOnce();
+	});
+
+	it('skip() does not break the streak if the task has no recurrence_id', () => {
+		mockedStreakBreak.mockClear();
+		tasks.setAll([
+			baseTask({ id: 'no-recurrence', due_date: '2026-02-01', status: 'pending' })
+		]);
+
+		tasks.skip('no-recurrence'); // no-op since not recurring
+
+		expect(mockedStreakBreak).not.toHaveBeenCalled();
 	});
 
 	it('punts a due-today task into tomorrow while marking today as addressed', () => {

@@ -367,7 +367,6 @@ export const tasks = {
 	async deleteRemote(id: string) {
 		const existing = tasks.getAll().find((task) => task.id === id);
 		if (!existing) return;
-		streak.break();
 		if (existing.local || !isServerId(existing.id)) {
 			tasks.remove(id);
 			return;
@@ -475,19 +474,25 @@ export const tasks = {
 	},
 	skip(id: string) {
 		const now = Date.now();
+		let didSkip = false;
 		tasksStore.update((list) =>
-			list.map((t) =>
-				t.id === id && !!t.recurrence_id
-					? {
-							...clearPuntState(t),
-							due_date: nextRecurringDueAfterCurrent(t),
-							updated_ts: now,
-							dirty: true
-						}
-					: t
-			)
+			list.map((t) => {
+				if (t.id === id && !!t.recurrence_id) {
+					didSkip = true;
+					return {
+						...clearPuntState(t),
+						due_date: nextRecurringDueAfterCurrent(t),
+						updated_ts: now,
+						dirty: true
+					};
+				}
+				return t;
+			})
 		);
 		void repo.saveTasks(get(tasksStore));
+		if (didSkip) {
+			streak.break();
+		}
 	},
 	punt(id: string) {
 		const now = Date.now();

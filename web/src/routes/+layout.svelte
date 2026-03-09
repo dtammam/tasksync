@@ -8,7 +8,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
-	import { tasks } from '$lib/stores/tasks';
+	import { tasks, myDayMissed } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
 	import { playCompletion } from '$lib/sound/sound';
 	import { uiPreferences } from '$lib/stores/preferences';
@@ -307,10 +307,15 @@
 			uiPreferences.hydrateFromLocal()
 		]);
 		streak.hydrateFromLocal();
-		// Load theme assets non-blocking after local hydration
+		// Load theme assets then check missed tasks — checkMissedTasks must run
+		// after loadThemeAssets so missedFileLists is populated before break() fires.
 		const prefs = uiPreferences.get();
 		if (prefs.streakSettings.enabled) {
-			void streak.loadThemeAssets(prefs.streakSettings.theme);
+			void streak.loadThemeAssets(prefs.streakSettings.theme).then(() => {
+				streak.checkMissedTasks(get(myDayMissed).length);
+			});
+		} else {
+			streak.checkMissedTasks(get(myDayMissed).length);
 		}
 	};
 
@@ -369,8 +374,13 @@
 			await soundSettings.hydrateFromServer();
 			const wire = await uiPreferences.hydrateFromServer();
 			streak.hydrateFromServer(wire?.streakStateJson);
-			if (uiPreferences.get().streakSettings.enabled) {
-				void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
+			const serverPrefs = uiPreferences.get();
+			if (serverPrefs.streakSettings.enabled) {
+				void streak.loadThemeAssets(serverPrefs.streakSettings.theme).then(() => {
+					streak.checkMissedTasks(get(myDayMissed).length);
+				});
+			} else {
+				streak.checkMissedTasks(get(myDayMissed).length);
 			}
 			await members.hydrateFromServer();
 		})();
@@ -417,8 +427,13 @@
 				await soundSettings.hydrateFromServer();
 				const wire = await uiPreferences.hydrateFromServer();
 				streak.hydrateFromServer(wire?.streakStateJson);
-				if (uiPreferences.get().streakSettings.enabled) {
-					void streak.loadThemeAssets(uiPreferences.get().streakSettings.theme);
+				const scopePrefs = uiPreferences.get();
+				if (scopePrefs.streakSettings.enabled) {
+					void streak.loadThemeAssets(scopePrefs.streakSettings.theme).then(() => {
+						streak.checkMissedTasks(get(myDayMissed).length);
+					});
+				} else {
+					streak.checkMissedTasks(get(myDayMissed).length);
 				}
 				await members.hydrateFromServer();
 			})();
