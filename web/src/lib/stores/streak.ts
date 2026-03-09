@@ -178,50 +178,40 @@ const maybePlayAnnouncer = async (newCount: number) => {
 };
 
 // ---------------------------------------------------------------------------
-// Announcer file list (populated on hydration)
+// Theme manifest (replaces file probing)
 // ---------------------------------------------------------------------------
 
-// Maps theme → list of absolute static paths for announcer clips.
-// Populated by probing /streak/{theme}/announcer/ during initialization.
+interface ThemeManifest {
+	streakWord: string;
+	announcer: string[];
+	judgment: string[];
+}
+
+const manifestCache: Record<string, ThemeManifest> = {};
 const announcerFileLists: Record<string, string[]> = {};
-
-const probeAnnouncerFiles = async (theme: string, maxFiles = 10): Promise<string[]> => {
-	const urls: string[] = [];
-	for (let i = 1; i <= maxFiles; i++) {
-		const url = `/streak/${theme}/announcer/${i}.mp3`;
-		try {
-			const res = await fetch(url, { method: 'HEAD' });
-			if (res.ok) {
-				urls.push(url);
-			} else {
-				break; // stop at first gap
-			}
-		} catch {
-			break;
-		}
-	}
-	return urls;
-};
-
-// ---------------------------------------------------------------------------
-// Judgment image list
-// ---------------------------------------------------------------------------
-
 const judgmentFileLists: Record<string, string[]> = {};
 
-const probeJudgmentFiles = async (theme: string, maxFiles = 10): Promise<string[]> => {
-	const urls: string[] = [];
-	const names = ['marvelous', 'excellent', 'great', 'good'];
-	for (const name of names.slice(0, maxFiles)) {
-		const url = `/streak/${theme}/judgment/${name}.png`;
-		try {
-			const res = await fetch(url, { method: 'HEAD' });
-			if (res.ok) urls.push(url);
-		} catch {
-			// skip
-		}
+// Writable store so the component can reactively get the streak word URL.
+const streakWordUrlStore = writable<string>('');
+
+const loadManifest = async (theme: string): Promise<ThemeManifest> => {
+	if (manifestCache[theme]) return manifestCache[theme];
+	try {
+		const res = await fetch(`/streak/${theme}/manifest.json`);
+		if (!res.ok) throw new Error('manifest not found');
+		const data = await res.json() as ThemeManifest;
+		manifestCache[theme] = data;
+		return data;
+	} catch {
+		// Fallback: empty lists, best-guess streak word path
+		const fallback: ThemeManifest = {
+			streakWord: `/streak/${theme}/streak/streak-word.png`,
+			announcer: [],
+			judgment: []
+		};
+		manifestCache[theme] = fallback;
+		return fallback;
 	}
-	return urls;
 };
 
 export const getRandomJudgmentImage = (theme: string): string | null => {
@@ -229,6 +219,8 @@ export const getRandomJudgmentImage = (theme: string): string | null => {
 	if (!list.length) return null;
 	return list[Math.floor(Math.random() * list.length)];
 };
+
+export const streakWordUrl = { subscribe: streakWordUrlStore.subscribe };
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -374,16 +366,14 @@ export const streak = {
 	},
 
 	/**
-	 * Pre-load theme assets (announcer + judgment probing). Called when streak
-	 * is enabled or theme changes. Non-blocking.
+	 * Load theme assets from the manifest. Called when streak is enabled or
+	 * theme changes. Non-blocking. Subsequent calls for the same theme are no-ops.
 	 */
 	async loadThemeAssets(theme: string) {
-		if (!announcerFileLists[theme]) {
-			announcerFileLists[theme] = await probeAnnouncerFiles(theme);
-		}
-		if (!judgmentFileLists[theme]) {
-			judgmentFileLists[theme] = await probeJudgmentFiles(theme);
-		}
+		const manifest = await loadManifest(theme);
+		announcerFileLists[theme] = manifest.announcer;
+		judgmentFileLists[theme] = manifest.judgment;
+		streakWordUrlStore.set(manifest.streakWord);
 	}
 };
 

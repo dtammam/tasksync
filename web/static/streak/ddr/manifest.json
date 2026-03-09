@@ -1,0 +1,14 @@
+{
+  "streakWord": "/streak/ddr/streak/combo.png",
+  "announcer": [
+    "/streak/ddr/announcer/Good Good Keep on Goin'.mp3",
+    "/streak/ddr/announcer/P-p-p-perfect!.mp3",
+    "/streak/ddr/announcer/Wha Wha What!?.mp3",
+    "/streak/ddr/announcer/You are supreme.mp3"
+  ],
+  "judgment": [
+    "/streak/ddr/judgment/great.png",
+    "/streak/ddr/judgment/marvellous.png",
+    "/streak/ddr/judgment/perfect.png"
+  ]
+}

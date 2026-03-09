@@ -1,7 +1,7 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { fly, fade } from 'svelte/transition';
-	import { streakDisplay, getRandomJudgmentImage } from '$lib/stores/streak';
+	import { streakDisplay, getRandomJudgmentImage, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
 	$: settings = $uiPreferences.streakSettings;
@@ -62,14 +62,16 @@
 			</div>
 		{/key}
 
-		<div class="word-layer">
-			<img
-				src={`/streak/${theme}/streak/streak-word.png`}
-				alt="streak"
-				class="word-img"
-				draggable="false"
-			/>
-		</div>
+		{#if $streakWordUrl}
+			<div class="word-layer">
+				<img
+					src={$streakWordUrl}
+					alt="streak"
+					class="word-img"
+					draggable="false"
+				/>
+			</div>
+		{/if}
 	</div>
 {/if}
 
