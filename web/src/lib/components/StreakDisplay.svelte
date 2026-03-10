@@ -114,7 +114,10 @@
 		   left and max-width are set via inline style using a frozen offset captured at
 		   display time, so navigation changes to --sidebar-offset don't shift the indicator. */
 		top: 64px;
-		transform: translateX(-50%);
+		/* Use `translate` (independent of `transform`) so Svelte's fly transition,
+		   which animates via `transform: translateY(...)`, doesn't override the
+		   horizontal centering during the fly-in animation. */
+		translate: -50% 0;
 		z-index: 200;
 		pointer-events: none;
 		display: flex;
