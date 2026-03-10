@@ -53,6 +53,7 @@
 	<div
 		class="streak-root"
 		class:day-complete={display.isDayComplete}
+		class:combo-dropped={display.breaking}
 		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
@@ -169,6 +170,21 @@
 		filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
 	}
 
+	/* Combo dropped: silver glow + larger missed image (same size as day-complete) */
+	.streak-root.combo-dropped {
+		animation: combo-dropped-glow 0.7s ease-out forwards;
+	}
+
+	.streak-root.combo-dropped .judgment-img {
+		height: clamp(80px, 14vw, 180px);
+	}
+
+	@keyframes combo-dropped-glow {
+		0%   { filter: drop-shadow(0 0 0px rgba(192, 192, 192, 0)); }
+		40%  { filter: drop-shadow(0 0 22px rgba(192, 192, 192, 0.8)) drop-shadow(0 0 8px rgba(220, 220, 240, 0.6)); }
+		100% { filter: drop-shadow(0 0 14px rgba(192, 192, 192, 0.45)) drop-shadow(0 0 4px rgba(192, 192, 192, 0.25)); }
+	}
+
 	/* Day-complete: warm golden glow + larger judgment image */
 	.streak-root.day-complete {
 		animation: day-complete-glow 0.7s ease-out forwards;
@@ -198,6 +214,10 @@
 		}
 		.judgment-img {
 			height: clamp(18px, 5vw, 36px);
+		}
+		.streak-root.combo-dropped .judgment-img,
+		.streak-root.day-complete .judgment-img {
+			height: clamp(80px, 14vw, 180px);
 		}
 	}
 </style>
