@@ -460,7 +460,7 @@ fn normalize_streak_settings_json(raw: Option<String>) -> Result<Option<String>,
     let enabled = obj.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
     let theme = obj.get("theme").and_then(|v| v.as_str()).unwrap_or("ddr");
     let reset_mode = obj.get("resetMode").and_then(|v| v.as_str()).unwrap_or("daily");
-    if !matches!(theme, "ddr") {
+    if !matches!(theme, "ddr" | "thps") {
         return Err(StatusCode::BAD_REQUEST);
     }
     if !matches!(reset_mode, "daily" | "endless") {

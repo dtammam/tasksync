@@ -12,40 +12,42 @@
 	// Only used when count > 0 (normal combo state).
 	$: digits = String(Math.min(display.count, 9999)).split('');
 
-	// Freeze the sidebar offset the moment the combo first becomes visible so that
-	// navigating away (which changes --sidebar-offset) does not shift the indicator.
+	// Freeze the combo position the moment it first becomes visible so that
+	// navigating away (which changes the sidebar width) does not shift the indicator.
+	//
+	// Reads getBoundingClientRect() on <main> for an exact pixel center — more
+	// reliable than parsing CSS custom properties, which getComputedStyle returns
+	// as unresolved literal strings (e.g. "min(208px, 58vw)").
 	//
 	// Uses a single function to avoid Svelte's topological sort running
-	// `lastVisible = display.visible` before the capture check — which would
-	// make the condition always false.
+	// `_lastVisible = display.visible` before the capture check.
 	let _lastVisible = false;
-	let frozenOffset = '0px';
+	let frozenLeft = '50vw';
+	let frozenMaxWidth = 'calc(100vw - 32px)';
 
 	function trackVisibility(isVisible) {
 		if (isVisible && !_lastVisible) {
-			frozenOffset = readSidebarOffset();
+			captureContentCenter();
 		}
 		_lastVisible = isVisible;
 	}
 	$: trackVisibility(display.visible);
 
-	function readSidebarOffset() {
-		if (typeof document === 'undefined') return '0px';
-		const appShell = document.querySelector('[data-testid="app-shell"]');
-		if (appShell) {
-			return getComputedStyle(appShell).getPropertyValue('--sidebar-offset').trim() || '0px';
+	function captureContentCenter() {
+		if (typeof document === 'undefined') return;
+		const main = document.querySelector('main');
+		if (main) {
+			const rect = main.getBoundingClientRect();
+			frozenLeft = `${rect.left + rect.width / 2}px`;
+			frozenMaxWidth = `${rect.width - 32}px`;
 		}
-		return '0px';
 	}
-
-	$: leftStyle = `calc(${frozenOffset} + (100vw - ${frozenOffset}) / 2)`;
-	$: maxWidthStyle = `calc(100vw - ${frozenOffset} - 32px)`;
 </script>
 
 {#if display.visible && settings.enabled}
 	<div
 		class="streak-root"
-		style="left: {leftStyle}; max-width: {maxWidthStyle}"
+		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
 		aria-label={display.count > 0 ? `Streak: ${display.count}` : 'Combo dropped'}
