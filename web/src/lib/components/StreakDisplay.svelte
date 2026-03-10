@@ -1,6 +1,7 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { fly } from 'svelte/transition';
+	import { onMount } from 'svelte';
 	import { streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
@@ -12,18 +13,21 @@
 	// Only used when count > 0 (normal combo state).
 	$: digits = String(Math.min(display.count, 9999)).split('');
 
-	// Freeze the combo position the moment it first becomes visible so that
-	// navigating away (which changes the sidebar width) does not shift the indicator.
+	// Position the combo indicator at the center of <main> using an exact pixel
+	// value from getBoundingClientRect(), frozen at display time so navigating
+	// away (changing sidebar width) doesn't shift it while visible.
 	//
-	// Reads getBoundingClientRect() on <main> for an exact pixel center — more
-	// reliable than parsing CSS custom properties, which getComputedStyle returns
-	// as unresolved literal strings (e.g. "min(208px, 58vw)").
-	//
-	// Uses a single function to avoid Svelte's topological sort running
-	// `_lastVisible = display.visible` before the capture check.
+	// onMount pre-populates the correct position so the very first combo
+	// appearance doesn't start at the '50vw' default and shift into place.
+	// trackVisibility re-captures whenever visibility transitions false → true
+	// (in case layout changed between combos).
 	let _lastVisible = false;
 	let frozenLeft = '50vw';
 	let frozenMaxWidth = 'calc(100vw - 32px)';
+
+	onMount(() => {
+		captureContentCenter();
+	});
 
 	function trackVisibility(isVisible) {
 		if (isVisible && !_lastVisible) {
