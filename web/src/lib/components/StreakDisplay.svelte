@@ -170,7 +170,7 @@
 		filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
 	}
 
-	/* Combo dropped: silver glow + larger missed image (same size as day-complete) */
+	/* Combo dropped: red glow + larger missed image (same size as day-complete) */
 	.streak-root.combo-dropped {
 		animation: combo-dropped-glow 0.7s ease-out forwards;
 	}
@@ -180,9 +180,9 @@
 	}
 
 	@keyframes combo-dropped-glow {
-		0%   { filter: drop-shadow(0 0 0px rgba(192, 192, 192, 0)); }
-		40%  { filter: drop-shadow(0 0 22px rgba(192, 192, 192, 0.8)) drop-shadow(0 0 8px rgba(220, 220, 240, 0.6)); }
-		100% { filter: drop-shadow(0 0 14px rgba(192, 192, 192, 0.45)) drop-shadow(0 0 4px rgba(192, 192, 192, 0.25)); }
+		0%   { filter: drop-shadow(0 0 0px rgba(220, 38, 38, 0)); }
+		40%  { filter: drop-shadow(0 0 22px rgba(220, 38, 38, 0.8)) drop-shadow(0 0 8px rgba(255, 100, 100, 0.6)); }
+		100% { filter: drop-shadow(0 0 14px rgba(220, 38, 38, 0.45)) drop-shadow(0 0 4px rgba(220, 38, 38, 0.25)); }
 	}
 
 	/* Day-complete: warm golden glow + larger judgment image */
