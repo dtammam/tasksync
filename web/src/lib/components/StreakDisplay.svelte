@@ -1,7 +1,6 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { fly } from 'svelte/transition';
-	import { onMount } from 'svelte';
 	import { streakDigitsPaths, streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
@@ -26,18 +25,8 @@
 	let frozenLeft = '50vw';
 	let frozenMaxWidth = 'calc(100vw - 32px)';
 
-	onMount(() => {
-		captureContentCenter();
-	});
-
-	function trackVisibility(isVisible) {
-		if (isVisible && !_lastVisible) {
-			captureContentCenter();
-		}
-		_lastVisible = isVisible;
-	}
-	$: trackVisibility(display.visible);
-
+	// Eagerly capture <main> center so the very first render frame is correct.
+	// This runs at script evaluation time (before the first paint of the {#if} block).
 	function captureContentCenter() {
 		if (typeof document === 'undefined') return;
 		const main = document.querySelector('main');
@@ -47,6 +36,15 @@
 			frozenMaxWidth = `${rect.width - 32}px`;
 		}
 	}
+	captureContentCenter();
+
+	function trackVisibility(isVisible) {
+		if (isVisible && !_lastVisible) {
+			captureContentCenter();
+		}
+		_lastVisible = isVisible;
+	}
+	$: trackVisibility(display.visible);
 </script>
 
 {#if display.visible && settings.enabled}
