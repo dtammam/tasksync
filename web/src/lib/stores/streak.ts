@@ -199,7 +199,7 @@ const playAnnouncer = (theme: string) => {
 // ---------------------------------------------------------------------------
 
 interface ThemeManifest {
-	streakWord: string;
+	streakWord: string | null;
 	announcer: string[];
 	judgment: string[];
 	drop: string[];
@@ -497,7 +497,7 @@ export const streak = {
 		judgmentFileLists[theme] = manifest.judgment.map(encodeSpaces);
 		dropFileLists[theme] = (manifest.drop ?? []).map(encodeSpaces);
 		missedFileLists[theme] = (manifest.missed ?? []).map(encodeSpaces);
-		streakWordUrlStore.set(encodeSpaces(manifest.streakWord));
+		streakWordUrlStore.set(manifest.streakWord ? encodeSpaces(manifest.streakWord) : '');
 	}
 };
 
