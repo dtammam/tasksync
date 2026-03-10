@@ -2,12 +2,13 @@
 	// @ts-nocheck
 	import { fly } from 'svelte/transition';
 	import { onMount } from 'svelte';
-	import { streakDigitsPath, streakDisplay, streakWordUrl } from '$lib/stores/streak';
+	import { streakDigitsPaths, streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
 	$: settings = $uiPreferences.streakSettings;
 	$: theme = settings.theme;
 	$: display = $streakDisplay;
+	$: digitsPath = $streakDigitsPaths[theme] ?? 'digits';
 
 	// Split count into individual digit characters for rendering.
 	// Only used when count > 0 (normal combo state).
@@ -85,7 +86,7 @@
 				>
 					{#each digits as digit}
 						<img
-							src={`/streak/${theme}/${$streakDigitsPath}/${digit}.png`}
+							src={`/streak/${theme}/${digitsPath}/${digit}.png`}
 							alt={digit}
 							class="digit-img"
 							draggable="false"
@@ -168,9 +169,13 @@
 		filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
 	}
 
-	/* Day-complete: warm golden glow behind the whole overlay */
+	/* Day-complete: warm golden glow + larger judgment image */
 	.streak-root.day-complete {
 		animation: day-complete-glow 0.7s ease-out forwards;
+	}
+
+	.streak-root.day-complete .judgment-img {
+		height: clamp(80px, 14vw, 180px);
 	}
 
 	@keyframes day-complete-glow {

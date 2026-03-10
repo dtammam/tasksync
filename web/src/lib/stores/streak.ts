@@ -250,7 +250,9 @@ const dayCompleteImageLists: Record<string, string[]> = {};
 
 // Writable stores so the component can reactively get theme-specific paths.
 const streakWordUrlStore = writable<string>('');
-const digitsPathStore = writable<string>('digits');
+// Per-theme record so each theme's digits folder is independent and never
+// clobbered by a concurrent loadThemeAssets call for a different theme.
+const digitsPathStore = writable<Record<string, string>>({});
 
 const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	if (manifestCache[theme]) return manifestCache[theme];
@@ -297,7 +299,8 @@ export const getRandomMissedImage = (theme: string): string | null => {
 };
 
 export const streakWordUrl = { subscribe: streakWordUrlStore.subscribe };
-export const streakDigitsPath = { subscribe: digitsPathStore.subscribe };
+/** Per-theme map of digits folder names. Look up by current theme; default to "digits". */
+export const streakDigitsPaths = { subscribe: digitsPathStore.subscribe };
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -578,7 +581,7 @@ export const streak = {
 		dayCompleteSoundLists[theme] = (manifest.dayCompleteSound ?? []).map(encodeSpaces);
 		dayCompleteImageLists[theme] = (manifest.dayCompleteImages ?? []).map(encodeSpaces);
 		streakWordUrlStore.set(manifest.streakWord ? encodeSpaces(manifest.streakWord) : '');
-		digitsPathStore.set(manifest.digitsPath ?? 'digits');
+		digitsPathStore.update((rec) => ({ ...rec, [theme]: manifest.digitsPath ?? 'digits' }));
 	}
 };
 
