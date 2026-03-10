@@ -1228,6 +1228,7 @@
 									}}
 								>
 									<option value="ddr">DDR</option>
+								<option value="thps">THPS</option>
 								</select>
 							</label>
 							<label>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	// @ts-nocheck
-	import { fly, fade } from 'svelte/transition';
+	import { fly } from 'svelte/transition';
+	import { onMount } from 'svelte';
 	import { streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
@@ -11,12 +12,46 @@
 	// Split count into individual digit characters for rendering.
 	// Only used when count > 0 (normal combo state).
 	$: digits = String(Math.min(display.count, 9999)).split('');
+
+	// Position the combo indicator at the center of <main> using an exact pixel
+	// value from getBoundingClientRect(), frozen at display time so navigating
+	// away (changing sidebar width) doesn't shift it while visible.
+	//
+	// onMount pre-populates the correct position so the very first combo
+	// appearance doesn't start at the '50vw' default and shift into place.
+	// trackVisibility re-captures whenever visibility transitions false → true
+	// (in case layout changed between combos).
+	let _lastVisible = false;
+	let frozenLeft = '50vw';
+	let frozenMaxWidth = 'calc(100vw - 32px)';
+
+	onMount(() => {
+		captureContentCenter();
+	});
+
+	function trackVisibility(isVisible) {
+		if (isVisible && !_lastVisible) {
+			captureContentCenter();
+		}
+		_lastVisible = isVisible;
+	}
+	$: trackVisibility(display.visible);
+
+	function captureContentCenter() {
+		if (typeof document === 'undefined') return;
+		const main = document.querySelector('main');
+		if (main) {
+			const rect = main.getBoundingClientRect();
+			frozenLeft = `${rect.left + rect.width / 2}px`;
+			frozenMaxWidth = `${rect.width - 32}px`;
+		}
+	}
 </script>
 
 {#if display.visible && settings.enabled}
 	<div
 		class="streak-root"
-		class:breaking={display.breaking}
+		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
 		aria-label={display.count > 0 ? `Streak: ${display.count}` : 'Combo dropped'}
@@ -28,7 +63,7 @@
 		     During normal combo: this is the judgment image. -->
 		{#if display.judgmentSrc}
 			{#key display.judgmentSrc}
-				<div class="judgment-layer" in:fade={{ duration: 150 }}>
+				<div class="judgment-layer">
 					<img
 						src={display.judgmentSrc}
 						alt=""
@@ -75,10 +110,14 @@
 <style>
 	.streak-root {
 		position: fixed;
-		/* Position at top of content area, centered in the content pane (sidebar-aware) */
+		/* Position at top of content area, centered in the content pane (sidebar-aware).
+		   left and max-width are set via inline style using a frozen offset captured at
+		   display time, so navigation changes to --sidebar-offset don't shift the indicator. */
 		top: 64px;
-		left: calc(var(--sidebar-offset, 0px) + (100vw - var(--sidebar-offset, 0px)) / 2);
-		transform: translateX(-50%);
+		/* Use `translate` (independent of `transform`) so Svelte's fly transition,
+		   which animates via `transform: translateY(...)`, doesn't override the
+		   horizontal centering during the fly-in animation. */
+		translate: -50% 0;
 		z-index: 200;
 		pointer-events: none;
 		display: flex;
@@ -87,7 +126,6 @@
 		gap: 2px;
 		/* Prevent layout interference */
 		width: max-content;
-		max-width: calc(100vw - var(--sidebar-offset, 0px) - 32px);
 	}
 
 	.judgment-layer {
@@ -127,12 +165,6 @@
 		width: auto;
 		object-fit: contain;
 		filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
-	}
-
-	/* Break animation: brief red desaturate flash on the missed image */
-	.streak-root.breaking .judgment-img {
-		filter: drop-shadow(0 2px 6px rgba(255, 60, 60, 0.8)) saturate(0.2);
-		transition: filter 150ms ease-out;
 	}
 
 	/* Mobile: tighten up spacing */

@@ -100,7 +100,7 @@ const normalizeListSort = (candidate?: Partial<ListSortPreference>): ListSortPre
 	direction: normalizeListSortDirection(candidate?.direction)
 });
 
-const validStreakThemes: StreakTheme[] = ['ddr'];
+const validStreakThemes: StreakTheme[] = ['ddr', 'thps'];
 const validStreakResetModes: StreakResetMode[] = ['daily', 'endless'];
 
 const defaultStreakSettings = (): StreakSettings => ({
