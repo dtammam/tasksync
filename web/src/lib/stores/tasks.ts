@@ -363,8 +363,15 @@ export const tasks = {
 			if (isRecurring) {
 				streak.undoCompletion(id);
 			}
-			// Announcer takes over audio duty for this completion; skip the regular sound.
-			if (shouldPlayCompletion && !willAnnounce) {
+			// Check if this was the final pending My Day task → day-complete celebration.
+			// myDayPending is a derived store that already reflects the post-toggle state.
+			const isLastMyDayTask =
+				!isRecurring &&
+				get(myDayPending).length === 0 &&
+				get(myDayCompleted).length > 0;
+			const willDayComplete = isLastMyDayTask && streak.triggerDayComplete();
+			// Announcer or day-complete takes over audio duty; skip the regular sound.
+			if (shouldPlayCompletion && !willAnnounce && !willDayComplete) {
 				void playCompletion(soundSettings.get());
 			}
 		} else if (didUncomplete) {

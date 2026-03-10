@@ -29,6 +29,8 @@ interface StreakDisplayState {
 	breaking: boolean;
 	/** judgment image URL for the current event; null = no image */
 	judgmentSrc: string | null;
+	/** true = the day-complete celebration is active */
+	isDayComplete: boolean;
 }
 
 const defaultState = (): StreakState => ({
@@ -43,7 +45,8 @@ const displayStore = writable<StreakDisplayState>({
 	visible: false,
 	pulse: 0,
 	breaking: false,
-	judgmentSrc: null
+	judgmentSrc: null,
+	isDayComplete: false
 });
 
 export const streakDisplay = { subscribe: displayStore.subscribe };
@@ -60,7 +63,7 @@ const scheduleHide = () => {
 	fadeTimer = typeof window !== 'undefined'
 		? window.setTimeout(() => {
 				fadeTimer = null;
-				displayStore.update((d) => ({ ...d, visible: false, breaking: false }));
+				displayStore.update((d) => ({ ...d, visible: false, breaking: false, isDayComplete: false }));
 			}, DISPLAY_TIMEOUT_MS)
 		: null;
 };
@@ -136,6 +139,30 @@ const writeLocalState = (state: StreakState) => {
 };
 
 // ---------------------------------------------------------------------------
+// Day-complete — once-per-day tracking
+// ---------------------------------------------------------------------------
+
+const dayCompleteDateKey = () => `${localKey()}:day-complete-date`;
+
+const hasFiredDayCompleteToday = (): boolean => {
+	if (typeof localStorage === 'undefined') return false;
+	try {
+		return localStorage.getItem(dayCompleteDateKey()) === todayIso();
+	} catch {
+		return false;
+	}
+};
+
+const markDayCompleteFired = (): void => {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		localStorage.setItem(dayCompleteDateKey(), todayIso());
+	} catch {
+		// storage quota — ignore
+	}
+};
+
+// ---------------------------------------------------------------------------
 // DDR daily-reset check
 // ---------------------------------------------------------------------------
 
@@ -200,11 +227,17 @@ const playAnnouncer = (theme: string) => {
 
 interface ThemeManifest {
 	streakWord: string | null;
+	/** Sub-folder name for digit images (0–9). Defaults to "digits" if absent. */
+	digitsPath?: string;
 	announcer: string[];
 	judgment: string[];
 	drop: string[];
 	/** Optional images shown when a combo is dropped. If absent or empty, no image is shown on break. */
 	missed?: string[];
+	/** Optional sounds for the day-complete celebration (final My Day task). */
+	dayCompleteSound?: string[];
+	/** Optional images for the day-complete celebration (final My Day task). */
+	dayCompleteImages?: string[];
 }
 
 const manifestCache: Record<string, ThemeManifest> = {};
@@ -212,9 +245,14 @@ const announcerFileLists: Record<string, string[]> = {};
 const judgmentFileLists: Record<string, string[]> = {};
 const dropFileLists: Record<string, string[]> = {};
 const missedFileLists: Record<string, string[]> = {};
+const dayCompleteSoundLists: Record<string, string[]> = {};
+const dayCompleteImageLists: Record<string, string[]> = {};
 
-// Writable store so the component can reactively get the streak word URL.
+// Writable stores so the component can reactively get theme-specific paths.
 const streakWordUrlStore = writable<string>('');
+// Per-theme record so each theme's digits folder is independent and never
+// clobbered by a concurrent loadThemeAssets call for a different theme.
+const digitsPathStore = writable<Record<string, string>>({});
 
 const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	if (manifestCache[theme]) return manifestCache[theme];
@@ -261,6 +299,8 @@ export const getRandomMissedImage = (theme: string): string | null => {
 };
 
 export const streakWordUrl = { subscribe: streakWordUrlStore.subscribe };
+/** Per-theme map of digits folder names. Look up by current theme; default to "digits". */
+export const streakDigitsPaths = { subscribe: digitsPathStore.subscribe };
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -300,7 +340,8 @@ export const streak = {
 			visible: true,
 			pulse: d.pulse + 1,
 			breaking: false,
-			judgmentSrc
+			judgmentSrc,
+			isDayComplete: false
 		}));
 		scheduleHide();
 
@@ -357,7 +398,7 @@ export const streak = {
 			// stays on screen with the break animation (DDR style: count freezes, then clears).
 			// This also ensures something is visible even when no missed image is configured.
 			const judgmentSrc = getRandomMissedImage(theme);
-			displayStore.update((d) => ({ ...d, count: current.count, visible: true, breaking: true, judgmentSrc }));
+			displayStore.update((d) => ({ ...d, count: current.count, visible: true, breaking: true, isDayComplete: false, judgmentSrc }));
 
 			// Remove the red CSS class after a short flash, but keep the overlay visible.
 			if (typeof window !== 'undefined') {
@@ -380,7 +421,7 @@ export const streak = {
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 		pendingDailyBreak = false;
 		lastMissedCheckDate = null;
-		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, judgmentSrc: null }));
+		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, isDayComplete: false, judgmentSrc: null }));
 	},
 
 	/**
@@ -486,6 +527,46 @@ export const streak = {
 	},
 
 	/**
+	 * Fire the day-complete celebration: plays a special sound and shows a
+	 * special image. Only fires once per calendar day. Returns true if it fired
+	 * (caller can use this to suppress the regular completion sound).
+	 *
+	 * Safe to call when streak is disabled — will return false immediately.
+	 */
+	triggerDayComplete(): boolean {
+		const prefs = uiPreferences.get();
+		if (!prefs.streakSettings.enabled) return false;
+		if (hasFiredDayCompleteToday()) return false;
+
+		markDayCompleteFired();
+
+		const theme = prefs.streakSettings.theme;
+		const images = dayCompleteImageLists[theme] ?? [];
+		const sounds = dayCompleteSoundLists[theme] ?? [];
+
+		const imageSrc = images.length
+			? images[Math.floor(Math.random() * images.length)]
+			: null;
+
+		// Override the current display with the day-complete state.
+		displayStore.update((d) => ({
+			...d,
+			visible: true,
+			isDayComplete: true,
+			// Use day-complete image if available; keep the existing judgment image otherwise
+			// so a normal combo image is still shown when no day-complete imagery is configured.
+			judgmentSrc: imageSrc ?? d.judgmentSrc
+		}));
+		scheduleHide();
+
+		if (soundSettings.get().enabled && sounds.length) {
+			void playUrl(sounds[Math.floor(Math.random() * sounds.length)], soundSettings.get().volume);
+		}
+
+		return true;
+	},
+
+	/**
 	 * Load theme assets from the manifest. Called when streak is enabled or
 	 * theme changes. Non-blocking. Subsequent calls for the same theme are no-ops.
 	 */
@@ -497,7 +578,10 @@ export const streak = {
 		judgmentFileLists[theme] = manifest.judgment.map(encodeSpaces);
 		dropFileLists[theme] = (manifest.drop ?? []).map(encodeSpaces);
 		missedFileLists[theme] = (manifest.missed ?? []).map(encodeSpaces);
+		dayCompleteSoundLists[theme] = (manifest.dayCompleteSound ?? []).map(encodeSpaces);
+		dayCompleteImageLists[theme] = (manifest.dayCompleteImages ?? []).map(encodeSpaces);
 		streakWordUrlStore.set(manifest.streakWord ? encodeSpaces(manifest.streakWord) : '');
+		digitsPathStore.update((rec) => ({ ...rec, [theme]: manifest.digitsPath ?? 'digits' }));
 	}
 };
 

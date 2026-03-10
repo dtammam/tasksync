@@ -57,5 +57,7 @@
     "/streak/thps/missed/wrong way!.png",
     "/streak/thps/missed/you big drip!.png",
     "/streak/thps/missed/you suck!.png"
-  ]
+  ],
+  "dayCompleteSound": [],
+  "dayCompleteImages": []
 }
