@@ -23,7 +23,7 @@ vi.mock('$lib/stores/preferences', () => ({ uiPreferences: mocks.uiPreferences }
 vi.mock('$lib/stores/settings', () => ({ soundSettings: mocks.soundSettings }));
 vi.mock('$lib/sound/sound', () => ({ playUrl: mocks.playUrl }));
 
-import { streak, streakState } from './streak';
+import { streak, streakDisplay, streakState } from './streak';
 
 const enabledPrefs = (resetMode = 'daily') => ({
 	streakSettings: { enabled: true, theme: 'ddr', resetMode }
@@ -387,5 +387,72 @@ describe('streak store — settings normalization', () => {
 		const { getSettingsSections } = await import('$lib/components/settingsMenu');
 		const ids = getSettingsSections(false).map((s) => s.id);
 		expect(ids).toContain('streak');
+	});
+});
+
+describe('streak store — day complete', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		localStorage.clear();
+		vi.clearAllMocks();
+		mocks.auth.get.mockReturnValue(defaultAuth());
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs());
+		mocks.soundSettings.get.mockReturnValue({ enabled: true, volume: 60 });
+		streak.reset();
+	});
+
+	it('triggerDayComplete returns true on first call today', () => {
+		const result = streak.triggerDayComplete();
+		expect(result).toBe(true);
+	});
+
+	it('triggerDayComplete returns false on second call same day (once-per-day guard)', () => {
+		streak.triggerDayComplete();
+		const result = streak.triggerDayComplete();
+		expect(result).toBe(false);
+	});
+
+	it('triggerDayComplete returns false when streak is disabled', () => {
+		mocks.uiPreferences.get.mockReturnValue(disabledPrefs());
+		const result = streak.triggerDayComplete();
+		expect(result).toBe(false);
+	});
+
+	it('triggerDayComplete sets isDayComplete on the display store', () => {
+		streak.increment('task-1');
+		streak.triggerDayComplete();
+		expect(get(streakDisplay).isDayComplete).toBe(true);
+	});
+
+	it('isDayComplete is reset to false after the hide timer fires', () => {
+		streak.increment('task-1');
+		streak.triggerDayComplete();
+		expect(get(streakDisplay).isDayComplete).toBe(true);
+		vi.advanceTimersByTime(3001);
+		expect(get(streakDisplay).isDayComplete).toBe(false);
+	});
+
+	it('triggerDayComplete does not play sound when sound is disabled', () => {
+		mocks.soundSettings.get.mockReturnValue({ enabled: false, volume: 60 });
+		streak.triggerDayComplete();
+		expect(mocks.playUrl).not.toHaveBeenCalled();
+	});
+
+	it('isDayComplete resets to false after streak.reset()', () => {
+		streak.increment('task-1');
+		streak.triggerDayComplete();
+		streak.reset();
+		expect(get(streakDisplay).isDayComplete).toBe(false);
+	});
+
+	it('triggerDayComplete fires again the next day', () => {
+		streak.triggerDayComplete(); // fires today
+		expect(streak.triggerDayComplete()).toBe(false); // blocked same day
+
+		// Simulate next day by overwriting the stored date to yesterday
+		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+		localStorage.setItem('tasksync:streak-state:s1:u1:day-complete-date', yesterday);
+
+		expect(streak.triggerDayComplete()).toBe(true); // new day → fires again
 	});
 });

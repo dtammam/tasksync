@@ -2,7 +2,7 @@
 	// @ts-nocheck
 	import { fly } from 'svelte/transition';
 	import { onMount } from 'svelte';
-	import { streakDisplay, streakWordUrl } from '$lib/stores/streak';
+	import { streakDigitsPath, streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
 	$: settings = $uiPreferences.streakSettings;
@@ -51,6 +51,7 @@
 {#if display.visible && settings.enabled}
 	<div
 		class="streak-root"
+		class:day-complete={display.isDayComplete}
 		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
@@ -84,7 +85,7 @@
 				>
 					{#each digits as digit}
 						<img
-							src={`/streak/${theme}/digits/${digit}.png`}
+							src={`/streak/${theme}/${$streakDigitsPath}/${digit}.png`}
 							alt={digit}
 							class="digit-img"
 							draggable="false"
@@ -165,6 +166,17 @@
 		width: auto;
 		object-fit: contain;
 		filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
+	}
+
+	/* Day-complete: warm golden glow behind the whole overlay */
+	.streak-root.day-complete {
+		animation: day-complete-glow 0.7s ease-out forwards;
+	}
+
+	@keyframes day-complete-glow {
+		0%   { filter: drop-shadow(0 0 0px rgba(251, 191, 36, 0)); }
+		40%  { filter: drop-shadow(0 0 22px rgba(251, 191, 36, 0.8)) drop-shadow(0 0 8px rgba(255, 255, 200, 0.6)); }
+		100% { filter: drop-shadow(0 0 14px rgba(251, 191, 36, 0.45)) drop-shadow(0 0 4px rgba(251, 191, 36, 0.25)); }
 	}
 
 	/* Mobile: tighten up spacing */

@@ -1,33 +1,47 @@
 {
-  "streakWord": "/streak/ddr/streak/combo.png",
+  "streakWord": "/streak/ddr/comboStreakGraphic/combo.png",
+  "digitsPath": "comboDigits",
   "announcer": [
-    "/streak/ddr/announcer/Absolutely wonderful!.mp3",
-    "/streak/ddr/announcer/Everybody's watchin' you!.mp3",
-    "/streak/ddr/announcer/G-g-g-great!.mp3",
-    "/streak/ddr/announcer/Great!.mp3",
-    "/streak/ddr/announcer/Keep steady 'till the end!.mp3",
-    "/streak/ddr/announcer/P-p-p-perfect!.mp3",
-    "/streak/ddr/announcer/Perfect combo!.mp3",
-    "/streak/ddr/announcer/Perfect!.mp3",
-    "/streak/ddr/announcer/Watari!.mp3",
-    "/streak/ddr/announcer/Wow!.mp3",
-    "/streak/ddr/announcer/Yeees.mp3",
-    "/streak/ddr/announcer/You're doin' pretty good.mp3"
+    "/streak/ddr/comboIncreasedSounds/Absolutely wonderful!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Everybody's watchin' you!.mp3",
+    "/streak/ddr/comboIncreasedSounds/G-g-g-great!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Great!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Keep steady 'till the end!.mp3",
+    "/streak/ddr/comboIncreasedSounds/P-p-p-perfect!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Perfect combo!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Perfect!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Watari!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Wow!.mp3",
+    "/streak/ddr/comboIncreasedSounds/Yeees.mp3",
+    "/streak/ddr/comboIncreasedSounds/You're doin' pretty good.mp3"
   ],
   "judgment": [
-    "/streak/ddr/judgment/marvellous.png",
-    "/streak/ddr/judgment/perfect.png"
+    "/streak/ddr/comboIncreasedGraphics/marvellous.png",
+    "/streak/ddr/comboIncreasedGraphics/perfect.png"
   ],
   "drop": [
-    "/streak/ddr/drop/Boo!.mp3",
-    "/streak/ddr/drop/NG.mp3",
-    "/streak/ddr/drop/Nnno good.mp3",
-    "/streak/ddr/drop/Nooooo!.mp3",
-    "/streak/ddr/drop/Oh my god!.mp3",
-    "/streak/ddr/drop/Oh no!.mp3"
+    "/streak/ddr/comboDroppedSounds/Boo!.mp3",
+    "/streak/ddr/comboDroppedSounds/NG.mp3",
+    "/streak/ddr/comboDroppedSounds/Nnno good.mp3",
+    "/streak/ddr/comboDroppedSounds/Nooooo!.mp3",
+    "/streak/ddr/comboDroppedSounds/Oh my god!.mp3",
+    "/streak/ddr/comboDroppedSounds/Oh no!.mp3"
   ],
   "missed": [
-    "/streak/ddr/missed/boo.png",
-    "/streak/ddr/missed/miss.png"
+    "/streak/ddr/comboDroppedGraphics/boo.png",
+    "/streak/ddr/comboDroppedGraphics/miss.png",
+    "/streak/ddr/comboDroppedGraphics/c.png",
+    "/streak/ddr/comboDroppedGraphics/d.png",
+    "/streak/ddr/comboDroppedGraphics/e.png"
+  ],
+  "dayCompleteSound": [
+    "/streak/ddr/dayCompleteAudio/Can I call you a dancin' master (Echo).mp3",
+    "/streak/ddr/dayCompleteAudio/Legend... You are a legend! (Echo).mp3",
+    "/streak/ddr/dayCompleteAudio/You're so fantastic, I was almost dazzled! (Echo).mp3",
+    "/streak/ddr/dayCompleteAudio/You're the one who'll give up hope for the future! (Echo).mp3"
+  ],
+  "dayCompleteImages": [
+    "/streak/ddr/dayCompleteGraphics/aa.png",
+    "/streak/ddr/dayCompleteGraphics/aaa.png"
   ]
 }
