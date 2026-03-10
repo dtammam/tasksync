@@ -1,7 +1,7 @@
 # Repo conventions
 
 ## Scripts are the interface
-Prefer `/scripts/*.ps1` for repeatable workflows and checks.
+Prefer `/scripts/` for repeatable workflows and checks.
 
 ## Docs are source of truth
 - `docs/` is the knowledge base.

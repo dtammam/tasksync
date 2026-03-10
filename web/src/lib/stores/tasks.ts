@@ -460,21 +460,6 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
-	setMyDay(id: string, my_day: boolean) {
-		tasksStore.update((list) =>
-			list.map((t) =>
-				t.id === id
-					? {
-							...t,
-							my_day,
-							dirty: true,
-							updated_ts: Date.now()
-						}
-					: t
-			)
-		);
-		void repo.saveTasks(get(tasksStore));
-	},
 	setDueDate(id: string, due_date?: string) {
 		const now = Date.now();
 		const isFutureOrToday = !!due_date && due_date >= todayIso();

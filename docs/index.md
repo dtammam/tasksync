@@ -6,7 +6,8 @@ Start here, then follow links. The goal is progressive disclosure: small entry p
 
 ## Core docs
 
-- Contributions: `CONTRIBUTING.md`
+- Contributing & software design principles: `CONTRIBUTING.md`
+- Agent operating instructions: `AGENTS.md`
 - Architecture: `ARCHITECTURE.md`
 - Frontend structure & boundaries: `FRONTEND.md`
 - Reliability & performance budgets: `RELIABILITY.md`
