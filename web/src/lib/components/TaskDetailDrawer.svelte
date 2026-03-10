@@ -18,7 +18,6 @@ let recur = '';
 let url = '';
 let notes = '';
 let priority = 0;
-let myDay = false;
 let listId = '';
 let assigneeUserId = '';
 let statusValue = 'pending';
@@ -49,7 +48,6 @@ function hydrate(t) {
 	url = t.url ?? '';
 	notes = t.notes ?? '';
 	priority = t.priority ?? 0;
-	myDay = t.my_day ?? false;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
 	statusValue = t.status ?? 'pending';
@@ -85,8 +83,8 @@ $: showPuntedTodayIndicator =
 $: canPunt =
 	canEditTask &&
 	task?.status === 'pending' &&
-	task?.recurrence_id !== 'daily' &&
-	task?.due_date === todayKey;
+	recur !== 'daily' &&
+	due === todayKey;
 $: showPuntedBadge = showPuntedArrivalIndicator || showPuntedTodayIndicator;
 $: isRecurringCompletedToday =
 	!!task?.recurrence_id && statusValue === 'pending' && recurringCompletionAck;
@@ -94,7 +92,7 @@ $: isStatusAcknowledged = statusValue === 'done' || isRecurringCompletedToday;
 $: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
 $: puntGlyph = isPuntedControlActive ? '▶' : '▷';
 $: starGlyph = priority > 0 ? '★' : '☆';
-$: if (canEditMyDay && due && due > todayKey) myDay = false;
+$: isInMyDay = due === todayKey || (!due && (task?.my_day ?? false));
 
 const save = () => {
 	if (!task || !canEditTask) return;
@@ -105,7 +103,7 @@ const save = () => {
 		url: url || undefined,
 		notes,
 		priority,
-		my_day: canEditMyDay ? myDay : (task.my_day ?? false),
+		my_day: canEditMyDay ? false : (task.my_day ?? false),
 		list_id: listId,
 		assignee_user_id: canEditAssignee ? assigneeUserId || undefined : task.assignee_user_id
 	});
@@ -132,11 +130,6 @@ const toggleStatus = () => {
 const toggleStar = () => {
 	if (!canEditTask) return;
 	priority = priority > 0 ? 0 : 1;
-};
-
-const toggleMyDay = () => {
-	if (!canEditMyDay) return;
-	myDay = !myDay;
 };
 
 const punt = () => {
@@ -198,15 +191,22 @@ const memberAvatar = (member) => {
 				</label>
 				<label>
 					My Day
-					<button
-						class={`ghost detail-toggle myday-toggle ${myDay ? 'active' : ''}`}
-						type="button"
-						data-testid="detail-myday-toggle"
-						on:click={toggleMyDay}
-						disabled={!canEditMyDay}
-					>
-						{myDay ? 'My Day' : 'Add to My Day'}
-					</button>
+					{#if isInMyDay}
+						<button
+							class="ghost detail-toggle myday-toggle active"
+							type="button"
+							data-testid="detail-myday-badge"
+							disabled
+						>In My Day</button>
+					{:else}
+						<button
+							class="ghost detail-toggle myday-toggle"
+							type="button"
+							data-testid="detail-myday-toggle"
+							on:click={() => { if (canEditTask) due = todayKey; }}
+							disabled={!canEditTask}
+						>Add to My Day</button>
+					{/if}
 				</label>
 				<label>
 					Starred

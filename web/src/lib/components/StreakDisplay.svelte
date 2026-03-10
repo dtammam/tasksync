@@ -1,7 +1,6 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { fly } from 'svelte/transition';
-	import { onMount } from 'svelte';
 	import { streakDigitsPaths, streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
 
@@ -26,18 +25,8 @@
 	let frozenLeft = '50vw';
 	let frozenMaxWidth = 'calc(100vw - 32px)';
 
-	onMount(() => {
-		captureContentCenter();
-	});
-
-	function trackVisibility(isVisible) {
-		if (isVisible && !_lastVisible) {
-			captureContentCenter();
-		}
-		_lastVisible = isVisible;
-	}
-	$: trackVisibility(display.visible);
-
+	// Eagerly capture <main> center so the very first render frame is correct.
+	// This runs at script evaluation time (before the first paint of the {#if} block).
 	function captureContentCenter() {
 		if (typeof document === 'undefined') return;
 		const main = document.querySelector('main');
@@ -47,12 +36,22 @@
 			frozenMaxWidth = `${rect.width - 32}px`;
 		}
 	}
+	captureContentCenter();
+
+	function trackVisibility(isVisible) {
+		if (isVisible && !_lastVisible) {
+			captureContentCenter();
+		}
+		_lastVisible = isVisible;
+	}
+	$: trackVisibility(display.visible);
 </script>
 
 {#if display.visible && settings.enabled}
 	<div
 		class="streak-root"
 		class:day-complete={display.isDayComplete}
+		class:combo-dropped={display.isComboDropped}
 		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
@@ -169,6 +168,21 @@
 		filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
 	}
 
+	/* Combo dropped: red glow + larger missed image (same size as day-complete) */
+	.streak-root.combo-dropped {
+		animation: combo-dropped-glow 0.7s ease-out forwards;
+	}
+
+	.streak-root.combo-dropped .judgment-img {
+		height: clamp(80px, 14vw, 180px);
+	}
+
+	@keyframes combo-dropped-glow {
+		0%   { filter: drop-shadow(0 0 0px rgba(220, 38, 38, 0)); }
+		40%  { filter: drop-shadow(0 0 22px rgba(220, 38, 38, 0.8)) drop-shadow(0 0 8px rgba(255, 100, 100, 0.6)); }
+		100% { filter: drop-shadow(0 0 14px rgba(220, 38, 38, 0.45)) drop-shadow(0 0 4px rgba(220, 38, 38, 0.25)); }
+	}
+
 	/* Day-complete: warm golden glow + larger judgment image */
 	.streak-root.day-complete {
 		animation: day-complete-glow 0.7s ease-out forwards;
@@ -198,6 +212,10 @@
 		}
 		.judgment-img {
 			height: clamp(18px, 5vw, 36px);
+		}
+		.streak-root.combo-dropped .judgment-img,
+		.streak-root.day-complete .judgment-img {
+			height: clamp(80px, 14vw, 180px);
 		}
 	}
 </style>

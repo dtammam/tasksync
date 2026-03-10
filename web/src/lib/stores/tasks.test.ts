@@ -780,14 +780,132 @@ describe('tasks store helpers', () => {
 		expect(get(myDayPending).map((t) => t.id)).not.toContain('md-1');
 	});
 
-	it('keeps my_day when setDueDate sets a past or same-day date', () => {
-		tasks.setAll([baseTask({ id: 'md-2', my_day: true, due_date: '2026-02-02', status: 'pending' })]);
+	it('clears my_day when setDueDate sets today', () => {
+		tasks.setAll([baseTask({ id: 'md-2', my_day: true, due_date: '2026-02-01', status: 'pending' })]);
 
-		tasks.setDueDate('md-2', '2026-02-02');
+		tasks.setDueDate('md-2', '2026-02-02'); // mock date is 2026-02-02 (today)
 
 		const updated = tasks.getAll().find((t) => t.id === 'md-2');
-		expect(updated?.my_day).toBe(true);
+		expect(updated?.my_day).toBe(false);
 		expect(updated?.due_date).toBe('2026-02-02');
+	});
+
+	it('keeps my_day when setDueDate sets a past date', () => {
+		tasks.setAll([baseTask({ id: 'md-3', my_day: true, due_date: '2026-02-02', status: 'pending' })]);
+
+		tasks.setDueDate('md-3', '2026-01-15'); // past date
+
+		const updated = tasks.getAll().find((t) => t.id === 'md-3');
+		expect(updated?.my_day).toBe(true);
+		expect(updated?.due_date).toBe('2026-01-15');
+	});
+
+	it('setDueToday sets due_date to today, clears my_day and punt state, marks dirty', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'sdt-1',
+				my_day: true,
+				due_date: '2026-03-01',
+				punted_from_due_date: '2026-03-01',
+				punted_on_date: '2026-03-01',
+				status: 'pending'
+			})
+		]);
+
+		tasks.setDueToday('sdt-1');
+
+		const updated = tasks.getAll().find((t) => t.id === 'sdt-1');
+		expect(updated?.due_date).toBe('2026-02-02'); // mock today
+		expect(updated?.my_day).toBe(false);
+		expect(updated?.punted_from_due_date).toBeUndefined();
+		expect(updated?.punted_on_date).toBeUndefined();
+		expect(updated?.dirty).toBe(true);
+	});
+
+	it('setDueToday on non-existent id is a no-op', () => {
+		tasks.setAll([baseTask({ id: 'sdt-x' })]);
+		tasks.setDueToday('does-not-exist');
+		expect(tasks.getAll()).toHaveLength(1);
+	});
+
+	it('catchUp advances missed recurring task to next occurrence after today', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'cu-1',
+				recurrence_id: 'daily',
+				due_date: '2026-01-30', // 3 days before mock today (2026-02-02)
+				status: 'pending'
+			})
+		]);
+
+		expect(get(myDayMissed).map((t) => t.id)).toContain('cu-1');
+
+		tasks.catchUp('cu-1');
+
+		const updated = tasks.getAll().find((t) => t.id === 'cu-1');
+		expect(updated?.due_date).toBe('2026-02-03'); // next daily after today
+		expect(updated?.occurrences_completed).toBe(0); // not incremented
+		expect(updated?.completed_ts).toBeUndefined();
+		expect(updated?.dirty).toBe(true);
+		expect(get(myDayMissed).map((t) => t.id)).not.toContain('cu-1');
+	});
+
+	it('catchUp clears punt state', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'cu-2',
+				recurrence_id: 'weekly',
+				due_date: '2026-01-19', // ~2 weeks before today
+				punted_from_due_date: '2026-01-19',
+				punted_on_date: '2026-01-19',
+				status: 'pending'
+			})
+		]);
+
+		tasks.catchUp('cu-2');
+
+		const updated = tasks.getAll().find((t) => t.id === 'cu-2');
+		expect(updated?.punted_from_due_date).toBeUndefined();
+		expect(updated?.punted_on_date).toBeUndefined();
+		expect(updated?.due_date).toBe('2026-02-09'); // next weekly after 2026-02-02
+	});
+
+	it('catchUp is a no-op for non-recurring tasks', () => {
+		tasks.setAll([
+			baseTask({ id: 'cu-3', due_date: '2026-01-30', status: 'pending' })
+		]);
+
+		tasks.catchUp('cu-3');
+
+		const updated = tasks.getAll().find((t) => t.id === 'cu-3');
+		expect(updated?.due_date).toBe('2026-01-30'); // unchanged
+	});
+
+	it('catchUp is a no-op when task has no due_date', () => {
+		tasks.setAll([
+			baseTask({ id: 'cu-4', recurrence_id: 'daily', due_date: undefined, status: 'pending' })
+		]);
+
+		tasks.catchUp('cu-4');
+
+		const updated = tasks.getAll().find((t) => t.id === 'cu-4');
+		expect(updated?.due_date).toBeUndefined();
+	});
+
+	it('catchUp does not call streak.break()', () => {
+		mockedStreakBreak.mockClear();
+		tasks.setAll([
+			baseTask({
+				id: 'cu-5',
+				recurrence_id: 'daily',
+				due_date: '2026-01-30',
+				status: 'pending'
+			})
+		]);
+
+		tasks.catchUp('cu-5');
+
+		expect(mockedStreakBreak).not.toHaveBeenCalled();
 	});
 
 	it('plays completion sound only when task moves to done', () => {

@@ -31,6 +31,8 @@ interface StreakDisplayState {
 	judgmentSrc: string | null;
 	/** true = the day-complete celebration is active */
 	isDayComplete: boolean;
+	/** true = the combo-dropped celebration is active */
+	isComboDropped: boolean;
 }
 
 const defaultState = (): StreakState => ({
@@ -46,7 +48,8 @@ const displayStore = writable<StreakDisplayState>({
 	pulse: 0,
 	breaking: false,
 	judgmentSrc: null,
-	isDayComplete: false
+	isDayComplete: false,
+	isComboDropped: false
 });
 
 export const streakDisplay = { subscribe: displayStore.subscribe };
@@ -63,7 +66,7 @@ const scheduleHide = () => {
 	fadeTimer = typeof window !== 'undefined'
 		? window.setTimeout(() => {
 				fadeTimer = null;
-				displayStore.update((d) => ({ ...d, visible: false, breaking: false, isDayComplete: false }));
+				displayStore.update((d) => ({ ...d, visible: false, breaking: false, isDayComplete: false, isComboDropped: false }));
 			}, DISPLAY_TIMEOUT_MS)
 		: null;
 };
@@ -341,7 +344,8 @@ export const streak = {
 			pulse: d.pulse + 1,
 			breaking: false,
 			judgmentSrc,
-			isDayComplete: false
+			isDayComplete: false,
+			isComboDropped: false
 		}));
 		scheduleHide();
 
@@ -398,7 +402,7 @@ export const streak = {
 			// stays on screen with the break animation (DDR style: count freezes, then clears).
 			// This also ensures something is visible even when no missed image is configured.
 			const judgmentSrc = getRandomMissedImage(theme);
-			displayStore.update((d) => ({ ...d, count: current.count, visible: true, breaking: true, isDayComplete: false, judgmentSrc }));
+			displayStore.update((d) => ({ ...d, count: current.count, visible: true, breaking: true, isDayComplete: false, isComboDropped: true, judgmentSrc }));
 
 			// Remove the red CSS class after a short flash, but keep the overlay visible.
 			if (typeof window !== 'undefined') {
@@ -421,7 +425,7 @@ export const streak = {
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 		pendingDailyBreak = false;
 		lastMissedCheckDate = null;
-		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, isDayComplete: false, judgmentSrc: null }));
+		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, isDayComplete: false, isComboDropped: false, judgmentSrc: null }));
 	},
 
 	/**

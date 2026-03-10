@@ -207,15 +207,14 @@
 	const quickAdd = () => {
 		if ($auth.user?.role === 'contributor') return;
 		if (!quickTitle.trim()) return;
-		tasks.createLocal(quickTitle, defaultListId, {
-			my_day: true
-		});
+		const task = tasks.createLocal(quickTitle, defaultListId);
+		if (task) tasks.setDueToday(task.id);
 		quickTitle = '';
 	};
 
 	const addSuggestionToMyDay = (id) => {
 		if ($auth.user?.role === 'contributor') return;
-		tasks.setMyDay(id, true);
+		tasks.setDueToday(id);
 		showSuggestions = false;
 	};
 

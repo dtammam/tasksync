@@ -2,6 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const todayIso = () => {
+	const d = new Date();
+	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 const seededLists = [
 	{ id: 'my-day', name: 'My Day', icon: '🌅', order: 'a' },
 	{ id: 'goal-management', name: 'Goal Management', icon: '🎯', order: 'b' },
@@ -21,6 +25,7 @@ interface SeedTask {
 	title: string;
 	list_id: string;
 	my_day?: boolean;
+	due_date?: string;
 	status?: 'pending' | 'done';
 }
 
@@ -307,6 +312,7 @@ const mockAuthenticatedSyncServer = async (
 			status: string;
 			list_id: string;
 			my_day: number;
+			due_date?: string;
 			priority: number;
 			order: string;
 			created_ts: number;
@@ -331,6 +337,7 @@ const mockAuthenticatedSyncServer = async (
 			status: seedTask.status ?? 'pending',
 			list_id: seedTask.list_id,
 			my_day: seedTask.my_day ? 1 : 0,
+			...(seedTask.due_date ? { due_date: seedTask.due_date } : {}),
 			priority: 0,
 			order: `seed-${now}`,
 			created_ts: now,
@@ -604,7 +611,7 @@ test.describe('Offline continuity', () => {
 		const title = makeTitle('Offline complete');
 		await setAuthenticatedClientState(page, user);
 		const mockServer = await mockAuthenticatedSyncServer(page, user, {
-			seedTasks: [{ title, list_id: 'my-day', my_day: true, status: 'pending' }]
+			seedTasks: [{ title, list_id: 'my-day', my_day: true, due_date: todayIso(), status: 'pending' }]
 		});
 
 		await page.goto('/');
@@ -659,7 +666,7 @@ test.describe('Offline continuity', () => {
 		const editedTitle = `${originalTitle} updated`;
 		await setAuthenticatedClientState(page, user);
 		const mockServer = await mockAuthenticatedSyncServer(page, user, {
-			seedTasks: [{ title: originalTitle, list_id: 'my-day', my_day: true, status: 'pending' }]
+			seedTasks: [{ title: originalTitle, list_id: 'my-day', my_day: true, due_date: todayIso(), status: 'pending' }]
 		});
 
 		await page.goto('/');
@@ -724,7 +731,7 @@ test.describe('Offline continuity', () => {
 		const destinationListId = 'goal-management';
 		await setAuthenticatedClientState(page, user);
 		const mockServer = await mockAuthenticatedSyncServer(page, user, {
-			seedTasks: [{ title, list_id: 'my-day', my_day: true, status: 'pending' }]
+			seedTasks: [{ title, list_id: 'my-day', my_day: true, due_date: todayIso(), status: 'pending' }]
 		});
 
 		await page.goto('/');
