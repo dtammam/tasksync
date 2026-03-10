@@ -25,11 +25,8 @@ const updateList = (event) => {
 	tasks.moveToList(task.id, select.value);
 };
 
-/** @param {Event & { target: HTMLInputElement }} event */
-const toggleMyDay = (event) => {
-	if ($auth.user?.role === 'contributor') return;
-	const input = event.target;
-	tasks.setMyDay(task.id, input.checked);
+const addToMyDay = () => {
+	tasks.setDueToday(task.id);
 };
 
 const openDetail = () => dispatch('openDetail', { id: task.id });
@@ -164,6 +161,12 @@ $: canPunt =
 	task.status === 'pending' &&
 	task.recurrence_id !== 'daily' &&
 	task.due_date === todayKey;
+$: showCatchUp =
+	canEditTask &&
+	!!task.recurrence_id &&
+	!!task.due_date &&
+	task.due_date < todayKey &&
+	task.status === 'pending';
 $: taskList = $lists.find((list) => list.id === task.list_id);
 $: listColor = taskList?.color?.trim() || '#334155';
 $: listColorSoft = toRgba(listColor, 0.18) || 'rgba(51,65,85,0.18)';
@@ -241,16 +244,25 @@ $: isRecurringCompletedToday =
 			{#if showPuntedCompletedTag}
 				<span class="chip subtle punted-chip">Punted today</span>
 			{/if}
-			{#if !inMyDayView}
-				<label class="chip toggle day-chip">
-					<input
-						type="checkbox"
-						checked={task.my_day}
-						on:change={toggleMyDay}
-						disabled={isContributor}
-					/>
+			{#if !inMyDayView && !task.my_day && task.due_date !== todayKey}
+				<button
+					class="chip ghost day-chip"
+					type="button"
+					on:click={addToMyDay}
+					data-testid="task-myday-btn"
+				>
 					My Day
-				</label>
+				</button>
+			{/if}
+			{#if showCatchUp}
+				<button
+					class="chip ghost catchup-chip"
+					type="button"
+					on:click={() => tasks.catchUp(task.id)}
+					data-testid="task-catchup"
+				>
+					Catch Up
+				</button>
 			{/if}
 			<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
 		</div>
@@ -372,7 +384,6 @@ $: isRecurringCompletedToday =
 		background: color-mix(in oklab, var(--surface-accent) 32%, var(--surface-2) 68%);
 		color: var(--app-text);
 	}
-	.chip.toggle { cursor:pointer; }
 	.chip.pending { background:#92400e; border-color:#f59e0b; color:#ffedd5; }
 	.chip.synced { background:#0b3a2a; border-color:#10b981; color:#d1fae5; }
 	.list-chip select {
@@ -387,16 +398,9 @@ $: isRecurringCompletedToday =
 		line-height:1;
 		height:18px;
 	}
-	.day-chip input {
-		margin:0;
-		width:13px;
-		height:13px;
-		transform: translateY(-0.5px);
-	}
 	.list-chip { border-color:var(--list-accent, #334155); background:var(--list-accent-soft, var(--surface-2)); }
 	.list-chip select:focus-visible { outline:none; }
-	input[type='checkbox'] { accent-color:#38bdf8; cursor:pointer; }
-	input[type='checkbox']:disabled, .list-chip select:disabled { cursor:not-allowed; opacity:0.65; }
+	.list-chip select:disabled { cursor:not-allowed; opacity:0.65; }
 	.quick { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-top:8px; }
 	.quick button {
 		background: color-mix(in oklab, var(--surface-1) 94%, white 4%);

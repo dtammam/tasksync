@@ -129,13 +129,15 @@ const readTaskFromIdb = async (page: Page, title: string) =>
 			notes?: string;
 			punted_from_due_date?: string;
 			punted_on_date?: string;
+			occurrences_completed?: number;
+			status?: string;
 		};
 	}, title);
 
 const updateTaskInIdb = async (
 	page: Page,
 	title: string,
-	patch: Partial<{ due_date: string; punted_from_due_date: string; punted_on_date: string }>
+	patch: Record<string, unknown>
 ) =>
 	page.evaluate(
 		async ({
@@ -143,7 +145,7 @@ const updateTaskInIdb = async (
 			taskPatch
 		}: {
 			taskTitle: string;
-			taskPatch: Partial<{ due_date: string; punted_from_due_date: string; punted_on_date: string }>;
+			taskPatch: Record<string, unknown>;
 		}) => {
 			const resolveScopedDbName = () => {
 				const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
@@ -332,13 +334,11 @@ test.describe('My Day', () => {
 		await row.getByRole('button', { name: '⋯' }).click();
 		await row.getByRole('button', { name: 'Details' }).click();
 
-		const myDayToggle = page.getByTestId('detail-myday-toggle');
-		await expect(myDayToggle).toHaveText('My Day');
-		await myDayToggle.click();
-		await expect(myDayToggle).toHaveText('Add to My Day');
-		await myDayToggle.click();
-		await expect(myDayToggle).toHaveText('My Day');
-		await page.getByLabel('Due date').fill(today);
+		// Task was created via quickAdd which calls setDueToday — badge should show
+		const myDayBadge = page.getByTestId('detail-myday-badge');
+		await expect(myDayBadge).toHaveText('In My Day');
+		await expect(page.getByLabel('Due date')).toHaveValue(today);
+
 		await page.getByLabel('Recurrence').selectOption('weekly');
 		await page.getByLabel('Notes').fill(notes);
 		await page.getByRole('button', { name: 'Save' }).click();
@@ -347,7 +347,7 @@ test.describe('My Day', () => {
 		await expect.poll(async () => (await readTaskFromIdb(page, title))?.recurrence_id ?? null).toBe(
 			'weekly'
 		);
-		await expect.poll(async () => (await readTaskFromIdb(page, title))?.my_day ?? null).toBe(true);
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.my_day ?? null).toBe(false);
 		await expect.poll(async () => (await readTaskFromIdb(page, title))?.notes ?? null).toBe(notes);
 
 		await page.reload();
@@ -355,7 +355,7 @@ test.describe('My Day', () => {
 		await expect(reloadedRow).toHaveCount(1);
 		await reloadedRow.getByRole('button', { name: '⋯' }).click();
 		await reloadedRow.getByRole('button', { name: 'Details' }).click();
-		await expect(page.getByTestId('detail-myday-toggle')).toHaveText('My Day');
+		await expect(page.getByTestId('detail-myday-badge')).toHaveText('In My Day');
 		await expect(page.getByLabel('Due date')).toHaveValue(today);
 		await expect(page.getByLabel('Recurrence')).toHaveValue('weekly');
 		await expect(page.getByLabel('Notes')).toHaveValue(notes);
@@ -781,6 +781,234 @@ test.describe('List view', () => {
 		await expect(completedSectionRows.filter({ hasText: marker })).toHaveCount(0);
 
 		await expect(pendingSection.getByTestId('task-row').filter({ hasText: marker })).toHaveCount(2);
+	});
+});
+
+test.describe('My Day button', () => {
+	test('@smoke My Day button on task row sets due_date to today', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('MyDay btn row');
+		const today = addDaysLocalIso(0);
+
+		// Create task on My Day page (quickAdd sets due_date = today), then clear it
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		await updateTaskInIdb(page, title, { due_date: undefined, my_day: false });
+
+		// Navigate to list view where the My Day button is visible
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+
+		const myDayBtn = row.getByTestId('task-myday-btn');
+		await expect(myDayBtn).toBeVisible();
+		await myDayBtn.click();
+
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null).toBe(today);
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.my_day ?? null).toBe(false);
+
+		// Verify button disappears (task now due today)
+		await expect(row.getByTestId('task-myday-btn')).toHaveCount(0);
+
+		// Verify persists after reload
+		await page.goto('/');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+	});
+
+	test('My Day button hidden when task already due today', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('MyDay btn hidden');
+
+		// quickAdd sets due_date = today
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+
+		// Navigate to list view (My Day button only rendered in list views)
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await expect(row.getByTestId('task-myday-btn')).toHaveCount(0);
+	});
+
+	test('My Day button in drawer fires immediately and saves due_date', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('MyDay drawer');
+		const today = addDaysLocalIso(0);
+
+		// Create task and clear its due date
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		await updateTaskInIdb(page, title, { due_date: undefined, my_day: false });
+
+		// Navigate to list view to see the task
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+
+		const toggle = page.getByTestId('detail-myday-toggle');
+		await expect(toggle).toHaveText('Add to My Day');
+		await expect(page.getByLabel('Due date')).toHaveValue('');
+
+		await toggle.click();
+		// Due field should immediately update
+		await expect(page.getByLabel('Due date')).toHaveValue(today);
+
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null).toBe(today);
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.my_day ?? null).toBe(false);
+	});
+
+	test('legacy my_day: true task without due_date still shows in My Day', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('MyDay legacy');
+
+		// Create task and patch to legacy state (my_day: true, no due_date)
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		await updateTaskInIdb(page, title, { due_date: undefined, my_day: true });
+		await page.reload();
+
+		// Should still appear in My Day Pending (inMyDay returns true for my_day: true)
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+
+		// In list view, My Day button should NOT be shown (already in My Day via legacy flag)
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		const listRow = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(listRow).toHaveCount(1);
+		await expect(listRow.getByTestId('task-myday-btn')).toHaveCount(0);
+	});
+});
+
+test.describe('Catch Up', () => {
+	test('@smoke Catch Up advances missed recurring task past today', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('CatchUp smoke');
+		const yesterday = addDaysLocalIso(-1);
+		const tomorrow = addDaysLocalIso(1);
+
+		// Create task on My Day page
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+
+		// Patch to missed daily recurring task
+		await updateTaskInIdb(page, title, { due_date: yesterday, recurrence_id: 'daily', my_day: false });
+		await page.reload();
+
+		// Should be in missed section with catch-up chip
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		const catchUpBtn = row.getByTestId('task-catchup');
+		await expect(catchUpBtn).toBeVisible();
+
+		await catchUpBtn.click();
+
+		// Should advance to tomorrow (next daily after today)
+		await expect.poll(async () => (await readTaskFromIdb(page, title))?.due_date ?? null).toBe(
+			tomorrow
+		);
+
+		// Verify persistence: task with due_date=tomorrow won't be on My Day, check from list view
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		const listRow = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(listRow).toHaveCount(1);
+		await expect(listRow.getByTestId('task-catchup')).toHaveCount(0);
+	});
+
+	test('Catch Up not shown for non-recurring missed task', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('CatchUp nonrecur');
+		const yesterday = addDaysLocalIso(-1);
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		await updateTaskInIdb(page, title, { due_date: yesterday, my_day: false });
+		await page.reload();
+
+		// Non-recurring missed task appears in Missed section but without Catch Up
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await expect(row.getByTestId('task-catchup')).toHaveCount(0);
+	});
+
+	test('Catch Up clears punt state', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('CatchUp punt');
+		const yesterday = addDaysLocalIso(-1);
+		const twoDaysAgo = addDaysLocalIso(-2);
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		await updateTaskInIdb(page, title, {
+			due_date: yesterday,
+			recurrence_id: 'daily',
+			my_day: false,
+			punted_from_due_date: twoDaysAgo,
+			punted_on_date: yesterday
+		});
+		await page.reload();
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		const catchUpBtn = row.getByTestId('task-catchup');
+		await expect(catchUpBtn).toBeVisible();
+		await catchUpBtn.click();
+
+		await expect
+			.poll(async () => {
+				const task = await readTaskFromIdb(page, title);
+				return task?.punted_from_due_date ?? null;
+			})
+			.toBeNull();
+		await expect
+			.poll(async () => {
+				const task = await readTaskFromIdb(page, title);
+				return task?.punted_on_date ?? null;
+			})
+			.toBeNull();
+	});
+
+	test('Catch Up does not increment occurrences_completed', async ({ page }) => {
+		await resetClientState(page);
+		const title = makeTitle('CatchUp occ');
+		const yesterday = addDaysLocalIso(-1);
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		await updateTaskInIdb(page, title, {
+			due_date: yesterday,
+			recurrence_id: 'daily',
+			my_day: false,
+			occurrences_completed: 5
+		});
+		await page.reload();
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await row.getByTestId('task-catchup').click();
+
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.occurrences_completed ?? null)
+			.toBe(5);
 	});
 });
 

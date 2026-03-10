@@ -124,6 +124,19 @@ const nextRecurringDueAfterCurrent = (task: Task) => {
 	return next;
 };
 
+const nextRecurringDueAfterToday = (task: Task) => {
+	const today = todayIso();
+	const anchor = task.punted_from_due_date ?? task.due_date;
+	let next = nextDueForRecurrence(anchor, task.recurrence_id);
+	if (!next) return task.due_date;
+	while (next <= today) {
+		const candidate = nextDueForRecurrence(next, task.recurrence_id);
+		if (!candidate || candidate === next) break;
+		next = candidate;
+	}
+	return next;
+};
+
 const preservePuntState = (incoming: Task, existing?: Task) => {
 	if (
 		!existing?.punted_from_due_date &&
@@ -160,7 +173,7 @@ export const tasks = {
 		tasksStore.update((list) => [...list, task]);
 		void repo.saveTasks(get(tasksStore));
 	},
-	createLocal(title: string, list_id: string, opts?: { my_day?: boolean; assignee_user_id?: string }) {
+	createLocal(title: string, list_id: string, opts?: { my_day?: boolean; assignee_user_id?: string; due_date?: string }) {
 		return tasks.createLocalWithOptions(title, list_id, opts);
 	},
 	createLocalWithOptions(
@@ -171,6 +184,7 @@ export const tasks = {
 			status?: Task['status'];
 			priority?: Task['priority'];
 			assignee_user_id?: string;
+			due_date?: string;
 		}
 	) {
 		const trimmed = title.trim();
@@ -434,6 +448,18 @@ export const tasks = {
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
+	setDueToday(id: string) {
+		const today = todayIso();
+		const now = Date.now();
+		tasksStore.update((list) =>
+			list.map((t) =>
+				t.id === id
+					? { ...clearPuntState(t), due_date: today, my_day: false, dirty: true, updated_ts: now }
+					: t
+			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
 	setMyDay(id: string, my_day: boolean) {
 		tasksStore.update((list) =>
 			list.map((t) =>
@@ -451,19 +477,32 @@ export const tasks = {
 	},
 	setDueDate(id: string, due_date?: string) {
 		const now = Date.now();
-		const isFuture = !!due_date && due_date > todayIso();
+		const isFutureOrToday = !!due_date && due_date >= todayIso();
 		tasksStore.update((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
 							...clearPuntState(t),
 							due_date,
-							...(isFuture ? { my_day: false } : {}),
+							...(isFutureOrToday ? { my_day: false } : {}),
 							dirty: true,
 							updated_ts: now
 						}
 					: t
 			)
+		);
+		void repo.saveTasks(get(tasksStore));
+	},
+	catchUp(id: string) {
+		const now = Date.now();
+		tasksStore.update((list) =>
+			list.map((task) => {
+				if (task.id !== id) return task;
+				if (!task.recurrence_id || !task.due_date) return task;
+				const next = nextRecurringDueAfterToday(task);
+				if (!next || next === task.due_date) return task;
+				return { ...clearPuntState(task), due_date: next, dirty: true, updated_ts: now };
+			})
 		);
 		void repo.saveTasks(get(tasksStore));
 	},
