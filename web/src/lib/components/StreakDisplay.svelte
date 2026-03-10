@@ -53,7 +53,7 @@
 	<div
 		class="streak-root"
 		class:day-complete={display.isDayComplete}
-		class:combo-dropped={display.breaking}
+		class:combo-dropped={display.isComboDropped}
 		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
