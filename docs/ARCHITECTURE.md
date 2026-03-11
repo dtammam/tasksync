@@ -39,26 +39,33 @@ package "tasksync Server" {
 ## Repo Layout
 ```
 / (root)
-├─ server/               # Rust (Axum + SQLx)
+├─ server/                  # Rust (Axum + SQLx)
 │  ├─ src/
 │  ├─ migrations/
 │  └─ Cargo.toml
-├─ web/                  # SvelteKit PWA
+├─ web/                     # SvelteKit PWA
 │  ├─ src/
 │  │  ├─ lib/
-│  │  │  ├─ sound/      # WebAudio helper
-│  │  │  └─ stores/     # Svelte stores (tasks, settings, sync, search)
-│  │  ├─ routes/
-│  │  │  ├─ settings/
-│  │  │  └─ (app pages)
-│  │  └─ components/
-│  ├─ static/sounds/     # built‑in audio assets
-│  └─ service-worker.ts
+│  │  │  ├─ api/           # HTTP client + headers
+│  │  │  ├─ assets/        # static imports (images, etc.)
+│  │  │  ├─ components/    # UI components (Sidebar, TaskRow, etc.)
+│  │  │  ├─ data/          # IndexedDB repo + persistence
+│  │  │  ├─ markdown/      # import parsing (Joplin, plain text)
+│  │  │  ├─ sound/         # WebAudio helper
+│  │  │  ├─ stores/        # Svelte stores (tasks, settings, auth, etc.)
+│  │  │  ├─ sync/          # sync coordinator + worker
+│  │  │  └─ tasks/         # task domain helpers
+│  │  ├─ routes/           # SvelteKit pages + layout
+│  │  ├─ test/             # test utilities
+│  │  └─ service-worker.ts
+│  └─ static/
+│     ├─ sounds/           # built-in audio assets
+│     └─ streak/           # streak theme assets (per-theme manifests)
 ├─ shared/
-│  └─ types/             # TS interfaces mirrored server↔client
-└─ docs/
-   ├─ ARCHITECTURE.md
-   └─ AGENTS.md
+│  └─ types/               # TS interfaces mirrored server↔client
+├─ scripts/                # workflow scripts
+├─ hooks/                  # git hooks (pre-commit, pre-push)
+└─ docs/                   # system of record (see docs/index.md)
 ```
 
 ## Client Architecture

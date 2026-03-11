@@ -139,7 +139,7 @@ The hooks source `~/.profile` and `~/.cargo/env` automatically to pick up `npm`/
 ## Project History
 
 - This started on 2026-01-31, and by 2026-02-08 it became a fully functional system with Docker images published and a complete transition off Microsoft To Do. Built with Codex + Cursor and a tight testing/linting loop.
-- See `PROGRESS.md` for milestone notes and `ROADMAP.md` for what's next.
+- Early milestone notes and roadmap are archived in `docs/exec-plans/completed/legacy-progress-and-roadmap.md`.
 - For deeper technical docs, start at `docs/index.md`.
 
 ## License
