@@ -1,14 +1,21 @@
-# PROGRESS
+# Legacy Artifact: Progress Log + Roadmap
 
-This file is an append-only log of completed work and notable discoveries.
+**Migrated:** 2026-03-11
+**Source files:** `PROGRESS.md`, `ROADMAP.md` (top-level, now removed)
+**Purpose:** Preserve early project history that predates the exec-plan system.
 
-Rules:
-- Do not edit old entries except to fix factual errors.
-- Do not plan in this file.
-- Do not describe future work here.
-- If an entry implies future work, link to:
-  - an execution plan in `docs/exec-plans/active/`, or
-  - an item in `docs/exec-plans/tech-debt-tracker.md`
+---
+
+## Context
+
+Before the exec-plan system was adopted, progress was tracked in a flat
+append-only `PROGRESS.md` and directional intent lived in `ROADMAP.md`.
+Both are superseded by per-plan progress logs and the tech-debt tracker.
+This file preserves their content for historical reference.
+
+---
+
+## Progress Log (from PROGRESS.md)
 
 - 2026-01-31 19:13 - Set up shared web/server/types foundations so the app could evolve as one cohesive product.
 - 2026-01-31 19:13 - Audited dependencies and environment readiness early to reduce setup and security surprises.
@@ -110,3 +117,26 @@ Rules:
 - 2026-02-15 12:55 - Finalized My Day card density by showing full task names with tighter typography and moving My Day toggling to details in that view, preserving readability while preventing oversized cards.
 - 2026-02-15 13:05 - Polished My Day card density by shortening recurrence labels and tightening metadata typography/spacing, reducing wasted line wraps while preserving full-title readability.
 - 2026-02-15 13:10 - Standardized TaskRow pill sizing/typography so List dropdown and My Day chips share consistent height and rhythm, smoothing visual continuity in dense list cards.
+
+---
+
+## Roadmap (from ROADMAP.md)
+
+### Planned (as of retirement)
+1. Improve user-facing error messages (including clearer login error mapping, such as 404 cases).
+2. Add list import support for plain-text and Joplin-compatible formats.
+3. Add a checklist "Uncheck all" action for repeat-use lists (for example grocery workflows).
+
+### Recently Completed (as of retirement)
+- Sync delete determinism hardening shipped: cross-device delete tombstones now converge reliably so deleted tasks do not reappear after refresh.
+- Punt behavior refined: punting is instance-scoped, daily recurrences are excluded, and My Day treatment reflects punted tasks as addressed for today while preserving tomorrow visibility.
+- Task attachments were intentionally retired after implementation review; task URL references remain the supported lightweight alternative.
+
+### Deferred
+- Full local-client expansion with deeper long-horizon cached data (Actual Budget-like model) is intentionally deferred to a later phase.
+
+### Later / Ideas
+- Multi-user team workflow improvements
+- Admin UX refinements
+- Mobile-specific UX pass
+- Advanced analytics / insights

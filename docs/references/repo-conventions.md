@@ -8,8 +8,8 @@ Prefer `/scripts/` for repeatable workflows and checks.
 - Keep `AGENTS.md` short and map-like.
 
 ## Logs
-- `PROGRESS.md` is outcome-first and append-only.
-- `ROADMAP.md` is future work only.
+- Progress and roadmap are tracked in exec plans (see `docs/PLANS.md`).
+- Legacy logs archived in `docs/exec-plans/completed/legacy-progress-and-roadmap.md`.
 
 ## CI
 - CI must gate correctness and budgets.

@@ -74,8 +74,8 @@ Key rules:
 - Docs updated if behavior changed.
 
 ## Logs
-- `PROGRESS.md` — outcome-first, append-only. State the user/project outcome first, tie to architecture goals.
-- `ROADMAP.md` — future work only. Move items to PROGRESS.md when delivered.
+- Progress and roadmap are tracked in per-plan progress logs (see `docs/PLANS.md`).
+- Legacy logs archived in `docs/exec-plans/completed/legacy-progress-and-roadmap.md`.
 
 ## Security
 - Follow `SECURITY.md` for disclosures; avoid logging secrets.

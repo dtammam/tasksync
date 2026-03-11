@@ -12,7 +12,7 @@ Start here, then follow links. The goal is progressive disclosure: small entry p
 - Frontend structure & boundaries: `FRONTEND.md`
 - Reliability & performance budgets: `RELIABILITY.md`
 - Plans & execution artifacts: `PLANS.md`
-- Product roadmap: `../ROADMAP.md`
+- Legacy progress + roadmap: `exec-plans/completed/legacy-progress-and-roadmap.md`
 - Quality grading by domain: `QUALITY_SCORE.md`
 - Security posture: `SECURITY.md`
 
