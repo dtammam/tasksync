@@ -36,6 +36,7 @@ Rules:
 | 028 | Test | Med | Fix silent E2E test skips on SW registration failure | 6 offline tests silently return instead of being marked as skipped; misleading CI coverage | Use Playwright `test.skip()` API instead of early return | unassigned | chore/code-quality-audit |
 | 029 | Test | Low | Extract shared IDB test fixture from E2E suites | `resolveScopedDbName()` pattern duplicated 5× across myday + offline specs | Create shared fixture in `tests/e2e/fixtures/` | unassigned | chore/code-quality-audit |
 | 030 | Test | Low | Convert `resetClientState()` to `test.beforeEach()` hook | Called manually in 29 tests; error-prone if a test forgets | Centralize in describe-level hook | unassigned | chore/code-quality-audit |
+| 031 | Store | Low | Sync `day-complete-date` flag to server alongside streak state | `day-complete-date` is localStorage-only; streak count/state syncs cross-device via `updateUiPreferences` but the once-per-day day-complete guard does not. Edge case: complete all My Day tasks on device A (flag fires), open device B same day, add + complete a task → day-complete fires again on B. Fix: add `dayCompleteDate` field to `StreakState` type, include in server push/hydrate — same path as existing streak sync | Add `dayCompleteDate?: string` to `StreakState`; write/read it in `markDayCompleteFired` / `hasFiredDayCompleteToday`; include in `hydrateFromServer` | unassigned | chore/streak-day-complete-sync-debt |
 
 ## Closed
 
