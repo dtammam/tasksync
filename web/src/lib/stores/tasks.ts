@@ -380,7 +380,6 @@ export const tasks = {
 			// Check if this was the final pending My Day task → day-complete celebration.
 			// myDayPending is a derived store that already reflects the post-toggle state.
 			const isLastMyDayTask =
-				!isRecurring &&
 				get(myDayPending).length === 0 &&
 				get(myDayCompleted).length > 0;
 			const willDayComplete = isLastMyDayTask && streak.triggerDayComplete();

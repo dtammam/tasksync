@@ -5,7 +5,8 @@
 	import StreakDisplay from '$lib/components/StreakDisplay.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
 	import { tasks, myDayMissed } from '$lib/stores/tasks';
@@ -511,7 +512,15 @@
 				<button class="nav-toggle" aria-label="Toggle navigation" on:click={toggleNav}>
 					☰
 				</button>
-				<button class="logo-easter-egg" aria-label="Play sound" on:click={() => playCompletion(soundSettings.get())}>
+				<button class="logo-easter-egg" aria-label={$page.url.pathname === '/' ? 'Play sound' : 'Go to My Day'} on:click={() => {
+					if ($page.url.pathname === '/') {
+						playCompletion(soundSettings.get());
+					} else {
+						goto('/').then(() => {
+							document.querySelector('main')?.scrollTo(0, 0);
+						});
+					}
+				}}>
 					<img src={favicon} alt="logo" />
 				</button>
 				<span class="brand-name">tasksync</span>
@@ -791,6 +800,12 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 18px;
+		position: sticky;
+		top: -30px;
+		z-index: 2;
+		background: var(--app-bg);
+		padding: 30px 0 12px;
+		margin-top: -30px;
 	}
 
 	.brand {
@@ -962,7 +977,7 @@
 			pointer-events: auto;
 		}
 		main { padding: 18px 16px 28px; }
-		.app-header { margin-bottom: 12px; }
+		.app-header { margin-bottom: 12px; background: var(--app-bg-mobile); padding: 18px 0 8px; margin-top: -18px; top: -18px; }
 		.nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
 		.badge { font-size: 11px; padding: 6px 8px; }
 	}
