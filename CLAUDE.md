@@ -70,7 +70,7 @@ Scripts live in `scripts/`. Check there before constructing ad-hoc commands.
 ## Exec plan ownership
 
 Active plans currently in progress:
-- `docs/exec-plans/active/2026-03-10-docs-cleanup-design-principles.md`
+- `docs/exec-plans/active/2026-03-11-code-quality-audit.md` — full-codebase quality audit (fact-finding only)
 
 Append to the progress log (dated, append-only) when making meaningful advances on a plan.
 Do not rewrite or summarize away prior log entries.

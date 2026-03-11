@@ -294,10 +294,6 @@ $: isRecurringCompletedToday =
 		display: grid;
 		grid-template-columns: auto 1fr;
 		gap: 12px;
-		background: color-mix(in oklab, var(--surface-1) 95%, white 5%);
-		border: 1px solid var(--list-accent, var(--border-1));
-		box-shadow: inset 2px 0 0 var(--list-accent, #334155), 0 6px 18px rgba(2,6,23,0.22);
-		border-radius: 12px;
 		padding: 12px;
 		align-items: start;
 		border-radius: 14px;
@@ -384,8 +380,6 @@ $: isRecurringCompletedToday =
 		background: color-mix(in oklab, var(--surface-accent) 32%, var(--surface-2) 68%);
 		color: var(--app-text);
 	}
-	.chip.pending { background:#92400e; border-color:#f59e0b; color:#ffedd5; }
-	.chip.synced { background:#0b3a2a; border-color:#10b981; color:#d1fae5; }
 	.list-chip select {
 		background:transparent;
 		border:none;

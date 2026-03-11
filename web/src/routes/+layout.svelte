@@ -695,26 +695,18 @@
 	:global(select),
 	:global(textarea) {
 		font-family: inherit;
-		transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
-	}
-
-	:global(input),
-	:global(select),
-	:global(textarea) {
-		font-size: 16px;
-	}
-
-	:global(button),
-	:global(input),
-	:global(select),
-	:global(textarea) {
-		font-family: inherit;
 		transition:
 			border-color 120ms ease,
 			background-color 120ms ease,
 			color 120ms ease,
 			box-shadow 120ms ease,
 			transform 120ms ease;
+	}
+
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		font-size: 16px;
 	}
 
 	:global(button:focus-visible),
@@ -832,8 +824,7 @@
 			sans-serif;
 	}
 
-	.nav-toggle,
-	.refresh-btn {
+	.nav-toggle {
 		background: var(--surface-1);
 		border: 1px solid var(--border-1);
 		color: var(--app-text);
@@ -843,7 +834,6 @@
 		box-shadow: var(--ring-shadow);
 	}
 
-	.refresh-btn:hover,
 	.nav-toggle:hover {
 		transform: translateY(-1px);
 	}

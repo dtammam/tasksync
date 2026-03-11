@@ -21,7 +21,6 @@
 	let listActionMessage = '';
 
 	$: listId = $page.params.id;
-	let listTasks = tasksByList(listId);
 	$: listTasks = tasksByList(listId);
 	$: listName = findListName(listId);
 	$: detailTask = detailId ? ($tasks.find((t) => t.id === detailId) ?? null) : null;

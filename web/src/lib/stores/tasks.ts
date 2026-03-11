@@ -690,9 +690,7 @@ export const tasks = {
 								dirty: true
 							}
 						: preservePuntState(sanitizeIncomingPuntState({ ...remote, dirty: false, local: false }), task)
-					: task.id === remote.id
-						? task
-						: task
+					: task
 			)
 		);
 		void repo.saveTasks(get(tasksStore));
@@ -702,10 +700,6 @@ export const tasks = {
 		tasksStore.set(stored);
 	}
 };
-
-export const pendingCount = derived(tasksStore, ($tasks) =>
-	$tasks.filter((task) => task.status === 'pending').length
-);
 
 const isToday = (date?: string) => date && date === todayIso();
 const isBeforeToday = (date?: string) => !!date && date < todayIso();
