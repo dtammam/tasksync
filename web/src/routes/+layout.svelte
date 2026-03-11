@@ -516,7 +516,9 @@
 					if ($page.url.pathname === '/') {
 						playCompletion(soundSettings.get());
 					} else {
-						goto('/');
+						goto('/').then(() => {
+							document.querySelector('main')?.scrollTo(0, 0);
+						});
 					}
 				}}>
 					<img src={favicon} alt="logo" />
@@ -799,10 +801,11 @@
 		align-items: center;
 		margin-bottom: 18px;
 		position: sticky;
-		top: 0;
+		top: -30px;
 		z-index: 10;
 		background: var(--app-bg);
-		padding: 12px 0;
+		padding: 30px 0 12px;
+		margin-top: -30px;
 	}
 
 	.brand {
@@ -974,7 +977,7 @@
 			pointer-events: auto;
 		}
 		main { padding: 18px 16px 28px; }
-		.app-header { margin-bottom: 12px; background: var(--app-bg-mobile); padding: 8px 0; }
+		.app-header { margin-bottom: 12px; background: var(--app-bg-mobile); padding: 18px 0 8px; margin-top: -18px; top: -18px; }
 		.nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
 		.badge { font-size: 11px; padding: 6px 8px; }
 	}
