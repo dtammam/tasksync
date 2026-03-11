@@ -5,7 +5,8 @@
 	import StreakDisplay from '$lib/components/StreakDisplay.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
 	import { tasks, myDayMissed } from '$lib/stores/tasks';
@@ -511,7 +512,13 @@
 				<button class="nav-toggle" aria-label="Toggle navigation" on:click={toggleNav}>
 					☰
 				</button>
-				<button class="logo-easter-egg" aria-label="Play sound" on:click={() => playCompletion(soundSettings.get())}>
+				<button class="logo-easter-egg" aria-label={$page.url.pathname === '/' ? 'Play sound' : 'Go to My Day'} on:click={() => {
+					if ($page.url.pathname === '/') {
+						playCompletion(soundSettings.get());
+					} else {
+						goto('/');
+					}
+				}}>
 					<img src={favicon} alt="logo" />
 				</button>
 				<span class="brand-name">tasksync</span>
