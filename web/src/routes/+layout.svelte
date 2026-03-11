@@ -802,7 +802,7 @@
 		margin-bottom: 18px;
 		position: sticky;
 		top: -30px;
-		z-index: 10;
+		z-index: 2;
 		background: var(--app-bg);
 		padding: 30px 0 12px;
 		margin-top: -30px;
