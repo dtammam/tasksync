@@ -1806,7 +1806,7 @@
 	.settings-nav-item span,
 	.settings-mobile-item span {
 		font-size: 14px;
-		font-weight: 640;
+		font-weight: 600;
 	}
 
 	.settings-nav-item small,

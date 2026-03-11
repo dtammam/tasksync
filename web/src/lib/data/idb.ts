@@ -42,8 +42,6 @@ export const setDbScope = (scope: string) => {
 	dbScope = next;
 };
 
-export const getDbScope = () => dbScope;
-
 export const getDb = () => {
 	if (typeof indexedDB === 'undefined') {
 		return null;

@@ -12,10 +12,8 @@
 	$: activeQuotes = $uiPreferences.completionQuotes?.length
 		? $uiPreferences.completionQuotes
 		: DEFAULT_COMPLETION_QUOTES;
-	let blissMessage = DEFAULT_COMPLETION_QUOTES[Math.floor(Math.random() * DEFAULT_COMPLETION_QUOTES.length)];
 	$: blissMessage = activeQuotes[Math.floor(Math.random() * activeQuotes.length)];
 
-	const listsStore = lists;
 	let quickTitle = '';
 	let sortMode = 'created';
 	let sortDirection = 'asc';
@@ -141,7 +139,7 @@
 	});
 
 	$: defaultListId =
-		($listsStore ?? []).find((l) => l.id !== 'my-day')?.id ?? ($listsStore ?? [])[0]?.id ?? 'goal-management';
+		($lists ?? []).find((l) => l.id !== 'my-day')?.id ?? ($lists ?? [])[0]?.id ?? 'goal-management';
 
 	const sortTasks = (arr, mode = sortMode, direction = sortDirection) => {
 		const copy = [...arr];
@@ -492,35 +490,9 @@
 		color: var(--app-muted);
 	}
 
-	.actions {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-		justify-content: flex-end;
-		margin-left: auto;
-		margin-top: 2px;
-	}
-
-	.actions .sorter {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
 	.actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }
 	.actions .sorter { display: flex; flex-direction: column; gap: 4px; }
 	.sorter label { display: inline-flex; align-items: center; gap: 8px; }
-	.sorter span { font-size: 11px; color: var(--app-muted); }
-	.sorter select {
-		background: var(--surface-1);
-		color: var(--app-text);
-		border: 1px solid var(--border-1);
-		border-radius: 999px;
-		padding: 6px 10px;
-		min-height: 32px;
-		font-size: 13px;
-		box-shadow: var(--ring-shadow);
-	}
 
 	.block {
 		margin-top: 16px;
@@ -542,16 +514,6 @@
 		border: 1px solid var(--border-1);
 		border-radius: 12px;
 		background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 92%, #f59e0b 8%), var(--surface-2));
-	}
-
-	.missed-actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		padding: 10px 12px;
-		border: 1px solid color-mix(in oklab, #f59e0b 30%, var(--border-1));
-		border-radius: 14px;
-		background: color-mix(in oklab, var(--surface-2) 88%, #f59e0b 12%);
 	}
 
 	.missed-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
@@ -644,16 +606,8 @@
 		padding: 12px;
 		box-shadow: var(--soft-shadow);
 	}
-
-	.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--app-text); }
 	.suggestion .title { margin: 0; font-weight: 650; }
 	.suggestion .meta { margin: 2px 0 0; color: var(--app-muted); font-size: 13px; }
-
-	.suggestion .meta {
-		margin: 2px 0 0;
-		color: var(--app-muted);
-		font-size: 13px;
-	}
 
 	.suggestion button {
 		background: linear-gradient(180deg, #1e40af, #1d4ed8);
@@ -674,9 +628,6 @@
 		border-radius: 12px;
 	}
 
-	.empty.subtle {
-		color: #64748b;
-	}
 
 	.bliss {
 		display: flex;

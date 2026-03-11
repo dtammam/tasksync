@@ -1,6 +1,6 @@
 <script lang="ts">
 // @ts-nocheck
-import { createEventDispatcher, onMount } from 'svelte';
+import { createEventDispatcher } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
@@ -28,10 +28,6 @@ const recurrenceOptions = recurrenceRules.map((rule) => ({
 	value: rule,
 	label: recurrenceRuleLabels[rule]
 }));
-
-onMount(() => {
-	if (open && task) hydrate(task);
-});
 
 $: if (task) hydrate(task);
 
@@ -366,14 +362,8 @@ const memberAvatar = (member) => {
 		text-align: center;
 	}
 	.status-toggle.active,
-	button.ghost.star-toggle.active {
-		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
-		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
-	}
-	button.ghost.punt-toggle.active {
-		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
-		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
-	}
+	button.ghost.star-toggle.active,
+	button.ghost.punt-toggle.active,
 	button.ghost.myday-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
