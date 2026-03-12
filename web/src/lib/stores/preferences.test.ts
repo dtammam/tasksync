@@ -104,3 +104,112 @@ describe('ui preferences store list sort', () => {
 		);
 	});
 });
+
+describe('ui preferences — setters and hydration', () => {
+	beforeEach(() => {
+		vi.useRealTimers();
+		localStorage.clear();
+		vi.clearAllMocks();
+		mocks.auth.get.mockReturnValue({
+			status: 'authenticated',
+			user: { space_id: 's1', user_id: 'u-admin' }
+		});
+		uiPreferences.setAll(
+			{
+				theme: 'default',
+				font: 'sora',
+				completionQuotes: [],
+				sidebarPanels: defaultSidebarPanels,
+				listSort: { mode: 'created', direction: 'asc' },
+				streakSettings: { enabled: false, theme: 'ddr', resetMode: 'daily' }
+			},
+			{ queueRemote: false }
+		);
+	});
+
+	it('setTheme persists to localStorage', () => {
+		uiPreferences.setTheme('dark');
+		const raw = localStorage.getItem('tasksync:ui-preferences:s1:u-admin');
+		const stored = JSON.parse(raw ?? '{}') as { theme?: string };
+		expect(stored.theme).toBe('dark');
+		expect(uiPreferences.get().theme).toBe('dark');
+	});
+
+	it('setFont persists to localStorage', () => {
+		uiPreferences.setFont('sono');
+		const raw = localStorage.getItem('tasksync:ui-preferences:s1:u-admin');
+		const stored = JSON.parse(raw ?? '{}') as { font?: string };
+		expect(stored.font).toBe('sono');
+		expect(uiPreferences.get().font).toBe('sono');
+	});
+
+	it('setPanel opens a panel and persists', () => {
+		uiPreferences.setPanel('lists', true);
+		const raw = localStorage.getItem('tasksync:ui-preferences:s1:u-admin');
+		const stored = JSON.parse(raw ?? '{}') as { sidebarPanels?: { lists?: boolean } };
+		expect(stored.sidebarPanels?.lists).toBe(true);
+		expect(uiPreferences.get().sidebarPanels.lists).toBe(true);
+	});
+
+	it('setStreakSettings merges partial update and normalizes', () => {
+		uiPreferences.setStreakSettings({ enabled: true });
+		const prefs = uiPreferences.get();
+		expect(prefs.streakSettings.enabled).toBe(true);
+		expect(prefs.streakSettings.theme).toBe('ddr');
+		expect(prefs.streakSettings.resetMode).toBe('daily');
+	});
+
+	it('setCompletionQuotes stores string array', () => {
+		uiPreferences.setCompletionQuotes(['hello', 'world']);
+		expect(uiPreferences.get().completionQuotes).toEqual(['hello', 'world']);
+	});
+
+	it('hydrateFromLocal reads previously persisted theme and font', () => {
+		localStorage.setItem(
+			'tasksync:ui-preferences:s1:u-admin',
+			JSON.stringify({
+				theme: 'matrix',
+				font: 'inter',
+				completionQuotes: [],
+				sidebarPanels: defaultSidebarPanels,
+				listSort: { mode: 'created', direction: 'asc' },
+				streakSettings: { enabled: false, theme: 'ddr', resetMode: 'daily' }
+			})
+		);
+		uiPreferences.hydrateFromLocal();
+		expect(uiPreferences.get().theme).toBe('matrix');
+		expect(uiPreferences.get().font).toBe('inter');
+	});
+
+	it('hydrateFromLocal falls back to defaults when no stored value', () => {
+		uiPreferences.hydrateFromLocal();
+		expect(uiPreferences.get().theme).toBe('default');
+		expect(uiPreferences.get().font).toBe('sora');
+	});
+
+	it('hydrateFromServer race guard: ignores server response when local mutation occurred during fetch', async () => {
+		let resolveRemote!: (value: { theme: string }) => void;
+		const pendingRemote = new Promise<{ theme: string }>((resolve) => {
+			resolveRemote = resolve;
+		});
+		mocks.api.getUiPreferences.mockReturnValue(pendingRemote);
+
+		const fetching = uiPreferences.hydrateFromServer();
+		// Mutate while fetch is in-flight
+		uiPreferences.setTheme('dark');
+		resolveRemote({ theme: 'shades-of-coffee' });
+		await fetching;
+
+		// Local mutation version incremented → server payload discarded
+		expect(uiPreferences.get().theme).toBe('dark');
+	});
+
+	it('setAll normalizes unknown theme to default and unknown font to sora', () => {
+		uiPreferences.setAll(
+			{ theme: 'not-a-theme' as never, font: 'not-a-font' as never },
+			{ queueRemote: false }
+		);
+		expect(uiPreferences.get().theme).toBe('default');
+		expect(uiPreferences.get().font).toBe('sora');
+	});
+});

@@ -80,7 +80,7 @@ beforeEach(() => {
 
 describe('syncFromServer', () => {
 	it('retains unsynced local tasks when server returns none', async () => {
-		tasks.createLocal('offline', 'goal-management');
+		tasks.createLocalWithOptions('offline', 'goal-management');
 
 		await syncFromServer();
 
@@ -165,7 +165,7 @@ describe('syncFromServer', () => {
 	});
 
 	it('keeps local dirty status instead of remote pending copy', async () => {
-		const local = tasks.createLocal('flip me', 'goal-management');
+		const local = tasks.createLocalWithOptions('flip me', 'goal-management');
 		if (local) {
 			tasks.toggle(local.id);
 		}
@@ -207,7 +207,7 @@ describe('syncFromServer', () => {
 		mockedApi.syncPull.mockReturnValue(remotePull as ReturnType<typeof mockedApi.syncPull>);
 
 		const pulling = syncFromServer();
-		const created = tasks.createLocal('created during pull', 'goal-management');
+		const created = tasks.createLocalWithOptions('created during pull', 'goal-management');
 		resolvePull!({ protocol: 'delta-v1', cursor_ts: 0, lists: [], tasks: [] });
 		await pulling;
 
@@ -318,6 +318,53 @@ describe('syncFromServer', () => {
 		);
 	});
 
+	it('defaults task status to pending when server returns unrecognised status', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined);
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 1,
+			lists: [],
+			tasks: [remoteTask({ id: 'srv-bogus', status: 'bogus' })]
+		});
+
+		await syncFromServer();
+
+		expect(tasks.getAll().find((t) => t.id === 'srv-bogus')?.status).toBe('pending');
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unexpected task status'));
+		warnSpy.mockRestore();
+	});
+
+	it('clamps out-of-range priority to 0', async () => {
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 1,
+			lists: [],
+			tasks: [{ ...remoteTask({ id: 'srv-p99' }), priority: 99 }]
+		});
+
+		await syncFromServer();
+
+		expect(tasks.getAll().find((t) => t.id === 'srv-p99')?.priority).toBe(0);
+	});
+
+	it('accepts valid priority values 1 and 3 from server', async () => {
+		mockedApi.syncPull.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 1,
+			lists: [],
+			tasks: [
+				{ ...remoteTask({ id: 'srv-p1' }), priority: 1 },
+				{ ...remoteTask({ id: 'srv-p3' }), priority: 3 }
+			]
+		});
+
+		await syncFromServer();
+
+		const all = tasks.getAll();
+		expect(all.find((t) => t.id === 'srv-p1')?.priority).toBe(1);
+		expect(all.find((t) => t.id === 'srv-p3')?.priority).toBe(3);
+	});
+
 	it('hydrates priority and punt metadata from remote tasks', async () => {
 		mockedApi.syncPull.mockResolvedValue({
 			protocol: 'delta-v1',
@@ -353,7 +400,7 @@ describe('syncFromServer', () => {
 
 describe('pushPendingToServer', () => {
 	it('creates local tasks remotely and clears dirty flag', async () => {
-		const local = tasks.createLocal('offline', 'goal-management');
+		const local = tasks.createLocalWithOptions('offline', 'goal-management');
 		mockedApi.syncPush.mockResolvedValue({
 			protocol: 'delta-v1',
 			cursor_ts: 12,
@@ -390,9 +437,9 @@ describe('pushPendingToServer', () => {
 	});
 
 	it('replays an offline task burst once and does not duplicate on retry', async () => {
-		const first = tasks.createLocal('offline burst one', 'goal-management');
-		const second = tasks.createLocal('offline burst two', 'goal-management');
-		const third = tasks.createLocal('offline burst three', 'goal-management');
+		const first = tasks.createLocalWithOptions('offline burst one', 'goal-management');
+		const second = tasks.createLocalWithOptions('offline burst two', 'goal-management');
+		const third = tasks.createLocalWithOptions('offline burst three', 'goal-management');
 		expect(first && second && third).toBeTruthy();
 
 		mockedApi.syncPush.mockResolvedValue({
@@ -450,7 +497,7 @@ describe('pushPendingToServer', () => {
 	});
 
 	it('remains converged after replay when pull returns same server tasks', async () => {
-		const created = tasks.createLocal('offline converge', 'goal-management');
+		const created = tasks.createLocalWithOptions('offline converge', 'goal-management');
 		expect(created).toBeTruthy();
 		mockedApi.syncPush.mockResolvedValue({
 			protocol: 'delta-v1',
@@ -489,7 +536,7 @@ describe('pushPendingToServer', () => {
 	});
 
 	it('keeps local edits made while push request is in flight', async () => {
-		const local = tasks.createLocal('race task', 'goal-management');
+		const local = tasks.createLocalWithOptions('race task', 'goal-management');
 		let resolvePush: (
 			value: ReturnType<typeof mockedApi.syncPush> extends Promise<infer T> ? T : never
 		) => void;
@@ -545,7 +592,7 @@ describe('pushPendingToServer', () => {
 			updated_ts: 1,
 			dirty: true
 		};
-		const local = tasks.createLocal('new', 'goal-management');
+		const local = tasks.createLocalWithOptions('new', 'goal-management');
 		if (local) {
 			tasks.setAll([legacy, local]);
 		}
@@ -595,7 +642,7 @@ describe('pushPendingToServer', () => {
 			updated_ts: 1,
 			dirty: true
 		};
-		const local = tasks.createLocal('keep me', 'goal-management');
+		const local = tasks.createLocalWithOptions('keep me', 'goal-management');
 		if (local) {
 			tasks.setAll([orphan, local]);
 		}
@@ -664,7 +711,7 @@ describe('pushPendingToServer', () => {
 	});
 
 	it('reports friendly push error when network is unavailable', async () => {
-		const local = tasks.createLocal('offline-only', 'goal-management');
+		const local = tasks.createLocalWithOptions('offline-only', 'goal-management');
 		expect(local).toBeTruthy();
 		mockedApi.syncPush.mockRejectedValue(new Error('TypeError: Failed to fetch'));
 
@@ -694,7 +741,7 @@ describe('pushPendingToServer', () => {
 			});
 
 		await syncFromServer();
-		tasks.createLocal('cursor check', 'goal-management');
+		tasks.createLocalWithOptions('cursor check', 'goal-management');
 		mockedApi.syncPush.mockResolvedValue({
 			protocol: 'delta-v1',
 			cursor_ts: 50,
@@ -722,7 +769,7 @@ describe('pushPendingToServer', () => {
 	});
 
 	it('resets queue depth and records replay timestamp after successful push', async () => {
-		tasks.createLocal('telemetry', 'goal-management');
+		tasks.createLocalWithOptions('telemetry', 'goal-management');
 		mockedApi.syncPush.mockResolvedValue({
 			protocol: 'delta-v1',
 			cursor_ts: 4,
@@ -749,6 +796,72 @@ describe('pushPendingToServer', () => {
 		expect(status.queueDepth).toBe(0);
 		expect(status.lastReplayTs).toBeDefined();
 		expect(status.lastReplayTs).toBeGreaterThanOrEqual(before);
+	});
+
+	it('strips local- prefix from task id when building create_task request body', async () => {
+		const local = tasks.createLocalWithOptions('local prefix test', 'goal-management');
+		expect(local?.id).toMatch(/^local-/);
+		const uuidPart = local!.id.slice('local-'.length);
+
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 1,
+			applied: [
+				{
+					id: 'srv-from-local',
+					space_id: 's1',
+					title: 'local prefix test',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'a',
+					created_ts: 1,
+					updated_ts: 1
+				}
+			],
+			rejected: []
+		});
+
+		await pushPendingToServer();
+
+		const body = mockedApi.syncPush.mock.calls[0]?.[0]?.changes?.[0];
+		expect(body).toMatchObject({ kind: 'create_task' });
+		expect((body as { body?: { id?: string } })?.body?.id).toBe(uuidPart);
+	});
+
+	it('logs warning when server returns fewer applied tasks than sent', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined);
+
+		const first = tasks.createLocalWithOptions('first op', 'goal-management');
+		const second = tasks.createLocalWithOptions('second op', 'goal-management');
+		expect(first && second).toBeTruthy();
+
+		// Server returns only 1 applied task for the 2 non-rejected ops sent
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 5,
+			applied: [
+				{
+					id: 'srv-first',
+					space_id: 's1',
+					title: 'first op',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'a',
+					created_ts: 1,
+					updated_ts: 5
+				}
+			],
+			rejected: []
+		});
+
+		await pushPendingToServer();
+
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining('fewer applied tasks than sent')
+		);
+		warnSpy.mockRestore();
 	});
 
 	it('includes priority and punt metadata in update push payload', async () => {

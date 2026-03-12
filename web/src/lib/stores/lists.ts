@@ -14,7 +14,7 @@ const seedLists: List[] = [
 
 const listStore = writable<List[]>(seedLists);
 
-const mapApiList = (l: Awaited<ReturnType<typeof api.getLists>>[number]): List => ({
+const normalizeListFromApi = (l: Awaited<ReturnType<typeof api.getLists>>[number]): List => ({
 	id: l.id,
 	name: l.name,
 	icon: l.icon ?? undefined,
@@ -37,14 +37,14 @@ export const lists = {
 			color,
 			order: nextOrder()
 		});
-		const mapped = mapApiList(created);
+		const mapped = normalizeListFromApi(created);
 		listStore.update((prev) => [...prev, mapped]);
 		void repo.saveLists(get(listStore));
 		return mapped;
 	},
 	async updateRemote(id: string, body: { name?: string; icon?: string; color?: string }) {
 		const updated = await api.updateList(id, body);
-		const mapped = mapApiList(updated);
+		const mapped = normalizeListFromApi(updated);
 		listStore.update((prev) => prev.map((l) => (l.id === id ? mapped : l)));
 		void repo.saveLists(get(listStore));
 		return mapped;

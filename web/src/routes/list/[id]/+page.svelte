@@ -130,7 +130,7 @@
 	const quickAdd = () => {
 		const title = quickTitle.trim();
 		if (!title) return;
-		tasks.createLocal(title, listId);
+		tasks.createLocalWithOptions(title, listId);
 		quickTitle = '';
 	};
 
@@ -224,7 +224,7 @@
 		Reflect.set(window, '__addTaskListWithTitle', (title) => {
 			const nextTitle = String(title ?? '').trim();
 			if (!nextTitle) return;
-			tasks.createLocal(nextTitle, listId);
+			tasks.createLocalWithOptions(nextTitle, listId);
 		});
 		Reflect.set(window, '__copyTasksAsJoplin', copyProvider);
 	}

@@ -95,7 +95,7 @@ const normalizeSettings = (settings: Partial<SoundSettings>): SoundSettings => {
 };
 
 const soundSettingsStore = writable<SoundSettings>(defaultSoundSettings);
-let settingsMutationVersion = 0;
+let hydrateGuardVersion = 0;
 let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingRemotePayload: { settings: SoundSettings; clearCustomSound: boolean } | null = null;
 
@@ -151,7 +151,7 @@ export const soundSettings = {
 		return get(soundSettingsStore);
 	},
 	setEnabled(enabled: boolean) {
-		settingsMutationVersion += 1;
+		hydrateGuardVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = { ...current, enabled };
 			saveLocal(next);
@@ -161,7 +161,7 @@ export const soundSettings = {
 	},
 	setVolume(volume: number) {
 		const nextVolume = normalizeVolume(volume);
-		settingsMutationVersion += 1;
+		hydrateGuardVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = { ...current, volume: nextVolume };
 			saveLocal(next);
@@ -171,7 +171,7 @@ export const soundSettings = {
 	},
 	setTheme(theme: SoundTheme) {
 		const nextTheme = normalizeTheme(theme);
-		settingsMutationVersion += 1;
+		hydrateGuardVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = { ...current, theme: nextTheme };
 			saveLocal(next);
@@ -196,7 +196,7 @@ export const soundSettings = {
 		if (!entries.length) return;
 		const serialized = stringifyCustomSoundEntries(entries);
 		const firstEntry = entries[0];
-		settingsMutationVersion += 1;
+		hydrateGuardVersion += 1;
 		soundSettingsStore.update((current) => {
 			const next = {
 				...current,
@@ -212,7 +212,7 @@ export const soundSettings = {
 		});
 	},
 	clearCustomSound() {
-		settingsMutationVersion += 1;
+		hydrateGuardVersion += 1;
 		soundSettingsStore.update((current) => {
 			const nextTheme =
 				current.theme === 'custom_file' ? defaultSoundSettings.theme : current.theme;
@@ -231,15 +231,15 @@ export const soundSettings = {
 	},
 	setAll(settings: Partial<SoundSettings>) {
 		const normalized = normalizeSettings(settings);
-		settingsMutationVersion += 1;
+		hydrateGuardVersion += 1;
 		soundSettingsStore.set(normalized);
 		saveLocal(normalized);
 		queueRemoteSave(normalized);
 	},
 	async hydrateFromDb() {
-		const hydrateStartVersion = settingsMutationVersion;
+		const hydrateStartVersion = hydrateGuardVersion;
 		const stored = await repo.loadSoundSettings();
-		if (settingsMutationVersion !== hydrateStartVersion) {
+		if (hydrateGuardVersion !== hydrateStartVersion) {
 			return;
 		}
 		if (!stored) {
@@ -250,10 +250,12 @@ export const soundSettings = {
 	},
 	async hydrateFromServer() {
 		if (!canSyncRemote()) return;
+		const hydrateStartVersion = hydrateGuardVersion;
 		try {
 			const remote = await api.getSoundSettings();
+			if (hydrateGuardVersion !== hydrateStartVersion) return;
 			const normalized = normalizeSettings(remote);
-			settingsMutationVersion += 1;
+			hydrateGuardVersion += 1;
 			soundSettingsStore.set(normalized);
 			saveLocal(normalized);
 		} catch {

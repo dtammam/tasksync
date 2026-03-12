@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readTasksFromIdbByTitle } from './helpers/idb';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const todayIso = () => {
 	const d = new Date();
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -104,77 +104,6 @@ const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnre
 
 	return true;
 };
-
-const readTasksFromIdbByTitle = async (page: Page, title: string) =>
-	page.evaluate(async (taskTitle) => {
-		const resolveScopedDbName = () => {
-			const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
-			const rawUser = localStorage.getItem('tasksync:auth-user');
-			let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
-			if (rawUser) {
-				try {
-					const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
-					if (parsed.user_id && parsed.space_id) {
-						scope = `space:${parsed.space_id}:user:${parsed.user_id}`;
-					}
-				} catch {
-					// Keep fallback scope.
-				}
-			}
-			const sanitized =
-				scope
-					.toLowerCase()
-					.replace(/[^a-z0-9_-]/g, '_')
-					.slice(0, 80) || 'legacy';
-			return `tasksync_${sanitized}`;
-		};
-
-		const dbName = resolveScopedDbName();
-		const db = await new Promise<IDBDatabase | null>((resolve) => {
-			const req = indexedDB.open(dbName);
-			req.onsuccess = () => resolve(req.result);
-			req.onerror = () => resolve(null);
-		});
-		if (!db) return [];
-		if (!Array.from(db.objectStoreNames).includes('tasks')) {
-			db.close();
-			return [];
-		}
-
-		const all = await new Promise<unknown[]>((resolve) => {
-			try {
-				const tx = db.transaction('tasks', 'readonly');
-				const store = tx.objectStore('tasks');
-				const allReq = store.getAll();
-				allReq.onsuccess = () => resolve(allReq.result ?? []);
-				allReq.onerror = () => resolve([]);
-			} catch {
-				resolve([]);
-			}
-		});
-		db.close();
-
-		return all
-			.filter((task) => !!task && typeof task === 'object' && (task as { title?: unknown }).title === taskTitle)
-			.map((task) => {
-				const candidate = task as {
-					id?: unknown;
-					title?: unknown;
-					list_id?: unknown;
-					status?: unknown;
-					dirty?: unknown;
-					local?: unknown;
-				};
-				return {
-					id: typeof candidate.id === 'string' ? candidate.id : '',
-					title: typeof candidate.title === 'string' ? candidate.title : '',
-					list_id: typeof candidate.list_id === 'string' ? candidate.list_id : '',
-					status: typeof candidate.status === 'string' ? candidate.status : '',
-					dirty: !!candidate.dirty,
-					local: !!candidate.local
-				};
-			});
-	}, title);
 
 const openTaskDetailsForTitle = async (page: Page, title: string) => {
 	const row = page.getByTestId('task-row').filter({ hasText: title });
@@ -542,6 +471,7 @@ test.describe('Offline continuity', () => {
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 		if (!swReady) {
 			// SW unavailable in this environment; skip offline shell reload coverage.
+			test.skip();
 			return;
 		}
 
@@ -575,17 +505,19 @@ test.describe('Offline continuity', () => {
 		await page.getByTestId('new-task-submit').click();
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 
-		if (swReady) {
-			await page.reload({ waitUntil: 'domcontentloaded' });
-			await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-			await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
-			await expect
-				.poll(async () => {
-					const rows = await readTasksFromIdbByTitle(page, title);
-					return rows.length === 1 && rows[0]?.dirty && rows[0]?.local;
-				})
-				.toBe(true);
+		if (!swReady) {
+			test.skip();
+			return;
 		}
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return rows.length === 1 && rows[0]?.dirty && rows[0]?.local;
+			})
+			.toBe(true);
 
 		mockServer.setOffline(false);
 		await context.setOffline(false);
@@ -630,17 +562,19 @@ test.describe('Offline continuity', () => {
 			})
 			.toBe(true);
 
-		if (swReady) {
-			await page.reload({ waitUntil: 'domcontentloaded' });
-			await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-			await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
-			await expect
-				.poll(async () => {
-					const rows = await readTasksFromIdbByTitle(page, title);
-					return rows.length === 1 && rows[0]?.status === 'done' && rows[0]?.dirty && !rows[0]?.local;
-				})
-				.toBe(true);
+		if (!swReady) {
+			test.skip();
+			return;
 		}
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return rows.length === 1 && rows[0]?.status === 'done' && rows[0]?.dirty && !rows[0]?.local;
+			})
+			.toBe(true);
 
 		mockServer.setOffline(false);
 		await context.setOffline(false);
@@ -699,14 +633,18 @@ test.describe('Offline continuity', () => {
 			})
 			.toBe(true);
 
-		if (swReady) {
-			await page.reload({ waitUntil: 'domcontentloaded' });
-			await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-			await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
-			await expect(
-				page.getByTestId('task-title').filter({ hasText: new RegExp(`^${escapeRegex(originalTitle)}$`) })
-			).toHaveCount(0);
+		if (!swReady) {
+			test.skip();
+			return;
 		}
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
+		await expect(
+			page.getByTestId('task-title').filter({
+				hasText: new RegExp(`^${originalTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
+			})
+		).toHaveCount(0);
 
 		await context.setOffline(false);
 		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
@@ -764,23 +702,25 @@ test.describe('Offline continuity', () => {
 			})
 			.toBe(true);
 
-		if (swReady) {
-			await page.reload({ waitUntil: 'domcontentloaded' });
-			await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-			await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
-			await expect
-				.poll(async () => {
-					const rows = await readTasksFromIdbByTitle(page, title);
-					return (
-						rows.length === 1 &&
-						rows[0]?.id === taskId &&
-						rows[0]?.list_id === destinationListId &&
-						rows[0]?.dirty &&
-						!rows[0]?.local
-					);
-				})
-				.toBe(true);
+		if (!swReady) {
+			test.skip();
+			return;
 		}
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+		await expect
+			.poll(async () => {
+				const rows = await readTasksFromIdbByTitle(page, title);
+				return (
+					rows.length === 1 &&
+					rows[0]?.id === taskId &&
+					rows[0]?.list_id === destinationListId &&
+					rows[0]?.dirty &&
+					!rows[0]?.local
+				);
+			})
+			.toBe(true);
 
 		mockServer.setOffline(false);
 		await context.setOffline(false);
@@ -808,6 +748,7 @@ test.describe('Offline continuity', () => {
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 		if (!swReady) {
 			// SW unavailable; offline scope continuity cannot be verified without cached shell.
+			test.skip();
 			return;
 		}
 

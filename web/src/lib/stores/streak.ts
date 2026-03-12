@@ -202,27 +202,27 @@ const markDayCompleteFired = (): void => {
 
 /**
  * Set to true when a new calendar day is detected in daily reset mode.
- * The actual zero-out is deferred until checkMissedTasks() runs, so we can
+ * The actual zero-out is deferred until checkMissedTasksAndApplyDailyReset() runs, so we can
  * decide whether to show the animated break (missed tasks present) or silently
  * reset (no missed tasks).
  */
-let pendingDailyBreak = false;
+let deferredDailyReset = false;
 
 /**
- * Tracks the last date on which checkMissedTasks() ran, to prevent it from
+ * Tracks the last date on which checkMissedTasksAndApplyDailyReset() ran, to prevent it from
  * firing more than once per day during repeated server-sync calls.
  */
 let lastMissedCheckDate: string | null = null;
 
 const applyResetRuleIfNeeded = (state: StreakState): StreakState => {
+	const today = todayIso();
 	const prefs = uiPreferences.get();
 	if (prefs.streakSettings.resetMode !== 'daily') return state;
-	const today = todayIso();
 	if (state.lastResetDate !== null && state.lastResetDate !== today) {
-		// New day detected. Defer the actual reset so checkMissedTasks() can
+		// New day detected. Defer the actual reset so checkMissedTasksAndApplyDailyReset() can
 		// decide whether to animate the break or silently zero out.
-		pendingDailyBreak = true;
-		return state; // keep count intact until checkMissedTasks() runs
+		deferredDailyReset = true;
+		return state; // keep count intact until checkMissedTasksAndApplyDailyReset() runs
 	}
 	return state;
 };
@@ -456,7 +456,7 @@ export const streak = {
 		writeStreakStateToPrefsBlob(next);
 		queueStateSync(next);
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
-		pendingDailyBreak = false;
+		deferredDailyReset = false;
 		lastMissedCheckDate = null;
 		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, isDayComplete: false, isComboDropped: false, judgmentSrc: null }));
 	},
@@ -473,16 +473,16 @@ export const streak = {
 	 *
 	 * Safe to call multiple times per session; only acts once per calendar day.
 	 */
-	checkMissedTasks(missedCount: number) {
+	checkMissedTasksAndApplyDailyReset(missedCount: number) {
 		const today = todayIso();
 		// Skip if we've already acted today and there's no pending daily break.
-		if (!pendingDailyBreak && lastMissedCheckDate === today) return;
+		if (!deferredDailyReset && lastMissedCheckDate === today) return;
 
 		const current = get(stateStore);
 		const hasMissed = missedCount > 0;
 
-		if (pendingDailyBreak) {
-			pendingDailyBreak = false;
+		if (deferredDailyReset) {
+			deferredDailyReset = false;
 			lastMissedCheckDate = today;
 			if (hasMissed && current.count > 0) {
 				// New day + missed tasks → animated break
