@@ -45,8 +45,11 @@ Minimum set:
 - E2E offline continuity:
   - hard reload while offline still renders cached shell + local task data
 - Perf checks:
-  - search benchmark at 10k
-  - optional: key interaction timing in Playwright
+  - task filter / text-search benchmark at 10k tasks: `npm run bench` (Vitest bench, `web/src/lib/stores/tasks.bench.ts`)
+    - Product budget: < 100 ms; CI ceiling: < 500 ms (catastrophic-regression gate for slow runners)
+    - Note: MiniSearch not yet integrated (V1); current benchmarks cover linear-scan equivalents
+  - Task toggle interaction timing: `@smoke @perf` Playwright test (`web/tests/e2e/perf.spec.ts`)
+    - E2E ceiling: < 200 ms (accounts for test-runner overhead; product budget is < 16 ms)
 
 ## Test framework and gate principles
 

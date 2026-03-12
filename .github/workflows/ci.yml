@@ -34,6 +34,10 @@ jobs:
       - run: npm run lint
       - run: npm run check
       - run: npm run test
+      # Catastrophic-regression gate: fails only if any benchmark exceeds 500 ms.
+      # The 500 ms ceiling is a CI-runner-tolerant guard; the product budget is 100 ms.
+      # See docs/RELIABILITY.md for budget intent.
+      - run: npm run bench
       - name: Cache Playwright browsers (chromium)
         uses: actions/cache@v4
         with:
