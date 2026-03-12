@@ -397,10 +397,12 @@
 				requestSync('retry');
 			}
 		}, 15000);
-		// Poll preferences + streak every 5 minutes so a perpetually-open desktop PWA
-		// stays current even when visibilitychange never fires.
+		// Periodic full refresh every 5 minutes so a perpetually-open desktop PWA
+		// stays current even when visibilitychange never fires. Covers tasks (sync),
+		// preferences, and streak state.
 		prefsRefreshTimer = setInterval(() => {
 			if (!auth.isAuthenticated() || document.visibilityState !== 'visible') return;
+			requestSync('poll');
 			void (async () => {
 				const wire = await uiPreferences.hydrateFromServer();
 				streak.hydrateFromServer(wire?.streakStateJson);
