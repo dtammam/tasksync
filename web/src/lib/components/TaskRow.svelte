@@ -237,6 +237,9 @@ $: isRecurringCompletedToday =
 			{#if inMyDayView && nextRecurrenceDate}
 				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
 			{/if}
+			{#if !task.recurrence_id && task.due_date}
+				<span class="chip subtle date-chip">Date: {task.due_date}</span>
+			{/if}
 			{#if showPuntedArrivalTag}
 				<span class="chip subtle punted-chip">Punted</span>
 			{/if}
