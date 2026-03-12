@@ -1,6 +1,7 @@
 import { derived, get, readable, writable } from 'svelte/store';
 import type { Task } from '$shared/types/task';
 import { repo } from '$lib/data/repo';
+export { setDbScope } from '$lib/data/idb';
 import { playCompletion } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
 import { auth } from '$lib/stores/auth';

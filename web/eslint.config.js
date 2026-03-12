@@ -55,5 +55,45 @@ export default [
 				extraFileExtensions: ['.svelte']
 			}
 		}
+	},
+	// Layer boundary rules — see docs/FRONTEND.md "No spaghetti" import rules.
+	// UI layers (components/, routes/) must not reach into data/ directly.
+	// data/ must not import from UI layers.
+	{
+		files: ['src/lib/components/**', 'src/routes/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['$lib/data/*', '$lib/data'],
+							message:
+								'UI layers must not import from data/ directly. Go through stores/ or service/ instead. See docs/FRONTEND.md.'
+						}
+					]
+				}
+			]
+		}
+	},
+	{
+		files: ['src/lib/data/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['$lib/components/*', '$lib/components'],
+							message: 'data/ must not import from components/. See docs/FRONTEND.md.'
+						},
+						{
+							group: ['**/routes/**'],
+							message: 'data/ must not import from routes/. See docs/FRONTEND.md.'
+						}
+					]
+				}
+			]
+		}
 	}
 ];
