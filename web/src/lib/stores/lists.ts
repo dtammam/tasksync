@@ -42,7 +42,7 @@ export const lists = {
 		void repo.saveLists(get(listStore));
 		return mapped;
 	},
-	async updateRemote(id: string, body: { name?: string; icon?: string; color?: string }) {
+	async updateRemote(id: string, body: { name?: string; icon?: string; color?: string; order?: string }) {
 		const updated = await api.updateList(id, body);
 		const mapped = normalizeListFromApi(updated);
 		listStore.update((prev) => prev.map((l) => (l.id === id ? mapped : l)));

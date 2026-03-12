@@ -476,9 +476,11 @@ test.describe('Offline continuity', () => {
 		}
 
 		await context.setOffline(true);
+		const bootStart = Date.now();
 		await page.reload({ waitUntil: 'domcontentloaded' });
 
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		expect(Date.now() - bootStart, 'offline boot must complete within 3 s').toBeLessThan(3000);
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 	});

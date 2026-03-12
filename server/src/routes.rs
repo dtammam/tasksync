@@ -3859,4 +3859,114 @@ mod tests {
         assert_eq!(response.rejected[0].op_id, "op-forbidden");
         assert_eq!(response.rejected[0].status, StatusCode::FORBIDDEN.as_u16());
     }
+
+    #[tokio::test]
+    async fn admin_can_create_list() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let (status, Json(created)) = create_list(
+            State(state),
+            headers,
+            Json(CreateList {
+                name: "New List".to_string(),
+                icon: Some("📋".to_string()),
+                color: Some("#ff0000".to_string()),
+                order: Some("b".to_string()),
+            }),
+        )
+        .await
+        .expect("create list should succeed");
+
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(created.name, "New List");
+        assert_eq!(created.icon.as_deref(), Some("📋"));
+        assert_eq!(created.color.as_deref(), Some("#ff0000"));
+        assert_eq!(created.order, "b");
+        assert_eq!(created.space_id, "s1");
+        assert!(!created.id.is_empty());
+    }
+
+    #[tokio::test]
+    async fn admin_can_get_all_lists() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let Json(lists) = get_lists(State(state), headers).await.expect("get lists should succeed");
+
+        // setup_pool seeds "goal-management"
+        assert!(!lists.is_empty());
+        let ids: Vec<&str> = lists.iter().map(|l| l.id.as_str()).collect();
+        assert!(ids.contains(&"goal-management"), "seeded list should be returned");
+    }
+
+    #[tokio::test]
+    async fn admin_can_update_list_name_icon_color() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let Json(updated) = update_list(
+            State(state),
+            headers,
+            Path("goal-management".to_string()),
+            Json(UpdateList {
+                name: Some("Goals".to_string()),
+                icon: Some("🎯".to_string()),
+                color: Some("#00ff00".to_string()),
+                order: None,
+            }),
+        )
+        .await
+        .expect("update list should succeed");
+
+        assert_eq!(updated.id, "goal-management");
+        assert_eq!(updated.name, "Goals");
+        assert_eq!(updated.icon.as_deref(), Some("🎯"));
+        assert_eq!(updated.color.as_deref(), Some("#00ff00"));
+    }
+
+    #[tokio::test]
+    async fn admin_can_delete_empty_list() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+
+        // Create a fresh list to delete (goal-management may have tasks in other tests)
+        let create_headers = {
+            let mut h = HeaderMap::new();
+            h.insert("x-space-id", "s1".parse().expect("space"));
+            h.insert("x-user-id", "u-admin".parse().expect("user"));
+            h
+        };
+        let (_, Json(new_list)) = create_list(
+            State(state.clone()),
+            create_headers,
+            Json(CreateList {
+                name: "Temp List".to_string(),
+                icon: None,
+                color: None,
+                order: None,
+            }),
+        )
+        .await
+        .expect("create temp list");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let status = delete_list(State(state), headers, Path(new_list.id))
+            .await
+            .expect("delete list should succeed");
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
 }

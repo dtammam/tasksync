@@ -3,6 +3,7 @@
 declare const self: ServiceWorkerGlobalScope;
 
 import { build, files, version } from '$service-worker';
+import { networkFirstNavigate, cacheFirstAsset } from '$lib/sw/cacheStrategy';
 
 const SHELL_CACHE = `tasksync-shell-${version}`;
 const RUNTIME_CACHE = `tasksync-runtime-${version}`;
@@ -90,10 +91,10 @@ const shouldHandleRequest = (request: Request, url: URL) => {
 	return CACHEABLE_DESTINATIONS.has(request.destination);
 };
 
-const cacheResponse = async (cacheName: string, request: Request, response: Response) => {
-	if (!response || (!response.ok && response.type !== 'opaque')) return;
-	const cache = await caches.open(cacheName);
-	await cache.put(request, response.clone());
+const swDeps = {
+	caches,
+	doFetch: (req: Request) => fetch(req),
+	warn: (msg: string, err: unknown) => console.warn(msg, err)
 };
 
 self.addEventListener('fetch', (event) => {
@@ -103,42 +104,9 @@ self.addEventListener('fetch', (event) => {
 	if (!shouldHandleRequest(request, url)) return;
 
 	if (request.mode === 'navigate') {
-		event.respondWith(
-			(async () => {
-				try {
-					const networkResponse = await fetch(request);
-					await cacheResponse(SHELL_CACHE, request, networkResponse);
-					return networkResponse;
-				} catch {
-					const cache = await caches.open(SHELL_CACHE);
-					const cachedNavigation = await cache.match(request);
-					if (cachedNavigation) return cachedNavigation;
-					const cachedShell = await cache.match(withBase('/'));
-					if (cachedShell) return cachedShell;
-					throw new Error('Offline and no cached shell available');
-				}
-			})()
-		);
+		event.respondWith(networkFirstNavigate(request, SHELL_CACHE, withBase('/'), swDeps));
 		return;
 	}
 
-	event.respondWith(
-		(async () => {
-			const runtime = await caches.open(RUNTIME_CACHE);
-			const cached = await runtime.match(request);
-			if (cached) {
-				return cached;
-			}
-			try {
-				const networkResponse = await fetch(request);
-				await cacheResponse(RUNTIME_CACHE, request, networkResponse);
-				return networkResponse;
-			} catch {
-				const shell = await caches.open(SHELL_CACHE);
-				const shellHit = await shell.match(request);
-				if (shellHit) return shellHit;
-				throw new Error('Offline and request not cached');
-			}
-		})()
-	);
+	event.respondWith(cacheFirstAsset(request, RUNTIME_CACHE, SHELL_CACHE, swDeps));
 });

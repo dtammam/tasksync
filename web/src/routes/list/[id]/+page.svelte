@@ -1,5 +1,4 @@
 <script lang="ts">
-	// @ts-nocheck
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
@@ -7,12 +6,13 @@
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { auth } from '$lib/stores/auth';
 	import { tasks, tasksByList } from '$lib/stores/tasks';
-	import { lists, findListName } from '$lib/stores/lists';
+	import { lists } from '$lib/stores/lists';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { parseMarkdownTasks } from '$lib/markdown/import';
+	import type { Task } from '$shared/types/task';
 
 	let quickTitle = '';
-	let detailId = null;
+	let detailId: string | null = null;
 	let importOpen = false;
 	let importText = '';
 	let importMessage = '';
@@ -20,29 +20,29 @@
 	let importLoadedFileName = '';
 	let listActionMessage = '';
 
-	$: listId = $page.params.id;
+	$: listId = $page.params.id ?? '';
 	$: listTasks = tasksByList(listId);
-	$: listName = findListName(listId);
+	$: listName = $lists.find((l) => l.id === listId)?.name ?? 'List';
 	$: detailTask = detailId ? ($tasks.find((t) => t.id === detailId) ?? null) : null;
 
-	const normalizeImportKey = (title, targetListId) =>
+	const normalizeImportKey = (title: string, targetListId: string): string =>
 		`${targetListId.trim().toLowerCase()}::${title.trim().replace(/\s+/g, ' ').toLowerCase()}`;
 
-	const compareAlpha = (left, right) => {
+	const compareAlpha = (left: string | undefined, right: string | undefined): number => {
 		const a = (left ?? '').trim().toLowerCase();
 		const b = (right ?? '').trim().toLowerCase();
 		if (a === b) return 0;
 		return a < b ? -1 : 1;
 	};
 
-	const compareStarredFirst = (left, right) => {
+	const compareStarredFirst = (left: Task, right: Task): number => {
 		const leftStarred = (left?.priority ?? 0) > 0;
 		const rightStarred = (right?.priority ?? 0) > 0;
 		if (leftStarred === rightStarred) return 0;
 		return leftStarred ? -1 : 1;
 	};
 
-	const sortTasks = (arr, mode = 'created', direction = 'asc') => {
+	const sortTasks = (arr: Task[], mode = 'created', direction = 'asc'): Task[] => {
 		const copy = [...arr];
 		const isAscending = direction !== 'desc';
 		copy.sort((a, b) => {
@@ -98,7 +98,7 @@
 	$: knownListIds = new Set(($lists ?? []).map((list) => list.id));
 	$: importCandidates = importCandidatesRaw.map((item) => ({
 		...item,
-		list_id: knownListIds.has(item.list_id) ? item.list_id : listId
+		list_id: item.list_id && knownListIds.has(item.list_id) ? item.list_id : listId
 	}));
 	$: existingImportKeys = new Set(
 		($listTasks ?? []).map((task) => normalizeImportKey(task.title, task.list_id))
@@ -134,7 +134,7 @@
 		quickTitle = '';
 	};
 
-	const openDetail = (event) => (detailId = event.detail.id);
+	const openDetail = (event: CustomEvent<{ id: string }>) => (detailId = event.detail.id);
 	const closeDetail = () => (detailId = null);
 
 	const openImport = () => {
@@ -156,7 +156,7 @@
 		importLoadedFileName = '';
 	};
 
-	const onImportFileChange = async (event) => {
+	const onImportFileChange = async (event: Event & { currentTarget: HTMLInputElement }) => {
 		const input = event.currentTarget;
 		const file = input?.files?.[0];
 		if (!file) return;
@@ -221,7 +221,7 @@
 
 	if (typeof window !== 'undefined') {
 		Reflect.set(window, '__addTaskList', () => quickAdd());
-		Reflect.set(window, '__addTaskListWithTitle', (title) => {
+		Reflect.set(window, '__addTaskListWithTitle', (title: unknown) => {
 			const nextTitle = String(title ?? '').trim();
 			if (!nextTitle) return;
 			tasks.createLocalWithOptions(nextTitle, listId);
@@ -250,7 +250,7 @@
 					value={$uiPreferences.listSort.mode}
 					data-testid="list-sort-mode"
 					aria-label="Sort tasks"
-					on:change={(event) => uiPreferences.setListSort({ mode: event.target.value })}
+					on:change={(event) => uiPreferences.setListSort({ mode: (event.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').ListSortMode })}
 				>
 					<option value="created">Creation</option>
 					<option value="alpha">Alphabetical</option>
@@ -263,7 +263,7 @@
 					value={$uiPreferences.listSort.direction}
 					data-testid="list-sort-direction"
 					aria-label="Sort direction"
-					on:change={(event) => uiPreferences.setListSort({ direction: event.target.value })}
+					on:change={(event) => uiPreferences.setListSort({ direction: (event.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').ListSortDirection })}
 				>
 					<option value="asc">Ascending</option>
 					<option value="desc">Descending</option>

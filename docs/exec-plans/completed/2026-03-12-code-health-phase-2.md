@@ -161,12 +161,17 @@ data enters the store layer.
 
 ## Acceptance criteria
 
-- [ ] All quality gates pass after each batch
-- [ ] All 17 tech debt items listed above are closed or explicitly re-deferred with a note
-- [ ] No new `@ts-nocheck` introduced
-- [ ] Tech debt tracker updated when items are closed
-- [ ] This plan moved to `done/` when complete
+- [x] All quality gates pass after each batch
+- [x] All 17 tech debt items listed above are closed or explicitly re-deferred with a note
+- [x] No new `@ts-nocheck` introduced
+- [x] Tech debt tracker updated when items are closed
+- [x] This plan moved to `done/` when complete
 
 ## Progress log
 
 - 2026-03-12: Plan written. Follows `chore/code-audit-cleanup-2026-03-12` (merged 2026-03-12). Waiting for new branch.
+- 2026-03-12: Batch 3 complete. Added 4 list CRUD tests to `server/src/routes.rs` (`admin_can_create_list`, `admin_can_get_all_lists`, `admin_can_update_list_name_icon_color`, `admin_can_delete_empty_list`). Extracted SW caching strategies into `src/lib/sw/cacheStrategy.ts` (`networkFirstNavigate`, `cacheFirstAsset`) and updated `service-worker.ts` to call them; added 7 unit tests in `src/lib/sw/cacheStrategy.test.ts` covering cache-first hit, cache miss → network, network failure → cache fallback, network failure with no cache → error. All gates green (web: 244 unit tests; server: 40 tests).
+- 2026-03-12: Batch 2 complete. Extracted `updateAndPersist(fn)` helper in `tasks.ts` (21 call sites converted; `uncheckAllInList` and `setAll` left intentionally unchanged — conditional save and `set` vs `update` semantics). Extracted `filterSyncableTasks()` and `applyRejections()` from `pushPendingToServer()` in `sync.ts`. Created `createHydrateGuard()` utility in `hydrateGuard.ts`; replaced ad-hoc `prefsMutationVersion` counter in `preferences.ts` and `hydrateGuardVersion` in `settings.ts`. All gates green (lint, check, 237 unit tests).
+- 2026-03-12: Batch 1 complete. Added `.catch(err => console.error('[repo] saveTasks failed', err))` to all 23 `void repo.saveTasks()` call sites in `tasks.ts`. Added `console.warn('[sw] fetch failed', err)` to both catch blocks in `service-worker.ts`. Added offline boot timing assertion (< 3 s) to `@smoke hard reload offline` test in `offline.spec.ts`. All gates green (lint, check, 237 unit tests, 10 smoke tests).
+- 2026-03-12: Batch 4 complete. Removed `// @ts-nocheck` from all 7 Svelte components one at a time (`StreakDisplay.svelte`, `TaskDetailDrawer.svelte`, `TaskRow.svelte`, `Sidebar.svelte`, `+page.svelte`, `list/[id]/+page.svelte`, `+layout.svelte`). Fixed all resulting type errors: added `import type` statements, typed untyped variables and function params, replaced `e.target` with `e.currentTarget` casts, fixed `0 | 1 | 2 | 3` literal type for `priority`. Also extended `lists.updateRemote` body type to accept `order` (used by `moveList` but missing from the type). Updated `eslint.config.js` to explicitly configure the TypeScript embedded parser for `.svelte` files (required once TypeScript syntax was present). All gates green (lint, check, 244 unit tests).
+- 2026-03-12: Batch 5 complete. Added `warnInvalidField` helper and validation in `preferences.ts` at localStorage read (`readLocal`) and server response (`hydrateFromServer`). Added `warnInvalidField` + `validateAndWarnSettings` in `settings.ts` at IDB read (`hydrateFromDb`) and server response (`hydrateFromServer`). Used manual parse (no Zod dependency). All gates green (lint, check, 244 unit tests, 10/10 smoke tests). Plan complete — all 10 in-scope items closed.

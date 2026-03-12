@@ -1,5 +1,4 @@
-<script>
-	// @ts-nocheck
+<script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import StreakDisplay from '$lib/components/StreakDisplay.svelte';
@@ -19,16 +18,19 @@
 	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
 	import { createSyncCoordinator } from '$lib/sync/coordinator';
+	import type { SyncCoordinator } from '$lib/sync/coordinator';
+	import type { AuthState } from '$lib/stores/auth';
+	import type { Task } from '$shared/types/task';
 
 	const NAV_PIN_KEY = 'tasksync:nav-pinned';
 	let navOpen = false;
 	let navPinned = false;
 	let settingsDialogOpen = false;
 	let appReady = false;
-	let syncInFlight = null;
-	let syncCoordinator = null;
+	let syncInFlight: Promise<void> | null = null;
+	let syncCoordinator: SyncCoordinator | null = null;
 	let syncLeader = true;
-	let syncStatusUnsub = null;
+	let syncStatusUnsub: (() => void) | null = null;
 	let lastFollowerReplayTs = 0;
 	let lastFollowerHydrateAt = 0;
 	const toggleNav = () => {
@@ -44,14 +46,14 @@
 		if (!navPinned) navOpen = false;
 	};
 
-	const handleSettingsOpenChange = (event) => {
+	const handleSettingsOpenChange = (event: CustomEvent<{ open: boolean }>) => {
 		settingsDialogOpen = !!event?.detail?.open;
 		if (settingsDialogOpen) {
 			navOpen = true;
 		}
 	};
 
-	const savePinned = (pinned) => {
+	const savePinned = (pinned: boolean) => {
 		navPinned = pinned;
 		if (typeof localStorage !== 'undefined') {
 			localStorage.setItem(NAV_PIN_KEY, pinned ? '1' : '0');
@@ -105,7 +107,7 @@
 		window.location.reload();
 	};
 
-	const fallbackCopyText = (text) => {
+	const fallbackCopyText = (text: string): boolean => {
 		if (typeof document === 'undefined') return false;
 		const el = document.createElement('textarea');
 		el.value = text;
@@ -126,7 +128,7 @@
 		return copied;
 	};
 
-	const setCopyLabel = (label) => {
+	const setCopyLabel = (label: string) => {
 		copyLabel = label;
 		if (copyResetTimer) {
 			clearTimeout(copyResetTimer);
@@ -167,7 +169,7 @@
 		}
 	};
 
-	const isEditableInput = (target) => {
+	const isEditableInput = (target: EventTarget | null): boolean => {
 		if (!(target instanceof HTMLElement)) return false;
 		if (target.isContentEditable) return true;
 		if (target instanceof HTMLTextAreaElement) {
@@ -202,7 +204,7 @@
 			};
 		}
 
-		let focusTimers = [];
+		let focusTimers: ReturnType<typeof setTimeout>[] = [];
 		const clearFocusTimers = () => {
 			for (const timer of focusTimers) {
 				clearTimeout(timer);
@@ -231,7 +233,7 @@
 			}
 		};
 
-		const handleFocusIn = (event) => {
+		const handleFocusIn = (event: FocusEvent) => {
 			if (!isEditableInput(event.target)) return;
 			scheduleFocusRefresh();
 		};
@@ -264,17 +266,17 @@
 		syncCoordinator.publishStatus(get(syncStatus));
 	};
 
-	let retryTimer = null;
-	let prefsRefreshTimer = null;
-	let visibilityListener = null;
-	let copyResetTimer = null;
-	let keyboardOffsetCleanup = null;
+	let retryTimer: ReturnType<typeof setTimeout> | null = null;
+	let prefsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let visibilityListener: (() => void) | null = null;
+	let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
+	let keyboardOffsetCleanup: (() => void) | null = null;
 	let copyLabel = 'Copy';
 	let lastScopeKey = '';
-	let remoteTaskToast = null;
-	let remoteTaskToastTimer = null;
+	let remoteTaskToast: { count: number; titles: string[] } | null = null;
+	let remoteTaskToastTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const showRemoteTaskToast = (newTasks) => {
+	const showRemoteTaskToast = (newTasks: Task[]) => {
 		if (remoteTaskToastTimer) clearTimeout(remoteTaskToastTimer);
 		remoteTaskToast = {
 			count: newTasks.length,
@@ -292,7 +294,7 @@
 		remoteTaskToastTimer = null;
 	};
 
-	const storageScopeFromAuth = (state) => {
+	const storageScopeFromAuth = (state: AuthState): string => {
 		if (state.status === 'authenticated' && state.user) {
 			return `space:${state.user.space_id}:user:${state.user.user_id}`;
 		}

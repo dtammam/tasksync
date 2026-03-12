@@ -1,5 +1,4 @@
 <script lang="ts">
-	// @ts-nocheck
 	import TaskRow from '$lib/components/TaskRow.svelte';
 	import { auth } from '$lib/stores/auth';
 	import { myDayCompleted, myDayMissed, myDayPending, tasks, myDaySuggestions } from '$lib/stores/tasks';
@@ -8,6 +7,7 @@
 	import { onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { uiPreferences, DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
+	import type { Task } from '$shared/types/task';
 
 	$: activeQuotes = $uiPreferences.completionQuotes?.length
 		? $uiPreferences.completionQuotes
@@ -18,7 +18,7 @@
 	let sortMode = 'created';
 	let sortDirection = 'asc';
 	let sortLoaded = false;
-	let detailId = null;
+	let detailId: string | null = null;
 	let showSuggestions = false;
 	let missedActionError = '';
 	let deletingMissedId = '';
@@ -30,13 +30,13 @@
 		if (typeof window === 'undefined') return;
 		isMobilePwaViewport = window.matchMedia('(max-width: 900px)').matches;
 	};
-	const compareAlpha = (left, right) => {
+	const compareAlpha = (left: string | undefined, right: string | undefined): number => {
 		const a = (left ?? '').trim().toLowerCase();
 		const b = (right ?? '').trim().toLowerCase();
 		if (a === b) return 0;
 		return a < b ? -1 : 1;
 	};
-	const compareStarredFirst = (left, right) => {
+	const compareStarredFirst = (left: Task, right: Task): number => {
 		const leftStarred = (left?.priority ?? 0) > 0;
 		const rightStarred = (right?.priority ?? 0) > 0;
 		if (leftStarred === rightStarred) return 0;
@@ -83,10 +83,10 @@
 	let easterTitleIndex = -1;
 	let dayTitle = 'My Day';
 	let dayTitleShiver = false;
-	let easterRevertTimer = null;
-	let holdTimer = null;
+	let easterRevertTimer: ReturnType<typeof setTimeout> | null = null;
+	let holdTimer: ReturnType<typeof setTimeout> | null = null;
 	let holdStartPos = { x: 0, y: 0 };
-	let titleEl = null;
+	let titleEl: HTMLElement | null = null;
 
 	function fitTitleFont() {
 		if (!titleEl) return;
@@ -114,13 +114,13 @@
 		}, 67000);
 	}
 
-	function onTitlePointerDown(e) {
+	function onTitlePointerDown(e: PointerEvent) {
 		e.preventDefault();
 		holdStartPos = { x: e.clientX, y: e.clientY };
 		holdTimer = setTimeout(triggerEasterTitle, 1000);
 	}
 
-	function cancelHold(e = undefined) {
+	function cancelHold(e?: PointerEvent) {
 		if (!holdTimer) return;
 		if (e) {
 			const dx = e.clientX - holdStartPos.x;
@@ -141,7 +141,7 @@
 	$: defaultListId =
 		($lists ?? []).find((l) => l.id !== 'my-day')?.id ?? ($lists ?? [])[0]?.id ?? 'goal-management';
 
-	const sortTasks = (arr, mode = sortMode, direction = sortDirection) => {
+	const sortTasks = (arr: Task[], mode = sortMode, direction = sortDirection): Task[] => {
 		const copy = [...arr];
 		const isAscending = direction !== 'desc';
 		copy.sort((a, b) => {
@@ -194,7 +194,7 @@
 		Reflect.set(window, '__addTaskMyDay', () => quickAdd());
 	}
 
-	const openDetail = (event) => {
+	const openDetail = (event: CustomEvent<{ id: string }>) => {
 		detailId = event.detail.id;
 	};
 
@@ -210,30 +210,30 @@
 		quickTitle = '';
 	};
 
-	const addSuggestionToMyDay = (id) => {
+	const addSuggestionToMyDay = (id: string) => {
 		if ($auth.user?.role === 'contributor') return;
 		tasks.setDueToday(id);
 		showSuggestions = false;
 	};
 
-	const canResolveMissed = (task) => {
+	const canResolveMissed = (task: Task): boolean => {
 		if ($auth.user?.role !== 'contributor') return true;
 		return !!$auth.user?.user_id && task.created_by_user_id === $auth.user.user_id;
 	};
 
-	const markMissedDone = (task) => {
+	const markMissedDone = (task: Task) => {
 		if (!canResolveMissed(task)) return;
 		missedActionError = '';
 		tasks.toggle(task.id);
 	};
 
-	const skipMissed = (task) => {
+	const skipMissed = (task: Task) => {
 		if (!canResolveMissed(task) || !task.recurrence_id) return;
 		missedActionError = '';
 		tasks.skip(task.id);
 	};
 
-	const deleteMissed = async (task) => {
+	const deleteMissed = async (task: Task) => {
 		if (!canResolveMissed(task) || deletingMissedId) return;
 		deletingMissedId = task.id;
 		missedActionError = '';

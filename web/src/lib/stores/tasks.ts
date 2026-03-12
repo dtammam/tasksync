@@ -167,11 +167,15 @@ const preservePuntState = (incoming: Task, existing?: Task) => {
 	};
 };
 
+const updateAndPersist = (fn: (list: Task[]) => Task[]) => {
+	tasksStore.update(fn);
+	void repo.saveTasks(get(tasksStore)).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
+};
+
 export const tasks = {
 	subscribe: tasksStore.subscribe,
 	add(task: Task) {
-		tasksStore.update((list) => [...list, task]);
-		void repo.saveTasks(get(tasksStore));
+		updateAndPersist((list) => [...list, task]);
 	},
 	createLocalWithOptions(
 		title: string,
@@ -187,8 +191,7 @@ export const tasks = {
 		const trimmed = title.trim();
 		if (!trimmed) return;
 		const task = makeLocalTask(trimmed, list_id, opts);
-		tasksStore.update((list) => [...list, task]);
-		void repo.saveTasks(get(tasksStore));
+		updateAndPersist((list) => [...list, task]);
 		return task;
 	},
 	importBatch(
@@ -206,7 +209,7 @@ export const tasks = {
 		const currentUserId = auth.get().user?.user_id;
 		const ownerUserId = opts?.ownerUserId;
 
-		tasksStore.update((list) => {
+		updateAndPersist((list) => {
 			const next = [...list];
 			for (const item of items) {
 				const title = item.title?.trim();
@@ -256,7 +259,6 @@ export const tasks = {
 			}
 			return next;
 		});
-		void repo.saveTasks(get(tasksStore));
 		return { created, skipped, reactivated };
 	},
 	uncheckAllInList(listId: string, opts?: { ownerUserId?: string }): number {
@@ -277,16 +279,16 @@ export const tasks = {
 			})
 		);
 		if (changed > 0) {
-			void repo.saveTasks(get(tasksStore));
+			void repo.saveTasks(get(tasksStore)).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
 		}
 		return changed;
 	},
 	setAll(next: Task[]) {
 		tasksStore.set(next);
-		void repo.saveTasks(next);
+		void repo.saveTasks(next).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
 	},
 	mergeRemote(remote: Task[]) {
-		tasksStore.update((current) => {
+		updateAndPersist((current) => {
 			// Sync pull is incremental, so start with local cache and layer remote deltas on top.
 			const merged = new Map<string, Task>();
 			for (const task of current) {
@@ -299,7 +301,6 @@ export const tasks = {
 			}
 			return Array.from(merged.values());
 		});
-		void repo.saveTasks(get(tasksStore));
 	},
 	applyRemoteDeletes(deleted: { id: string; deleted_ts: number }[]) {
 		if (!deleted.length) return;
@@ -310,7 +311,7 @@ export const tasks = {
 				deletedTsById.set(tombstone.id, tombstone.deleted_ts);
 			}
 		}
-		tasksStore.update((current) =>
+		updateAndPersist((current) =>
 			current.filter((task) => {
 				const deletedTs = deletedTsById.get(task.id);
 				if (deletedTs === undefined) return true;
@@ -319,14 +320,13 @@ export const tasks = {
 				return false;
 			})
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	toggle(id: string) {
 		let shouldPlayCompletion = false;
 		let didComplete = false;
 		let didUncomplete = false;
 		let isRecurring = false;
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((task) =>
 				task.id === id
 					? (() => {
@@ -366,7 +366,6 @@ export const tasks = {
 					: task
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 		if (didComplete) {
 			const willAnnounce = streak.increment(id);
 			// Recurring tasks reuse the same ID for every occurrence — remove it from
@@ -392,14 +391,12 @@ export const tasks = {
 		return get(tasksStore);
 	},
 	clearDirty(id: string) {
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((task) => (task.id === id ? { ...task, dirty: false } : task))
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	remove(id: string) {
-		tasksStore.update((list) => list.filter((t) => t.id !== id));
-		void repo.saveTasks(get(tasksStore));
+		updateAndPersist((list) => list.filter((t) => t.id !== id));
 	},
 	async deleteRemote(id: string) {
 		const existing = tasks.getAll().find((task) => task.id === id);
@@ -412,7 +409,7 @@ export const tasks = {
 		tasks.remove(id);
 	},
 	moveToList(id: string, list_id: string) {
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
@@ -424,13 +421,12 @@ export const tasks = {
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	rename(id: string, title: string) {
 		const trimmed = title.trim();
 		if (!trimmed) return;
 		const now = Date.now();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
@@ -442,24 +438,22 @@ export const tasks = {
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	setDueToday(id: string) {
 		const today = todayIso();
 		const now = Date.now();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id
 					? { ...clearPuntState(t), due_date: today, my_day: false, dirty: true, updated_ts: now }
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	setDueDate(id: string, due_date?: string) {
 		const now = Date.now();
 		const isFutureOrToday = !!due_date && due_date >= todayIso();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
@@ -472,11 +466,10 @@ export const tasks = {
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	catchUp(id: string) {
 		const now = Date.now();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((task) => {
 				if (task.id !== id) return task;
 				if (!task.recurrence_id || !task.due_date) return task;
@@ -485,11 +478,10 @@ export const tasks = {
 				return { ...clearPuntState(task), due_date: next, dirty: true, updated_ts: now };
 			})
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	setPriority(id: string, priority: Task['priority']) {
 		const now = Date.now();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
@@ -501,11 +493,10 @@ export const tasks = {
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	setAssignee(id: string, assignee_user_id?: string) {
 		const now = Date.now();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
@@ -517,12 +508,11 @@ export const tasks = {
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	skip(id: string) {
 		const now = Date.now();
 		let didSkip = false;
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) => {
 				if (t.id === id && !!t.recurrence_id) {
 					didSkip = true;
@@ -536,7 +526,6 @@ export const tasks = {
 				return t;
 			})
 		);
-		void repo.saveTasks(get(tasksStore));
 		if (didSkip) {
 			streak.break();
 		}
@@ -545,7 +534,7 @@ export const tasks = {
 		const now = Date.now();
 		const today = todayIso();
 		let didPunt = false;
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((task) => {
 				if (
 					task.id !== id ||
@@ -570,7 +559,6 @@ export const tasks = {
 				};
 			})
 		);
-		void repo.saveTasks(get(tasksStore));
 		if (didPunt) {
 			streak.break();
 		}
@@ -579,7 +567,7 @@ export const tasks = {
 		const now = Date.now();
 		const isCompletionFromToday = (ts?: number) =>
 			typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayIso();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id &&
 				!!t.recurrence_id &&
@@ -596,7 +584,6 @@ export const tasks = {
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	saveFromDetails(
 		id: string,
@@ -614,7 +601,7 @@ export const tasks = {
 	) {
 		const now = Date.now();
 		const trimmedTitle = details.title.trim();
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) => {
 				if (t.id !== id) return t;
 				const clearsPuntState =
@@ -638,7 +625,6 @@ export const tasks = {
 				};
 			})
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	updateDetails(
 		id: string,
@@ -652,7 +638,7 @@ export const tasks = {
 		}
 	) {
 		const clearsPuntState = details.due_date !== undefined || details.recurrence_id !== undefined;
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((t) =>
 				t.id === id
 					? {
@@ -673,10 +659,9 @@ export const tasks = {
 					: t
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	replaceWithRemote(localId: string, remote: Task, sent?: Task) {
-		tasksStore.update((list) =>
+		updateAndPersist((list) =>
 			list.map((task) =>
 				task.id === localId
 					? sent && hasChangesSinceCreate(task, sent)
@@ -690,7 +675,6 @@ export const tasks = {
 					: task
 			)
 		);
-		void repo.saveTasks(get(tasksStore));
 	},
 	async hydrateFromDb() {
 		const { tasks: stored } = await repo.loadAll();

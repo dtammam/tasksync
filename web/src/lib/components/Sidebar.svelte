@@ -1,5 +1,4 @@
 <script lang="ts">
-	// @ts-nocheck
 	import { page } from '$app/stores';
 	import { createEventDispatcher } from 'svelte';
 	import { lists } from '$lib/stores/lists';
@@ -13,7 +12,11 @@
 	import { playCompletion } from '$lib/sound/sound';
 	import { BACKUP_SCHEMA_V1 } from '$shared/types/backup';
 	import { getSettingsSections, pickSettingsSection } from '$lib/components/settingsMenu';
+	import type { SettingsSectionId } from '$lib/components/settingsMenu';
 	import { DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
+	import type { ListGrant, SpaceMember } from '$shared/types/auth';
+	import type { SoundSettings } from '$shared/types/settings';
+	import type { List } from '$shared/types/list';
 
 	export let navPinned = false;
 
@@ -22,9 +25,9 @@
 	let newListName = '';
 	let newListIcon = '';
 	let newListColor = '#3b82f6';
-	let listNameDrafts = {};
-	let listIconDrafts = {};
-	let listColorDrafts = {};
+	let listNameDrafts: Record<string, string> = {};
+	let listIconDrafts: Record<string, string> = {};
+	let listColorDrafts: Record<string, string> = {};
 	let listError = '';
 	let busy = false;
 	let listSortMode = 'manual';
@@ -51,18 +54,18 @@
 	let passwordError = '';
 
 	let settingsOpen = false;
-	let settingsActiveSection = 'account';
+	let settingsActiveSection: SettingsSectionId = 'account';
 	let settingsMobileMenu = false;
 	let settingsIsMobile = false;
 	let teamBusy = false;
 	let teamError = '';
 	let teamMessage = '';
 	let grantsLoading = false;
-	let grants = [];
+	let grants: ListGrant[] = [];
 	let loadedAdminScope = '';
 	let newMemberEmail = '';
 	let newMemberDisplay = '';
-	let newMemberRole = 'contributor';
+	let newMemberRole: 'admin' | 'contributor' = 'contributor';
 	let newMemberPassword = '';
 	let newMemberIcon = '';
 	let adminMode = false;
@@ -74,7 +77,7 @@
 	let backupMessage = '';
 	let completionQuotesDraft = '';
 	let quotesMessage = '';
-	let quotesMessageTimer = null;
+	let quotesMessageTimer: ReturnType<typeof setTimeout> | null = null;
 	let prevSettingsSection = '';
 	const appFonts = [
 		{ value: 'sora', label: 'Sora' },
@@ -122,23 +125,23 @@
 		{ value: 'butterfly', label: 'Butterfly' },
 	];
 
-	const iconFromIdentity = (display, email) => {
+	const iconFromIdentity = (display: string | undefined, email: string | undefined): string => {
 		const source = (display ?? email ?? '').trim();
 		if (!source) return '?';
 		return source.charAt(0).toUpperCase();
 	};
 
-	const avatarFor = (user) => {
+	const avatarFor = (user: SpaceMember | null | undefined): string => {
 		const icon = user?.avatar_icon?.trim();
 		if (icon) return icon.slice(0, 4);
 		return iconFromIdentity(user?.display, user?.email);
 	};
 
-	const roleLabel = (role) => (role === 'admin' ? 'Admin' : 'Contributor');
+	const roleLabel = (role: string): string => (role === 'admin' ? 'Admin' : 'Contributor');
 
-	const passwordIsValid = (value) => value.trim().length >= 8;
+	const passwordIsValid = (value: string): boolean => value.trim().length >= 8;
 
-	const readAsDataUrl = (file) =>
+	const readAsDataUrl = (file: File): Promise<string> =>
 		new Promise((resolve, reject) => {
 			const reader = new FileReader();
 			reader.onload = () => resolve(String(reader.result ?? ''));
@@ -146,7 +149,7 @@
 			reader.readAsDataURL(file);
 		});
 
-	const readAsText = (file) =>
+	const readAsText = (file: File): Promise<string> =>
 		new Promise((resolve, reject) => {
 			const reader = new FileReader();
 			reader.onload = () => resolve(String(reader.result ?? ''));
@@ -154,7 +157,7 @@
 			reader.readAsText(file);
 		});
 
-	const uploadCustomSound = async (event) => {
+	const uploadCustomSound = async (event: Event & { currentTarget: HTMLInputElement }) => {
 		const input = event.currentTarget;
 		const files = Array.from(input?.files ?? []);
 		if (!files.length) return;
@@ -207,7 +210,7 @@
 		soundMessage = 'Custom sound removed.';
 	};
 
-	const customSoundNames = (settings) => {
+	const customSoundNames = (settings: SoundSettings): string[] => {
 		const raw = settings?.customSoundFilesJson;
 		if (typeof raw === 'string' && raw.trim()) {
 			try {
@@ -231,7 +234,7 @@
 		await playCompletion(soundSettings.get());
 	};
 
-	const normalizeListIcon = (raw) => {
+	const normalizeListIcon = (raw: unknown): string | undefined => {
 		const trimmed = String(raw ?? '').trim();
 		if (!trimmed) return undefined;
 		if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
@@ -252,13 +255,13 @@
 		}
 	};
 
-	const setSettingsOpen = (nextOpen) => {
+	const setSettingsOpen = (nextOpen: boolean) => {
 		if (settingsOpen === nextOpen) return;
 		settingsOpen = nextOpen;
 		dispatch('settingsOpenChange', { open: settingsOpen });
 	};
 
-	const openSettings = (section) => {
+	const openSettings = (section: SettingsSectionId | null | undefined) => {
 		updateSettingsViewport();
 		settingsActiveSection = pickSettingsSection(
 			section ?? settingsActiveSection,
@@ -273,20 +276,20 @@
 		setSettingsOpen(false);
 	};
 
-	const selectSettingsSection = (section) => {
+	const selectSettingsSection = (section: SettingsSectionId) => {
 		settingsActiveSection = pickSettingsSection(section, adminMode, settingsActiveSection);
 		if (settingsIsMobile) {
 			settingsMobileMenu = false;
 		}
 	};
 
-	const handleSettingsDialogKeydown = (event) => {
+	const handleSettingsDialogKeydown = (event: KeyboardEvent) => {
 		if (event.key === 'Escape') {
 			closeSettings();
 		}
 	};
 
-	const backupFileName = (spaceId, exportedAtTs) => {
+	const backupFileName = (spaceId: string, exportedAtTs: number): string => {
 		const date = new Date(exportedAtTs * 1000);
 		const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(
 			date.getDate()
@@ -322,7 +325,7 @@
 		}
 	};
 
-	const restoreBackup = async (event) => {
+	const restoreBackup = async (event: Event & { currentTarget: HTMLInputElement }) => {
 		if (!adminMode || $auth.status !== 'authenticated') return;
 		const input = event.currentTarget;
 		const file = input?.files?.[0];
@@ -369,10 +372,10 @@
 		listError = '';
 	};
 
-	const sortByOrder = (items) =>
+	const sortByOrder = (items: List[]): List[] =>
 		[...items].sort((a, b) => (a.order ?? '').localeCompare(b.order ?? ''));
 
-	const manualOrderValue = (index) => `m-${String(index).padStart(4, '0')}`;
+	const manualOrderValue = (index: number): string => `m-${String(index).padStart(4, '0')}`;
 
 	$: adminMode = $auth.status === 'authenticated' && $auth.user?.role === 'admin';
 
@@ -396,7 +399,7 @@
 		}
 	};
 
-	const renameList = async (id) => {
+	const renameList = async (id: string) => {
 		if (!adminMode) return;
 		const name = (listNameDrafts[id] ?? '').trim();
 		const iconInput = listIconDrafts[id];
@@ -422,7 +425,7 @@
 		}
 	};
 
-	const moveList = async (id, direction) => {
+	const moveList = async (id: string, direction: number) => {
 		if (!adminMode || busy) return;
 		const ordered = sortByOrder(($lists ?? []).filter((list) => list.id !== 'my-day'));
 		const currentIndex = ordered.findIndex((list) => list.id === id);
@@ -434,7 +437,7 @@
 		const [moving] = reordered.splice(currentIndex, 1);
 		reordered.splice(nextIndex, 0, moving);
 
-		const updates = [];
+		const updates: Promise<unknown>[] = [];
 		reordered.forEach((list, index) => {
 			const nextOrder = manualOrderValue(index);
 			if ((list.order ?? '') !== nextOrder) {
@@ -454,7 +457,7 @@
 		}
 	};
 
-	const deleteList = async (id) => {
+	const deleteList = async (id: string) => {
 		if (!adminMode) return;
 		if (!confirm('Delete this list? Tasks within cannot be deleted yet.')) return;
 		busy = true;
@@ -611,10 +614,10 @@
 		}
 	};
 
-	const hasGrant = (userId, listId) =>
+	const hasGrant = (userId: string, listId: string): boolean =>
 		grants.some((grant) => grant.user_id === userId && grant.list_id === listId);
 
-	const setGrant = async (userId, listId, granted) => {
+	const setGrant = async (userId: string, listId: string, granted: boolean) => {
 		if (!adminMode) return;
 		teamBusy = true;
 		teamError = '';
@@ -635,7 +638,7 @@
 		}
 	};
 
-	const resetMemberPassword = async (member) => {
+	const resetMemberPassword = async (member: SpaceMember) => {
 		if (!adminMode) return;
 		const draft = prompt(`New password for ${member.display}`, '');
 		if (draft === null) return;
@@ -658,10 +661,10 @@
 		}
 	};
 
-	const canDeleteMember = (member) =>
-		adminMode && $auth.user && member.user_id !== $auth.user.user_id;
+	const canDeleteMember = (member: SpaceMember): boolean =>
+		adminMode && !!$auth.user && member.user_id !== $auth.user.user_id;
 
-	const deleteMember = async (member) => {
+	const deleteMember = async (member: SpaceMember) => {
 		if (!canDeleteMember(member) || teamBusy) return;
 		const confirmed = confirm(`Delete ${member.display} from this space?`);
 		if (!confirmed) return;
@@ -1128,7 +1131,7 @@
 									data-testid="sound-enabled"
 									type="checkbox"
 									checked={$soundSettings.enabled}
-									on:change={(e) => soundSettings.setEnabled(e.target.checked)}
+									on:change={(e) => soundSettings.setEnabled((e.currentTarget as HTMLInputElement).checked)}
 								/>
 								Completion sound
 							</label>
@@ -1137,7 +1140,7 @@
 								<select
 									data-testid="sound-theme"
 									value={$soundSettings.theme}
-									on:change={(e) => soundSettings.setTheme(e.target.value)}
+									on:change={(e) => soundSettings.setTheme((e.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').SoundTheme)}
 								>
 									{#each soundThemes as theme}
 										<option value={theme}>{theme.replace('_', ' ')}</option>
@@ -1155,7 +1158,7 @@
 										step="1"
 										value={$soundSettings.volume}
 										style={`--range-pct:${$soundSettings.volume}%`}
-										on:input={(e) => soundSettings.setVolume(Number(e.target.value))}
+										on:input={(e) => soundSettings.setVolume(Number((e.currentTarget as HTMLInputElement).value))}
 									/>
 									<span>{$soundSettings.volume}%</span>
 								</div>
@@ -1209,8 +1212,9 @@
 									type="checkbox"
 									checked={$uiPreferences.streakSettings.enabled}
 									on:change={(e) => {
-										uiPreferences.setStreakSettings({ enabled: e.target.checked });
-										if (e.target.checked) {
+										const checked = (e.currentTarget as HTMLInputElement).checked;
+										uiPreferences.setStreakSettings({ enabled: checked });
+										if (checked) {
 											void streak.loadThemeAssets($uiPreferences.streakSettings.theme);
 										}
 									}}
@@ -1223,8 +1227,9 @@
 									data-testid="streak-theme"
 									value={$uiPreferences.streakSettings.theme}
 									on:change={(e) => {
-										uiPreferences.setStreakSettings({ theme: e.target.value });
-										void streak.loadThemeAssets(e.target.value);
+										const val = (e.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').StreakTheme;
+										uiPreferences.setStreakSettings({ theme: val });
+										void streak.loadThemeAssets(val);
 									}}
 								>
 									<option value="ddr">DDR</option>
@@ -1236,7 +1241,7 @@
 								<select
 									data-testid="streak-reset-mode"
 									value={$uiPreferences.streakSettings.resetMode}
-									on:change={(e) => uiPreferences.setStreakSettings({ resetMode: e.target.value })}
+									on:change={(e) => uiPreferences.setStreakSettings({ resetMode: (e.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').StreakResetMode })}
 								>
 									<option value="daily">Daily (DDR) — resets at midnight</option>
 									<option value="endless">Endless (ITG) — never resets automatically</option>
@@ -1287,7 +1292,7 @@
 								<select
 									data-testid="ui-theme"
 									value={$uiPreferences.theme}
-									on:change={(e) => uiPreferences.setTheme(e.target.value)}
+									on:change={(e) => uiPreferences.setTheme((e.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').UiTheme)}
 								>
 									{#each appThemes as option}
 										<option value={option.value}>{option.label}</option>
@@ -1299,7 +1304,7 @@
 								<select
 									data-testid="ui-font"
 									value={$uiPreferences.font}
-									on:change={(e) => uiPreferences.setFont(e.target.value)}
+									on:change={(e) => uiPreferences.setFont((e.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').UiFont)}
 								>
 									{#each appFonts as option}
 										<option value={option.value}>{option.label}</option>
