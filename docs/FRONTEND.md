@@ -122,11 +122,13 @@ Utilities extracted from route/layout files live under `web/src/lib/utils/`:
 | `keyboardOffset.ts` | `routes/+layout.svelte` | `installKeyboardOffsetTracker(el)` — sets `--mobile-keyboard-offset` CSS var; returns cleanup. |
 | `shareText.ts` | `routes/+layout.svelte` | `copyToClipboard(text)` with `execCommand` fallback. No DOM coupling beyond function params. |
 
-## “No spaghetti” import rules (to enforce via lint)
+## “No spaghetti” import rules (enforced by ESLint)
+
+These boundaries are mechanically enforced via `no-restricted-imports` rules in `web/eslint.config.js`:
 
 - `components/` must not import directly from `data/` (go through stores/service)
 - `routes/` must not import from `data/` (go through stores/service)
 - `data/` must not import from `components/` or `routes/`
 
 If a rule needs an exception:
-- document it in `docs/RELIABILITY.md` or add a linter exception with a comment explaining why.
+- add a `// eslint-disable-next-line no-restricted-imports` comment with an explanation, and document the exception here.

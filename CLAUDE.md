@@ -85,9 +85,10 @@ Scripts live in `scripts/`. Check there before constructing ad-hoc commands.
 ## Exec plan ownership
 
 Active plans currently in progress:
-(none)
+- `docs/exec-plans/active/2026-03-12-ui-polish-batch-1.md` — UI polish + fixes: list sort indicator (#036), color picker (#037), date chip (#038), review skill (#039), streak text position (#040)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-03-12-tech-debt-batch-3.md` — close #003 (ESLint boundaries), #002 (latency CI gates), #010 (routes.rs split) (complete 2026-03-12)
 - `docs/exec-plans/completed/2026-03-12-ui-decomposition.md` — UI component decomposition: Sidebar, layout utilities, list import modal, My Day sub-components (#011, #017, #018, #032) (complete 2026-03-12)
 - `docs/exec-plans/completed/2026-03-12-code-health-phase-2.md` — medium-complexity cleanup: error handling, structural refactors, test coverage, @ts-nocheck removal, wire format validation (complete 2026-03-12)
 - `docs/exec-plans/active/2026-03-11-code-quality-audit.md` — full-codebase quality audit (fact-finding reference; complete)

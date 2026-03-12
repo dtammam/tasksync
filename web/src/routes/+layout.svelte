@@ -8,12 +8,11 @@
 	import { page } from '$app/stores';
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
-	import { tasks, myDayMissed } from '$lib/stores/tasks';
+	import { tasks, myDayMissed, setDbScope } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
 	import { playCompletion } from '$lib/sound/sound';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { streak } from '$lib/stores/streak';
-	import { setDbScope } from '$lib/data/idb';
 	import { auth } from '$lib/stores/auth';
 	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';

@@ -9,16 +9,21 @@ Rules:
 
 ## Active
 
-| ID | Area | Severity | Summary | Why it matters | Next action | Owner | Link |
-|---:|------|----------|---------|----------------|------------|-------|------|
-| 002 | Perf | High | Make latency budgets mechanically enforced in CI | Prevent silent regressions | Add benchmarks + CI gates | unassigned | (add plan) |
-| 003 | Arch | Med | Enforce frontend layer boundaries with lints | Prevent coupling & drift | Add ESLint boundary rules | unassigned | (add plan) |
-| 010 | Arch | High | Split `server/src/routes.rs` (3,862 lines) into modules | Entire server in one file; all domains mixed; hard to navigate and review | Extract into `routes/{auth,tasks,sync,lists}.rs` + `types.rs` | unassigned | chore/code-quality-audit |
+| ID | Area | Severity | Summary | Owner | Next action |
+|---:|------|----------|---------|-------|-------------|
+| 040 | UI | Med | Streak text renders too far right on first task check after container rebuild | unassigned | Fix `captureContentCenter()` timing in `StreakDisplay.svelte` |
+| 039 | Tooling | Med | Create `/review` skill that enforces coding standards from a consistent entrypoint | unassigned | Write `~/.claude/commands/review.md` skill file |
+| 038 | UI | Low | Show scheduled date ("Date:") for non-recurring tasks in task row (My Day view only shows it for recurring) | unassigned | Extend `TaskRow.svelte` chip logic to cover non-recurring scheduled tasks |
+| 037 | UI | Low | Color picker for list edit looks visually wrong — native `<input type="color">` is unstyled/jarring | unassigned | Replace or restyle the color input in `Sidebar.svelte` |
+| 036 | UI | Med | List sort indicator line in sidebar is confusing — falls between list name and properties, not intuitive | unassigned | Redesign drag/reorder visual in `Sidebar.svelte` sort mode |
 
 ## Closed
 
 | ID | Area | Closed on | Summary | Link |
 |---:|------|-----------|---------|------|
+| 010 | Arch | 2026-03-12 | Split `server/src/routes.rs` into `routes/{types,auth,lists,tasks,sync}.rs` + `mod.rs` | chore/tech-debt-batch-3 |
+| 003 | Arch | 2026-03-12 | Enforce frontend layer boundaries with ESLint `no-restricted-imports` rules | chore/tech-debt-batch-3 |
+| 002 | Perf | 2026-03-12 | Vitest bench harness (10k tasks) + CI gate (500ms ceiling) + Playwright perf test (200ms ceiling) | chore/tech-debt-batch-3 |
 | 032 | UI | 2026-03-12 | Decompose My Day page — extracted `MissedTaskBanner`, `SuggestionPanel`, `SortControls` | feat/ui-decomposition-2026-03-12 |
 | 018 | UI | 2026-03-12 | Extract `ImportTasksModal.svelte` from list route page | feat/ui-decomposition-2026-03-12 |
 | 017 | UI | 2026-03-12 | Extract `keyboardOffset.ts` and `shareText.ts` from `+layout.svelte` | feat/ui-decomposition-2026-03-12 |
