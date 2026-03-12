@@ -1,5 +1,8 @@
 <script lang="ts">
 	import TaskRow from '$lib/components/TaskRow.svelte';
+	import MissedTaskBanner from '$lib/components/MissedTaskBanner.svelte';
+	import SuggestionPanel from '$lib/components/SuggestionPanel.svelte';
+	import SortControls from '$lib/components/SortControls.svelte';
 	import { auth } from '$lib/stores/auth';
 	import { myDayCompleted, myDayMissed, myDayPending, tasks, myDaySuggestions } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
@@ -19,13 +22,12 @@
 	let sortDirection = 'asc';
 	let sortLoaded = false;
 	let detailId: string | null = null;
-	let showSuggestions = false;
 	let missedActionError = '';
 	let deletingMissedId = '';
 	let isMobilePwaViewport = false;
 	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
 	const MY_DAY_SORT_DIRECTION_KEY = 'tasksync:sort:myday:direction';
-	
+
 	const updateMobileViewport = () => {
 		if (typeof window === 'undefined') return;
 		isMobilePwaViewport = window.matchMedia('(max-width: 900px)').matches;
@@ -213,7 +215,6 @@
 	const addSuggestionToMyDay = (id: string) => {
 		if ($auth.user?.role === 'contributor') return;
 		tasks.setDueToday(id);
-		showSuggestions = false;
 	};
 
 	const canResolveMissed = (task: Task): boolean => {
@@ -246,9 +247,10 @@
 		}
 	};
 
-	$: if (!$myDaySuggestions?.length) {
-		showSuggestions = false;
-	}
+	const onSortChange = (event: CustomEvent<{ mode: string; direction: string }>) => {
+		sortMode = event.detail.mode;
+		sortDirection = event.detail.direction;
+	};
 
 	$: if (typeof window !== 'undefined') {
 		Reflect.set(window, '__copyTasksAsJoplin', copyProvider);
@@ -278,66 +280,24 @@
 				on:pointermove={cancelHold}
 				style="user-select: none; -webkit-user-select: none;"
 			>{dayTitle}</h1>
-			<p class="sub">Tasks you’ve chosen for today.</p>
+			<p class="sub">Tasks you've chosen for today.</p>
 		</div>
 		<div class="actions">
-			<div class="sorter">
-				<label>
-					<span>Sort</span>
-					<select bind:value={sortMode} aria-label="Sort tasks">
-						<option value="created">Creation</option>
-						<option value="alpha">Alphabetical</option>
-					</select>
-				</label>
-				<label class="order-control">
-					<span>Order</span>
-					<select bind:value={sortDirection} aria-label="Sort direction">
-						<option value="asc">Ascending</option>
-						<option value="desc">Descending</option>
-					</select>
-				</label>
-			</div>
+			<SortControls mode={sortMode} direction={sortDirection} on:change={onSortChange} />
 		</div>
 	</header>
 
-	{#if sortedMissed.length}
-		<section class="block missed-block">
-			<div class="section-title">Missed ({sortedMissed.length})</div>
-			<div class="stack" data-testid="missed-section">
-				{#each sortedMissed as task (task.id)}
-					<div class="missed-item" transition:fade={{ duration: 150 }}>
-						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
-						<div class="missed-actions">
-							{#if task.recurrence_id}
-								<button
-									type="button"
-									class="ghost"
-									on:click={() => skipMissed(task)}
-									disabled={!canResolveMissed(task)}
-								>
-									Skip next
-								</button>
-							{/if}
-							<button type="button" on:click={() => markMissedDone(task)} disabled={!canResolveMissed(task)}>
-								Mark done
-							</button>
-							<button
-								type="button"
-								class="danger"
-								on:click={() => deleteMissed(task)}
-								disabled={!canResolveMissed(task) || deletingMissedId === task.id}
-							>
-								{deletingMissedId === task.id ? 'Deleting…' : 'Delete'}
-							</button>
-						</div>
-					</div>
-				{/each}
-				{#if missedActionError}
-					<p class="missed-error">{missedActionError}</p>
-				{/if}
-			</div>
-		</section>
-	{/if}
+	<MissedTaskBanner
+		tasks={sortedMissed}
+		{isMobilePwaViewport}
+		canResolve={canResolveMissed}
+		deletingId={deletingMissedId}
+		actionError={missedActionError}
+		on:markDone={(e) => markMissedDone(e.detail.task)}
+		on:skip={(e) => skipMissed(e.detail.task)}
+		on:delete={(e) => deleteMissed(e.detail.task)}
+		on:openDetail={openDetail}
+	/>
 
 	<section class="block">
 		<div class="section-title">Planned</div>
@@ -376,44 +336,11 @@
 	</section>
 </div>
 
-{#if $myDaySuggestions?.length}
-	<div class="suggestions-flyout">
-		{#if showSuggestions}
-			<div class="suggestions-panel">
-				<div class="panel-head">
-					<strong>Suggestions</strong>
-					<button type="button" class="ghost tiny" on:click={() => (showSuggestions = false)}>Close</button>
-				</div>
-				<div class="suggestions">
-					{#each $myDaySuggestions as suggestion (suggestion.id)}
-						<div class="suggestion">
-							<div>
-								<p class="title">{suggestion.title}</p>
-								<p class="meta">
-									{#if suggestion.due_date}
-										Due {suggestion.due_date}
-									{:else}
-										No due date
-									{/if}
-								</p>
-							</div>
-							<button
-								type="button"
-								on:click={() => addSuggestionToMyDay(suggestion.id)}
-								disabled={$auth.user?.role === 'contributor'}
-							>
-								Add
-							</button>
-						</div>
-					{/each}
-				</div>
-			</div>
-		{/if}
-		<button class="suggestions-toggle" type="button" on:click={() => (showSuggestions = !showSuggestions)}>
-			Suggestions {$myDaySuggestions.length}
-		</button>
-	</div>
-{/if}
+<SuggestionPanel
+	suggestions={$myDaySuggestions ?? []}
+	disabled={$auth.user?.role === 'contributor'}
+	on:add={(e) => addSuggestionToMyDay(e.detail.id)}
+/>
 
 <TaskDetailDrawer task={detailTask} open={!!detailTask} on:close={closeDetail} />
 
@@ -491,8 +418,6 @@
 	}
 
 	.actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }
-	.actions .sorter { display: flex; flex-direction: column; gap: 4px; }
-	.sorter label { display: inline-flex; align-items: center; gap: 8px; }
 
 	.block {
 		margin-top: 16px;
@@ -504,120 +429,7 @@
 	}
 
 	.section-title { color: var(--app-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
-	.missed-block .section-title { color: #fbbf24; }
 	.stack { display: grid; gap: 12px; }
-
-	.missed-item {
-		display: grid;
-		gap: 6px;
-		padding: 10px 12px;
-		border: 1px solid var(--border-1);
-		border-radius: 12px;
-		background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 92%, #f59e0b 8%), var(--surface-2));
-	}
-
-	.missed-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-	.missed-actions button,
-	.suggestions-toggle,
-	.panel-head .ghost.tiny {
-		background: var(--surface-1);
-		border: 1px solid var(--border-2);
-		color: var(--app-text);
-		border-radius: 999px;
-		padding: 6px 11px;
-		font-size: 12px;
-		cursor: pointer;
-		box-shadow: var(--ring-shadow);
-	}
-
-	.missed-actions button:hover,
-	.suggestions-toggle:hover,
-	.panel-head .ghost.tiny:hover,
-	.suggestion button:hover,
-	.mobile-add button:hover {
-		transform: translateY(-1px);
-		filter: brightness(1.11);
-	}
-
-	.missed-actions button.ghost {
-		color: var(--app-muted);
-	}
-
-	.missed-actions button.danger { border-color: #7f1d1d; color: #fecaca; }
-	.missed-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
-	.missed-error { margin: 0; color: #fda4af; font-size: 12px; }
-
-	.suggestions { display: grid; gap: 10px; }
-	.suggestion {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		align-items: center;
-		background: color-mix(in oklab, var(--surface-1) 95%, white 5%);
-		border: 1px solid var(--border-1);
-		border-radius: 12px;
-		padding: 10px 12px;
-		box-shadow: var(--ring-shadow);
-	}
-
-	.suggestions-flyout {
-		position: fixed;
-		right: 14px;
-		bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
-		display: grid;
-		gap: 10px;
-		justify-items: end;
-		z-index: 16;
-	}
-
-	.suggestions-toggle {
-		background: var(--surface-1);
-		color: var(--app-text);
-		border: 1px solid var(--border-2);
-		border-radius: 999px;
-		padding: 8px 14px;
-		font-size: 12px;
-		cursor: pointer;
-		box-shadow: var(--soft-shadow);
-	}
-
-	.suggestions-panel {
-		width: min(430px, calc(100vw - 28px));
-		max-height: min(50vh, 430px);
-		overflow: auto;
-		background: color-mix(in oklab, var(--surface-2) 95%, white 3%);
-		border: 1px solid var(--border-2);
-		border-radius: 13px;
-		padding: 12px;
-		box-shadow: var(--soft-shadow);
-	}
-
-	.panel-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 10px;
-		color: var(--app-text);
-	}
-
-	.panel-head .ghost.tiny {
-		background: var(--surface-1);
-		border: 1px solid var(--border-2);
-		border-radius: 18px;
-		padding: 12px;
-		box-shadow: var(--soft-shadow);
-	}
-	.suggestion .title { margin: 0; font-weight: 650; }
-	.suggestion .meta { margin: 2px 0 0; color: var(--app-muted); font-size: 13px; }
-
-	.suggestion button {
-		background: linear-gradient(180deg, #1e40af, #1d4ed8);
-		color: white;
-		border: 1px solid rgba(147, 197, 253, 0.4);
-		padding: 10px 12px;
-		border-radius: 11px;
-		cursor: pointer;
-		box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
-	}
 
 	.empty {
 		color: var(--app-muted);
@@ -627,7 +439,6 @@
 		border: 1px dashed var(--border-1);
 		border-radius: 12px;
 	}
-
 
 	.bliss {
 		display: flex;
@@ -660,28 +471,6 @@
 		color: var(--app-muted);
 	}
 
-	.sorter {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		color: var(--app-text);
-	}
-
-	.sorter select {
-		background: linear-gradient(180deg, var(--surface-1), color-mix(in oklab, var(--surface-1) 88%, black 12%));
-		color: var(--app-text);
-		border: 1px solid var(--border-1);
-		border-radius: 999px;
-		padding: 6px 10px;
-		min-height: 32px;
-		font-size: 13px;
-		box-shadow: var(--ring-shadow);
-	}
-
-	.sorter span {
-		font-size: 11px;
-		color: var(--app-muted);
-	}
 	.empty.subtle { color: #7285a4; }
 
 	.mobile-add {
@@ -742,6 +531,11 @@
 		box-shadow: var(--ring-shadow);
 	}
 
+	.mobile-add button:hover {
+		transform: translateY(-1px);
+		filter: brightness(1.11);
+	}
+
 	@media (max-width: 900px) {
 		.page-content {
 			padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 108px);
@@ -755,21 +549,6 @@
 
 		.actions {
 			margin-left: 0;
-		}
-
-		.order-control {
-			display: none;
-		}
-
-		.suggestion {
-			grid-template-columns: 1fr;
-			gap: 8px;
-		}
-
-		.suggestions-flyout {
-			right: 10px;
-			left: auto;
-			bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
 		}
 
 		h1 {

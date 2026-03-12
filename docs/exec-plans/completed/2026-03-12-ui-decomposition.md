@@ -153,3 +153,9 @@ in `Sidebar.svelte` until a follow-up plan is written for those.
 
 - 2026-03-12: Plan written. Follows code health phase 2 (merged 2026-03-12).
   Waiting for new branch.
+- 2026-03-12: All four batches executed on branch `feat/ui-decomposition-2026-03-12`.
+  Batch 1 (#032): Extracted `MissedTaskBanner.svelte`, `SuggestionPanel.svelte`, `SortControls.svelte` from `+page.svelte`. Gates passed.
+  Batch 2 (#018): Extracted `ImportTasksModal.svelte` from `list/[id]/+page.svelte`. Gates passed.
+  Batch 3 (#017): Extracted `keyboardOffset.ts` and `shareText.ts` from `+layout.svelte`. Gates passed.
+  Batch 4 (#011): Extracted `SoundSettings.svelte`, `MemberList.svelte`, `ListPermissions.svelte` from `Sidebar.svelte`. Gates passed (lint + check + 244 unit tests + 10 Playwright @smoke).
+  `docs/FRONTEND.md` updated with extracted component/utility locations. Tech debt items #011, #017, #018, #032 closed.

@@ -42,8 +42,9 @@ Within `web/src/lib/`:
 ## Mobile quick-add positioning
 
 - Route-level quick-add bars (`.mobile-add`) rely on `var(--mobile-keyboard-offset, 0px)` in their `bottom` offset.
-- `web/src/routes/+layout.svelte` is the single owner of `--mobile-keyboard-offset` and updates it from `visualViewport` + focus events.
-- Do not duplicate keyboard-offset logic inside route components.
+- `web/src/routes/+layout.svelte` is the single owner of `--mobile-keyboard-offset`; it delegates to `web/src/lib/utils/keyboardOffset.ts`.
+- `keyboardOffset.ts` installs the tracker via `installKeyboardOffsetTracker(el)` and returns a cleanup function. Do not duplicate keyboard-offset logic inside route components.
+- Clipboard copy is handled by `web/src/lib/utils/shareText.ts` (`copyToClipboard` + `fallbackCopyText`); `+layout.svelte` imports it rather than inlining the logic.
 
 ## User-facing API errors
 
@@ -55,8 +56,8 @@ Within `web/src/lib/`:
 
 ## List utilities (import + reset)
 
-- List route utility actions live in `web/src/routes/list/[id]/+page.svelte`:
-  - `Import` (plain text + markdown/Joplin checkbox support)
+- List route utility actions are triggered from `web/src/routes/list/[id]/+page.svelte`.
+  - `Import` — opens `web/src/lib/components/ImportTasksModal.svelte` (full import state machine lives there)
   - `Uncheck all` (resets completed tasks in the active list back to pending)
 - Parsing contract lives in `web/src/lib/markdown/import.ts`; parser must remain deterministic line-by-line and skip non-task markdown noise.
 - Bulk mutations must go through `web/src/lib/stores/tasks.ts` helpers (`importBatch`, `uncheckAllInList`) so offline behavior and sync queue semantics stay consistent.
@@ -99,6 +100,27 @@ Mapping for now:
 If you add new modules:
 - Put orchestration logic in `service/`
 - Keep UI components dumb (props in, events out)
+
+## Extracted UI components
+
+Components extracted from route-level files live under `web/src/lib/components/`:
+
+| Component | Extracted from | Notes |
+|---|---|---|
+| `MissedTaskBanner.svelte` | `routes/+page.svelte` | Props in, events out. No store access. |
+| `SuggestionPanel.svelte` | `routes/+page.svelte` | Props in, events out. Owns `showPanel` toggle state internally. |
+| `SortControls.svelte` | `routes/+page.svelte` | Props in, events out. No store access. |
+| `ImportTasksModal.svelte` | `routes/list/[id]/+page.svelte` | Intentional store access (`tasks`, `lists`, `auth`). Owns deduplication and import state machine. |
+| `settings/SoundSettings.svelte` | `Sidebar.svelte` | Intentional store access (`soundSettings`). Owns all custom-sound upload/clear/preview logic. |
+| `settings/MemberList.svelte` | `Sidebar.svelte` | Props in, events out (`reset`, `delete`, `grantChange`). Uses `ListPermissions` internally. |
+| `settings/ListPermissions.svelte` | `Sidebar.svelte` | Props in, events out (`grantChange`). Renders grant grid for contributor members. |
+
+Utilities extracted from route/layout files live under `web/src/lib/utils/`:
+
+| Utility | Extracted from | Notes |
+|---|---|---|
+| `keyboardOffset.ts` | `routes/+layout.svelte` | `installKeyboardOffsetTracker(el)` — sets `--mobile-keyboard-offset` CSS var; returns cleanup. |
+| `shareText.ts` | `routes/+layout.svelte` | `copyToClipboard(text)` with `execCommand` fallback. No DOM coupling beyond function params. |
 
 ## “No spaghetti” import rules (to enforce via lint)
 

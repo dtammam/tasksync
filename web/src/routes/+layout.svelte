@@ -21,6 +21,8 @@
 	import type { SyncCoordinator } from '$lib/sync/coordinator';
 	import type { AuthState } from '$lib/stores/auth';
 	import type { Task } from '$shared/types/task';
+	import { installKeyboardOffsetTracker } from '$lib/utils/keyboardOffset';
+	import { copyToClipboard } from '$lib/utils/shareText';
 
 	const NAV_PIN_KEY = 'tasksync:nav-pinned';
 	let navOpen = false;
@@ -107,26 +109,6 @@
 		window.location.reload();
 	};
 
-	const fallbackCopyText = (text: string): boolean => {
-		if (typeof document === 'undefined') return false;
-		const el = document.createElement('textarea');
-		el.value = text;
-		el.setAttribute('readonly', 'true');
-		el.style.position = 'fixed';
-		el.style.opacity = '0';
-		el.style.pointerEvents = 'none';
-		document.body.appendChild(el);
-		el.focus();
-		el.select();
-		let copied = false;
-		try {
-			copied = document.execCommand('copy');
-		} catch {
-			copied = false;
-		}
-		document.body.removeChild(el);
-		return copied;
-	};
 
 	const setCopyLabel = (label: string) => {
 		copyLabel = label;
@@ -157,109 +139,10 @@
 			return;
 		}
 		const payload = lines.join('\n');
-		try {
-			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-				await navigator.clipboard.writeText(payload);
-			} else if (!fallbackCopyText(payload)) {
-				throw new Error('Clipboard not available');
-			}
-			setCopyLabel('Copied');
-		} catch {
-			setCopyLabel('Copy failed');
-		}
+		const ok = await copyToClipboard(payload);
+		setCopyLabel(ok ? 'Copied' : 'Copy failed');
 	};
 
-	const isEditableInput = (target: EventTarget | null): boolean => {
-		if (!(target instanceof HTMLElement)) return false;
-		if (target.isContentEditable) return true;
-		if (target instanceof HTMLTextAreaElement) {
-			return !target.readOnly && !target.disabled;
-		}
-		if (target instanceof HTMLInputElement) {
-			const nonTextInputTypes = new Set([
-				'button',
-				'checkbox',
-				'color',
-				'file',
-				'hidden',
-				'image',
-				'radio',
-				'range',
-				'reset',
-				'submit'
-			]);
-			return !target.readOnly && !target.disabled && !nonTextInputTypes.has((target.type || 'text').toLowerCase());
-		}
-		return false;
-	};
-
-	const createMobileKeyboardOffsetController = () => {
-		if (typeof window === 'undefined' || typeof document === 'undefined') return () => undefined;
-		const root = document.documentElement;
-		const viewport = window.visualViewport;
-		if (!root || !viewport) {
-			root?.style.setProperty('--mobile-keyboard-offset', '0px');
-			return () => {
-				root?.style.removeProperty('--mobile-keyboard-offset');
-			};
-		}
-
-		let focusTimers: ReturnType<typeof setTimeout>[] = [];
-		const clearFocusTimers = () => {
-			for (const timer of focusTimers) {
-				clearTimeout(timer);
-			}
-			focusTimers = [];
-		};
-
-		const updateOffset = () => {
-			const isMobileViewport = window.matchMedia('(max-width: 900px)').matches;
-			const editableFocused = isEditableInput(document.activeElement);
-			if (!isMobileViewport || !editableFocused) {
-				root.style.setProperty('--mobile-keyboard-offset', '0px');
-				return;
-			}
-
-			const layoutHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
-			const keyboardHeight = Math.max(0, Math.round(layoutHeight - viewport.height - viewport.offsetTop));
-			root.style.setProperty('--mobile-keyboard-offset', `${keyboardHeight}px`);
-		};
-
-		const scheduleFocusRefresh = () => {
-			clearFocusTimers();
-			updateOffset();
-			for (const delay of [40, 120, 220]) {
-				focusTimers.push(setTimeout(updateOffset, delay));
-			}
-		};
-
-		const handleFocusIn = (event: FocusEvent) => {
-			if (!isEditableInput(event.target)) return;
-			scheduleFocusRefresh();
-		};
-
-		const handleFocusOut = () => {
-			clearFocusTimers();
-			setTimeout(updateOffset, 60);
-		};
-
-		window.addEventListener('resize', updateOffset);
-		viewport.addEventListener('resize', updateOffset);
-		viewport.addEventListener('scroll', updateOffset);
-		document.addEventListener('focusin', handleFocusIn);
-		document.addEventListener('focusout', handleFocusOut);
-		updateOffset();
-
-		return () => {
-			clearFocusTimers();
-			window.removeEventListener('resize', updateOffset);
-			viewport.removeEventListener('resize', updateOffset);
-			viewport.removeEventListener('scroll', updateOffset);
-			document.removeEventListener('focusin', handleFocusIn);
-			document.removeEventListener('focusout', handleFocusOut);
-			root.style.removeProperty('--mobile-keyboard-offset');
-		};
-	};
 
 	const publishSyncStatus = () => {
 		if (!syncCoordinator || !syncLeader || !auth.isAuthenticated()) return;
@@ -324,7 +207,9 @@
 	};
 
 	onMount(async () => {
-		keyboardOffsetCleanup = createMobileKeyboardOffsetController();
+		if (typeof document !== 'undefined') {
+			keyboardOffsetCleanup = installKeyboardOffsetTracker(document.documentElement);
+		}
 		syncCoordinator = createSyncCoordinator({
 			onLeaderChange: (isLeader) => {
 				syncLeader = isLeader;
