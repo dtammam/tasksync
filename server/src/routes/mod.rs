@@ -20,7 +20,7 @@ mod tests {
 
     use super::auth::{
         auth_change_password, auth_create_member, auth_delete_member, auth_export_backup,
-        auth_get_preferences, auth_get_sound, auth_grants, auth_members, auth_restore_backup,
+        auth_get_preferences, auth_get_sound, auth_grants, auth_restore_backup,
         auth_set_grant, auth_set_member_password, auth_update_me, auth_update_preferences,
         auth_update_sound, login, ChangePasswordBody, CreateMemberBody, LoginBody,
         SetListGrantBody, SetMemberPasswordBody, UpdateProfileBody, UpdateSoundSettingsBody,
