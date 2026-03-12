@@ -16,6 +16,7 @@
 	import type { List } from '$shared/types/list';
 	import SoundSettingsPanel from '$lib/components/settings/SoundSettings.svelte';
 	import MemberList from '$lib/components/settings/MemberList.svelte';
+	import ColorSwatchPicker from '$lib/components/ColorSwatchPicker.svelte';
 
 	export let navPinned = false;
 
@@ -831,7 +832,7 @@
 							</label>
 							<label>
 								Color (optional)
-								<input type="color" bind:value={newListColor} />
+								<ColorSwatchPicker bind:value={newListColor} />
 							</label>
 							<button
 								type="button"
@@ -868,11 +869,9 @@
 												bind:value={listIconDrafts[list.id]}
 												on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 											/>
-											<input
-												class="color-input"
-												type="color"
+											<ColorSwatchPicker
 												value={listColorDrafts[list.id] ?? list.color ?? '#3b82f6'}
-												on:input={(e) => (listColorDrafts[list.id] = e.currentTarget.value)}
+												on:change={(e) => (listColorDrafts[list.id] = e.detail)}
 											/>
 											<button
 												type="button"
@@ -1741,14 +1740,6 @@
 
 	.manager .row .name-input {
 		width: 100%;
-	}
-
-	.manager .row .color-input {
-		width: 44px;
-		height: 36px;
-		padding: 3px;
-		border-radius: 8px;
-		flex-shrink: 0;
 	}
 
 	.row-line-2 {
