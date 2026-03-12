@@ -32,11 +32,12 @@ test('@smoke @perf task toggle is fast (< 200 ms E2E ceiling)', async ({ page })
 	await expect(row).toHaveCount(1);
 
 	// Measure: time from clicking the toggle to the task appearing in completed.
+	const toggle = row.getByTestId('task-toggle');
 	const t0 = Date.now();
-	await row.getByRole('checkbox').click();
+	await toggle.click();
 
-	// Task should move to completed section — its checkbox becomes checked.
-	await expect(row.getByRole('checkbox')).toBeChecked({ timeout: 1000 });
+	// Task should move to completed section — toggle becomes acknowledged.
+	await expect(toggle).toHaveAttribute('data-acknowledged', 'true', { timeout: 1000 });
 	const elapsed = Date.now() - t0;
 
 	// E2E ceiling — fails only on severe regression, not minor variance.
