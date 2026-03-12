@@ -14,15 +14,15 @@ Rules:
 | 002 | Perf | High | Make latency budgets mechanically enforced in CI | Prevent silent regressions | Add benchmarks + CI gates | unassigned | (add plan) |
 | 003 | Arch | Med | Enforce frontend layer boundaries with lints | Prevent coupling & drift | Add ESLint boundary rules | unassigned | (add plan) |
 | 010 | Arch | High | Split `server/src/routes.rs` (3,862 lines) into modules | Entire server in one file; all domains mixed; hard to navigate and review | Extract into `routes/{auth,tasks,sync,lists}.rs` + `types.rs` | unassigned | chore/code-quality-audit |
-| 011 | UI | Med | Decompose `Sidebar.svelte` (2,382 lines) | Six distinct features in one component; violates SRP | Split into sub-components per panel | unassigned | chore/code-quality-audit |
-| 017 | UI | Med | Decompose `+layout.svelte` (985 lines) | Root layout owns sync coordination, mobile keyboard offsets, toast lifecycle — beyond structural role | Extract sync coordinator, keyboard offset utility, toast manager | unassigned | chore/code-quality-audit |
-| 018 | UI | Med | Extract bulk import feature from list page | 835-line route component owns file parsing, duplicate detection, multi-step import state | Extract to `ImportTasks.svelte` component or service module | unassigned | chore/code-quality-audit |
-| 032 | UI | Med | Decompose My Day page (`+page.svelte`, 835 lines) | Sort logic, easter eggs, suggestion engine, quick-add mixed in one route component; violates SRP | Extract sort panel, suggestion list, easter egg coordinator to sub-components | unassigned | chore/code-audit-cleanup-2026-03-12 |
 
 ## Closed
 
 | ID | Area | Closed on | Summary | Link |
 |---:|------|-----------|---------|------|
+| 032 | UI | 2026-03-12 | Decompose My Day page — extracted `MissedTaskBanner`, `SuggestionPanel`, `SortControls` | feat/ui-decomposition-2026-03-12 |
+| 018 | UI | 2026-03-12 | Extract `ImportTasksModal.svelte` from list route page | feat/ui-decomposition-2026-03-12 |
+| 017 | UI | 2026-03-12 | Extract `keyboardOffset.ts` and `shareText.ts` from `+layout.svelte` | feat/ui-decomposition-2026-03-12 |
+| 011 | UI | 2026-03-12 | Decompose `Sidebar.svelte` — extracted `SoundSettings`, `MemberList`, `ListPermissions` | feat/ui-decomposition-2026-03-12 |
 | 035 | Types | 2026-03-12 | Add wire format validation for settings deserialization | chore/code-health-phase-2-2026-03-12 |
 | 034 | Store | 2026-03-12 | Redesign preferences hydration race guard — shared `createHydrateGuard()` utility | chore/code-health-phase-2-2026-03-12 |
 | 033 | Test | 2026-03-12 | Add service worker unit tests — extracted cacheStrategy.ts + 7 unit tests | chore/code-health-phase-2-2026-03-12 |

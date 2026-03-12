@@ -3,20 +3,19 @@
 	import { createEventDispatcher } from 'svelte';
 	import { lists } from '$lib/stores/lists';
 	import { listCounts, myDayPending } from '$lib/stores/tasks';
-	import { soundSettings, soundThemes } from '$lib/stores/settings';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { streak, streakState } from '$lib/stores/streak';
 	import { auth } from '$lib/stores/auth';
 	import { members } from '$lib/stores/members';
 	import { api } from '$lib/api/client';
-	import { playCompletion } from '$lib/sound/sound';
 	import { BACKUP_SCHEMA_V1 } from '$shared/types/backup';
 	import { getSettingsSections, pickSettingsSection } from '$lib/components/settingsMenu';
 	import type { SettingsSectionId } from '$lib/components/settingsMenu';
 	import { DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
 	import type { ListGrant, SpaceMember } from '$shared/types/auth';
-	import type { SoundSettings } from '$shared/types/settings';
 	import type { List } from '$shared/types/list';
+	import SoundSettingsPanel from '$lib/components/settings/SoundSettings.svelte';
+	import MemberList from '$lib/components/settings/MemberList.svelte';
 
 	export let navPinned = false;
 
@@ -69,9 +68,6 @@
 	let newMemberPassword = '';
 	let newMemberIcon = '';
 	let adminMode = false;
-	let soundBusy = false;
-	let soundError = '';
-	let soundMessage = '';
 	let backupBusy = false;
 	let backupError = '';
 	let backupMessage = '';
@@ -141,14 +137,6 @@
 
 	const passwordIsValid = (value: string): boolean => value.trim().length >= 8;
 
-	const readAsDataUrl = (file: File): Promise<string> =>
-		new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(String(reader.result ?? ''));
-			reader.onerror = () => reject(new Error('Could not read sound file.'));
-			reader.readAsDataURL(file);
-		});
-
 	const readAsText = (file: File): Promise<string> =>
 		new Promise((resolve, reject) => {
 			const reader = new FileReader();
@@ -156,83 +144,6 @@
 			reader.onerror = () => reject(new Error('Could not read backup file.'));
 			reader.readAsText(file);
 		});
-
-	const uploadCustomSound = async (event: Event & { currentTarget: HTMLInputElement }) => {
-		const input = event.currentTarget;
-		const files = Array.from(input?.files ?? []);
-		if (!files.length) return;
-		if (files.length > 8) {
-			soundError = 'Please upload up to 8 sounds at a time.';
-			soundMessage = '';
-			input.value = '';
-			return;
-		}
-		for (const file of files) {
-			if (!/\.(mp3|wav)$/i.test(file.name)) {
-				soundError = 'Please upload MP3 or WAV files only.';
-				soundMessage = '';
-				input.value = '';
-				return;
-			}
-			if (file.size > 2 * 1024 * 1024) {
-				soundError = 'Sound file is too large (max 2MB each).';
-				soundMessage = '';
-				input.value = '';
-				return;
-			}
-		}
-		soundBusy = true;
-		soundError = '';
-		soundMessage = '';
-		try {
-			const payload = await Promise.all(
-				files.map(async (file) => ({
-					dataUrl: await readAsDataUrl(file),
-					fileName: file.name,
-				}))
-			);
-			soundSettings.setCustomSounds(payload);
-			soundMessage =
-				payload.length === 1
-					? `Custom sound loaded: ${payload[0].fileName}`
-					: `${payload.length} custom sounds loaded. Playback will randomize.`;
-		} catch (err) {
-			soundError = err instanceof Error ? err.message : String(err);
-		} finally {
-			soundBusy = false;
-			input.value = '';
-		}
-	};
-
-	const clearCustomSound = () => {
-		soundSettings.clearCustomSound();
-		soundError = '';
-		soundMessage = 'Custom sound removed.';
-	};
-
-	const customSoundNames = (settings: SoundSettings): string[] => {
-		const raw = settings?.customSoundFilesJson;
-		if (typeof raw === 'string' && raw.trim()) {
-			try {
-				const parsed = JSON.parse(raw);
-				if (Array.isArray(parsed)) {
-					return parsed
-						.map((entry) =>
-							entry && typeof entry === 'object' ? String(entry.name ?? '').trim() : ''
-						)
-						.filter((name) => !!name)
-						.slice(0, 8);
-				}
-			} catch {
-				// Fall back to legacy single-file naming below.
-			}
-		}
-		return settings?.customSoundFileName ? [settings.customSoundFileName] : [];
-	};
-
-	const previewSound = async () => {
-		await playCompletion(soundSettings.get());
-	};
 
 	const normalizeListIcon = (raw: unknown): string | undefined => {
 		const trimmed = String(raw ?? '').trim();
@@ -717,12 +628,6 @@
 	}
 	$: settingsSectionMeta =
 		settingsSections.find((section) => section.id === settingsActiveSection) ?? settingsSections[0];
-	$: loadedCustomSoundNames = customSoundNames($soundSettings);
-	$: hasCustomSounds =
-		loadedCustomSoundNames.length > 0 ||
-		!!$soundSettings.customSoundDataUrl ||
-		!!$soundSettings.customSoundFilesJson;
-
 	$: teamMembers = ($members ?? []).filter((member) => member.user_id !== $auth.user?.user_id);
 	$: managedLists = ($lists ?? []).filter((list) => list.id !== 'my-day');
 	$: managedListsManual = sortByOrder($lists ?? []).filter((list) => list.id !== 'my-day');
@@ -1060,61 +965,16 @@
 							{#if grantsLoading}
 								<p class="muted-note">Loading access matrix...</p>
 							{:else}
-								<div class="member-list">
-									{#if teamMembers.length}
-										{#each teamMembers as member}
-											<div class="member-row">
-												<div class="member-head">
-													<span class="avatar small">{avatarFor(member)}</span>
-													<div>
-														<strong>{member.display}</strong>
-														<span>{member.email}</span>
-													</div>
-													<span class="role-chip">{roleLabel(member.role)}</span>
-												</div>
-												<div class="member-tools">
-													<button
-														type="button"
-														class="ghost tiny"
-														disabled={teamBusy}
-														on:click={() => resetMemberPassword(member)}
-													>
-														Reset password
-													</button>
-													<button
-														type="button"
-														class="ghost tiny danger"
-														disabled={!canDeleteMember(member) || teamBusy}
-														on:click={() => deleteMember(member)}
-													>
-														Delete member
-													</button>
-												</div>
-												{#if member.role === 'contributor'}
-													<div class="grant-grid">
-														{#each managedLists as list}
-															<label
-																class={`grant-row ${hasGrant(member.user_id, list.id) ? 'on' : ''}`}
-															>
-																<span class="grant-name">{list.icon ?? '•'} {list.name}</span>
-																<input
-																	type="checkbox"
-																	class="grant-checkbox"
-																	checked={hasGrant(member.user_id, list.id)}
-																	disabled={teamBusy}
-																	on:change={(e) =>
-																		setGrant(member.user_id, list.id, e.currentTarget.checked)}
-																/>
-															</label>
-														{/each}
-													</div>
-												{/if}
-											</div>
-										{/each}
-									{:else}
-										<p class="muted-note">No other members yet. Add one above.</p>
-									{/if}
-								</div>
+								<MemberList
+									members={teamMembers}
+									{grants}
+									managedLists={managedLists}
+									busy={teamBusy}
+									canDelete={canDeleteMember}
+									on:reset={(e) => resetMemberPassword(e.detail.member)}
+									on:delete={(e) => deleteMember(e.detail.member)}
+									on:grantChange={(e) => setGrant(e.detail.userId, e.detail.listId, e.detail.granted)}
+								/>
 							{/if}
 							{#if teamMessage}
 								<p class="ok">{teamMessage}</p>
@@ -1124,85 +984,7 @@
 							{/if}
 						</div>
 					{:else if settingsActiveSection === 'sound'}
-						<div class="card sound">
-							<label class="toggle" for="sound-enabled">
-								<input
-									id="sound-enabled"
-									data-testid="sound-enabled"
-									type="checkbox"
-									checked={$soundSettings.enabled}
-									on:change={(e) => soundSettings.setEnabled((e.currentTarget as HTMLInputElement).checked)}
-								/>
-								Completion sound
-							</label>
-							<label>
-								Theme
-								<select
-									data-testid="sound-theme"
-									value={$soundSettings.theme}
-									on:change={(e) => soundSettings.setTheme((e.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').SoundTheme)}
-								>
-									{#each soundThemes as theme}
-										<option value={theme}>{theme.replace('_', ' ')}</option>
-									{/each}
-								</select>
-							</label>
-							<label>
-								Volume
-								<div class="volume">
-									<input
-										data-testid="sound-volume"
-										type="range"
-										min="0"
-										max="100"
-										step="1"
-										value={$soundSettings.volume}
-										style={`--range-pct:${$soundSettings.volume}%`}
-										on:input={(e) => soundSettings.setVolume(Number((e.currentTarget as HTMLInputElement).value))}
-									/>
-									<span>{$soundSettings.volume}%</span>
-								</div>
-							</label>
-							<label>
-								Custom sounds (mp3/wav)
-								<input
-									type="file"
-									accept=".mp3,.wav,audio/mpeg,audio/wav"
-									multiple
-									on:change={uploadCustomSound}
-									disabled={soundBusy}
-								/>
-							</label>
-							<div class="sound-actions">
-								<button type="button" class="ghost tiny" on:click={previewSound}>
-									Test sound
-								</button>
-								<button
-									type="button"
-									class="ghost tiny"
-									on:click={clearCustomSound}
-									disabled={!hasCustomSounds}
-								>
-									Clear custom
-								</button>
-							</div>
-							{#if loadedCustomSoundNames.length}
-								<div class="loaded-sounds">
-									<p class="muted-note">Loaded:</p>
-									<ul class="sound-file-list">
-										{#each loadedCustomSoundNames as name}
-											<li>{name}</li>
-										{/each}
-									</ul>
-								</div>
-							{/if}
-							{#if soundMessage}
-								<p class="ok">{soundMessage}</p>
-							{/if}
-							{#if soundError}
-								<p class="error">{soundError}</p>
-							{/if}
-						</div>
+						<SoundSettingsPanel />
 					{:else if settingsActiveSection === 'streak'}
 						<div class="card streak-settings">
 							<label class="toggle" for="streak-enabled">
@@ -1900,7 +1682,6 @@
 	.manager label,
 	.account label,
 	.team label:not(.grant-row),
-	.sound label,
 	.profile-editor label,
 	.quotes label,
 	.appearance label {
@@ -2039,27 +1820,6 @@
 		align-items: center;
 	}
 
-	.member-head strong {
-		color: var(--app-text);
-		font-size: var(--text-base);
-	}
-
-	.member-head span {
-		color: var(--app-muted);
-		font-size: var(--text-sm);
-	}
-
-	.member-head .role-chip {
-		color: var(--app-text);
-		font-size: var(--text-xs);
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		border: 1px solid var(--border-2);
-		background: color-mix(in oklab, var(--surface-accent) 18%, transparent);
-		padding: 4px 6px;
-		border-radius: 999px;
-	}
-
 	.member-tools {
 		display: flex;
 		justify-content: flex-start;
@@ -2176,85 +1936,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-	}
-
-	.sound .toggle {
-		flex-direction: row;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.sound .sound-actions {
-		display: flex;
-		gap: 6px;
-		flex-wrap: wrap;
-	}
-
-	.loaded-sounds {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.sound-file-list {
-		margin: 0;
-		padding-left: 16px;
-		list-style: disc;
-	}
-
-	.sound-file-list li {
-		font-size: var(--text-sm);
-		color: var(--app-muted);
-		line-height: 1.5;
-	}
-
-	.sound input[type='checkbox'] {
-		accent-color: var(--surface-accent);
-	}
-
-	.sound .volume {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 8px;
-		align-items: center;
-	}
-
-	.sound .volume input[type='range'] {
-		appearance: none;
-		-webkit-appearance: none;
-		width: 100%;
-		height: 8px;
-		border-radius: 999px;
-		border: 1px solid var(--border-1);
-		background: var(--surface-2);
-		padding: 0;
-	}
-
-	.sound .volume input[type='range']::-webkit-slider-thumb {
-		appearance: none;
-		-webkit-appearance: none;
-		width: 15px;
-		height: 15px;
-		border-radius: 50%;
-		background: var(--app-text);
-		border: 1px solid var(--surface-accent);
-		cursor: pointer;
-	}
-
-	.sound .volume input[type='range']::-moz-range-thumb {
-		width: 15px;
-		height: 15px;
-		border-radius: 50%;
-		background: var(--app-text);
-		border: 1px solid var(--surface-accent);
-		cursor: pointer;
-	}
-
-	.sound .volume span {
-		color: var(--app-muted);
-		font-size: var(--text-sm);
-		min-width: 38px;
-		text-align: right;
 	}
 
 	.backup .backup-actions {
