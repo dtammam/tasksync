@@ -265,6 +265,7 @@
 	};
 
 	let retryTimer = null;
+	let prefsRefreshTimer = null;
 	let visibilityListener = null;
 	let copyResetTimer = null;
 	let keyboardOffsetCleanup = null;
@@ -396,9 +397,24 @@
 				requestSync('retry');
 			}
 		}, 15000);
+		// Periodic full refresh every 5 minutes so a perpetually-open desktop PWA
+		// stays current even when visibilitychange never fires. Covers tasks (sync),
+		// preferences, and streak state.
+		prefsRefreshTimer = setInterval(() => {
+			if (!auth.isAuthenticated() || document.visibilityState !== 'visible') return;
+			requestSync('poll');
+			void (async () => {
+				const wire = await uiPreferences.hydrateFromServer();
+				streak.hydrateFromServer(wire?.streakStateJson);
+			})();
+		}, 5 * 60 * 1000);
 		visibilityListener = () => {
 			if (document.visibilityState === 'visible' && auth.isAuthenticated()) {
 				requestSync('focus');
+				void (async () => {
+					const wire = await uiPreferences.hydrateFromServer();
+					streak.hydrateFromServer(wire?.streakStateJson);
+				})();
 			}
 		};
 		document.addEventListener('visibilitychange', visibilityListener);
@@ -406,6 +422,7 @@
 
 	onDestroy(() => {
 		if (retryTimer) clearInterval(retryTimer);
+		if (prefsRefreshTimer) clearInterval(prefsRefreshTimer);
 		if (copyResetTimer) clearTimeout(copyResetTimer);
 		if (remoteTaskToastTimer) clearTimeout(remoteTaskToastTimer);
 		if (visibilityListener) {

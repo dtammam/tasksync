@@ -38,6 +38,18 @@ const defaultAuth = () => ({
 	user: { space_id: 's1', user_id: 'u1' }
 });
 
+// Helpers for the new prefs-blob storage format
+const PREFS_KEY = 'tasksync:ui-preferences:s1:u1';
+
+const setPrefsBlob = (partial: Record<string, unknown>) => {
+	localStorage.setItem(PREFS_KEY, JSON.stringify(partial));
+};
+
+const getPrefsBlob = (): Record<string, unknown> => {
+	const raw = localStorage.getItem(PREFS_KEY);
+	return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+};
+
 describe('streak store — increment', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
@@ -78,6 +90,13 @@ describe('streak store — increment', () => {
 		streak.increment('task-2');
 		expect(get(streakState).countedTaskIds).toContain('task-1');
 		expect(get(streakState).countedTaskIds).toContain('task-2');
+	});
+
+	it('increment preserves dayCompleteDate already set', () => {
+		const today = new Date().toISOString().slice(0, 10);
+		streak.hydrateFromServer(JSON.stringify({ count: 0, countedTaskIds: [], lastResetDate: today, dayCompleteDate: today }));
+		streak.increment('task-1');
+		expect(get(streakState).dayCompleteDate).toBe(today);
 	});
 });
 
@@ -148,6 +167,13 @@ describe('streak store — break', () => {
 		streak.increment('task-1');
 		expect(get(streakState).count).toBe(1);
 	});
+
+	it('break preserves dayCompleteDate', () => {
+		const today = new Date().toISOString().slice(0, 10);
+		streak.hydrateFromServer(JSON.stringify({ count: 3, countedTaskIds: ['t1'], lastResetDate: today, dayCompleteDate: today }));
+		streak.break();
+		expect(get(streakState).dayCompleteDate).toBe(today);
+	});
 });
 
 describe('streak store — DDR daily reset', () => {
@@ -163,8 +189,7 @@ describe('streak store — DDR daily reset', () => {
 	it('silently resets count after hydrateFromLocal + checkMissedTasks(0) on a new day', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		const staleState = JSON.stringify({ count: 42, countedTaskIds: ['task-1'], lastResetDate: yesterday });
-		localStorage.setItem('tasksync:streak-state:s1:u1', staleState);
+		setPrefsBlob({ streakState: { count: 42, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
 		streak.hydrateFromLocal();
 		// Count is deferred until checkMissedTasks resolves the pending break
@@ -177,8 +202,7 @@ describe('streak store — DDR daily reset', () => {
 	it('preserves count when lastResetDate is today in DDR mode', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const today = new Date().toISOString().slice(0, 10);
-		const freshState = JSON.stringify({ count: 17, countedTaskIds: ['task-1'], lastResetDate: today });
-		localStorage.setItem('tasksync:streak-state:s1:u1', freshState);
+		setPrefsBlob({ streakState: { count: 17, countedTaskIds: ['task-1'], lastResetDate: today } });
 
 		streak.hydrateFromLocal();
 
@@ -188,8 +212,7 @@ describe('streak store — DDR daily reset', () => {
 	it('preserves count across days in endless mode', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		const oldState = JSON.stringify({ count: 99, countedTaskIds: ['task-1'], lastResetDate: yesterday });
-		localStorage.setItem('tasksync:streak-state:s1:u1', oldState);
+		setPrefsBlob({ streakState: { count: 99, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
 		streak.hydrateFromLocal();
 
@@ -253,8 +276,7 @@ describe('streak store — checkMissedTasks', () => {
 	it('in DDR mode new day: breaks with animation when there are missed tasks', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		const staleState = JSON.stringify({ count: 10, countedTaskIds: ['task-1'], lastResetDate: yesterday });
-		localStorage.setItem('tasksync:streak-state:s1:u1', staleState);
+		setPrefsBlob({ streakState: { count: 10, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
 		streak.hydrateFromLocal(); // sets pendingDailyBreak
 		streak.checkMissedTasks(2); // new day + missed → animated break
@@ -265,8 +287,7 @@ describe('streak store — checkMissedTasks', () => {
 	it('in DDR mode new day: silently zeros when no missed tasks', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		const staleState = JSON.stringify({ count: 7, countedTaskIds: ['task-1'], lastResetDate: yesterday });
-		localStorage.setItem('tasksync:streak-state:s1:u1', staleState);
+		setPrefsBlob({ streakState: { count: 7, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
 		streak.hydrateFromLocal();
 		streak.checkMissedTasks(0); // new day, no missed → silent zero
@@ -380,6 +401,29 @@ describe('streak store — server hydration', () => {
 		streak.hydrateFromServer(undefined);
 		expect(get(streakState).count).toBe(1);
 	});
+
+	it('hydrateFromServer populates dayCompleteDate from server blob', () => {
+		const today = new Date().toISOString().slice(0, 10);
+		streak.hydrateFromServer(JSON.stringify({ count: 5, countedTaskIds: [], lastResetDate: today, dayCompleteDate: today }));
+		expect(get(streakState).dayCompleteDate).toBe(today);
+	});
+
+	it('hydrateFromServer with yesterday dayCompleteDate leaves guard inactive', () => {
+		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+		streak.hydrateFromServer(JSON.stringify({ count: 3, countedTaskIds: [], lastResetDate: yesterday, dayCompleteDate: yesterday }));
+		// Guard should be inactive — yesterday is not today
+		const today = new Date().toISOString().slice(0, 10);
+		expect(get(streakState).dayCompleteDate).toBe(yesterday);
+		expect(get(streakState).dayCompleteDate).not.toBe(today);
+	});
+
+	it('hydrateFromServer writes streak state into prefs blob', () => {
+		const today = new Date().toISOString().slice(0, 10);
+		streak.hydrateFromServer(JSON.stringify({ count: 7, countedTaskIds: ['x'], lastResetDate: today, dayCompleteDate: today }));
+		const blob = getPrefsBlob();
+		expect(blob.streakState).toBeDefined();
+		expect((blob.streakState as { count: number }).count).toBe(7);
+	});
 });
 
 describe('streak store — settings normalization', () => {
@@ -445,14 +489,105 @@ describe('streak store — day complete', () => {
 		expect(get(streakDisplay).isDayComplete).toBe(false);
 	});
 
+	it('streak.reset() clears dayCompleteDate', () => {
+		streak.triggerDayComplete();
+		expect(get(streakState).dayCompleteDate).not.toBeNull();
+		streak.reset();
+		expect(get(streakState).dayCompleteDate).toBeNull();
+	});
+
 	it('triggerDayComplete fires again the next day', () => {
 		streak.triggerDayComplete(); // fires today
 		expect(streak.triggerDayComplete()).toBe(false); // blocked same day
 
-		// Simulate next day by overwriting the stored date to yesterday
+		// Simulate next day: hydrate with yesterday's dayCompleteDate
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		localStorage.setItem('tasksync:streak-state:s1:u1:day-complete-date', yesterday);
+		streak.hydrateFromServer(JSON.stringify({ count: 0, countedTaskIds: [], lastResetDate: yesterday, dayCompleteDate: yesterday }));
 
 		expect(streak.triggerDayComplete()).toBe(true); // new day → fires again
+	});
+
+	it('triggerDayComplete writes dayCompleteDate into stateStore', () => {
+		streak.triggerDayComplete();
+		const today = new Date().toISOString().slice(0, 10);
+		expect(get(streakState).dayCompleteDate).toBe(today);
+	});
+
+	it('triggerDayComplete writes dayCompleteDate into prefs blob', () => {
+		streak.triggerDayComplete();
+		const today = new Date().toISOString().slice(0, 10);
+		const blob = getPrefsBlob();
+		expect((blob.streakState as { dayCompleteDate: string }).dayCompleteDate).toBe(today);
+	});
+
+	it('hydrating with today dayCompleteDate prevents triggerDayComplete from firing', () => {
+		const today = new Date().toISOString().slice(0, 10);
+		streak.hydrateFromServer(JSON.stringify({ count: 3, countedTaskIds: [], lastResetDate: today, dayCompleteDate: today }));
+		expect(streak.triggerDayComplete()).toBe(false);
+	});
+
+	it('triggerDayComplete queues a server sync', () => {
+		vi.clearAllMocks();
+		streak.triggerDayComplete();
+		vi.runAllTimers(); // flush debounce
+		expect(mocks.api.updateUiPreferences).toHaveBeenCalledWith(
+			expect.objectContaining({ streakStateJson: expect.stringContaining('dayCompleteDate') })
+		);
+	});
+});
+
+describe('streak store — localStorage collapse (prefs blob)', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		localStorage.clear();
+		vi.clearAllMocks();
+		mocks.auth.get.mockReturnValue(defaultAuth());
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs());
+		mocks.soundSettings.get.mockReturnValue({ enabled: false, volume: 60 });
+		streak.reset();
+	});
+
+	it('writeStreakStateToPrefsBlob does not clobber other prefs fields', () => {
+		setPrefsBlob({ theme: 'dark', font: 'sora' });
+		streak.increment('task-1'); // triggers writeStreakStateToPrefsBlob
+		const blob = getPrefsBlob();
+		expect(blob.theme).toBe('dark');
+		expect(blob.font).toBe('sora');
+	});
+
+	it('hydrateFromLocal reads streak state from prefs blob', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
+		const today = new Date().toISOString().slice(0, 10);
+		setPrefsBlob({ streakState: { count: 12, countedTaskIds: ['x'], lastResetDate: today } });
+		streak.hydrateFromLocal();
+		expect(get(streakState).count).toBe(12);
+	});
+
+	it('migration: reads old streak key, removes it, stores in prefs blob', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
+		const today = new Date().toISOString().slice(0, 10);
+		// Simulate pre-migration boot: no streakState in prefs blob, only old separate key
+		localStorage.clear();
+		localStorage.setItem('tasksync:streak-state:s1:u1', JSON.stringify({ count: 8, countedTaskIds: ['old'], lastResetDate: today }));
+
+		streak.hydrateFromLocal();
+
+		expect(get(streakState).count).toBe(8);
+		// Old key should be cleaned up
+		expect(localStorage.getItem('tasksync:streak-state:s1:u1')).toBeNull();
+	});
+
+	it('migration: reads old day-complete key, removes it', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
+		const today = new Date().toISOString().slice(0, 10);
+		// Simulate pre-migration boot: no streakState in prefs blob, both old keys present
+		localStorage.clear();
+		localStorage.setItem('tasksync:streak-state:s1:u1', JSON.stringify({ count: 1, countedTaskIds: [], lastResetDate: today }));
+		localStorage.setItem('tasksync:streak-state:s1:u1:day-complete-date', today);
+
+		streak.hydrateFromLocal();
+
+		expect(get(streakState).dayCompleteDate).toBe(today);
+		expect(localStorage.getItem('tasksync:streak-state:s1:u1:day-complete-date')).toBeNull();
 	});
 });

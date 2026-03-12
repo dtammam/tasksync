@@ -101,6 +101,7 @@ export interface StreakState {
 	count: number;
 	countedTaskIds: string[];
 	lastResetDate: string | null; // ISO date string (YYYY-MM-DD)
+	dayCompleteDate?: string | null; // ISO date string; null/absent = not fired today
 }
 
 export interface UiPreferencesWire {

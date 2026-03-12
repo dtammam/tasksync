@@ -217,7 +217,18 @@ const readLocal = (): UiPreferences | null => {
 
 const writeLocal = (prefs: UiPreferences) => {
 	if (typeof localStorage === 'undefined') return;
-	localStorage.setItem(storageKey(), JSON.stringify(prefs));
+	const key = storageKey();
+	// Preserve the streakState field owned by the streak store so it is not clobbered.
+	const existing = localStorage.getItem(key);
+	let streakState: unknown;
+	if (existing) {
+		try {
+			const parsed = JSON.parse(existing) as Record<string, unknown>;
+			streakState = parsed.streakState;
+		} catch { /* ignore */ }
+	}
+	const blob = streakState !== undefined ? { ...prefs, streakState } : { ...prefs };
+	localStorage.setItem(key, JSON.stringify(blob));
 };
 
 const applyThemeToDocument = (theme: UiTheme) => {
