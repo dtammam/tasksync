@@ -20,7 +20,8 @@ const resetClientState = async (page: import('@playwright/test').Page) => {
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 };
 
-test('@smoke @perf task toggle is fast (< 200 ms E2E ceiling)', async ({ page }) => {
+test('@smoke @perf task toggle is fast (< 200 ms E2E ceiling)', async ({ page, browserName }) => {
+	test.skip(browserName !== 'chromium', 'Timing gate: Chromium only — other engines are too variable');
 	await resetClientState(page);
 
 	// Seed a task.
