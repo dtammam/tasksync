@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForTaskInIdb, readTaskFromIdb, updateTaskInIdb } from './helpers/idb';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 const toLocalIsoDate = (date: Date) =>
@@ -9,216 +10,6 @@ const addDaysLocalIso = (days: number) => {
 	return toLocalIsoDate(value);
 };
 
-const waitForTaskInIdb = async (page: Page, title: string) => {
-	await expect
-		.poll(async () =>
-			page.evaluate(async (taskTitle) => {
-				const resolveScopedDbName = () => {
-					const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
-					const rawUser = localStorage.getItem('tasksync:auth-user');
-					let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
-					if (rawUser) {
-						try {
-							const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
-							if (parsed.user_id && parsed.space_id) {
-								scope = `space:${parsed.space_id}:user:${parsed.user_id}`;
-							}
-						} catch {
-							// Keep fallback scope.
-						}
-					}
-					const sanitized =
-						scope
-							.toLowerCase()
-							.replace(/[^a-z0-9_-]/g, '_')
-							.slice(0, 80) || 'legacy';
-					return `tasksync_${sanitized}`;
-				};
-				const dbName = resolveScopedDbName();
-				const db = await new Promise<IDBDatabase | null>((resolve) => {
-					const req = indexedDB.open(dbName);
-					req.onsuccess = () => resolve(req.result);
-					req.onerror = () => resolve(null);
-				});
-				if (!db) return false;
-				const storeNames = Array.from(db.objectStoreNames);
-				if (!storeNames.includes('tasks')) {
-					db.close();
-					return false;
-				}
-				const all = await new Promise<unknown[]>((resolve) => {
-					try {
-						const tx = db.transaction('tasks', 'readonly');
-						const store = tx.objectStore('tasks');
-						const allReq = store.getAll();
-						allReq.onsuccess = () => resolve(allReq.result ?? []);
-						allReq.onerror = () => resolve([]);
-					} catch {
-						resolve([]);
-					}
-				});
-				db.close();
-				return all.some((task) => {
-					if (!task || typeof task !== 'object') return false;
-					if (!('title' in task)) return false;
-					return (task as { title?: unknown }).title === taskTitle;
-				});
-			}, title)
-		)
-		.toBe(true);
-};
-
-const readTaskFromIdb = async (page: Page, title: string) =>
-	page.evaluate(async (taskTitle) => {
-		const resolveScopedDbName = () => {
-			const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
-			const rawUser = localStorage.getItem('tasksync:auth-user');
-			let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
-			if (rawUser) {
-				try {
-					const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
-					if (parsed.user_id && parsed.space_id) {
-						scope = `space:${parsed.space_id}:user:${parsed.user_id}`;
-					}
-				} catch {
-					// Keep fallback scope.
-				}
-			}
-			const sanitized =
-				scope
-					.toLowerCase()
-					.replace(/[^a-z0-9_-]/g, '_')
-					.slice(0, 80) || 'legacy';
-			return `tasksync_${sanitized}`;
-		};
-		const dbName = resolveScopedDbName();
-		const db = await new Promise<IDBDatabase | null>((resolve) => {
-			const req = indexedDB.open(dbName);
-			req.onsuccess = () => resolve(req.result);
-			req.onerror = () => resolve(null);
-		});
-		if (!db) return null;
-		const storeNames = Array.from(db.objectStoreNames);
-		if (!storeNames.includes('tasks')) {
-			db.close();
-			return null;
-		}
-		const all = await new Promise<unknown[]>((resolve) => {
-			try {
-				const tx = db.transaction('tasks', 'readonly');
-				const store = tx.objectStore('tasks');
-				const allReq = store.getAll();
-				allReq.onsuccess = () => resolve(allReq.result ?? []);
-				allReq.onerror = () => resolve([]);
-			} catch {
-				resolve([]);
-			}
-		});
-		db.close();
-		const matched = all.find((task) => {
-			if (!task || typeof task !== 'object') return false;
-			if (!('title' in task)) return false;
-			return (task as { title?: unknown }).title === taskTitle;
-		});
-		if (!matched || typeof matched !== 'object') return null;
-		return matched as {
-			title?: string;
-			due_date?: string;
-			recurrence_id?: string;
-			my_day?: boolean;
-			notes?: string;
-			punted_from_due_date?: string;
-			punted_on_date?: string;
-			occurrences_completed?: number;
-			status?: string;
-		};
-	}, title);
-
-const updateTaskInIdb = async (
-	page: Page,
-	title: string,
-	patch: Record<string, unknown>
-) =>
-	page.evaluate(
-		async ({
-			taskTitle,
-			taskPatch
-		}: {
-			taskTitle: string;
-			taskPatch: Record<string, unknown>;
-		}) => {
-			const resolveScopedDbName = () => {
-				const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
-				const rawUser = localStorage.getItem('tasksync:auth-user');
-				let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
-				if (rawUser) {
-					try {
-						const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
-						if (parsed.user_id && parsed.space_id) {
-							scope = `space:${parsed.space_id}:user:${parsed.user_id}`;
-						}
-					} catch {
-						// Keep fallback scope.
-					}
-				}
-				const sanitized =
-					scope
-						.toLowerCase()
-						.replace(/[^a-z0-9_-]/g, '_')
-						.slice(0, 80) || 'legacy';
-				return `tasksync_${sanitized}`;
-			};
-			const dbName = resolveScopedDbName();
-			const db = await new Promise<IDBDatabase | null>((resolve) => {
-				const req = indexedDB.open(dbName);
-				req.onsuccess = () => resolve(req.result);
-				req.onerror = () => resolve(null);
-			});
-			if (!db) return false;
-			const storeNames = Array.from(db.objectStoreNames);
-			if (!storeNames.includes('tasks')) {
-				db.close();
-				return false;
-			}
-			try {
-				const all = await new Promise<unknown[]>((resolve) => {
-					const tx = db.transaction('tasks', 'readonly');
-					const store = tx.objectStore('tasks');
-					const allReq = store.getAll();
-					allReq.onsuccess = () => resolve(allReq.result ?? []);
-					allReq.onerror = () => resolve([]);
-				});
-				const matched = all.find((task) => {
-					if (!task || typeof task !== 'object') return false;
-					if (!('title' in task)) return false;
-					return (task as { title?: unknown }).title === taskTitle;
-				});
-				if (!matched || typeof matched !== 'object') {
-					db.close();
-					return false;
-				}
-				const updated = {
-					...matched,
-					...taskPatch,
-					dirty: true,
-					updated_ts: Date.now()
-				};
-				await new Promise<boolean>((resolve) => {
-					const tx = db.transaction('tasks', 'readwrite');
-					const store = tx.objectStore('tasks');
-					const putReq = store.put(updated);
-					putReq.onsuccess = () => resolve(true);
-					putReq.onerror = () => resolve(false);
-				});
-				db.close();
-				return true;
-			} catch {
-				db.close();
-				return false;
-			}
-		},
-		{ taskTitle: title, taskPatch: patch }
-	);
 
 const ensureSoundPanelOpen = async (page: Page) => {
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
@@ -263,7 +54,6 @@ const resetClientState = async (page: Page) => {
 };
 
 const seedSuggestions = async (page: Page) => {
-	await resetClientState(page);
 	await page.goto('/list/goal-management');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 
@@ -285,8 +75,9 @@ const seedSuggestions = async (page: Page) => {
 };
 
 test.describe('My Day', () => {
+	test.beforeEach(async ({ page }) => { await resetClientState(page); });
+
 	test('@smoke shows tasks and moves to completed when toggled', async ({ page }) => {
-		await resetClientState(page);
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 
 		const title = makeTitle('Playwright seed');
@@ -306,7 +97,6 @@ test.describe('My Day', () => {
 	});
 
 	test('@smoke can create a new task and persist after reload', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('Playwright-added task');
 		await page.getByTestId('new-task-input').fill(title);
 		await page.getByTestId('new-task-submit').click();
@@ -321,7 +111,6 @@ test.describe('My Day', () => {
 	test('@smoke persists first detail save deterministically with recurrence and My Day button state', async ({
 		page
 	}) => {
-		await resetClientState(page);
 		const title = makeTitle('Detail persist');
 		const notes = `Detail notes ${Math.random().toString(36).slice(2, 6)}`;
 		const today = addDaysLocalIso(0);
@@ -363,7 +152,6 @@ test.describe('My Day', () => {
 	});
 
 	test('shows Marked Done state in details immediately after status toggle', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('Detail mark done');
 		await page.getByTestId('new-task-input').fill(title);
 		await page.getByTestId('new-task-submit').click();
@@ -382,7 +170,6 @@ test.describe('My Day', () => {
 	});
 
 	test('keeps alphabetical sort mode and direction after reload', async ({ page }) => {
-		await resetClientState(page);
 		const marker = makeTitle('Sort marker');
 		const titleB = `${marker} B`;
 		const titleA = `${marker} A`;
@@ -413,7 +200,6 @@ test.describe('My Day', () => {
 	});
 
 	test('persists sound settings changes across reload', async ({ page }) => {
-		await resetClientState(page);
 		await ensureSoundPanelOpen(page);
 		await expect(page.getByTestId('sound-enabled')).toBeChecked();
 
@@ -424,7 +210,17 @@ test.describe('My Day', () => {
 			input.value = '25';
 			input.dispatchEvent(new Event('input', { bubbles: true }));
 		});
-		await page.waitForTimeout(300);
+		await expect.poll(() =>
+			page.evaluate(() => {
+				const stored = localStorage.getItem('tasksync:sound-settings');
+				if (!stored) return null;
+				try {
+					return (JSON.parse(stored) as { volume?: number }).volume ?? null;
+				} catch {
+					return null;
+				}
+			})
+		).toBe(25);
 		await page.reload();
 		await ensureSoundPanelOpen(page);
 
@@ -434,7 +230,6 @@ test.describe('My Day', () => {
 	});
 
 	test('keeps recurring cadence when punting only a single scheduled instance', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('Punt recurrence');
 		const today = addDaysLocalIso(0);
 		const tomorrow = addDaysLocalIso(1);
@@ -497,7 +292,6 @@ test.describe('My Day', () => {
 	});
 
 	test('does not offer punt for daily recurrence tasks', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('Daily no punt');
 		const today = addDaysLocalIso(0);
 
@@ -518,7 +312,6 @@ test.describe('My Day', () => {
 	});
 
 	test('shows punt indicator when a task lands on today from a previous-day punt', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('Punt marker');
 		const today = addDaysLocalIso(0);
 		const yesterday = addDaysLocalIso(-1);
@@ -543,7 +336,6 @@ test.describe('My Day', () => {
 	});
 
 	test('keeps starred tasks at top in My Day sorting', async ({ page }) => {
-		await resetClientState(page);
 		const marker = makeTitle('MyDay star sort');
 		const titleA = `${marker} A`;
 		const titleB = `${marker} B`;
@@ -570,11 +362,70 @@ test.describe('My Day', () => {
 		await page.getByLabel('Sort direction').selectOption('asc');
 		await expect(markerRows.first()).toContainText(titleB);
 	});
+
+	test('completing last pending My Day non-recurring task triggers day-complete', async ({
+		page
+	}) => {
+		// Enable streak before page load so hydrateFromLocal picks it up
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				'tasksync:ui-preferences:anon',
+				JSON.stringify({
+					theme: 'default',
+					font: 'sora',
+					completionQuotes: [],
+					sidebarPanels: {
+						lists: false,
+						members: false,
+						sound: false,
+						backups: false,
+						account: true
+					},
+					listSort: { mode: 'created', direction: 'asc' },
+					streakSettings: { enabled: true, theme: 'ddr', resetMode: 'daily' }
+				})
+			);
+		});
+
+		await page.goto('/');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const title = makeTitle('Day complete trigger');
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
+
+		// Complete the task — it is the only pending My Day task and has no recurrence
+		await page
+			.getByTestId('task-row')
+			.filter({ hasText: title })
+			.getByTestId('task-toggle')
+			.click();
+
+		// day-complete fires once and writes dayCompleteDate into the prefs blob
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const raw = localStorage.getItem('tasksync:ui-preferences:anon');
+					if (!raw) return null;
+					try {
+						const blob = JSON.parse(raw) as {
+							streakState?: { dayCompleteDate?: string };
+						};
+						return blob.streakState?.dayCompleteDate ?? null;
+					} catch {
+						return null;
+					}
+				})
+			)
+			.toBeTruthy();
+	});
 });
 
 test.describe('List view', () => {
+	test.beforeEach(async ({ page }) => { await resetClientState(page); });
+
 	test('filters tasks by list', async ({ page }) => {
-		await resetClientState(page);
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 		await expect(page.getByRole('heading', { name: 'Goal Management' })).toBeVisible();
@@ -588,7 +439,6 @@ test.describe('List view', () => {
 	});
 
 	test('can add a task to list', async ({ page }) => {
-		await resetClientState(page);
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 		const title = makeTitle('Goal list task');
@@ -601,7 +451,6 @@ test.describe('List view', () => {
 	test('supports due-date sort with asc/desc order and keeps preference after reload', async ({
 		page,
 	}) => {
-		await resetClientState(page);
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 
@@ -660,7 +509,6 @@ test.describe('List view', () => {
 	test('shows starred indicator and keeps starred tasks at top for created/alpha sorting', async ({
 		page,
 	}) => {
-		await resetClientState(page);
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 
@@ -700,7 +548,6 @@ test.describe('List view', () => {
 	});
 
 	test('imports plain text and Joplin-style markdown tasks into the active list', async ({ page }) => {
-		await resetClientState(page);
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 
@@ -743,7 +590,6 @@ test.describe('List view', () => {
 	});
 
 	test('unchecks all completed tasks in the current list', async ({ page }) => {
-		await resetClientState(page);
 		await page.goto('/list/goal-management');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 
@@ -785,8 +631,9 @@ test.describe('List view', () => {
 });
 
 test.describe('My Day button', () => {
+	test.beforeEach(async ({ page }) => { await resetClientState(page); });
+
 	test('@smoke My Day button on task row sets due_date to today', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('MyDay btn row');
 		const today = addDaysLocalIso(0);
 
@@ -820,7 +667,6 @@ test.describe('My Day button', () => {
 	});
 
 	test('My Day button hidden when task already due today', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('MyDay btn hidden');
 
 		// quickAdd sets due_date = today
@@ -838,7 +684,6 @@ test.describe('My Day button', () => {
 	});
 
 	test('My Day button in drawer fires immediately and saves due_date', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('MyDay drawer');
 		const today = addDaysLocalIso(0);
 
@@ -872,7 +717,6 @@ test.describe('My Day button', () => {
 	});
 
 	test('legacy my_day: true task without due_date still shows in My Day', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('MyDay legacy');
 
 		// Create task and patch to legacy state (my_day: true, no due_date)
@@ -896,8 +740,9 @@ test.describe('My Day button', () => {
 });
 
 test.describe('Catch Up', () => {
+	test.beforeEach(async ({ page }) => { await resetClientState(page); });
+
 	test('@smoke Catch Up advances missed recurring task past today', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('CatchUp smoke');
 		const yesterday = addDaysLocalIso(-1);
 		const tomorrow = addDaysLocalIso(1);
@@ -933,7 +778,6 @@ test.describe('Catch Up', () => {
 	});
 
 	test('Catch Up not shown for non-recurring missed task', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('CatchUp nonrecur');
 		const yesterday = addDaysLocalIso(-1);
 
@@ -950,7 +794,6 @@ test.describe('Catch Up', () => {
 	});
 
 	test('Catch Up clears punt state', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('CatchUp punt');
 		const yesterday = addDaysLocalIso(-1);
 		const twoDaysAgo = addDaysLocalIso(-2);
@@ -987,7 +830,6 @@ test.describe('Catch Up', () => {
 	});
 
 	test('Catch Up does not increment occurrences_completed', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('CatchUp occ');
 		const yesterday = addDaysLocalIso(-1);
 
@@ -1013,6 +855,8 @@ test.describe('Catch Up', () => {
 });
 
 test.describe('Navigation', () => {
+	test.beforeEach(async ({ page }) => { await resetClientState(page); });
+
 	test('hides suggestions button while settings modal is open', async ({ page }) => {
 		const suggestionsButton = await seedSuggestions(page);
 		await expect(suggestionsButton).toBeVisible();
@@ -1044,7 +888,6 @@ test.describe('Navigation', () => {
 	});
 
 	test('hides add button while settings modal is open', async ({ page }) => {
-		await resetClientState(page);
 		const addInput = page.getByTestId('new-task-input');
 		const addButton = page.getByTestId('new-task-submit');
 		await expect(addInput).toBeVisible();
@@ -1066,7 +909,6 @@ test.describe('Navigation', () => {
 
 	test('hides add field and button while mobile sidebar drawer is open', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 });
-		await resetClientState(page);
 		const addInput = page.getByTestId('new-task-input');
 		const addButton = page.getByTestId('new-task-submit');
 		await expect(addInput).toBeVisible();
@@ -1143,8 +985,6 @@ test.describe('Navigation', () => {
 
 	test('keeps mobile sidebar open when pinned', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 });
-		await resetClientState(page);
-
 		const drawer = page.getByTestId('sidebar-drawer');
 		await expect(drawer).not.toHaveClass(/open/);
 
@@ -1171,13 +1011,11 @@ test.describe('Navigation', () => {
 	});
 
 	test('shows planned-empty state when no tasks exist', async ({ page }) => {
-		await resetClientState(page);
 		await expect(page.getByTestId('planned-empty')).toBeVisible();
 		await expect(page.getByTestId('bliss-state')).not.toBeVisible();
 	});
 
 	test('shows bliss state after completing the only planned task', async ({ page }) => {
-		await resetClientState(page);
 		const title = makeTitle('Bliss test task');
 		await page.getByTestId('new-task-input').fill(title);
 		await page.getByTestId('new-task-submit').click();

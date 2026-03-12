@@ -47,7 +47,7 @@ describe('parseMarkdownTasks', () => {
 		]);
 	});
 
-	it('skips markdown headings and fenced-code markers from note exports', () => {
+	it('skips markdown headings and content inside fenced code blocks', () => {
 		const md = `
 		# Grocery note
 		- [ ] Apples
@@ -59,7 +59,6 @@ describe('parseMarkdownTasks', () => {
 		const result = parseMarkdownTasks(md, 'tasks');
 		expect(result).toEqual([
 			{ title: 'Apples', status: 'pending', list_id: 'tasks', my_day: false },
-			{ title: 'Not a task here', status: 'done', list_id: 'tasks', my_day: false },
 			{ title: 'Bananas', status: 'done', list_id: 'tasks', my_day: false }
 		]);
 	});

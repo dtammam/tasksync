@@ -5,6 +5,14 @@ const initial: SyncStatus = { pull: 'idle', push: 'idle', queueDepth: 0 };
 
 const store = writable<SyncStatus>(initial);
 
+const setPhase = (field: 'pull' | 'push', state: Phase, err?: string) => {
+	store.update((s) => ({
+		...s,
+		[field]: state,
+		lastError: state === 'idle' || state === 'running' ? undefined : err ?? s.lastError
+	}));
+};
+
 export const syncStatus = {
 	subscribe: store.subscribe,
 	setSnapshot(next: SyncStatus) {
@@ -17,18 +25,10 @@ export const syncStatus = {
 		});
 	},
 	setPull(state: Phase, err?: string) {
-		store.update((s) => ({
-			...s,
-			pull: state,
-			lastError: state === 'idle' || state === 'running' ? undefined : err ?? s.lastError
-		}));
+		setPhase('pull', state, err);
 	},
 	setPush(state: Phase, err?: string) {
-		store.update((s) => ({
-			...s,
-			push: state,
-			lastError: state === 'idle' || state === 'running' ? undefined : err ?? s.lastError
-		}));
+		setPhase('push', state, err);
 	},
 	resetError() {
 		store.update((s) => ({ ...s, lastError: undefined }));

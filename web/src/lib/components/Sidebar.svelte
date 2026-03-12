@@ -22,9 +22,9 @@
 	let newListName = '';
 	let newListIcon = '';
 	let newListColor = '#3b82f6';
-	let renameDraft = {};
-	let iconDraft = {};
-	let colorDraft = {};
+	let listNameDrafts = {};
+	let listIconDrafts = {};
+	let listColorDrafts = {};
 	let listError = '';
 	let busy = false;
 	let listSortMode = 'manual';
@@ -360,9 +360,9 @@
 	};
 
 	const resetDrafts = () => {
-		renameDraft = {};
-		iconDraft = {};
-		colorDraft = {};
+		listNameDrafts = {};
+		listIconDrafts = {};
+		listColorDrafts = {};
 		newListName = '';
 		newListIcon = '';
 		newListColor = '#3b82f6';
@@ -398,9 +398,9 @@
 
 	const renameList = async (id) => {
 		if (!adminMode) return;
-		const name = (renameDraft[id] ?? '').trim();
-		const iconInput = iconDraft[id];
-		const colorInput = colorDraft[id];
+		const name = (listNameDrafts[id] ?? '').trim();
+		const iconInput = listIconDrafts[id];
+		const colorInput = listColorDrafts[id];
 		const icon = typeof iconInput === 'string' ? normalizeListIcon(iconInput) : undefined;
 		const color = typeof colorInput === 'string' ? colorInput.trim() : undefined;
 		if (!name && typeof iconInput !== 'string' && typeof colorInput !== 'string') return;
@@ -412,9 +412,9 @@
 				icon: typeof iconInput === 'string' ? icon || '' : undefined,
 				color: typeof colorInput === 'string' ? color || '' : undefined,
 			});
-			renameDraft = { ...renameDraft, [id]: '' };
-			iconDraft = { ...iconDraft, [id]: '' };
-			colorDraft = { ...colorDraft, [id]: '' };
+			listNameDrafts = { ...listNameDrafts, [id]: '' };
+			listIconDrafts = { ...listIconDrafts, [id]: '' };
+			listColorDrafts = { ...listColorDrafts, [id]: '' };
 		} catch (err) {
 			listError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -946,7 +946,7 @@
 											class="name-input"
 											type="text"
 											placeholder={list.name}
-											bind:value={renameDraft[list.id]}
+											bind:value={listNameDrafts[list.id]}
 											on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 										/>
 										<div class="row-line-2">
@@ -957,14 +957,14 @@
 												maxlength="24"
 												autocapitalize="off"
 												spellcheck="false"
-												bind:value={iconDraft[list.id]}
+												bind:value={listIconDrafts[list.id]}
 												on:keydown={(e) => e.key === 'Enter' && renameList(list.id)}
 											/>
 											<input
 												class="color-input"
 												type="color"
-												value={colorDraft[list.id] ?? list.color ?? '#3b82f6'}
-												on:input={(e) => (colorDraft[list.id] = e.currentTarget.value)}
+												value={listColorDrafts[list.id] ?? list.color ?? '#3b82f6'}
+												on:input={(e) => (listColorDrafts[list.id] = e.currentTarget.value)}
 											/>
 											<button
 												type="button"

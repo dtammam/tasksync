@@ -110,6 +110,20 @@ describe('createSyncCoordinator', () => {
 		);
 	});
 
+	it('uses fallback tab ID format when crypto.randomUUID is not available', () => {
+		vi.stubGlobal('crypto', undefined);
+		const port = new MockPort();
+		createSyncCoordinator({
+			workerFactory: () => new MockWorker(port) as never
+		});
+		vi.unstubAllGlobals();
+
+		const registerMsg = port.messages[0] as { type: string; tabId: string };
+		expect(registerMsg.type).toBe('register');
+		// Fallback format: tab-{timestamp}-{random hex}
+		expect(registerMsg.tabId).toMatch(/^tab-\d+-[0-9a-f]+$/);
+	});
+
 	it('applies run-sync messages only when current tab is leader', () => {
 		const port = new MockPort();
 		const onRunSync = vi.fn();

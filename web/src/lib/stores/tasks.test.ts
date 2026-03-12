@@ -16,7 +16,7 @@ vi.mock('$lib/stores/streak', () => ({
 		reset: vi.fn(),
 		hydrateFromLocal: vi.fn(),
 		hydrateFromServer: vi.fn(),
-		checkMissedTasks: vi.fn(),
+		checkMissedTasksAndApplyDailyReset: vi.fn(),
 		loadThemeAssets: vi.fn(),
 		getCount: vi.fn().mockReturnValue(0),
 		triggerDayComplete: vi.fn().mockReturnValue(false)

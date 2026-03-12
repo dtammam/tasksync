@@ -49,4 +49,33 @@ describe('members store', () => {
 		expect(members.get()).toEqual([]);
 		expect(mockedApi.getMembers).not.toHaveBeenCalled();
 	});
+
+	it('find returns null when userId is undefined', () => {
+		expect(members.find(undefined)).toBeNull();
+	});
+
+	it('find returns null when userId does not match any loaded member', async () => {
+		mockedAuth.isAuthenticated.mockReturnValue(true);
+		mockedApi.getMembers.mockResolvedValue([
+			{
+				user_id: 'admin',
+				email: 'admin@example.com',
+				display: 'Admin',
+				space_id: 's1',
+				role: 'admin'
+			}
+		]);
+		await members.hydrateFromServer();
+
+		expect(members.find('unknown-user')).toBeNull();
+	});
+
+	it('hydrateFromServer clears members when API throws', async () => {
+		mockedAuth.isAuthenticated.mockReturnValue(true);
+		mockedApi.getMembers.mockRejectedValue(new Error('network error'));
+
+		await members.hydrateFromServer();
+
+		expect(members.get()).toEqual([]);
+	});
 });

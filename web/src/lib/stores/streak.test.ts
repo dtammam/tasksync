@@ -186,14 +186,14 @@ describe('streak store — DDR daily reset', () => {
 		streak.reset();
 	});
 
-	it('silently resets count after hydrateFromLocal + checkMissedTasks(0) on a new day', () => {
+	it('silently resets count after hydrateFromLocal + checkMissedTasksAndApplyDailyReset(0) on a new day', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 		setPrefsBlob({ streakState: { count: 42, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
 		streak.hydrateFromLocal();
-		// Count is deferred until checkMissedTasks resolves the pending break
-		streak.checkMissedTasks(0); // no missed tasks → silent zero
+		// Count is deferred until checkMissedTasksAndApplyDailyReset resolves the pending break
+		streak.checkMissedTasksAndApplyDailyReset(0); // no missed tasks → silent zero
 
 		expect(get(streakState).count).toBe(0);
 		expect(get(streakState).countedTaskIds).toHaveLength(0);
@@ -220,7 +220,7 @@ describe('streak store — DDR daily reset', () => {
 	});
 });
 
-describe('streak store — checkMissedTasks', () => {
+describe('streak store — checkMissedTasksAndApplyDailyReset', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		localStorage.clear();
@@ -236,7 +236,7 @@ describe('streak store — checkMissedTasks', () => {
 		streak.increment('task-2');
 		expect(get(streakState).count).toBe(2);
 
-		streak.checkMissedTasks(3); // 3 missed tasks from prior day
+		streak.checkMissedTasksAndApplyDailyReset(3); // 3 missed tasks from prior day
 
 		expect(get(streakState).count).toBe(0);
 	});
@@ -245,7 +245,7 @@ describe('streak store — checkMissedTasks', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
 		// count stays at 0
 
-		streak.checkMissedTasks(5);
+		streak.checkMissedTasksAndApplyDailyReset(5);
 
 		expect(get(streakState).count).toBe(0); // no-op, nothing to break
 	});
@@ -254,7 +254,7 @@ describe('streak store — checkMissedTasks', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
 		streak.increment('task-1');
 
-		streak.checkMissedTasks(0);
+		streak.checkMissedTasksAndApplyDailyReset(0);
 
 		expect(get(streakState).count).toBe(1); // unchanged
 	});
@@ -262,13 +262,13 @@ describe('streak store — checkMissedTasks', () => {
 	it('only fires once per day — second call with missed tasks is a no-op', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
 		streak.increment('task-1');
-		streak.checkMissedTasks(2); // breaks
+		streak.checkMissedTasksAndApplyDailyReset(2); // breaks
 		expect(get(streakState).count).toBe(0);
 
 		// Complete more tasks and call again — should not break again today
 		streak.increment('task-2');
 		streak.increment('task-3');
-		streak.checkMissedTasks(2); // same day, second call → no-op
+		streak.checkMissedTasksAndApplyDailyReset(2); // same day, second call → no-op
 
 		expect(get(streakState).count).toBe(2);
 	});
@@ -279,7 +279,7 @@ describe('streak store — checkMissedTasks', () => {
 		setPrefsBlob({ streakState: { count: 10, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
 		streak.hydrateFromLocal(); // sets pendingDailyBreak
-		streak.checkMissedTasks(2); // new day + missed → animated break
+		streak.checkMissedTasksAndApplyDailyReset(2); // new day + missed → animated break
 
 		expect(get(streakState).count).toBe(0);
 	});
@@ -290,7 +290,7 @@ describe('streak store — checkMissedTasks', () => {
 		setPrefsBlob({ streakState: { count: 7, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
 		streak.hydrateFromLocal();
-		streak.checkMissedTasks(0); // new day, no missed → silent zero
+		streak.checkMissedTasksAndApplyDailyReset(0); // new day, no missed → silent zero
 
 		expect(get(streakState).count).toBe(0);
 	});

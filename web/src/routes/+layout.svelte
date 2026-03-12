@@ -309,15 +309,15 @@
 			uiPreferences.hydrateFromLocal()
 		]);
 		streak.hydrateFromLocal();
-		// Load theme assets then check missed tasks — checkMissedTasks must run
+		// Load theme assets then check missed tasks — checkMissedTasksAndApplyDailyReset must run
 		// after loadThemeAssets so missedFileLists is populated before break() fires.
 		const prefs = uiPreferences.get();
 		if (prefs.streakSettings.enabled) {
 			void streak.loadThemeAssets(prefs.streakSettings.theme).then(() => {
-				streak.checkMissedTasks(get(myDayMissed).length);
+				streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 			});
 		} else {
-			streak.checkMissedTasks(get(myDayMissed).length);
+			streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 		}
 	};
 
@@ -379,10 +379,10 @@
 			const serverPrefs = uiPreferences.get();
 			if (serverPrefs.streakSettings.enabled) {
 				void streak.loadThemeAssets(serverPrefs.streakSettings.theme).then(() => {
-					streak.checkMissedTasks(get(myDayMissed).length);
+					streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 				});
 			} else {
-				streak.checkMissedTasks(get(myDayMissed).length);
+				streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 			}
 			await members.hydrateFromServer();
 		})();
@@ -448,10 +448,10 @@
 				const scopePrefs = uiPreferences.get();
 				if (scopePrefs.streakSettings.enabled) {
 					void streak.loadThemeAssets(scopePrefs.streakSettings.theme).then(() => {
-						streak.checkMissedTasks(get(myDayMissed).length);
+						streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 					});
 				} else {
-					streak.checkMissedTasks(get(myDayMissed).length);
+					streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 				}
 				await members.hydrateFromServer();
 			})();

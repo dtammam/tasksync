@@ -1,3 +1,5 @@
+import type { TaskStatus } from './task';
+
 export interface SyncList {
 	id: string;
 	space_id: string;
@@ -93,7 +95,7 @@ export interface SyncUpdateTaskStatusChange {
 	kind: 'update_task_status';
 	op_id: string;
 	task_id: string;
-	status: string;
+	status: TaskStatus;
 }
 
 export type SyncPushChange = SyncCreateTaskChange | SyncUpdateTaskChange | SyncUpdateTaskStatusChange;

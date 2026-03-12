@@ -15,7 +15,6 @@ const isSkippableLine = (line: string) => {
 	if (!line) return true;
 	// Skip common non-task markdown structures from note exports.
 	if (/^#{1,6}\s+/.test(line)) return true;
-	if (/^```/.test(line)) return true;
 	return false;
 };
 
@@ -61,13 +60,21 @@ const parseLine = (rawLine: string): ParsedTaskInput | null => {
  * Returns structured task inputs using a provided default list id.
  */
 export const parseMarkdownTasks = (markdown: string, defaultListId: string): ParsedTaskInput[] => {
-	return markdown
-		.split(/\r?\n/)
-		.map(parseLine)
-		.filter((task): task is ParsedTaskInput => !!task)
-		.map((task) => ({
-			...task,
-			list_id: task.list_id ?? defaultListId,
-			my_day: task.my_day ?? false
-		}));
+	let inCodeBlock = false;
+	const results: ParsedTaskInput[] = [];
+	for (const rawLine of markdown.split(/\r?\n/)) {
+		const trimmed = rawLine.trim();
+		if (/^```/.test(trimmed)) {
+			inCodeBlock = !inCodeBlock;
+			continue;
+		}
+		if (inCodeBlock) continue;
+		const parsed = parseLine(rawLine);
+		if (parsed) results.push(parsed);
+	}
+	return results.map((task) => ({
+		...task,
+		list_id: task.list_id ?? defaultListId,
+		my_day: task.my_day ?? false
+	}));
 };

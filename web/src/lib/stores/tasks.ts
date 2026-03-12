@@ -173,9 +173,6 @@ export const tasks = {
 		tasksStore.update((list) => [...list, task]);
 		void repo.saveTasks(get(tasksStore));
 	},
-	createLocal(title: string, list_id: string, opts?: { my_day?: boolean; assignee_user_id?: string; due_date?: string }) {
-		return tasks.createLocalWithOptions(title, list_id, opts);
-	},
 	createLocalWithOptions(
 		title: string,
 		list_id: string,
@@ -719,12 +716,7 @@ const myDayDateKey = readable(todayIso(), (set) => {
 		window.clearInterval(intervalId);
 	};
 });
-const canSeeTask = (task: Task, userId?: string | null, role?: string | null) => {
-	void task;
-	void userId;
-	void role;
-	return true;
-};
+// TODO: implement per-user permission filtering (tech debt #005)
 const isAssignedToUser = (task: Task, userId?: string | null) => {
 	if (!userId) return true;
 	return (task.assignee_user_id ?? task.created_by_user_id) === userId;
@@ -752,7 +744,6 @@ export const myDayPending = derived(
 		void _myDayDateKey;
 		return $tasks.filter(
 			(task) =>
-				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
 				isAssignedToUser(task, $auth.user?.user_id) &&
 				inMyDay(task) &&
 				!isMissedTask(task) &&
@@ -766,7 +757,6 @@ export const myDayMissed = derived([tasksStore, auth, myDayDateKey], ([$tasks, $
 	return $tasks
 		.filter(
 			(task) =>
-				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
 				isAssignedToUser(task, $auth.user?.user_id) &&
 				isMissedTask(task)
 		)
@@ -785,7 +775,6 @@ export const myDayCompleted = derived(
 		void _myDayDateKey;
 		return $tasks.filter(
 			(task) =>
-				canSeeTask(task, $auth.user?.user_id, $auth.user?.role) &&
 				isAssignedToUser(task, $auth.user?.user_id) &&
 				((inMyDay(task) && wasCompletedToday(task)) ||
 					wasRecurringCompletedToday(task) ||
@@ -803,7 +792,6 @@ export const myDaySuggestions = derived(
 		return $tasks
 			.filter(
 				(t) =>
-					canSeeTask(t, $auth.user?.user_id, $auth.user?.role) &&
 					isAssignedToUser(t, $auth.user?.user_id) &&
 					t.status === 'pending' &&
 					!t.recurrence_id &&
@@ -823,15 +811,12 @@ export const myDaySuggestions = derived(
 );
 
 export const tasksByList = (listId: string) =>
-	derived([tasksStore, auth], ([$tasks, $auth]) =>
-		$tasks.filter(
-			(task) => task.list_id === listId && canSeeTask(task, $auth.user?.user_id, $auth.user?.role)
-		)
+	derived([tasksStore, auth], ([$tasks]) =>
+		$tasks.filter((task) => task.list_id === listId)
 	);
 
-export const listCounts = derived([tasksStore, auth], ([$tasks, $auth]) => {
+export const listCounts = derived([tasksStore], ([$tasks]) => {
 	return $tasks.reduce<Record<string, { pending: number; total: number }>>((acc, task) => {
-		if (!canSeeTask(task, $auth.user?.user_id, $auth.user?.role)) return acc;
 		const entry = acc[task.list_id] ?? { pending: 0, total: 0 };
 		entry.total += 1;
 		if (task.status === 'pending') entry.pending += 1;

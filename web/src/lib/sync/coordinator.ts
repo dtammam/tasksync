@@ -56,14 +56,14 @@ export const createSyncCoordinator = ({
 		onLeaderChange?.(leader);
 	};
 
-	const runSyncLocally = (reason: SyncReason) => onRunSync?.(reason);
+	const dispatchSync = (reason: SyncReason) => onRunSync?.(reason);
 
 	const fallback: SyncCoordinator = {
 		isLeader: () => true,
 		setAuthenticated: () => {
 			return;
 		},
-		requestSync: (reason = 'manual') => runSyncLocally(reason),
+		requestSync: (reason = 'manual') => dispatchSync(reason),
 		publishStatus: () => {
 			return;
 		},
@@ -96,7 +96,7 @@ export const createSyncCoordinator = ({
 				return;
 			}
 			if (msg.type === 'run-sync' && leader) {
-				runSyncLocally(msg.reason ?? 'manual');
+				dispatchSync(msg.reason ?? 'manual');
 				return;
 			}
 			if (msg.type === 'status') {
@@ -120,11 +120,11 @@ export const createSyncCoordinator = ({
 		},
 		requestSync(reason: SyncReason = 'manual') {
 			if (!port) {
-				runSyncLocally(reason);
+				dispatchSync(reason);
 				return;
 			}
 			if (leader) {
-				runSyncLocally(reason);
+				dispatchSync(reason);
 				return;
 			}
 			const message: CoordinatorOutbound = { type: 'request-sync', reason };

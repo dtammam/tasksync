@@ -12,6 +12,8 @@ import type {
 	SpaceMember
 } from '$shared/types/auth';
 import type {
+	SyncList,
+	SyncTask,
 	SyncPullRequest,
 	SyncPullResponse,
 	SyncPushRequest,
@@ -19,14 +21,6 @@ import type {
 } from '$shared/types/sync';
 import type { SoundSettings, UiPreferencesWire } from '$shared/types/settings';
 import type { SpaceBackupBundle, SpaceBackupRestoreResponse } from '$shared/types/backup';
-
-declare global {
-	interface Window {
-		__TASKSYNC_RUNTIME_CONFIG__?: {
-			apiUrl?: string;
-		};
-	}
-}
 
 const defaultApiUrl = () => {
 	if (typeof window === 'undefined') return 'http://localhost:3000';
@@ -92,37 +86,7 @@ export const apiErrorStatus = (err: unknown): number | null => {
 	return Number.isFinite(parsed) ? parsed : null;
 };
 
-export interface ApiList {
-	id: string;
-	space_id: string;
-	name: string;
-	icon?: string;
-	color?: string;
-	order: string;
-}
-
-export interface ApiTask {
-	id: string;
-	space_id: string;
-	title: string;
-	status: string;
-	list_id: string;
-	my_day: number;
-	priority?: number;
-	order: string;
-	updated_ts: number;
-	created_ts: number;
-	url?: string;
-	recur_rule?: string;
-	due_date?: string;
-	punted_from_due_date?: string;
-	punted_on_date?: string;
-	occurrences_completed?: number;
-	completed_ts?: number;
-	notes?: string;
-	assignee_user_id?: string;
-	created_by_user_id?: string;
-}
+export type { SyncList as SyncList, SyncTask as SyncTask } from '$shared/types/sync';
 
 const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> => {
 	const res = await fetch(`${baseUrl}${path}`, {
@@ -185,16 +149,16 @@ export const api = {
 	getListGrants: () => fetchJson<ListGrant[]>('/auth/grants'),
 	setListGrant: (body: SetListGrantRequest) =>
 		fetchJson<ListGrant>('/auth/grants', { method: 'PUT', body: JSON.stringify(body) }),
-	getLists: () => fetchJson<ApiList[]>('/lists'),
+	getLists: () => fetchJson<SyncList[]>('/lists'),
 	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
-		fetchJson<ApiList>('/lists', { method: 'POST', body: JSON.stringify(body) }),
+		fetchJson<SyncList>('/lists', { method: 'POST', body: JSON.stringify(body) }),
 	updateList: (id: string, body: { name?: string; icon?: string; color?: string; order?: string }) =>
-		fetchJson<ApiList>(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+		fetchJson<SyncList>(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 	deleteList: (id: string) =>
 		fetchJson<void>(`/lists/${id}`, {
 			method: 'DELETE'
 		}),
-	getTasks: () => fetchJson<ApiTask[]>('/tasks'),
+	getTasks: () => fetchJson<SyncTask[]>('/tasks'),
 	syncPull: (body: SyncPullRequest = {}) =>
 		fetchJson<SyncPullResponse>('/sync/pull', {
 			method: 'POST',
@@ -220,7 +184,7 @@ export const api = {
 		notes?: string;
 		assignee_user_id?: string;
 	}) =>
-		fetchJson<ApiTask>('/tasks', {
+		fetchJson<SyncTask>('/tasks', {
 			method: 'POST',
 			body: JSON.stringify(body)
 		}),
@@ -243,7 +207,7 @@ export const api = {
 			assignee_user_id?: string;
 		}
 	) =>
-		fetchJson<ApiTask>(`/tasks/${id}`, {
+		fetchJson<SyncTask>(`/tasks/${id}`, {
 			method: 'PATCH',
 			body: JSON.stringify(body)
 		}),
@@ -252,7 +216,7 @@ export const api = {
 			method: 'DELETE'
 		}),
 	updateTaskStatus: (id: string, status: string) =>
-		fetchJson<ApiTask>(`/tasks/${id}/status`, {
+		fetchJson<SyncTask>(`/tasks/${id}/status`, {
 			method: 'POST',
 			body: JSON.stringify({ status })
 		})

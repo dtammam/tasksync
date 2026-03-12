@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/api/client', () => ({
 	api: {
 		login: vi.fn(),
-		me: vi.fn()
+		me: vi.fn(),
+		updateMe: vi.fn()
 	},
 	apiErrorStatus: (err: unknown) => {
 		const message = err instanceof Error ? err.message : String(err);
@@ -131,5 +132,36 @@ describe('auth store', () => {
 		expect(getAuthMode()).toBe('token');
 		expect(getAuthToken()).toBeNull();
 		expect(auth.get().status).toBe('anonymous');
+	});
+
+	it('isAuthenticated returns true when authenticated and false otherwise', async () => {
+		mockedApi.me.mockResolvedValue(meUser);
+		await auth.hydrate();
+		// Still 'loading' after hydrate? No — with token mode and no token set, it's anonymous.
+		// Test after login instead.
+		mockedApi.login.mockResolvedValue({ token: 'jwt-token', ...meUser });
+		await auth.login('admin@example.com', 'tasksync', 's1');
+		expect(auth.isAuthenticated()).toBe(true);
+
+		auth.logout();
+		expect(auth.isAuthenticated()).toBe(false);
+	});
+
+	it('updateProfile updates the stored user on success', async () => {
+		mockedApi.login.mockResolvedValue({ token: 'jwt-token', ...meUser });
+		await auth.login('admin@example.com', 'tasksync', 's1');
+
+		const updated = { ...meUser, display: 'Admin Updated' };
+		mockedApi.updateMe.mockResolvedValue(updated);
+
+		const result = await auth.updateProfile({ display: 'Admin Updated' });
+
+		expect(result.display).toBe('Admin Updated');
+		expect(auth.get().user?.display).toBe('Admin Updated');
+	});
+
+	it('updateProfile throws when not authenticated', async () => {
+		auth.logout();
+		await expect(auth.updateProfile({ display: 'anything' })).rejects.toThrow('Not authenticated');
 	});
 });

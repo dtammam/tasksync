@@ -8,6 +8,12 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	interface Window {
+		__TASKSYNC_RUNTIME_CONFIG__?: {
+			apiUrl?: string;
+		};
+	}
 }
 
 export {};

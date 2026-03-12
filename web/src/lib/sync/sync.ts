@@ -4,9 +4,8 @@ import { tasks } from '$lib/stores/tasks';
 import { auth } from '$lib/stores/auth';
 import { repo } from '$lib/data/repo';
 import { syncStatus } from './status';
-import type { Task } from '$shared/types/task';
+import type { Task, TaskStatus } from '$shared/types/task';
 import type { List } from '$shared/types/list';
-import type { ApiTask } from '$lib/api/client';
 import type { SyncDeletedTask, SyncPushChange, SyncPushRejected, SyncTask } from '$shared/types/sync';
 
 const isServerId = (id: string) =>
@@ -38,12 +37,20 @@ const bumpSyncCursor = (cursorTs?: number) => {
 	lastPullCursorTs = Math.max(lastPullCursorTs ?? 0, cursorTs);
 };
 
-const mapApiTask = (t: ApiTask | SyncTask): Task => ({
+const validTaskStatuses: TaskStatus[] = ['pending', 'done', 'cancelled'];
+
+const toTaskStatus = (raw: string): TaskStatus => {
+	if ((validTaskStatuses as string[]).includes(raw)) return raw as TaskStatus;
+	console.warn(`[sync] unexpected task status from server: "${raw}", defaulting to "pending"`);
+	return 'pending';
+};
+
+const mapApiTask = (t: SyncTask): Task => ({
 	id: t.id,
 	title: t.title,
-	status: t.status as Task['status'],
+	status: toTaskStatus(t.status),
 	list_id: t.list_id,
-	my_day: t.my_day === 1,
+	my_day: t.my_day === 1, // wire: number (0/1) → domain: boolean
 	dirty: false,
 	local: false,
 	priority: toTaskPriority(typeof t.priority === 'number' ? t.priority : undefined),
@@ -51,7 +58,7 @@ const mapApiTask = (t: ApiTask | SyncTask): Task => ({
 	checklist: [],
 	order: t.order,
 	url: t.url ?? undefined,
-	recurrence_id: t.recur_rule ?? undefined,
+	recurrence_id: t.recur_rule ?? undefined, // wire: recur_rule → domain: recurrence_id
 	due_date: t.due_date ?? undefined,
 	punted_from_due_date: t.punted_from_due_date ?? undefined,
 	punted_on_date: t.punted_on_date ?? undefined,
@@ -172,8 +179,8 @@ const formatSyncRuntimeError = (err: unknown, phase: 'pull' | 'push') => {
 export const syncFromServer = async () => {
 	syncStatus.setPull('running');
 	// Snapshot state before the pull to detect genuinely new remote tasks.
-	const isIncrementalPull = typeof lastPullCursorTs === 'number';
-	const existingIdsBefore = isIncrementalPull
+	const hasPriorCursor = typeof lastPullCursorTs === 'number';
+	const existingIdsBefore = hasPriorCursor
 		? new Set(tasks.getAll().map((t) => t.id))
 		: null;
 	try {
@@ -263,7 +270,10 @@ export const pushPendingToServer = async () => {
 			if (rejectedById.has(entry.op.op_id)) continue;
 			const remoteTask = response.applied[appliedIndex];
 			appliedIndex += 1;
-			if (!remoteTask) continue;
+			if (!remoteTask) {
+				console.warn(`[sync] server returned fewer applied tasks than sent; no entry at appliedIndex ${appliedIndex - 1} for op_id "${entry.op.op_id}"`);
+				continue;
+			}
 			tasks.replaceWithRemote(entry.op.localTaskId, mapApiTask(remoteTask), entry.op.sent);
 			pushed += 1;
 			if (entry.op.kind === 'create_task') {

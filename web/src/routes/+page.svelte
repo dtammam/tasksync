@@ -205,7 +205,7 @@
 	const quickAdd = () => {
 		if ($auth.user?.role === 'contributor') return;
 		if (!quickTitle.trim()) return;
-		const task = tasks.createLocal(quickTitle, defaultListId);
+		const task = tasks.createLocalWithOptions(quickTitle, defaultListId);
 		if (task) tasks.setDueToday(task.id);
 		quickTitle = '';
 	};

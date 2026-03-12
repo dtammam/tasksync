@@ -6,12 +6,12 @@ import type { AuthUpdateProfileRequest, AuthUser } from '$shared/types/auth';
 const authUserKey = 'tasksync:auth-user';
 
 type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
-type AuthSource = 'token' | 'legacy' | null;
+type AuthOrigin = 'token' | 'legacy' | null;
 
 export interface AuthState {
 	status: AuthStatus;
 	mode: AuthMode;
-	source: AuthSource;
+	source: AuthOrigin;
 	user: AuthUser | null;
 	error: string | null;
 }
