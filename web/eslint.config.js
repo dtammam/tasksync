@@ -2,6 +2,8 @@ import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
+import svelteParser from 'svelte-eslint-parser';
+import tsParser from '@typescript-eslint/parser';
 
 const ignores = [
 	'build',
@@ -41,6 +43,17 @@ export default [
 		rules: {
 			'no-console': ['warn', { allow: ['warn', 'error'] }],
 			'svelte/no-at-html-tags': 'error'
+		}
+	},
+	{
+		files: ['**/*.svelte'],
+		languageOptions: {
+			parser: svelteParser,
+			parserOptions: {
+				parser: tsParser,
+				project: ['./tsconfig.json'],
+				extraFileExtensions: ['.svelte']
+			}
 		}
 	}
 ];

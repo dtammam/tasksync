@@ -1,12 +1,12 @@
 <script lang="ts">
-	// @ts-nocheck
 import { createEventDispatcher, onDestroy } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
 import { nextDueForRecurrence, toLocalIsoDate } from '$lib/tasks/recurrence';
+import type { Task } from '$shared/types/task';
 
-export let task;
+export let task: Task;
 export let completedContext = false;
 export let mobileCompact = false;
 export let inMyDayView = false;
@@ -16,12 +16,11 @@ let showActions = false;
 let deleting = false;
 let actionError = '';
 let statusAck = false;
-let toggleTimer = null;
+let toggleTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** @param {Event & { target: HTMLSelectElement }} event */
-const updateList = (event) => {
+const updateList = (event: Event & { currentTarget: HTMLSelectElement }) => {
 	if (!canEditTask) return;
-	const select = event.target;
+	const select = event.currentTarget;
 	tasks.moveToList(task.id, select.value);
 };
 
@@ -51,7 +50,7 @@ const addNextWeek = () => {
 	tasks.setDueDate(task.id, nextWeekIso());
 };
 
-const isTodayTs = (ts) => {
+const isTodayTs = (ts: unknown): boolean => {
 	if (typeof ts !== 'number' || !Number.isFinite(ts)) return false;
 	const now = new Date();
 	const value = new Date(ts);
@@ -62,7 +61,7 @@ const isTodayTs = (ts) => {
 	);
 };
 
-const recurrencePreview = (taskValue, count = 1) => {
+const recurrencePreview = (taskValue: Task | null | undefined, count = 1): string => {
 	if (!taskValue?.recurrence_id || !taskValue?.due_date) return '';
 	const nextDates = [];
 	let cursor = taskValue.due_date;
@@ -133,7 +132,7 @@ const openDetailFromMenu = () => {
 	showActions = false;
 };
 
-const toRgba = (hex, alpha) => {
+const toRgba = (hex: string | undefined, alpha: number): string => {
 	if (!hex || typeof hex !== 'string') return '';
 	const clean = hex.trim().replace('#', '');
 	const normalized =

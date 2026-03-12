@@ -1,13 +1,14 @@
 <script lang="ts">
-// @ts-nocheck
 import { createEventDispatcher } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
 import { recurrenceRuleLabels, recurrenceRules, toLocalIsoDate } from '$lib/tasks/recurrence';
+import type { Task } from '$shared/types/task';
+import type { SpaceMember } from '$shared/types/auth';
 
-export let task = null;
+export let task: Task | null = null;
 export let open = false;
 
 const dispatch = createEventDispatcher();
@@ -17,7 +18,7 @@ let due = '';
 let recur = '';
 let url = '';
 let notes = '';
-let priority = 0;
+let priority: 0 | 1 | 2 | 3 = 0;
 let listId = '';
 let assigneeUserId = '';
 let statusValue = 'pending';
@@ -31,7 +32,7 @@ const recurrenceOptions = recurrenceRules.map((rule) => ({
 
 $: if (task) hydrate(task);
 
-function hydrate(t) {
+function hydrate(t: Task) {
 	if (t.id === lastHydratedTaskId) {
 		// Same task is already loaded — do not overwrite user edits in progress.
 		return;
@@ -56,7 +57,7 @@ const close = () => {
 	lastHydratedTaskId = '';
 	dispatch('close');
 };
-const isTodayTs = (ts) =>
+const isTodayTs = (ts: unknown): boolean =>
 	typeof ts === 'number' && Number.isFinite(ts) && toLocalIsoDate(new Date(ts)) === todayKey;
 $: isContributor = $auth.user?.role === 'contributor';
 $: isOwner = !!$auth.user?.user_id && task?.created_by_user_id === $auth.user.user_id;
@@ -139,7 +140,7 @@ const skip = () => {
 	tasks.skip(task.id);
 };
 
-const memberAvatar = (member) => {
+const memberAvatar = (member: SpaceMember): string => {
 	const icon = member?.avatar_icon?.trim();
 	if (icon) return icon.slice(0, 4);
 	const source = (member?.display ?? member?.email ?? '').trim();

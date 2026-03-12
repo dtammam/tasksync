@@ -1,5 +1,4 @@
 <script lang="ts">
-	// @ts-nocheck
 	import { fly } from 'svelte/transition';
 	import { streakDigitsPaths, streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
@@ -38,7 +37,7 @@
 	}
 	captureContentCenter();
 
-	function trackVisibility(isVisible) {
+	function trackVisibility(isVisible: boolean) {
 		if (isVisible && !_lastVisible) {
 			captureContentCenter();
 		}
