@@ -225,15 +225,9 @@ export const syncFromServer = async () => {
 	}
 };
 
-export const pushPendingToServer = async () => {
-	syncStatus.setPush('running');
-	const dirtySnapshot = tasks.getAll().filter((t) => t.dirty);
-	syncStatus.setQueueDepth(dirtySnapshot.length);
-	if (!dirtySnapshot.length) {
-		syncStatus.setPush('idle');
-		return { pushed: 0, created: 0, rejected: 0 };
-	}
-
+// Returns the subset of dirty tasks that are eligible to push, removing legacy
+// seed IDs that were never created on the server as a side-effect.
+const filterSyncableTasks = async (dirtySnapshot: Task[]): Promise<Task[]> => {
 	const syncable: Task[] = [];
 	for (const task of dirtySnapshot) {
 		if (!task.local && !isServerId(task.id)) {
@@ -243,11 +237,50 @@ export const pushPendingToServer = async () => {
 		}
 		syncable.push(task);
 	}
-
 	if (syncable.length !== dirtySnapshot.length) {
 		await repo.saveTasks(tasks.getAll());
 		syncStatus.setQueueDepth(syncable.length);
 	}
+	return syncable;
+};
+
+// Applies the server's rejected op list: removes 404 tasks, clears dirty on
+// 403 updates so re-pull can restore canonical state, and collects the first
+// error message to surface to the user.
+const applyRejections = (
+	rejected: SyncPushRejected[],
+	opById: Map<string, PendingPushOp>
+): string | undefined => {
+	let firstUnhandledError: string | undefined;
+	for (const item of rejected) {
+		const op = opById.get(item.op_id);
+		if (!op) {
+			if (!firstUnhandledError) firstUnhandledError = rejectMessage(item);
+			continue;
+		}
+		if (item.status === 404) {
+			tasks.remove(op.localTaskId);
+			continue;
+		}
+		if (item.status === 403 && op.kind !== 'create_task') {
+			// Clear forbidden updates so re-pull can restore canonical server state.
+			tasks.clearDirty(op.localTaskId);
+		}
+		if (!firstUnhandledError) firstUnhandledError = rejectMessage(item);
+	}
+	return firstUnhandledError;
+};
+
+export const pushPendingToServer = async () => {
+	syncStatus.setPush('running');
+	const dirtySnapshot = tasks.getAll().filter((t) => t.dirty);
+	syncStatus.setQueueDepth(dirtySnapshot.length);
+	if (!dirtySnapshot.length) {
+		syncStatus.setPush('idle');
+		return { pushed: 0, created: 0, rejected: 0 };
+	}
+
+	const syncable = await filterSyncableTasks(dirtySnapshot);
 
 	if (!syncable.length) {
 		syncStatus.setPush('idle');
@@ -281,23 +314,7 @@ export const pushPendingToServer = async () => {
 			}
 		}
 
-		let firstUnhandledError: string | undefined;
-		for (const rejected of response.rejected) {
-			const op = opById.get(rejected.op_id);
-			if (!op) {
-				if (!firstUnhandledError) firstUnhandledError = rejectMessage(rejected);
-				continue;
-			}
-			if (rejected.status === 404) {
-				tasks.remove(op.localTaskId);
-				continue;
-			}
-			if (rejected.status === 403 && op.kind !== 'create_task') {
-				// Clear forbidden updates so re-pull can restore canonical server state.
-				tasks.clearDirty(op.localTaskId);
-			}
-			if (!firstUnhandledError) firstUnhandledError = rejectMessage(rejected);
-		}
+		const firstUnhandledError = applyRejections(response.rejected, opById);
 
 		await repo.saveTasks(tasks.getAll());
 		const remainingDirty = tasks.getAll().filter((task) => task.dirty).length;

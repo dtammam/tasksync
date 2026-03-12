@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { auth } from '$lib/stores/auth';
+import { createHydrateGuard } from '$lib/stores/hydrateGuard';
 import type {
 	ListSortDirection,
 	ListSortMode,
@@ -247,7 +248,7 @@ preferencesStore.subscribe((prefs) => {
 	applyFontToDocument(prefs.font);
 });
 
-let prefsMutationVersion = 0;
+const hydrateGuard = createHydrateGuard();
 let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingRemotePayload: UiPreferences | null = null;
 
@@ -289,7 +290,7 @@ export const uiPreferences = {
 	},
 	setTheme(theme: UiTheme) {
 		const nextTheme = normalizeTheme(theme);
-		prefsMutationVersion += 1;
+		hydrateGuard.bump();
 		preferencesStore.update((current) => {
 			const next = {
 				...current,
@@ -301,7 +302,7 @@ export const uiPreferences = {
 		});
 	},
 	setPanel(panel: keyof SidebarPanelState, open: boolean) {
-		prefsMutationVersion += 1;
+		hydrateGuard.bump();
 		preferencesStore.update((current) => {
 			const next = {
 				...current,
@@ -316,7 +317,7 @@ export const uiPreferences = {
 		});
 	},
 	setListSort(nextSort: Partial<ListSortPreference>) {
-		prefsMutationVersion += 1;
+		hydrateGuard.bump();
 		preferencesStore.update((current) => {
 			const next = {
 				...current,
@@ -332,7 +333,7 @@ export const uiPreferences = {
 	},
 	setFont(font: UiFont) {
 		const nextFont = normalizeFont(font);
-		prefsMutationVersion += 1;
+		hydrateGuard.bump();
 		preferencesStore.update((current) => {
 			const next = { ...current, font: nextFont };
 			persist(next);
@@ -341,7 +342,7 @@ export const uiPreferences = {
 		});
 	},
 	setStreakSettings(next: Partial<StreakSettings>) {
-		prefsMutationVersion += 1;
+		hydrateGuard.bump();
 		preferencesStore.update((current) => {
 			const merged = normalizeStreakSettings({ ...current.streakSettings, ...next });
 			const updated = { ...current, streakSettings: merged };
@@ -351,7 +352,7 @@ export const uiPreferences = {
 		});
 	},
 	setCompletionQuotes(quotes: string[]) {
-		prefsMutationVersion += 1;
+		hydrateGuard.bump();
 		preferencesStore.update((current) => {
 			const next = { ...current, completionQuotes: normalizeCompletionQuotes(quotes) };
 			persist(next);
@@ -368,7 +369,7 @@ export const uiPreferences = {
 			listSort: normalizeListSort(next.listSort),
 			streakSettings: normalizeStreakSettings(next.streakSettings)
 		};
-		prefsMutationVersion += 1;
+		hydrateGuard.bump();
 		preferencesStore.set(normalized);
 		persist(normalized);
 		if (options?.queueRemote !== false) {
@@ -385,12 +386,12 @@ export const uiPreferences = {
 	},
 	async hydrateFromServer(): Promise<UiPreferencesWire | null> {
 		if (!canSyncRemote()) return null;
-		const hydrateStartVersion = prefsMutationVersion;
+		const snap = hydrateGuard.snapshot();
 		try {
 			const remote = await api.getUiPreferences();
-			if (prefsMutationVersion !== hydrateStartVersion) return null;
+			if (!hydrateGuard.isCurrent(snap)) return null;
 			const normalized = fromWire(remote);
-			prefsMutationVersion += 1;
+			hydrateGuard.bump();
 			preferencesStore.set(normalized);
 			persist(normalized);
 			return remote;
