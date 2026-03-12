@@ -1736,6 +1736,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+		padding: 8px;
+		border-radius: 8px;
+		border: 1px solid var(--border-1);
+		background: var(--surface-2);
 	}
 
 	.manager .row .name-input {
@@ -1747,8 +1751,6 @@
 		align-items: center;
 		gap: 6px;
 		flex-wrap: wrap;
-		border-top: 1px solid var(--border-1);
-		padding-top: 6px;
 	}
 
 	.row-line-2 .icon-input {
@@ -1759,7 +1761,7 @@
 	.manager .existing {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 8px;
 		margin-top: 4px;
 	}
 
