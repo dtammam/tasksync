@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { streakDigitsPaths, streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
@@ -12,34 +11,6 @@
 	// Split count into individual digit characters for rendering.
 	// Only used when count > 0 (normal combo state).
 	$: digits = String(Math.min(display.count, 9999)).split('');
-
-	// Position the combo indicator at the center of <main> using an exact pixel
-	// value from getBoundingClientRect(), kept in sync via ResizeObserver so
-	// layout shifts (font load, sidebar toggle, first render) never cause drift.
-	let frozenLeft = '50vw';
-	let frozenMaxWidth = 'calc(100vw - 32px)';
-
-	let resizeObserver: ResizeObserver | undefined;
-
-	function captureContentCenter(main: Element) {
-		const rect = main.getBoundingClientRect();
-		frozenLeft = `${rect.left + rect.width / 2}px`;
-		frozenMaxWidth = `${rect.width - 32}px`;
-	}
-
-	onMount(() => {
-		const main = document.querySelector('main');
-		if (!main) return;
-		captureContentCenter(main);
-		resizeObserver = new ResizeObserver(() => {
-			captureContentCenter(main);
-		});
-		resizeObserver.observe(main);
-	});
-
-	onDestroy(() => {
-		resizeObserver?.disconnect();
-	});
 </script>
 
 {#if display.visible && settings.enabled}
@@ -47,7 +18,6 @@
 		class="streak-root"
 		class:day-complete={display.isDayComplete}
 		class:combo-dropped={display.isComboDropped}
-		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
 		aria-label={display.count > 0 ? `Streak: ${display.count}` : 'Combo dropped'}
@@ -106,10 +76,11 @@
 <style>
 	.streak-root {
 		position: fixed;
-		/* Position at top of content area, centered in the content pane (sidebar-aware).
-		   left and max-width are set via inline style using a frozen offset captured at
-		   display time, so navigation changes to --sidebar-offset don't shift the indicator. */
 		top: 64px;
+		/* Center horizontally in the content pane using the sidebar-offset CSS var
+		   set by +layout.svelte. Pure CSS — no JS measurement, no timing races. */
+		left: calc((100vw + var(--sidebar-offset, 0px)) / 2);
+		max-width: calc(100vw - var(--sidebar-offset, 0px) - 32px);
 		/* Use `translate` (independent of `transform`) so Svelte's fly transition,
 		   which animates via `transform: translateY(...)`, doesn't override the
 		   horizontal centering during the fly-in animation. */
