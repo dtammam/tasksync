@@ -77,22 +77,17 @@
 	.streak-root {
 		position: fixed;
 		top: 64px;
-		/* Center horizontally in the content pane using the sidebar-offset CSS var
-		   set by +layout.svelte. Pure CSS — no JS measurement, no timing races. */
-		left: calc((100vw + var(--sidebar-offset, 0px)) / 2);
-		max-width: calc(100vw - var(--sidebar-offset, 0px) - 32px);
-		/* Use `translate` (independent of `transform`) so Svelte's fly transition,
-		   which animates via `transform: translateY(...)`, doesn't override the
-		   horizontal centering during the fly-in animation. */
-		translate: -50% 0;
+		/* Span the full content pane using sidebar-offset from +layout.svelte.
+		   Flexbox centers children — no translate/-50% hack, so centering works
+		   even before streak images finish loading (no width dependency). */
+		left: var(--sidebar-offset, 0px);
+		right: 0;
 		z-index: 200;
 		pointer-events: none;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 2px;
-		/* Prevent layout interference */
-		width: max-content;
 	}
 
 	.judgment-layer {

@@ -223,7 +223,7 @@ $: isRecurringCompletedToday =
 				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
 			{/if}
 			{#if !task.recurrence_id && task.due_date}
-				<span class="meta-inline">{task.due_date}</span>
+				<span class="chip subtle date-chip">{task.due_date}</span>
 			{/if}
 			{#if showPuntedArrivalTag}
 				<span class="chip subtle punted-chip">Punted</span>
@@ -357,7 +357,8 @@ $: isRecurringCompletedToday =
 	}
 	.chip.subtle { background:var(--surface-2); border-color:var(--border-1); color:var(--app-muted); }
 
-	.recur-next-chip {
+	.recur-next-chip,
+	.date-chip {
 		font-size: 11px;
 		padding-inline: 7px;
 	}
