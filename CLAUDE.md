@@ -71,6 +71,7 @@ Scripts live in `scripts/`. Check there before constructing ad-hoc commands.
 
 Active plans currently in progress:
 - `docs/exec-plans/active/2026-03-11-code-quality-audit.md` — full-codebase quality audit (fact-finding only)
+- `docs/exec-plans/active/2026-03-12-streak-server-side-state.md` — move day-complete-date guard into server-synced StreakState; closes tech debt #031
 
 Append to the progress log (dated, append-only) when making meaningful advances on a plan.
 Do not rewrite or summarize away prior log entries.

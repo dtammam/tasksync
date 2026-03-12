@@ -399,6 +399,10 @@
 		visibilityListener = () => {
 			if (document.visibilityState === 'visible' && auth.isAuthenticated()) {
 				requestSync('focus');
+				void (async () => {
+					const wire = await uiPreferences.hydrateFromServer();
+					streak.hydrateFromServer(wire?.streakStateJson);
+				})();
 			}
 		};
 		document.addEventListener('visibilitychange', visibilityListener);

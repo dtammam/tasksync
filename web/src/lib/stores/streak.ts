@@ -38,7 +38,8 @@ interface StreakDisplayState {
 const defaultState = (): StreakState => ({
 	count: 0,
 	countedTaskIds: [],
-	lastResetDate: null
+	lastResetDate: null,
+	dayCompleteDate: null
 });
 
 const stateStore = writable<StreakState>(defaultState());
@@ -103,10 +104,20 @@ const queueStateSync = (state: StreakState) => {
 };
 
 // ---------------------------------------------------------------------------
-// localStorage persistence (per-user key, fast path to avoid IDB round-trip)
+// localStorage persistence — streak state lives in the shared preferences blob
 // ---------------------------------------------------------------------------
 
-const localKey = () => {
+// Mirrors the key formula in preferences.ts storageKey()
+const prefsKey = () => {
+	const s = auth.get();
+	if (s.status === 'authenticated' && s.user) {
+		return `tasksync:ui-preferences:${s.user.space_id}:${s.user.user_id}`;
+	}
+	return 'tasksync:ui-preferences:anon';
+};
+
+// Old separate streak key — used only for one-time migration reads
+const oldStreakKey = () => {
 	const s = auth.get();
 	if (s.status === 'authenticated' && s.user) {
 		return `tasksync:streak-state:${s.user.space_id}:${s.user.user_id}`;
@@ -114,55 +125,75 @@ const localKey = () => {
 	return 'tasksync:streak-state:anon';
 };
 
-const readLocalState = (): StreakState | null => {
+const parseRawStreakState = (raw: Partial<StreakState>): StreakState => ({
+	count: typeof raw.count === 'number' && raw.count >= 0 ? Math.floor(raw.count) : 0,
+	countedTaskIds: Array.isArray(raw.countedTaskIds)
+		? raw.countedTaskIds.filter((x): x is string => typeof x === 'string')
+		: [],
+	lastResetDate: typeof raw.lastResetDate === 'string' ? raw.lastResetDate : null,
+	dayCompleteDate: typeof raw.dayCompleteDate === 'string' ? raw.dayCompleteDate : null
+});
+
+const readStreakStateFromPrefsBlob = (): StreakState | null => {
 	if (typeof localStorage === 'undefined') return null;
 	try {
-		const raw = localStorage.getItem(localKey());
-		if (!raw) return null;
-		const parsed = JSON.parse(raw) as Partial<StreakState>;
+		const raw = localStorage.getItem(prefsKey());
+		if (raw) {
+			const blob = JSON.parse(raw) as Record<string, unknown>;
+			if (blob && typeof blob.streakState === 'object' && blob.streakState !== null) {
+				return parseRawStreakState(blob.streakState as Partial<StreakState>);
+			}
+		}
+		// Migration fallback: read old separate keys and remove them
+		const oldKey = oldStreakKey();
+		const oldDayCompleteKey = `${oldKey}:day-complete-date`;
+		const oldRaw = localStorage.getItem(oldKey);
+		const oldDayCompleteRaw = localStorage.getItem(oldDayCompleteKey);
+		localStorage.removeItem(oldKey);
+		localStorage.removeItem(oldDayCompleteKey);
+		if (!oldRaw) return null;
+		const oldParsed = JSON.parse(oldRaw) as Partial<StreakState>;
 		return {
-			count: typeof parsed.count === 'number' && parsed.count >= 0 ? Math.floor(parsed.count) : 0,
-			countedTaskIds: Array.isArray(parsed.countedTaskIds)
-				? parsed.countedTaskIds.filter((x): x is string => typeof x === 'string')
-				: [],
-			lastResetDate: typeof parsed.lastResetDate === 'string' ? parsed.lastResetDate : null
+			...parseRawStreakState(oldParsed),
+			dayCompleteDate: typeof oldDayCompleteRaw === 'string' && oldDayCompleteRaw.length > 0
+				? oldDayCompleteRaw
+				: null
 		};
 	} catch {
 		return null;
 	}
 };
 
-const writeLocalState = (state: StreakState) => {
+const writeStreakStateToPrefsBlob = (state: StreakState) => {
 	if (typeof localStorage === 'undefined') return;
 	try {
-		localStorage.setItem(localKey(), JSON.stringify(state));
+		const key = prefsKey();
+		const existing = localStorage.getItem(key);
+		let blob: Record<string, unknown> = {};
+		if (existing) {
+			try { blob = JSON.parse(existing) as Record<string, unknown>; } catch { /* start fresh */ }
+		}
+		blob.streakState = state;
+		localStorage.setItem(key, JSON.stringify(blob));
 	} catch {
 		// storage quota exceeded — ignore
 	}
 };
 
 // ---------------------------------------------------------------------------
-// Day-complete — once-per-day tracking
+// Day-complete — once-per-day tracking (reads/writes stateStore in memory)
 // ---------------------------------------------------------------------------
 
-const dayCompleteDateKey = () => `${localKey()}:day-complete-date`;
-
-const hasFiredDayCompleteToday = (): boolean => {
-	if (typeof localStorage === 'undefined') return false;
-	try {
-		return localStorage.getItem(dayCompleteDateKey()) === todayIso();
-	} catch {
-		return false;
-	}
-};
+const hasFiredDayCompleteToday = (): boolean =>
+	get(stateStore).dayCompleteDate === todayIso();
 
 const markDayCompleteFired = (): void => {
-	if (typeof localStorage === 'undefined') return;
-	try {
-		localStorage.setItem(dayCompleteDateKey(), todayIso());
-	} catch {
-		// storage quota — ignore
-	}
+	stateStore.update((current) => {
+		const next: StreakState = { ...current, dayCompleteDate: todayIso() };
+		writeStreakStateToPrefsBlob(next);
+		queueStateSync(next);
+		return next;
+	});
 };
 
 // ---------------------------------------------------------------------------
@@ -325,11 +356,12 @@ export const streak = {
 			if (current.countedTaskIds.includes(taskId)) return current; // already counted
 			newCount = current.count + 1;
 			const next: StreakState = {
+				...current,
 				count: newCount,
 				countedTaskIds: [...current.countedTaskIds, taskId],
 				lastResetDate: todayIso()
 			};
-			writeLocalState(next);
+			writeStreakStateToPrefsBlob(next);
 			queueStateSync(next);
 			return next;
 		});
@@ -366,7 +398,7 @@ export const streak = {
 				...current,
 				countedTaskIds: current.countedTaskIds.filter((id) => id !== taskId)
 			};
-			writeLocalState(next);
+			writeStreakStateToPrefsBlob(next);
 			queueStateSync(next);
 			return next;
 		});
@@ -381,9 +413,10 @@ export const streak = {
 	break() {
 		const current = get(stateStore);
 		const hadCount = current.count > 0;
-		const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: todayIso() };
+		// Preserve dayCompleteDate — a combo break does not reset the day-complete guard
+		const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: todayIso(), dayCompleteDate: current.dayCompleteDate ?? null };
 		stateStore.set(next);
-		writeLocalState(next);
+		writeStreakStateToPrefsBlob(next);
 		queueStateSync(next);
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 
@@ -418,9 +451,9 @@ export const streak = {
 
 	/** Reset manually (from settings). Equivalent to break but without animation. */
 	reset() {
-		const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: todayIso() };
+		const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: todayIso(), dayCompleteDate: null };
 		stateStore.set(next);
-		writeLocalState(next);
+		writeStreakStateToPrefsBlob(next);
 		queueStateSync(next);
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 		pendingDailyBreak = false;
@@ -455,10 +488,10 @@ export const streak = {
 				// New day + missed tasks → animated break
 				streak.break();
 			} else {
-				// New day, no missed tasks → silent reset (same as previous behavior)
-				const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: today };
+				// New day, no missed tasks → silent reset; preserve dayCompleteDate guard
+				const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: today, dayCompleteDate: current.dayCompleteDate ?? null };
 				stateStore.set(next);
-				writeLocalState(next);
+				writeStreakStateToPrefsBlob(next);
 				queueStateSync(next);
 				nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 				displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
@@ -484,13 +517,13 @@ export const streak = {
 	 * the server response arrives.
 	 */
 	hydrateFromLocal() {
-		const local = readLocalState();
+		const local = readStreakStateFromPrefsBlob();
 		if (!local) return;
 		const checked = applyResetRuleIfNeeded(local);
 		stateStore.set(checked);
 		if (checked.count !== local.count) {
 			// Reset fired — persist updated state
-			writeLocalState(checked);
+			writeStreakStateToPrefsBlob(checked);
 			queueStateSync(checked);
 		}
 		// Position the next announcer trigger past the already-achieved count
@@ -510,16 +543,10 @@ export const streak = {
 		if (!streakStateJson) return;
 		try {
 			const parsed = JSON.parse(streakStateJson) as Partial<StreakState>;
-			const remote: StreakState = {
-				count: typeof parsed.count === 'number' && parsed.count >= 0 ? Math.floor(parsed.count) : 0,
-				countedTaskIds: Array.isArray(parsed.countedTaskIds)
-					? parsed.countedTaskIds.filter((x): x is string => typeof x === 'string')
-					: [],
-				lastResetDate: typeof parsed.lastResetDate === 'string' ? parsed.lastResetDate : null
-			};
+			const remote: StreakState = parseRawStreakState(parsed);
 			const checked = applyResetRuleIfNeeded(remote);
 			stateStore.set(checked);
-			writeLocalState(checked);
+			writeStreakStateToPrefsBlob(checked);
 			if (checked.count > 0) {
 				nextAnnouncerAt = checked.count + randomInterval();
 			} else {
