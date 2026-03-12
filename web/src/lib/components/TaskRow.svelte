@@ -18,12 +18,6 @@ let actionError = '';
 let statusAck = false;
 let toggleTimer: ReturnType<typeof setTimeout> | null = null;
 
-const updateList = (event: Event & { currentTarget: HTMLSelectElement }) => {
-	if (!canEditTask) return;
-	const select = event.currentTarget;
-	tasks.moveToList(task.id, select.value);
-};
-
 const addToMyDay = () => {
 	tasks.setDueToday(task.id);
 };
@@ -224,21 +218,12 @@ $: isRecurringCompletedToday =
 		<div class="sub">
 			{#if inMyDayView}
 				<span class="meta-inline list-name">{taskList?.name ?? 'Unknown list'}</span>
-			{:else}
-				<span class="chip subtle list-chip">
-					List:
-					<select on:change={updateList} title="Move task to list" disabled={!canEditTask}>
-						{#each $lists as list}
-							<option value={list.id} selected={list.id === task.list_id}>{list.name}</option>
-						{/each}
-					</select>
-				</span>
 			{/if}
 			{#if inMyDayView && nextRecurrenceDate}
 				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
 			{/if}
 			{#if !task.recurrence_id && task.due_date}
-				<span class="chip subtle date-chip">Date: {task.due_date}</span>
+				<span class="meta-inline">{task.due_date}</span>
 			{/if}
 			{#if showPuntedArrivalTag}
 				<span class="chip subtle punted-chip">Punted</span>
@@ -382,21 +367,6 @@ $: isRecurringCompletedToday =
 		background: color-mix(in oklab, var(--surface-accent) 32%, var(--surface-2) 68%);
 		color: var(--app-text);
 	}
-	.list-chip select {
-		background:transparent;
-		border:none;
-		color:var(--app-muted);
-		padding:0 2px;
-		max-width:124px;
-		font:inherit;
-		font-size:12px;
-		font-weight:500;
-		line-height:1;
-		height:18px;
-	}
-	.list-chip { border-color:var(--list-accent, #334155); background:var(--list-accent-soft, var(--surface-2)); }
-	.list-chip select:focus-visible { outline:none; }
-	.list-chip select:disabled { cursor:not-allowed; opacity:0.65; }
 	.quick { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-top:8px; }
 	.quick button {
 		background: color-mix(in oklab, var(--surface-1) 94%, white 4%);

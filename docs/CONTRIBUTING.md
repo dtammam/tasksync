@@ -8,6 +8,10 @@
 ## Setup
 - Web: `cd web && npm install`.
 - Server: install Rust stable (1.93+), `cargo check`.
+- Enable automatic pruning of stale remote-tracking refs on every fetch/pull (one-time per clone):
+  ```
+  git config remote.origin.prune true
+  ```
 - Git hooks are enabled via `core.hooksPath=hooks`:
   - `pre-commit`: `npm run lint && npm run check && npm run test` (web) + `cargo fmt -- --check && cargo clippy -D warnings` (server).
   - `pre-push`: web unit + Playwright smoke (set `SKIP_PLAYWRIGHT=1` to skip) + `cargo test`.
