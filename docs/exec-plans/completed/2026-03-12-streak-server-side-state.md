@@ -230,7 +230,8 @@ Update `web/src/lib/stores/streak.test.ts`:
 - Log in on two browsers, complete all My Day tasks on one, reload the other — no double celebration
 - Confirm `streak_state_json` in server response contains `dayCompleteDate`
 - Inspect localStorage — only `tasksync:ui-preferences:…` key; no streak-specific keys
-- Leave tab open on device A; complete tasks on device B; switch back to device A tab — streak state updates without manual refresh
+- Leave tab open on device A; complete tasks on device B; switch back to device A tab — streak state updates without manual refresh ✅
+- Leave PWA perpetually open on device A (never switch away); add task on device B; wait up to 5 minutes — task appears without manual refresh ✅
 
 ---
 
@@ -248,7 +249,8 @@ Update `web/src/lib/stores/streak.test.ts`:
 
 - **2026-03-12** — Plan authored. Scope confirmed: client-only changes (shared type + streak store + tests). No server changes required.
 - **2026-03-12** — Step 9 added and implemented: 5-minute periodic preferences + streak poll for always-open desktop PWA. `prefsRefreshTimer` added alongside `retryTimer` in `+layout.svelte`; cleaned up in `onDestroy`. Skips poll when tab is hidden (visibilitychange handler covers that path).
-- **2026-03-12** — Implementation complete. All 8 steps done: `StreakState.dayCompleteDate` added; streak localStorage collapsed into prefs blob; `markDayCompleteFired`/`hasFiredDayCompleteToday` moved to stateStore; `hydrateFromServer` updated; `reset()` clears `dayCompleteDate`, `break()` preserves it; `visibilityListener` extended for prefs+streak re-hydration on tab resume; tests updated and new cases added; tech debt #031 closed.
+- **2026-03-12** — Extended Step 9 poll to also call `requestSync('poll')` — task sync was not covered by the original poll, only prefs/streak. A perpetually-open PWA tab never saw tasks added on other devices without this. Verified working in beta.
+- **2026-03-12** — Implementation complete. All 9 steps done: `StreakState.dayCompleteDate` added; streak localStorage collapsed into prefs blob; `markDayCompleteFired`/`hasFiredDayCompleteToday` moved to stateStore; `hydrateFromServer` updated; `reset()` clears `dayCompleteDate`, `break()` preserves it; `visibilityListener` extended for prefs+streak re-hydration on tab resume; tests updated and new cases added; tech debt #031 closed; 5-minute full-refresh poll covers always-open desktop PWA. Beta-verified. **COMPLETE.**
 
 ---
 
