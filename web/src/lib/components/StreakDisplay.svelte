@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { streakDigitsPaths, streakDisplay, streakWordUrl } from '$lib/stores/streak';
 	import { uiPreferences } from '$lib/stores/preferences';
@@ -13,37 +14,32 @@
 	$: digits = String(Math.min(display.count, 9999)).split('');
 
 	// Position the combo indicator at the center of <main> using an exact pixel
-	// value from getBoundingClientRect(), frozen at display time so navigating
-	// away (changing sidebar width) doesn't shift it while visible.
-	//
-	// onMount pre-populates the correct position so the very first combo
-	// appearance doesn't start at the '50vw' default and shift into place.
-	// trackVisibility re-captures whenever visibility transitions false → true
-	// (in case layout changed between combos).
-	let _lastVisible = false;
+	// value from getBoundingClientRect(), kept in sync via ResizeObserver so
+	// layout shifts (font load, sidebar toggle, first render) never cause drift.
 	let frozenLeft = '50vw';
 	let frozenMaxWidth = 'calc(100vw - 32px)';
 
-	// Eagerly capture <main> center so the very first render frame is correct.
-	// This runs at script evaluation time (before the first paint of the {#if} block).
-	function captureContentCenter() {
-		if (typeof document === 'undefined') return;
-		const main = document.querySelector('main');
-		if (main) {
-			const rect = main.getBoundingClientRect();
-			frozenLeft = `${rect.left + rect.width / 2}px`;
-			frozenMaxWidth = `${rect.width - 32}px`;
-		}
-	}
-	captureContentCenter();
+	let resizeObserver: ResizeObserver | undefined;
 
-	function trackVisibility(isVisible: boolean) {
-		if (isVisible && !_lastVisible) {
-			captureContentCenter();
-		}
-		_lastVisible = isVisible;
+	function captureContentCenter(main: Element) {
+		const rect = main.getBoundingClientRect();
+		frozenLeft = `${rect.left + rect.width / 2}px`;
+		frozenMaxWidth = `${rect.width - 32}px`;
 	}
-	$: trackVisibility(display.visible);
+
+	onMount(() => {
+		const main = document.querySelector('main');
+		if (!main) return;
+		captureContentCenter(main);
+		resizeObserver = new ResizeObserver(() => {
+			captureContentCenter(main);
+		});
+		resizeObserver.observe(main);
+	});
+
+	onDestroy(() => {
+		resizeObserver?.disconnect();
+	});
 </script>
 
 {#if display.visible && settings.enabled}
