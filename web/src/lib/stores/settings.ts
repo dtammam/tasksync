@@ -95,6 +95,19 @@ const normalizeSettings = (settings: Partial<SoundSettings>): SoundSettings => {
 	};
 };
 
+const warnInvalidField = (field: string, value: unknown, source: string) => {
+	console.warn(`[settings] invalid ${field} in ${source}: ${JSON.stringify(value)}, using default`);
+};
+
+const validateAndWarnSettings = (raw: Partial<SoundSettings>, source: string) => {
+	if (raw.theme !== undefined && !soundThemes.includes(raw.theme)) {
+		warnInvalidField('theme', raw.theme, source);
+	}
+	if (raw.volume !== undefined && (!Number.isFinite(raw.volume) || raw.volume < 0 || raw.volume > 100)) {
+		warnInvalidField('volume', raw.volume, source);
+	}
+};
+
 const soundSettingsStore = writable<SoundSettings>(defaultSoundSettings);
 const hydrateGuard = createHydrateGuard();
 let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -247,6 +260,7 @@ export const soundSettings = {
 			soundSettingsStore.set(defaultSoundSettings);
 			return;
 		}
+		validateAndWarnSettings(stored, 'IndexedDB');
 		soundSettingsStore.set(normalizeSettings(stored));
 	},
 	async hydrateFromServer() {
@@ -255,6 +269,7 @@ export const soundSettings = {
 		try {
 			const remote = await api.getSoundSettings();
 			if (!hydrateGuard.isCurrent(snap)) return;
+			validateAndWarnSettings(remote, 'server');
 			const normalized = normalizeSettings(remote);
 			hydrateGuard.bump();
 			soundSettingsStore.set(normalized);

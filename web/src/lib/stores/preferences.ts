@@ -197,12 +197,22 @@ const storageKey = () => {
 	return 'tasksync:ui-preferences:anon';
 };
 
+const warnInvalidField = (field: string, value: unknown, source: string) => {
+	console.warn(`[preferences] invalid ${field} in ${source}: ${JSON.stringify(value)}, using default`);
+};
+
 const readLocal = (): UiPreferences | null => {
 	if (typeof localStorage === 'undefined') return null;
 	const raw = localStorage.getItem(storageKey());
 	if (!raw) return null;
 	try {
 		const parsed = JSON.parse(raw) as Partial<UiPreferences>;
+		if (parsed.theme !== undefined && !validThemes.includes(parsed.theme as UiTheme)) {
+			warnInvalidField('theme', parsed.theme, 'localStorage');
+		}
+		if (parsed.font !== undefined && !validFonts.includes(parsed.font as UiFont)) {
+			warnInvalidField('font', parsed.font, 'localStorage');
+		}
 		return {
 			theme: normalizeTheme(parsed.theme as string | undefined),
 			font: normalizeFont(parsed.font as string | undefined),
@@ -390,6 +400,12 @@ export const uiPreferences = {
 		try {
 			const remote = await api.getUiPreferences();
 			if (!hydrateGuard.isCurrent(snap)) return null;
+			if (remote.theme !== undefined && !validThemes.includes(remote.theme as UiTheme)) {
+				warnInvalidField('theme', remote.theme, 'server');
+			}
+			if (remote.font !== undefined && !validFonts.includes(remote.font as UiFont)) {
+				warnInvalidField('font', remote.font, 'server');
+			}
 			const normalized = fromWire(remote);
 			hydrateGuard.bump();
 			preferencesStore.set(normalized);
