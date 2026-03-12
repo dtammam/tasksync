@@ -190,6 +190,7 @@ No data migration needed. All changes are UI-only or tooling-only.
 
 - 2026-03-12: Plan written. Awaiting implementation.
 - 2026-03-12: All 5 items implemented in sequence (#039 → #038 → #037 → #036 → #040). Each committed independently. All lint/check/test gates pass. Also fixed stray unused `auth_members` import in server routes and added CONTRIBUTING.md with git prune config.
+- 2026-03-12: Post-review fixes: (1) Compacted task rows in list views — removed list dropdown chip (available in detail drawer), changed date display to inline text matching My Day density. (2) Replaced JS-based streak centering (ResizeObserver) with pure CSS using `--sidebar-offset` custom property — eliminates all timing races on first render.
 
 ## Decision log
 
