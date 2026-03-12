@@ -139,6 +139,29 @@ visibilityListener = () => {
 
 **Scope:** One file (`+layout.svelte`), ~5 lines. No new stores, no new API calls.
 
+### Step 9 — Periodic preferences + streak poll for always-open PWA
+
+**Context:** The `visibilitychange` listener (Step 7) covers tab switching and PWA minimize/restore, but a standalone desktop PWA that is perpetually visible and focused never hides — so `visibilitychange` never fires. A user who leaves the PWA open on their Mac all day while completing tasks on their phone would see stale streak state indefinitely.
+
+**Change:** Add a 5-minute `setInterval` (alongside the existing 15-second task-sync retry timer) that polls preferences + streak state whenever the page is visible and the user is authenticated:
+
+```ts
+prefsRefreshTimer = setInterval(() => {
+  if (!auth.isAuthenticated() || document.visibilityState !== 'visible') return;
+  void (async () => {
+    const wire = await uiPreferences.hydrateFromServer();
+    streak.hydrateFromServer(wire?.streakStateJson);
+  })();
+}, 5 * 60 * 1000);
+```
+
+**Why this is safe:**
+- Same hydration path as the `visibilitychange` handler — guarded by `prefsMutationVersion`, best-effort, no overwrite risk.
+- `document.visibilityState !== 'visible'` guard skips the poll when the tab is backgrounded (the `visibilitychange` handler will run on restore instead, avoiding a double call).
+- 5-minute interval: lightweight (one GET to `/auth/preferences`), unnoticeable to users, provides fresh state within one working interval even for always-open PWAs.
+
+**Scope:** One file (`+layout.svelte`), ~8 lines. Cleanup in `onDestroy` via `clearInterval(prefsRefreshTimer)`.
+
 ### Step 8 — Tests
 
 Update `web/src/lib/stores/streak.test.ts`:
@@ -224,6 +247,7 @@ Update `web/src/lib/stores/streak.test.ts`:
 ## Progress log
 
 - **2026-03-12** — Plan authored. Scope confirmed: client-only changes (shared type + streak store + tests). No server changes required.
+- **2026-03-12** — Step 9 added and implemented: 5-minute periodic preferences + streak poll for always-open desktop PWA. `prefsRefreshTimer` added alongside `retryTimer` in `+layout.svelte`; cleaned up in `onDestroy`. Skips poll when tab is hidden (visibilitychange handler covers that path).
 - **2026-03-12** — Implementation complete. All 8 steps done: `StreakState.dayCompleteDate` added; streak localStorage collapsed into prefs blob; `markDayCompleteFired`/`hasFiredDayCompleteToday` moved to stateStore; `hydrateFromServer` updated; `reset()` clears `dayCompleteDate`, `break()` preserves it; `visibilityListener` extended for prefs+streak re-hydration on tab resume; tests updated and new cases added; tech debt #031 closed.
 
 ---
@@ -235,3 +259,4 @@ Update `web/src/lib/stores/streak.test.ts`:
 - **2026-03-12** — Collapse separate streak localStorage key into the preferences blob. User confirmed: streak state should be co-located with other preferences in `tasksync:ui-preferences:…`, eliminating the orphaned `tasksync:streak-state:…` key. Implemented via merge-in-place write helper so stores remain decoupled.
 - **2026-03-12** — Migration fallback: read both old keys if `streakState` absent from prefs blob; remove after reading. One-time, low-cost, avoids silent double-fire on first post-deploy boot.
 - **2026-03-12** — Scoped in: preferences + streak re-hydration on tab resume (`visibilitychange`). Motivator is streak correctness across devices; benefit extends to all preferences. Implemented as a ~5-line extension to the existing `visibilityListener` in `+layout.svelte`. The `prefsMutationVersion` guard in the preferences store makes repeated hydration safe without additional debounce.
+- **2026-03-12** — Scoped in: 5-minute periodic poll for always-open desktop PWA (Step 9). `visibilitychange` covers tab-switching and minimize/restore but never fires for a perpetually visible standalone PWA window. Poll uses same hydration path, guarded by `document.visibilityState` to avoid double calls when the tab is already being covered by the `visibilitychange` handler.
