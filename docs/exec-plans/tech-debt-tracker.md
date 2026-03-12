@@ -9,7 +9,13 @@ Rules:
 
 ## Active
 
-(none)
+| ID | Area | Severity | Summary | Owner | Next action |
+|---:|------|----------|---------|-------|-------------|
+| 040 | UI | Med | Streak text renders too far right on first task check after container rebuild | unassigned | Fix `captureContentCenter()` timing in `StreakDisplay.svelte` |
+| 039 | Tooling | Med | Create `/review` skill that enforces coding standards from a consistent entrypoint | unassigned | Write `~/.claude/commands/review.md` skill file |
+| 038 | UI | Low | Show scheduled date ("Date:") for non-recurring tasks in task row (My Day view only shows it for recurring) | unassigned | Extend `TaskRow.svelte` chip logic to cover non-recurring scheduled tasks |
+| 037 | UI | Low | Color picker for list edit looks visually wrong — native `<input type="color">` is unstyled/jarring | unassigned | Replace or restyle the color input in `Sidebar.svelte` |
+| 036 | UI | Med | List sort indicator line in sidebar is confusing — falls between list name and properties, not intuitive | unassigned | Redesign drag/reorder visual in `Sidebar.svelte` sort mode |
 
 ## Closed
 
