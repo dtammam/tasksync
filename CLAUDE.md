@@ -3,9 +3,31 @@
 This file is the Claude Code entry point for this repo. It is intentionally thin.
 The real sources of truth live in `docs/`. Read them, not this file.
 
-## Start here
+## Session protocol
 
-Read these in order before touching any code:
+Every conversation follows this sequence. No exceptions.
+
+### On start (before writing any code)
+1. Read the SessionStart hook output (branch, active plans, tech debt count).
+2. Read `docs/index.md` → `docs/CONTRIBUTING.md` (design principles + coding standards).
+3. If active exec plans exist, read them. Understand what's in progress before starting new work.
+4. If the user's request overlaps with an active plan or tech debt item, say so.
+5. For new work: use `/kickoff` (simple) or `/kickoff-complex` (multi-domain). Do not start coding without a brief or plan.
+
+### During work
+- Follow `docs/CONTRIBUTING.md` design principles on every change.
+- Respect layer boundaries (`docs/FRONTEND.md`) and performance budgets (`docs/RELIABILITY.md`).
+- Update the active plan's progress log after each meaningful milestone (append-only, dated).
+
+### On finish (before the conversation ends)
+- If behavior changed, update exactly one doc (see "Change hygiene" below).
+- If debt was created, add it to `docs/exec-plans/tech-debt-tracker.md`.
+- If a plan was completed, check all acceptance criteria, move to `completed/`, update this file's plan list.
+- Run quality gates and confirm they pass.
+
+## Reference docs
+
+Read these before touching any code:
 
 1. `docs/index.md` — knowledge map
 2. `docs/ARCHITECTURE.md` — system design, data model, sync protocol
@@ -92,7 +114,8 @@ Completed plans:
 - `docs/exec-plans/completed/2026-03-12-tech-debt-batch-3.md` — close #003 (ESLint boundaries), #002 (latency CI gates), #010 (routes.rs split) (complete 2026-03-12)
 - `docs/exec-plans/completed/2026-03-12-ui-decomposition.md` — UI component decomposition: Sidebar, layout utilities, list import modal, My Day sub-components (#011, #017, #018, #032) (complete 2026-03-12)
 - `docs/exec-plans/completed/2026-03-12-code-health-phase-2.md` — medium-complexity cleanup: error handling, structural refactors, test coverage, @ts-nocheck removal, wire format validation (complete 2026-03-12)
-- `docs/exec-plans/active/2026-03-11-code-quality-audit.md` — full-codebase quality audit (fact-finding reference; complete)
+- `docs/exec-plans/completed/2026-03-11-code-quality-audit.md` — full-codebase quality audit: 93 findings across 10 categories, all addressed (complete 2026-03-13)
+- `docs/exec-plans/completed/2026-03-10-docs-cleanup-design-principles.md` — docs cleanup + design principles: CONTRIBUTING.md principles, QUALITY_SCORE.md refresh, AGENTS.md slim-down (complete 2026-03-13)
 
 Append to the progress log (dated, append-only) when making meaningful advances on a plan.
 Do not rewrite or summarize away prior log entries.
