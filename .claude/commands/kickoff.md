@@ -7,7 +7,13 @@ Use `kickoff-complex` instead when the work spans multiple domains, touches sync
 
 ## Workflow
 
-1. Ask the user to fill this template:
+1. **Check existing context first.** Before asking the user anything:
+   - Read `docs/exec-plans/active/` — if an active plan relates to the user's request, surface it and ask if this work falls under that plan.
+   - Read `docs/exec-plans/tech-debt-tracker.md` — if a tech debt item matches, reference it.
+   - Read `docs/CONTRIBUTING.md` — confirm the design principles that apply.
+   - If the request is already covered by an existing plan or debt item, say so and skip to step 5.
+
+2. Ask the user to fill this template:
 
 ```
 Goal:
@@ -17,13 +23,13 @@ Authoritative docs:
 Deliverables:
 ```
 
-2. Keep the ask short and explicit. Do not add implementation details or suggest solutions.
+3. Keep the ask short and explicit. Do not add implementation details or suggest solutions.
 
-3. Check for missing or vague fields. Ask one concise follow-up listing only what's missing.
+4. Check for missing or vague fields. Ask one concise follow-up listing only what's missing.
 
-4. Normalize the user input into an `Execution Brief` using the same five headings.
+5. Normalize the user input into an `Execution Brief` using the same five headings.
 
-5. Start implementation only after the brief is complete and confirmed.
+6. Start implementation only after the brief is complete and confirmed.
 
 ## Rules
 
@@ -32,3 +38,4 @@ Deliverables:
 - Suggest defaults only when the user leaves a field blank.
 - Do not propose solutions or design choices during kickoff.
 - Constraints must always include: offline-first behavior preserved, performance budgets not regressed, no new security surface.
+- When work is complete, follow the session protocol closing steps in CLAUDE.md (update plan log, tech debt, docs, quality gates).

@@ -43,13 +43,14 @@ Clean up high-level docs to reflect what the codebase actually is today, remove 
 
 ## Acceptance criteria
 
-- [ ] CONTRIBUTING.md has explicit software design principles
-- [ ] AGENTS.md is slim, non-duplicative, platform-neutral
-- [ ] ARCHITECTURE.md repo layout matches actual directory tree
-- [ ] QUALITY_SCORE.md grades reflect recent work
-- [ ] All doc cross-references are consistent
-- [ ] Quality gates pass (lint + check + vitest)
+- [x] CONTRIBUTING.md has explicit software design principles
+- [x] AGENTS.md is slim, non-duplicative, platform-neutral
+- [x] ARCHITECTURE.md repo layout matches actual directory tree
+- [x] QUALITY_SCORE.md grades reflect recent work
+- [x] All doc cross-references are consistent
+- [x] Quality gates pass (lint + check + vitest)
 
 ## Progress log
 
 - 2026-03-10: Plan created. Branch created from main with tech debt 005 cleanup (dead setMyDay removal) carried forward.
+- 2026-03-13: Review pass. CONTRIBUTING.md already had design principles (added across prior sessions); consolidated duplicate "Software design principles" and "Design principles" sections into single unified section. AGENTS.md already slim and platform-neutral. ARCHITECTURE.md repo layout already accurate. repo-conventions.md already clean (no .ps1 references). Updated QUALITY_SCORE.md: refreshed all domain grades to reflect code health work (244 vitest, 40 server, 45 Playwright tests; @ts-nocheck removed; routes.rs split; ESLint boundaries enforced; perf bench + offline boot tests added); closed 3 of 4 systemic gaps (perf gates, boundary lint, offline timing all resolved). Plan complete.
