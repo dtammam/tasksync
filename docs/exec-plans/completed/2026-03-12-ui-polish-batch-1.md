@@ -189,7 +189,11 @@ No data migration needed. All changes are UI-only or tooling-only.
 ## Progress log
 
 - 2026-03-12: Plan written. Awaiting implementation.
+- 2026-03-12: All 5 items implemented in sequence (#039 → #038 → #037 → #036 → #040). Each committed independently. All lint/check/test gates pass. Also fixed stray unused `auth_members` import in server routes and added CONTRIBUTING.md with git prune config.
+- 2026-03-12: Post-review fixes: (1) Compacted task rows in list views — removed list dropdown chip (available in detail drawer), changed date display to inline text matching My Day density. (2) Replaced JS-based streak centering (ResizeObserver) with pure CSS using `--sidebar-offset` custom property — eliminates all timing races on first render.
+- 2026-03-13: Final round of fixes: (1) Restyled date chip back to `chip subtle` matching My Day recurrence chip. (2) Fixed streak centering for real — replaced `translate: -50% 0` with full-width container (`left: var(--sidebar-offset); right: 0`) using flexbox centering; the `translate` approach failed because `-50%` resolves based on element width which is ~0 before images load. (3) Added image preloading in `loadThemeAssets` for digit PNGs, judgment, missed, and day-complete images — eliminates first-render delay. All items confirmed working. Plan complete.
 
 ## Decision log
 
 - 2026-03-12: Sequencing chosen: #039 → #038 → #037 → #036 → #040 (risk ascending). Open decisions: (a) #037 swatch vs. native picker — recommendation is swatch; (b) #038 scope — recommendation is all views. Awaiting confirmation before code.
+- 2026-03-12: Decisions confirmed: #037 uses swatch grid (12-color palette); #038 shows date chip in all list views.

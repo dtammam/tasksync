@@ -11,39 +11,6 @@
 	// Split count into individual digit characters for rendering.
 	// Only used when count > 0 (normal combo state).
 	$: digits = String(Math.min(display.count, 9999)).split('');
-
-	// Position the combo indicator at the center of <main> using an exact pixel
-	// value from getBoundingClientRect(), frozen at display time so navigating
-	// away (changing sidebar width) doesn't shift it while visible.
-	//
-	// onMount pre-populates the correct position so the very first combo
-	// appearance doesn't start at the '50vw' default and shift into place.
-	// trackVisibility re-captures whenever visibility transitions false → true
-	// (in case layout changed between combos).
-	let _lastVisible = false;
-	let frozenLeft = '50vw';
-	let frozenMaxWidth = 'calc(100vw - 32px)';
-
-	// Eagerly capture <main> center so the very first render frame is correct.
-	// This runs at script evaluation time (before the first paint of the {#if} block).
-	function captureContentCenter() {
-		if (typeof document === 'undefined') return;
-		const main = document.querySelector('main');
-		if (main) {
-			const rect = main.getBoundingClientRect();
-			frozenLeft = `${rect.left + rect.width / 2}px`;
-			frozenMaxWidth = `${rect.width - 32}px`;
-		}
-	}
-	captureContentCenter();
-
-	function trackVisibility(isVisible: boolean) {
-		if (isVisible && !_lastVisible) {
-			captureContentCenter();
-		}
-		_lastVisible = isVisible;
-	}
-	$: trackVisibility(display.visible);
 </script>
 
 {#if display.visible && settings.enabled}
@@ -51,7 +18,6 @@
 		class="streak-root"
 		class:day-complete={display.isDayComplete}
 		class:combo-dropped={display.isComboDropped}
-		style="left: {frozenLeft}; max-width: {frozenMaxWidth}"
 		aria-live="polite"
 		aria-atomic="true"
 		aria-label={display.count > 0 ? `Streak: ${display.count}` : 'Combo dropped'}
@@ -110,22 +76,18 @@
 <style>
 	.streak-root {
 		position: fixed;
-		/* Position at top of content area, centered in the content pane (sidebar-aware).
-		   left and max-width are set via inline style using a frozen offset captured at
-		   display time, so navigation changes to --sidebar-offset don't shift the indicator. */
 		top: 64px;
-		/* Use `translate` (independent of `transform`) so Svelte's fly transition,
-		   which animates via `transform: translateY(...)`, doesn't override the
-		   horizontal centering during the fly-in animation. */
-		translate: -50% 0;
+		/* Span the full content pane using sidebar-offset from +layout.svelte.
+		   Flexbox centers children — no translate/-50% hack, so centering works
+		   even before streak images finish loading (no width dependency). */
+		left: var(--sidebar-offset, 0px);
+		right: 0;
 		z-index: 200;
 		pointer-events: none;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 2px;
-		/* Prevent layout interference */
-		width: max-content;
 	}
 
 	.judgment-layer {

@@ -611,8 +611,18 @@ export const streak = {
 		missedFileLists[theme] = (manifest.missed ?? []).map(encodeSpaces);
 		dayCompleteSoundLists[theme] = (manifest.dayCompleteSound ?? []).map(encodeSpaces);
 		dayCompleteImageLists[theme] = (manifest.dayCompleteImages ?? []).map(encodeSpaces);
-		streakWordUrlStore.set(manifest.streakWord ? encodeSpaces(manifest.streakWord) : '');
-		digitsPathStore.update((rec) => ({ ...rec, [theme]: manifest.digitsPath ?? 'digits' }));
+		const wordUrl = manifest.streakWord ? encodeSpaces(manifest.streakWord) : '';
+		streakWordUrlStore.set(wordUrl);
+		const dp = manifest.digitsPath ?? 'digits';
+		digitsPathStore.update((rec) => ({ ...rec, [theme]: dp }));
+
+		// Preload images into browser cache so the first streak renders instantly.
+		const preload = (src: string) => { new Image().src = src; };
+		for (let d = 0; d <= 9; d++) preload(`/streak/${theme}/${encodeSpaces(dp)}/${d}.png`);
+		if (wordUrl) preload(wordUrl);
+		for (const src of judgmentFileLists[theme]) preload(src);
+		for (const src of (manifest.missed ?? []).map(encodeSpaces)) preload(src);
+		for (const src of (manifest.dayCompleteImages ?? []).map(encodeSpaces)) preload(src);
 	}
 };
 
