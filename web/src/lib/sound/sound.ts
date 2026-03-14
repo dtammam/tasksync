@@ -1,62 +1,62 @@
 import type { SoundSettings, SoundTheme } from '$shared/types/settings';
 
-let audioContext: AudioContext | null = null;
-let audioContextCreatedAt = 0;
-let needsContextReset = false;
-let lifecycleWatchersBound = false;
-const customBufferCache = new Map<string, AudioBuffer>();
-const IOS_STANDALONE_CONTEXT_MAX_AGE_MS = 120000;
-
 interface CustomSoundFileEntry {
 	id?: string;
 	name?: string;
 	dataUrl: string;
 }
 
-const contextState = (ctx: AudioContext | null) =>
-	ctx ? String((ctx as AudioContext & { state?: string }).state ?? '') : 'closed';
+/** Read AudioContext.state as a plain string to avoid TS narrowing issues. */
+const contextState = (ctx: AudioContext): string =>
+	String((ctx as AudioContext & { state?: string }).state ?? '');
 
-const isStandaloneDisplayMode = () => {
-	if (typeof window === 'undefined') return false;
-	const nav = window.navigator as Navigator & { standalone?: boolean };
-	if (typeof nav.standalone === 'boolean') return nav.standalone;
-	if (typeof window.matchMedia !== 'function') return false;
+/**
+ * Create a fresh AudioContext and ensure it is running.
+ *
+ * A new context is created for every playback request so that we never hold a
+ * stale singleton.  iOS (and other platforms) can silently invalidate the
+ * underlying audio session without updating AudioContext.state — the only
+ * reliable defence is to never reuse a context across user interactions.
+ *
+ * The caller is responsible for calling `closeContext()` when playback is done.
+ */
+const createRunningContext = async (): Promise<AudioContext | null> => {
+	if (typeof window === 'undefined') return null;
+	const Ctor = window.AudioContext;
+	if (!Ctor) return null;
+
+	const ctx = new Ctor({ latencyHint: 'interactive' });
+	if (contextState(ctx) === 'running') return ctx;
+
 	try {
-		return window.matchMedia('(display-mode: standalone)').matches;
+		await ctx.resume();
+		if (contextState(ctx) === 'running') return ctx;
 	} catch {
-		return false;
+		// resume failed — try closing and rebuilding once.
 	}
+
+	// WebKit can leave a brand-new context suspended; rebuild once.
+	try {
+		await ctx.close();
+	} catch {
+		/* ignore */
+	}
+	const ctx2 = new Ctor({ latencyHint: 'interactive' });
+	try {
+		await ctx2.resume();
+	} catch {
+		return null;
+	}
+	return contextState(ctx2) === 'running' ? ctx2 : null;
 };
 
-const shouldAggressivelyRecycleContext = () => {
-	if (typeof window === 'undefined') return false;
-	const nav = window.navigator as Navigator & { standalone?: boolean };
-	if (typeof nav.standalone === 'boolean') return nav.standalone;
-	// Cover any standalone PWA (macOS, Android, etc.) where the OS may silently
-	// suspend an idle AudioContext without reliably firing onstatechange.
-	return isStandaloneDisplayMode();
-};
-
-const markContextStale = () => {
-	needsContextReset = true;
-};
-
-const bindLifecycleWatchers = () => {
-	if (lifecycleWatchersBound || typeof window === 'undefined' || typeof document === 'undefined') return;
-	lifecycleWatchersBound = true;
-	document.addEventListener('visibilitychange', () => {
-		if (document.visibilityState !== 'visible') {
-			markContextStale();
-		}
-	});
-	window.addEventListener('pagehide', markContextStale);
-	window.addEventListener('pageshow', markContextStale);
-};
-
-const shouldRecycleLiveContext = () => {
-	if (needsContextReset) return true;
-	if (!audioContextCreatedAt || !shouldAggressivelyRecycleContext()) return false;
-	return Date.now() - audioContextCreatedAt >= IOS_STANDALONE_CONTEXT_MAX_AGE_MS;
+/** Fire-and-forget context cleanup. */
+const closeContext = (ctx: AudioContext) => {
+	try {
+		void ctx.close();
+	} catch {
+		/* ignore */
+	}
 };
 
 const clampVolume = (volume: number) => {
@@ -112,75 +112,6 @@ const pickRandomCustomSoundEntry = (settings: SoundSettings): CustomSoundFileEnt
 	if (entries.length === 1) return entries[0];
 	const index = Math.floor(Math.random() * entries.length);
 	return entries[index] ?? entries[0];
-};
-
-const getAudioContext = () => {
-	if (typeof window === 'undefined') return null;
-	if (audioContext && contextState(audioContext) !== 'closed') return audioContext;
-	audioContext = null;
-	const Ctor = window.AudioContext;
-	if (!Ctor) return null;
-	audioContext = new Ctor({ latencyHint: 'interactive' });
-	audioContextCreatedAt = Date.now();
-	audioContext.onstatechange = () => {
-		if (audioContext && contextState(audioContext) !== 'running') {
-			needsContextReset = true;
-		}
-	};
-	return audioContext;
-};
-
-const dropAudioContext = async () => {
-	const stale = audioContext;
-	audioContext = null;
-	audioContextCreatedAt = 0;
-	customBufferCache.clear();
-	if (!stale) return;
-	if (contextState(stale) === 'closed') return;
-	try {
-		await stale.close();
-	} catch {
-		// Ignore close errors and rebuild on next playback request.
-	}
-};
-
-const ensureRunningContext = async () => {
-	bindLifecycleWatchers();
-	let ctx = getAudioContext();
-	if (!ctx) return null;
-
-	if (shouldRecycleLiveContext()) {
-		await dropAudioContext();
-		ctx = getAudioContext();
-		if (!ctx) return null;
-	}
-
-	if (contextState(ctx) === 'running') {
-		needsContextReset = false;
-		return ctx;
-	}
-	try {
-		await ctx.resume();
-	} catch {
-		// Continue into rebuild path below.
-	}
-	if (contextState(ctx) === 'running') {
-		needsContextReset = false;
-		return ctx;
-	}
-
-	// WebKit can leave a context suspended/interrupted until fully rebuilt.
-	await dropAudioContext();
-	ctx = getAudioContext();
-	if (!ctx) return null;
-	try {
-		await ctx.resume();
-	} catch {
-		return null;
-	}
-	if (contextState(ctx) !== 'running') return null;
-	needsContextReset = false;
-	return ctx;
 };
 
 const scheduleTone = (
@@ -344,29 +275,15 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 	}
 };
 
-const decodeCustomBuffer = async (ctx: AudioContext, src: string) => {
-	const cached = customBufferCache.get(src);
-	if (cached) return cached;
-	const response = await fetch(src);
-	const arrayBuffer = await response.arrayBuffer();
-	const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
-	customBufferCache.set(src, decoded);
-	if (customBufferCache.size > 12) {
-		const oldest = customBufferCache.keys().next().value;
-		if (oldest) {
-			customBufferCache.delete(oldest);
-		}
-	}
-	return decoded;
-};
-
 const playCustomFileWithWebAudio = async (
 	ctx: AudioContext,
 	src: string,
 	volume: number
 ) => {
 	try {
-		const buffer = await decodeCustomBuffer(ctx, src);
+		const response = await fetch(src);
+		const arrayBuffer = await response.arrayBuffer();
+		const buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
 		const source = ctx.createBufferSource();
 		source.buffer = buffer;
 		const gain = ctx.createGain();
@@ -394,17 +311,21 @@ const playCustomFileWithHtmlAudio = async (src: string, volume: number) => {
 };
 
 /**
- * Play an audio file at a given URL (e.g. a static asset path) using the shared
+ * Play an audio file at a given URL (e.g. a static asset path) using a fresh
  * WebAudio context, with HTML Audio fallback. Used by the streak announcer.
  */
 export const playUrl = async (src: string, volume: number) => {
 	if (volume <= 0.0001) return;
 	const gain = toPerceptualGain(clampVolume(volume));
 	if (gain <= 0.0001) return;
-	const ctx = await ensureRunningContext();
+	const ctx = await createRunningContext();
 	if (ctx) {
 		const played = await playCustomFileWithWebAudio(ctx, src, gain);
-		if (played) return;
+		if (played) {
+			closeContext(ctx);
+			return;
+		}
+		closeContext(ctx);
 	}
 	await playCustomFileWithHtmlAudio(src, gain);
 };
@@ -413,14 +334,18 @@ export const playCompletion = async (settings: SoundSettings) => {
 	if (!settings.enabled) return;
 	const volume = toPerceptualGain(clampVolume(settings.volume));
 	if (volume <= 0.0001) return;
-	const ctx = await ensureRunningContext();
+	const ctx = await createRunningContext();
 	const customSound = settings.theme === 'custom_file' ? pickRandomCustomSoundEntry(settings) : null;
 	if (settings.theme === 'custom_file') {
 		const playedWithContext =
 			ctx && customSound
 				? await playCustomFileWithWebAudio(ctx, customSound.dataUrl, volume)
 				: false;
-		if (playedWithContext) return;
+		if (playedWithContext) {
+			closeContext(ctx!);
+			return;
+		}
+		if (ctx) closeContext(ctx);
 		const playedWithHtmlAudio =
 			customSound ? await playCustomFileWithHtmlAudio(customSound.dataUrl, volume) : false;
 		if (playedWithHtmlAudio) return;
@@ -428,4 +353,5 @@ export const playCompletion = async (settings: SoundSettings) => {
 	if (!ctx) return;
 	const fallbackTheme = settings.theme === 'custom_file' ? 'chime_soft' : settings.theme;
 	playTheme(ctx, fallbackTheme, volume);
+	closeContext(ctx);
 };

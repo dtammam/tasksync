@@ -107,7 +107,7 @@ Scripts live in `scripts/`. Check there before constructing ad-hoc commands.
 ## Exec plan ownership
 
 Active plans currently in progress:
-(none)
+- `docs/exec-plans/active/2026-03-14-ios-pwa-stale-audio.md` — Fix stale audio on iOS/macOS PWA: replace singleton AudioContext with fresh-context-per-play
 
 Completed plans:
 - `docs/exec-plans/completed/2026-03-12-ui-polish-batch-1.md` — UI polish + fixes: list sort indicator (#036), color picker (#037), date chip (#038), review skill (#039), streak text position (#040) (complete 2026-03-13)
