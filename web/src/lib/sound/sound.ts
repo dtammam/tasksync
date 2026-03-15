@@ -50,13 +50,16 @@ const createRunningContext = async (): Promise<AudioContext | null> => {
 	return contextState(ctx2) === 'running' ? ctx2 : null;
 };
 
-/** Fire-and-forget context cleanup. */
-const closeContext = (ctx: AudioContext) => {
-	try {
-		void ctx.close();
-	} catch {
-		/* ignore */
-	}
+/** Schedule context cleanup after playback finishes.
+ *  `delaySec` should cover the longest scheduled oscillator / buffer. */
+const closeContextAfter = (ctx: AudioContext, delaySec: number) => {
+	setTimeout(() => {
+		try {
+			void ctx.close();
+		} catch {
+			/* ignore */
+		}
+	}, delaySec * 1000);
 };
 
 const clampVolume = (volume: number) => {
@@ -145,12 +148,15 @@ const scheduleTone = (
 	osc.stop(startAt + duration + 0.02);
 };
 
-const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
+/** Play a built-in theme and return the total duration in seconds. */
+const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number): number => {
 	const start = ctx.currentTime + 0.005;
 	const output = ctx.createGain();
 	output.gain.value = Math.max(0.0001, volume);
 	output.connect(ctx.destination);
 
+	// Each branch returns seconds from now until the last oscillator stops.
+	// Formula: latest startAt offset + duration + 0.02 (osc tail) + 0.005 (initial offset).
 	switch (theme) {
 		case 'click_pop':
 			scheduleTone(ctx, {
@@ -169,7 +175,7 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.16,
 				output
 			});
-			return;
+			return 0.155; // 0.05 + 0.08 + 0.02 + 0.005
 		case 'sparkle_short':
 			scheduleTone(ctx, {
 				frequency: 840,
@@ -187,7 +193,7 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.14,
 				output
 			});
-			return;
+			return 0.185; // 0.06 + 0.1 + 0.02 + 0.005
 		case 'wood_tick':
 			scheduleTone(ctx, {
 				frequency: 220,
@@ -197,7 +203,7 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.2,
 				output
 			});
-			return;
+			return 0.085; // 0.06 + 0.02 + 0.005
 		case 'bell_crisp':
 			scheduleTone(ctx, {
 				frequency: 784,
@@ -215,7 +221,7 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.1,
 				output
 			});
-			return;
+			return 0.205; // 0.03 + 0.15 + 0.02 + 0.005
 		case 'marimba_blip':
 			scheduleTone(ctx, {
 				frequency: 392,
@@ -233,7 +239,7 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.13,
 				output
 			});
-			return;
+			return 0.165; // 0.05 + 0.09 + 0.02 + 0.005
 		case 'pulse_soft':
 			scheduleTone(ctx, {
 				frequency: 294,
@@ -251,9 +257,9 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.12,
 				output
 			});
-			return;
+			return 0.235; // 0.11 + 0.1 + 0.02 + 0.005
 		case 'custom_file':
-			return;
+			return 0;
 		case 'chime_soft':
 		default:
 			scheduleTone(ctx, {
@@ -272,9 +278,11 @@ const playTheme = (ctx: AudioContext, theme: SoundTheme, volume: number) => {
 				peak: 0.1,
 				output
 			});
+			return 0.21; // 0.045 + 0.14 + 0.02 + 0.005
 	}
 };
 
+/** Play a custom audio file via WebAudio. Closes the context when playback ends. */
 const playCustomFileWithWebAudio = async (
 	ctx: AudioContext,
 	src: string,
@@ -290,6 +298,7 @@ const playCustomFileWithWebAudio = async (
 		gain.gain.value = Math.max(0.0001, volume);
 		source.connect(gain);
 		gain.connect(ctx.destination);
+		source.onended = () => closeContextAfter(ctx, 0);
 		source.start(ctx.currentTime + 0.002);
 		return true;
 	} catch {
@@ -320,12 +329,10 @@ export const playUrl = async (src: string, volume: number) => {
 	if (gain <= 0.0001) return;
 	const ctx = await createRunningContext();
 	if (ctx) {
+		// playCustomFileWithWebAudio now closes the context via onended
 		const played = await playCustomFileWithWebAudio(ctx, src, gain);
-		if (played) {
-			closeContext(ctx);
-			return;
-		}
-		closeContext(ctx);
+		if (played) return;
+		closeContextAfter(ctx, 0);
 	}
 	await playCustomFileWithHtmlAudio(src, gain);
 };
@@ -337,21 +344,19 @@ export const playCompletion = async (settings: SoundSettings) => {
 	const ctx = await createRunningContext();
 	const customSound = settings.theme === 'custom_file' ? pickRandomCustomSoundEntry(settings) : null;
 	if (settings.theme === 'custom_file') {
+		// playCustomFileWithWebAudio closes the context via onended
 		const playedWithContext =
 			ctx && customSound
 				? await playCustomFileWithWebAudio(ctx, customSound.dataUrl, volume)
 				: false;
-		if (playedWithContext) {
-			closeContext(ctx!);
-			return;
-		}
-		if (ctx) closeContext(ctx);
+		if (playedWithContext) return;
+		if (ctx) closeContextAfter(ctx, 0);
 		const playedWithHtmlAudio =
 			customSound ? await playCustomFileWithHtmlAudio(customSound.dataUrl, volume) : false;
 		if (playedWithHtmlAudio) return;
 	}
 	if (!ctx) return;
 	const fallbackTheme = settings.theme === 'custom_file' ? 'chime_soft' : settings.theme;
-	playTheme(ctx, fallbackTheme, volume);
-	closeContext(ctx);
+	const duration = playTheme(ctx, fallbackTheme, volume);
+	closeContextAfter(ctx, duration + 0.1);
 };

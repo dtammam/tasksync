@@ -114,8 +114,11 @@ No data migration. Pure client-side behavior change. Ships with next web deploy.
 
 - 2026-03-14: Branch `fix/ios-pwa-stale-audio` created. Reviewed git history of 3 prior audio fixes. Initial plan was incremental (more events, lower TTL). Pivoted to structural fix after recognizing the detection-based pattern has failed repeatedly.
 - 2026-03-14: Plan finalized — fresh context per play, delete all lifecycle machinery.
+- 2026-03-15: Implemented fresh-context-per-play, deleted all lifecycle/singleton code, rewrote tests. Committed as `e2413e6`.
+- 2026-03-15: **Post-deploy bug** — all sounds silent on iOS and macOS Edge. Root cause: `closeContext(ctx)` was called synchronously immediately after scheduling oscillators / starting buffer sources. WebAudio playback is asynchronous — `ctx.close()` tore down the context before audio could play. Fix: replaced `closeContext()` with `closeContextAfter(ctx, duration)` using setTimeout for oscillator themes (duration returned by `playTheme()`), and `source.onended` callback for buffer source playback. Tests updated with `vi.useFakeTimers()` + `vi.runAllTimersAsync()` to validate deferred cleanup.
 
 ## Decision log
 
 - 2026-03-14: **Rejected incremental fix** (more lifecycle events + lower TTL). Reason: same detection-based pattern that has failed 3 times across 3 separate PRs. Each fix addresses one trigger but leaves others.
 - 2026-03-14: **Chose fresh-context-per-play**. Reason: eliminates the entire class of staleness bugs by removing the singleton. Trades ~2-5ms per play (well within budget) for zero platform-specific code and permanent immunity to OS audio session changes.
+- 2026-03-15: **Deferred context cleanup required**. The initial implementation called `ctx.close()` synchronously after scheduling, which is a use-after-free equivalent in WebAudio. Oscillators and buffer sources need the context alive until playback finishes. Fix: `closeContextAfter()` with computed duration for themes, `onended` for buffer sources.

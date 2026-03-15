@@ -24,7 +24,11 @@ class FakeOscillatorNode {
 class FakeBufferSourceNode {
 	buffer: AudioBuffer | null = null;
 	connect = vi.fn();
-	start = vi.fn();
+	onended: (() => void) | null = null;
+	start = vi.fn().mockImplementation(() => {
+		// Simulate immediate playback end so onended fires synchronously in tests
+		queueMicrotask(() => this.onended?.());
+	});
 }
 
 class FakeAudioContext {
@@ -90,6 +94,7 @@ describe('playCompletion — fresh context per play', () => {
 
 	beforeEach(() => {
 		vi.resetModules();
+		vi.useFakeTimers();
 		FakeAudioContext.instances = [];
 		FakeAudioContext.resumeModes = [];
 		FakeAudioContext.decodeShouldFail = false;
@@ -134,6 +139,7 @@ describe('playCompletion — fresh context per play', () => {
 	it('closes the context after playback completes', async () => {
 		const { playCompletion } = await import('./sound');
 		await playCompletion(settings);
+		await vi.runAllTimersAsync();
 
 		expect(FakeAudioContext.instances).toHaveLength(1);
 		expect(FakeAudioContext.instances[0].closed).toBe(true);
@@ -144,6 +150,7 @@ describe('playCompletion — fresh context per play', () => {
 		const { playCompletion } = await import('./sound');
 		await playCompletion(settings);
 
+		await vi.runAllTimersAsync();
 		expect(FakeAudioContext.instances).toHaveLength(2);
 		expect(FakeAudioContext.instances[1].state).toBe('closed');
 		expect(FakeAudioContext.instances[1].oscillatorCount).toBeGreaterThan(0);
@@ -165,6 +172,7 @@ describe('playCompletion — fresh context per play', () => {
 			await playCompletion({ ...settings, theme });
 		}
 
+		await vi.runAllTimersAsync();
 		expect(FakeAudioContext.instances).toHaveLength(7);
 		for (const ctx of FakeAudioContext.instances) {
 			expect(ctx.oscillatorCount).toBeGreaterThan(0);
@@ -182,6 +190,7 @@ describe('playCompletion — fresh context per play', () => {
 
 		await playCompletion(customSettings);
 
+		await vi.runAllTimersAsync();
 		expect(FakeAudioContext.instances).toHaveLength(1);
 		expect(FakeAudioContext.instances[0].bufferSourceCount).toBe(1);
 		expect(FakeAudioContext.instances[0].closed).toBe(true);
@@ -227,6 +236,7 @@ describe('playCompletion — fresh context per play', () => {
 
 		await playCompletion(invalidCustom);
 
+		await vi.runAllTimersAsync();
 		expect(FakeAudioContext.instances[0].oscillatorCount).toBe(2);
 		expect(FakeAudioContext.instances[0].closed).toBe(true);
 	});
@@ -243,6 +253,7 @@ describe('playCompletion — fresh context per play', () => {
 describe('playUrl — fresh context per play', () => {
 	beforeEach(() => {
 		vi.resetModules();
+		vi.useFakeTimers();
 		FakeAudioContext.instances = [];
 		FakeAudioContext.resumeModes = [];
 		FakeAudioContext.decodeShouldFail = false;
@@ -272,6 +283,7 @@ describe('playUrl — fresh context per play', () => {
 		const { playUrl } = await import('./sound');
 		await playUrl('/streak/ddr/announcer/clip.mp3', 60);
 		await playUrl('/streak/ddr/drop/clip.mp3', 60);
+		await vi.runAllTimersAsync();
 
 		expect(FakeAudioContext.instances).toHaveLength(2);
 		expect(FakeAudioContext.instances[0].closed).toBe(true);
