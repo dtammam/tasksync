@@ -24,7 +24,11 @@ class FakeOscillatorNode {
 class FakeBufferSourceNode {
 	buffer: AudioBuffer | null = null;
 	connect = vi.fn();
-	start = vi.fn();
+	onended: (() => void) | null = null;
+	start = vi.fn().mockImplementation(() => {
+		// Simulate immediate playback end so onended fires synchronously in tests
+		queueMicrotask(() => this.onended?.());
+	});
 }
 
 class FakeAudioContext {
@@ -33,12 +37,12 @@ class FakeAudioContext {
 	static decodeShouldFail = false;
 
 	state: AudioContextState | 'interrupted' = 'suspended';
-	onstatechange: (() => void) | null = null;
 	currentTime = 0;
 	destination = {} as AudioNode;
 	resumeMode: 'ok' | 'reject';
 	oscillatorCount = 0;
 	bufferSourceCount = 0;
+	closed = false;
 
 	constructor() {
 		this.resumeMode = FakeAudioContext.resumeModes.shift() ?? 'ok';
@@ -50,12 +54,11 @@ class FakeAudioContext {
 			throw new Error('resume failed');
 		}
 		this.state = 'running';
-		this.onstatechange?.();
 	}
 
 	async close() {
 		this.state = 'closed';
-		this.onstatechange?.();
+		this.closed = true;
 	}
 
 	createOscillator() {
@@ -86,14 +89,12 @@ const settings: SoundSettings = {
 	theme: 'chime_soft'
 };
 
-describe('playCompletion audio-context resilience', () => {
-	let visibilityState: DocumentVisibilityState = 'visible';
-	let standaloneMode = false;
+describe('playCompletion — fresh context per play', () => {
 	let htmlAudioConstructed = 0;
 
 	beforeEach(() => {
-		vi.useRealTimers();
 		vi.resetModules();
+		vi.useFakeTimers();
 		FakeAudioContext.instances = [];
 		FakeAudioContext.resumeModes = [];
 		FakeAudioContext.decodeShouldFail = false;
@@ -106,16 +107,6 @@ describe('playCompletion audio-context resilience', () => {
 		Object.defineProperty(window, 'AudioContext', {
 			configurable: true,
 			value: FakeAudioContext
-		});
-		visibilityState = 'visible';
-		Object.defineProperty(document, 'visibilityState', {
-			configurable: true,
-			get: () => visibilityState
-		});
-		standaloneMode = false;
-		Object.defineProperty(window.navigator, 'standalone', {
-			configurable: true,
-			get: () => standaloneMode
 		});
 		htmlAudioConstructed = 0;
 		Object.defineProperty(window, 'Audio', {
@@ -136,86 +127,35 @@ describe('playCompletion audio-context resilience', () => {
 		});
 	});
 
-	it('rebuilds the WebAudio context when prior context was closed', async () => {
+	it('creates a fresh AudioContext for each playCompletion call', async () => {
 		const { playCompletion } = await import('./sound');
 		await playCompletion(settings);
-		expect(FakeAudioContext.instances).toHaveLength(1);
-
-		FakeAudioContext.instances[0].state = 'closed';
+		await playCompletion(settings);
 		await playCompletion(settings);
 
-		expect(FakeAudioContext.instances).toHaveLength(2);
-		expect(FakeAudioContext.instances[1].state).toBe('running');
+		expect(FakeAudioContext.instances).toHaveLength(3);
 	});
 
-	it('rebuilds the context when resume fails on stale state', async () => {
+	it('keeps context open during playback, closes only after duration elapses', async () => {
+		const { playCompletion } = await import('./sound');
+		await playCompletion(settings);
+
+		expect(FakeAudioContext.instances).toHaveLength(1);
+		expect(FakeAudioContext.instances[0].closed).toBe(false);
+
+		await vi.runAllTimersAsync();
+		expect(FakeAudioContext.instances[0].closed).toBe(true);
+	});
+
+	it('rebuilds when first resume fails', async () => {
 		FakeAudioContext.resumeModes = ['reject', 'ok'];
 		const { playCompletion } = await import('./sound');
 		await playCompletion(settings);
 
+		await vi.runAllTimersAsync();
 		expect(FakeAudioContext.instances).toHaveLength(2);
-		expect(FakeAudioContext.instances[1].state).toBe('running');
-	});
-
-	it('rebuilds a running context after app backgrounding', async () => {
-		const { playCompletion } = await import('./sound');
-		await playCompletion(settings);
-		expect(FakeAudioContext.instances).toHaveLength(1);
-
-		visibilityState = 'hidden';
-		document.dispatchEvent(new Event('visibilitychange'));
-		visibilityState = 'visible';
-
-		await playCompletion(settings);
-		expect(FakeAudioContext.instances).toHaveLength(2);
-		expect(FakeAudioContext.instances[1].state).toBe('running');
-	});
-
-	it('recycles long-lived contexts in iOS standalone mode', async () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date('2026-02-09T00:00:00Z'));
-		standaloneMode = true;
-		const { playCompletion } = await import('./sound');
-
-		await playCompletion(settings);
-		expect(FakeAudioContext.instances).toHaveLength(1);
-
-		vi.advanceTimersByTime(120001);
-		await playCompletion(settings);
-		expect(FakeAudioContext.instances).toHaveLength(2);
-		expect(FakeAudioContext.instances[1].state).toBe('running');
-	});
-
-	it('recycles long-lived contexts in macOS (non-iOS) standalone PWA mode', async () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date('2026-02-09T00:00:00Z'));
-		// macOS PWA: nav.standalone is undefined, display-mode matches standalone
-		Object.defineProperty(window.navigator, 'standalone', {
-			configurable: true,
-			get: () => undefined
-		});
-		Object.defineProperty(window, 'matchMedia', {
-			configurable: true,
-			value: (query: string) => ({
-				matches: query === '(display-mode: standalone)',
-				media: query,
-				onchange: null,
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				dispatchEvent: vi.fn().mockReturnValue(false)
-			})
-		});
-		const { playCompletion } = await import('./sound');
-
-		await playCompletion(settings);
-		expect(FakeAudioContext.instances).toHaveLength(1);
-
-		vi.advanceTimersByTime(120001);
-		await playCompletion(settings);
-		expect(FakeAudioContext.instances).toHaveLength(2);
-		expect(FakeAudioContext.instances[1].state).toBe('running');
+		expect(FakeAudioContext.instances[1].state).toBe('closed');
+		expect(FakeAudioContext.instances[1].oscillatorCount).toBeGreaterThan(0);
 	});
 
 	it('plays each built-in theme without custom file flow', async () => {
@@ -231,17 +171,34 @@ describe('playCompletion audio-context resilience', () => {
 		];
 
 		for (const theme of themes) {
-			await playCompletion({
-				...settings,
-				theme
-			});
+			await playCompletion({ ...settings, theme });
 		}
 
-		expect(FakeAudioContext.instances).toHaveLength(1);
-		expect(FakeAudioContext.instances[0].oscillatorCount).toBeGreaterThan(0);
+		await vi.runAllTimersAsync();
+		expect(FakeAudioContext.instances).toHaveLength(7);
+		for (const ctx of FakeAudioContext.instances) {
+			expect(ctx.oscillatorCount).toBeGreaterThan(0);
+			expect(ctx.closed).toBe(true);
+		}
 	});
 
-	it('uses custom file via WebAudio and caches decoded buffers', async () => {
+	it('decodes custom file and plays via WebAudio', async () => {
+		const { playCompletion } = await import('./sound');
+		const customSettings: SoundSettings = {
+			...settings,
+			theme: 'custom_file',
+			customSoundFilesJson: JSON.stringify([{ dataUrl: 'data:audio/wav;base64,AAAA' }])
+		};
+
+		await playCompletion(customSettings);
+
+		await vi.runAllTimersAsync();
+		expect(FakeAudioContext.instances).toHaveLength(1);
+		expect(FakeAudioContext.instances[0].bufferSourceCount).toBe(1);
+		expect(FakeAudioContext.instances[0].closed).toBe(true);
+	});
+
+	it('re-decodes custom file on each play (no cross-context cache)', async () => {
 		const { playCompletion } = await import('./sound');
 		const customSettings: SoundSettings = {
 			...settings,
@@ -252,8 +209,8 @@ describe('playCompletion audio-context resilience', () => {
 		await playCompletion(customSettings);
 		await playCompletion(customSettings);
 
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(FakeAudioContext.instances[0].bufferSourceCount).toBe(2);
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(FakeAudioContext.instances).toHaveLength(2);
 	});
 
 	it('falls back to HTML audio when custom WebAudio decode fails', async () => {
@@ -281,19 +238,83 @@ describe('playCompletion audio-context resilience', () => {
 
 		await playCompletion(invalidCustom);
 
+		await vi.runAllTimersAsync();
 		expect(FakeAudioContext.instances[0].oscillatorCount).toBe(2);
+		expect(FakeAudioContext.instances[0].closed).toBe(true);
 	});
 
 	it('does nothing when disabled or effectively muted', async () => {
 		const { playCompletion } = await import('./sound');
-		await playCompletion({
-			...settings,
-			enabled: false
+		await playCompletion({ ...settings, enabled: false });
+		await playCompletion({ ...settings, volume: 0 });
+
+		expect(FakeAudioContext.instances).toHaveLength(0);
+	});
+});
+
+describe('playUrl — fresh context per play', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		vi.useFakeTimers();
+		FakeAudioContext.instances = [];
+		FakeAudioContext.resumeModes = [];
+		FakeAudioContext.decodeShouldFail = false;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(16))
+			})
+		);
+		Object.defineProperty(window, 'AudioContext', {
+			configurable: true,
+			value: FakeAudioContext
 		});
-		await playCompletion({
-			...settings,
-			volume: 0
+		Object.defineProperty(window, 'Audio', {
+			configurable: true,
+			value: class {
+				preload = '';
+				volume = 0;
+				async play() {
+					return;
+				}
+			}
 		});
+	});
+
+	it('creates and closes a fresh context for each playUrl call', async () => {
+		const { playUrl } = await import('./sound');
+		await playUrl('/streak/ddr/announcer/clip.mp3', 60);
+		await playUrl('/streak/ddr/drop/clip.mp3', 60);
+		await vi.runAllTimersAsync();
+
+		expect(FakeAudioContext.instances).toHaveLength(2);
+		expect(FakeAudioContext.instances[0].closed).toBe(true);
+		expect(FakeAudioContext.instances[1].closed).toBe(true);
+	});
+
+	it('falls back to HTML Audio when WebAudio decode fails', async () => {
+		FakeAudioContext.decodeShouldFail = true;
+		let htmlPlayed = false;
+		Object.defineProperty(window, 'Audio', {
+			configurable: true,
+			value: class {
+				preload = '';
+				volume = 0;
+				async play() {
+					htmlPlayed = true;
+				}
+			}
+		});
+
+		const { playUrl } = await import('./sound');
+		await playUrl('/streak/ddr/announcer/clip.mp3', 60);
+
+		expect(htmlPlayed).toBe(true);
+	});
+
+	it('does nothing when volume is zero', async () => {
+		const { playUrl } = await import('./sound');
+		await playUrl('/streak/ddr/announcer/clip.mp3', 0);
 
 		expect(FakeAudioContext.instances).toHaveLength(0);
 	});
