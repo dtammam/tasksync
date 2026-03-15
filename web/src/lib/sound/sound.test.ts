@@ -136,12 +136,14 @@ describe('playCompletion — fresh context per play', () => {
 		expect(FakeAudioContext.instances).toHaveLength(3);
 	});
 
-	it('closes the context after playback completes', async () => {
+	it('keeps context open during playback, closes only after duration elapses', async () => {
 		const { playCompletion } = await import('./sound');
 		await playCompletion(settings);
-		await vi.runAllTimersAsync();
 
 		expect(FakeAudioContext.instances).toHaveLength(1);
+		expect(FakeAudioContext.instances[0].closed).toBe(false);
+
+		await vi.runAllTimersAsync();
 		expect(FakeAudioContext.instances[0].closed).toBe(true);
 	});
 

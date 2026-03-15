@@ -79,14 +79,14 @@ There is no reliable Web API to determine whether an AudioContext will actually 
 
 ## Acceptance criteria
 
-- [ ] iOS standalone PWA plays audio after 5+ minutes of foreground idle
-- [ ] iOS standalone PWA plays audio after returning from lock screen
-- [ ] iOS standalone PWA plays audio after phone call interruption
-- [ ] macOS standalone PWA audio continues to work (no regression)
-- [ ] Desktop browser audio continues to work (no regression)
-- [ ] Completion sound onset stays < 20ms
-- [ ] All sound.test.ts tests pass (rewritten for new architecture)
-- [ ] No platform-specific detection code remains in sound.ts
+- [x] iOS standalone PWA plays audio after 5+ minutes of foreground idle
+- [x] iOS standalone PWA plays audio after returning from lock screen
+- [x] iOS standalone PWA plays audio after phone call interruption
+- [x] macOS standalone PWA audio continues to work (no regression)
+- [x] Desktop browser audio continues to work (no regression)
+- [x] Completion sound onset stays < 20ms
+- [x] All sound.test.ts tests pass (rewritten for new architecture)
+- [x] No platform-specific detection code remains in sound.ts
 
 ## Test plan
 
@@ -116,6 +116,8 @@ No data migration. Pure client-side behavior change. Ships with next web deploy.
 - 2026-03-14: Plan finalized — fresh context per play, delete all lifecycle machinery.
 - 2026-03-15: Implemented fresh-context-per-play, deleted all lifecycle/singleton code, rewrote tests. Committed as `e2413e6`.
 - 2026-03-15: **Post-deploy bug** — all sounds silent on iOS and macOS Edge. Root cause: `closeContext(ctx)` was called synchronously immediately after scheduling oscillators / starting buffer sources. WebAudio playback is asynchronous — `ctx.close()` tore down the context before audio could play. Fix: replaced `closeContext()` with `closeContextAfter(ctx, duration)` using setTimeout for oscillator themes (duration returned by `playTheme()`), and `source.onended` callback for buffer source playback. Tests updated with `vi.useFakeTimers()` + `vi.runAllTimersAsync()` to validate deferred cleanup.
+- 2026-03-15: Added temporal ordering test ("keeps context open during playback, closes only after duration elapses"). Added "Match cleanup semantics to the new architecture" design principle to CONTRIBUTING.md.
+- 2026-03-15: All acceptance criteria verified — iOS, macOS, desktop confirmed by manual testing. Plan complete.
 
 ## Decision log
 

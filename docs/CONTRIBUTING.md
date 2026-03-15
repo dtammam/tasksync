@@ -50,6 +50,9 @@ Use TypeScript `strict` mode; no `any` without justification. Avoid `@ts-nocheck
 ### Defensive async
 Guard against stale state in async operations. Don't fire-and-forget without error handling. Capture time-sensitive values once per operation.
 
+### Match cleanup semantics to the new architecture
+When refactoring from a shared/singleton pattern to a per-use pattern (or vice versa), re-examine every cleanup and teardown path. A singleton's cleanup means "prepare for next use"; a per-use object's cleanup means "wait until done, then discard." Carrying over the old cleanup semantics to the new architecture is a common source of silent breakage. Tests must verify *when* cleanup happens (temporal ordering), not just *that* it happens.
+
 ### Test coverage
 Every public method and exported function should have explicit test coverage. Untested surface area is unverified behavior.
 
