@@ -90,29 +90,17 @@ const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnre
 	if (!(await page.evaluate(() => !!navigator.serviceWorker?.controller))) {
 		await page.reload({ waitUntil: 'domcontentloaded' });
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-		// Wait for clients.claim() to fire rather than polling — the SW calls
-		// clients.claim() in its activate handler which triggers controllerchange.
-		const controlled = await page.evaluate(
-			() =>
-				new Promise<boolean>((resolve) => {
-					if (navigator.serviceWorker.controller) {
-						resolve(true);
-						return;
-					}
-					const timer = setTimeout(() => resolve(false), 20_000);
-					navigator.serviceWorker.addEventListener(
-						'controllerchange',
-						() => {
-							clearTimeout(timer);
-							resolve(true);
-						},
-						{ once: true }
-					);
-				})
-		);
-		if (!controlled) {
-			throw new Error('Service worker did not claim the page within 20 s.');
-		}
+		// Poll for controller — clients.claim() may fire before, during, or
+		// after reload so an event listener alone can miss the window.
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						() => !!navigator.serviceWorker?.controller
+					),
+				{ timeout: 20_000 }
+			)
+			.toBe(true);
 	}
 
 	return true;
