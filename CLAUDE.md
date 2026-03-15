@@ -107,7 +107,7 @@ Scripts live in `scripts/`. Check there before constructing ad-hoc commands.
 ## Exec plan ownership
 
 Active plans currently in progress:
-(none)
+- `docs/exec-plans/active/2026-03-15-readme-e2e-node24.md` — README refresh, flaky E2E fix, Node 24 CI update
 
 Completed plans:
 - `docs/exec-plans/completed/2026-03-14-ios-pwa-stale-audio.md` — Fix stale audio on iOS/macOS PWA: replace singleton AudioContext with fresh-context-per-play (complete 2026-03-15)

@@ -1,6 +1,6 @@
 # tasksync
 
-tasksync is a local-first, self-hosted task app built for fast daily use.
+A fast, offline-friendly task manager you host yourself.
 
 <p align="center">
     <img src="assets/images/tasksync_icon.png" alt="tasksync app icon" width="120">
@@ -9,100 +9,111 @@ tasksync is a local-first, self-hosted task app built for fast daily use.
 <table>
     <tr>
         <td align="center">
-            <img src="assets/images/desktop_example.png" alt="tasksync desktop view" width="620">
+            <img src="assets/images/desktop_example.png" alt="tasksync on a desktop browser" width="620">
         </td>
         <td align="center">
-            <img src="assets/images/iphone_example.png" alt="tasksync iPhone view" width="280">
+            <img src="assets/images/iphone_example.png" alt="tasksync on an iPhone" width="280">
         </td>
     </tr>
 </table>
 
-If Microsoft To Do or similar apps feel slow, this project is built for the opposite: open fast, act fast, sync safely.
+tasksync is a personal task app designed to open fast, work offline, and sync when a connection is available. It runs on your own server so your data stays with you.
 
-## What You Get
+## Features
 
-- Local-first behavior (works offline, syncs when available)
-- PWA-friendly experience on iPhone and desktop
-- Fast My Day workflow with recurrence, due dates, notes, and list views
-- Multi-user roles (`admin`, `contributor`) with server-side role enforcement
-- Admin backup/restore and simple Docker-based self-hosting
+- **Works offline** — tasks save to your device immediately. Changes sync to the server when you reconnect.
+- **Installable on your phone** — add it to your home screen like a native app (PWA).
+- **My Day workflow** — plan your day with recurring tasks, due dates, notes, and list views.
+- **Multi-user support** — invite others as contributors while keeping admin controls server-side.
+- **Backup and restore** — admin tools for exporting and importing your data.
+- **Self-hosted with Docker** — one `docker compose up` to get running.
 
-## Self-Hosting Quick Start
+## Quick Start (Docker)
 
-### 1. Prerequisites
+You'll need **Docker** and **Docker Compose** installed on your machine.
+If you don't have them yet, follow the [Docker install guide](https://docs.docker.com/get-docker/).
 
-- Docker + Docker Compose
+### 1. Download the project
 
-### 2. Configure `.env`
+```bash
+git clone https://github.com/dtammam/tasksync.git
+cd tasksync
+```
 
-Copy the example and edit it:
+### 2. Set up your environment file
+
+Copy the example configuration and open it in a text editor:
 
 ```bash
 cp .env.example .env
 ```
 
-At minimum, set these values in `.env`:
+Open `.env` and change these values:
 
-- `JWT_SECRET` to a long random secret
-- `SEED_ADMIN_PASSWORD` and `SEED_CONTRIB_PASSWORD`
-- Optional host ports: `SERVER_HOST_PORT`, `WEB_HOST_PORT`
-- Optional image channel: `TASKSYNC_IMAGE_TAG` (`latest` or `beta`)
+| Variable | What to put | Why |
+|----------|------------|-----|
+| `JWT_SECRET` | A long random string (32+ characters) | Secures login sessions |
+| `SEED_ADMIN_PASSWORD` | A password you'll remember | Your admin login |
+| `SEED_CONTRIB_PASSWORD` | A different password | Login for additional users |
 
-### 3. First deploy (with seed)
+The other values have sensible defaults. You can change the ports (`SERVER_HOST_PORT`, `WEB_HOST_PORT`) if they conflict with something else on your machine.
+
+### 3. Start it up (first time)
 
 ```bash
 docker compose pull
 COMPOSE_PROFILES=setup docker compose up -d
 ```
 
-This starts server + web and runs one-time seed data.
+This downloads the app images and creates two default accounts:
 
-Default seeded users:
+- **Admin:** `admin@example.com` with the password you set in `SEED_ADMIN_PASSWORD`
+- **Contributor:** `contrib@example.com` with the password you set in `SEED_CONTRIB_PASSWORD`
 
-- `admin@example.com` / value from `SEED_ADMIN_PASSWORD`
-- `contrib@example.com` / value from `SEED_CONTRIB_PASSWORD`
+### 4. Open the app
 
-### 4. Normal startup (no seed)
+- **Web app:** [http://localhost:5173](http://localhost:5173)
+- **API:** [http://localhost:3000](http://localhost:3000)
 
-After first deploy, run normally:
+(If you changed the port numbers in `.env`, use those instead.)
+
+### 5. Day-to-day usage
+
+After the first run, you don't need the setup profile. Just start normally:
 
 ```bash
 docker compose up -d
 ```
 
-### 5. Open the app
-
-- Web: `http://localhost:5173` (or your `WEB_HOST_PORT`)
-- API: `http://localhost:3000` (or your `SERVER_HOST_PORT`)
-
-## Operating Notes
-
-- Persistent DB data is stored in Docker volume `TASKSYNC_DATA_SOURCE` (default: `tasksync_data`).
-- If running behind a reverse proxy, set `VITE_API_URL` (often `/api`) and `VITE_ALLOWED_HOSTS`.
-- For multiple stacks (prod/beta), use different `TASKSYNC_DATA_SOURCE`, `SERVER_HOST_PORT`, and `WEB_HOST_PORT` values.
-- `main` publishes Docker images as `latest`; non-`main` branches publish `beta`.
-- To upgrade:
+To update to the latest version:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-- To stop:
+To stop:
 
 ```bash
 docker compose down
 ```
 
-## Local Dev (Optional)
+## Operating Notes
 
-### Prerequisites
+- Your database is stored in a Docker volume (`tasksync_data` by default). Your data persists across restarts and updates.
+- **Reverse proxy:** if you're putting tasksync behind nginx or Caddy, set `VITE_API_URL` (often `/api`) and `VITE_ALLOWED_HOSTS` in `.env`.
+- **Multiple environments:** to run separate prod/beta stacks, use different values for `TASKSYNC_DATA_SOURCE`, `SERVER_HOST_PORT`, and `WEB_HOST_PORT`.
+- **Image channels:** the `main` branch publishes Docker images as `latest`; other branches publish as `beta`. Set `TASKSYNC_IMAGE_TAG` in `.env` to choose.
 
-Before running from source or using the git hooks, install:
+## Developing Locally (Optional)
+
+This section is for people who want to modify the code or run tests. If you just want to use tasksync, the Docker setup above is all you need.
+
+### What you'll need
 
 - **Node.js 22+** — [nodejs.org](https://nodejs.org) or via [nvm](https://github.com/nvm-sh/nvm)
 - **Rust (stable)** — [rustup.rs](https://rustup.rs) (installs `cargo`, `rustfmt`, `clippy`)
-- **Playwright browsers** (for E2E tests) — run once after `npm install`:
+- **Playwright browsers** (for end-to-end tests) — run once after installing Node dependencies:
 
 ```bash
 cd web && npx playwright install --with-deps chromium
@@ -110,10 +121,14 @@ cd web && npx playwright install --with-deps chromium
 
 ### Running from source
 
+Start the server:
+
 ```bash
 cd server
 cargo run
 ```
+
+In a separate terminal, start the web app:
 
 ```bash
 cd web
@@ -121,9 +136,9 @@ npm install
 npm run dev
 ```
 
-### Git hooks (new host setup)
+### Git hooks
 
-The repo ships pre-commit and pre-push hooks in `hooks/`. They are not installed automatically — run this once after cloning on each new machine:
+The repo includes pre-commit and pre-push hooks for automated checks. Set them up once after cloning:
 
 ```bash
 ln -sf ../../hooks/pre-commit .git/hooks/pre-commit
@@ -131,16 +146,13 @@ ln -sf ../../hooks/pre-push .git/hooks/pre-push
 chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 ```
 
-The hooks source `~/.profile` and `~/.cargo/env` automatically to pick up `npm`/`node` and `cargo`. Install the prerequisites above first — the hooks will fail with `command not found` if either tool is missing.
-
-- **pre-commit:** lint, TypeScript check, Vitest units, `cargo fmt`, `cargo clippy`
-- **pre-push:** Vitest units, Playwright smoke (Chromium), `cargo test` — set `SKIP_PLAYWRIGHT=1` to bypass E2E locally
+What they check:
+- **Pre-commit:** linting, TypeScript types, unit tests (web), code formatting and lint (server)
+- **Pre-push:** unit tests, browser smoke tests (Chromium), server tests — set `SKIP_PLAYWRIGHT=1` to skip browser tests locally
 
 ## Project History
 
-- This started on 2026-01-31, and by 2026-02-08 it became a fully functional system with Docker images published and a complete transition off Microsoft To Do. Built with Codex + Cursor and a tight testing/linting loop.
-- Early milestone notes and roadmap are archived in `docs/exec-plans/completed/legacy-progress-and-roadmap.md`.
-- For deeper technical docs, start at `docs/index.md`.
+This project started on 2026-01-31 and became a fully functional system by 2026-02-08, with Docker images published and a complete transition off Microsoft To Do - updates since have been scratching itches as they come up, which can be followed in `docs/exec-plans/completed`. For deeper technical docs, start at `docs/index.md`.
 
 ## License
 
