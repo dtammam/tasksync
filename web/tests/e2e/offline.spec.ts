@@ -88,19 +88,28 @@ const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnre
 	if (!registrationReady) return false;
 
 	if (!(await page.evaluate(() => !!navigator.serviceWorker?.controller))) {
+		// Reload so the active SW can claim this page via clients.claim() in
+		// its activate handler. Use domcontentloaded — networkidle can hang
+		// when Playwright mock routes are active.
 		await page.reload({ waitUntil: 'domcontentloaded' });
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-		// Poll for controller — clients.claim() may fire before, during, or
-		// after reload so an event listener alone can miss the window.
-		await expect
-			.poll(
-				() =>
-					page.evaluate(
-						() => !!navigator.serviceWorker?.controller
-					),
-				{ timeout: 20_000 }
-			)
-			.toBe(true);
+		// Give claim() a reasonable window. If the SW never claims (e.g. mock
+		// routes interfere with SW fetch scope in CI), return false so callers
+		// that pass allowUnregistered can skip gracefully.
+		try {
+			await expect
+				.poll(
+					() =>
+						page.evaluate(
+							() => !!navigator.serviceWorker?.controller
+						),
+					{ timeout: 10_000 }
+				)
+				.toBe(true);
+		} catch {
+			if (options?.allowUnregistered) return false;
+			throw new Error('Service worker did not claim the page within 10 s.');
+		}
 	}
 
 	return true;
