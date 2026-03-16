@@ -90,13 +90,14 @@ const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnre
 	if (!(await page.evaluate(() => !!navigator.serviceWorker?.controller))) {
 		await page.reload({ waitUntil: 'domcontentloaded' });
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		// Poll for controller — clients.claim() may fire before, during, or
+		// after reload so an event listener alone can miss the window.
 		await expect
 			.poll(
 				() =>
-					page.evaluate(async () => {
-						const registration = await navigator.serviceWorker.getRegistration();
-						return !!registration?.active && !!navigator.serviceWorker?.controller;
-					}),
+					page.evaluate(
+						() => !!navigator.serviceWorker?.controller
+					),
 				{ timeout: 20_000 }
 			)
 			.toBe(true);
