@@ -110,6 +110,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-03-17-hide-completed-tasks.md` — Add "Show completed tasks" appearance toggle to hide completed sections on My Day and list views (complete 2026-03-17)
 - `docs/exec-plans/completed/2026-03-15-readme-e2e-node24.md` — README refresh, flaky E2E fix, Node 24 CI update (complete 2026-03-16)
 - `docs/exec-plans/completed/2026-03-14-ios-pwa-stale-audio.md` — Fix stale audio on iOS/macOS PWA: replace singleton AudioContext with fresh-context-per-play (complete 2026-03-15)
 - `docs/exec-plans/completed/2026-03-12-ui-polish-batch-1.md` — UI polish + fixes: list sort indicator (#036), color picker (#037), date chip (#038), review skill (#039), streak text position (#040) (complete 2026-03-13)

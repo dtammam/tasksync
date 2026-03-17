@@ -101,6 +101,7 @@ No migration needed. The field is additive with a safe default.
 
 - 2026-03-17: Plan created.
 - 2026-03-17: Implementation complete. All 6 files changed, 8 new tests added, all quality gates pass (lint, type-check, 254 unit tests).
+- 2026-03-17: Fixed toggle layout (checkbox inline with text) and persistence bug (server response was overwriting client-local field). All acceptance criteria met. Plan complete.
 
 ## Decision log
 
