@@ -320,6 +320,7 @@
 		</div>
 	</section>
 
+	{#if $uiPreferences.showCompleted}
 	<section class="block">
 		<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
 		<div class="stack" data-testid="completed-section">
@@ -334,6 +335,7 @@
 			{/if}
 		</div>
 	</section>
+	{/if}
 </div>
 
 <SuggestionPanel

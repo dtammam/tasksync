@@ -213,3 +213,113 @@ describe('ui preferences — setters and hydration', () => {
 		expect(uiPreferences.get().font).toBe('sora');
 	});
 });
+
+describe('ui preferences — showCompleted', () => {
+	beforeEach(() => {
+		vi.useRealTimers();
+		localStorage.clear();
+		vi.clearAllMocks();
+		mocks.auth.get.mockReturnValue({
+			status: 'authenticated',
+			user: { space_id: 's1', user_id: 'u-admin' }
+		});
+		uiPreferences.setAll(
+			{
+				theme: 'default',
+				font: 'sora',
+				completionQuotes: [],
+				sidebarPanels: defaultSidebarPanels,
+				listSort: { mode: 'created', direction: 'asc' },
+				streakSettings: { enabled: false, theme: 'ddr', resetMode: 'daily' },
+				showCompleted: true
+			},
+			{ queueRemote: false }
+		);
+	});
+
+	it('defaults to true', () => {
+		expect(uiPreferences.get().showCompleted).toBe(true);
+	});
+
+	it('setShowCompleted toggles to false and persists', () => {
+		uiPreferences.setShowCompleted(false);
+		expect(uiPreferences.get().showCompleted).toBe(false);
+
+		const raw = localStorage.getItem('tasksync:ui-preferences:s1:u-admin');
+		const stored = JSON.parse(raw ?? '{}') as { showCompleted?: boolean };
+		expect(stored.showCompleted).toBe(false);
+	});
+
+	it('setShowCompleted toggles back to true', () => {
+		uiPreferences.setShowCompleted(false);
+		uiPreferences.setShowCompleted(true);
+		expect(uiPreferences.get().showCompleted).toBe(true);
+	});
+
+	it('hydrateFromLocal preserves showCompleted: false', () => {
+		localStorage.setItem(
+			'tasksync:ui-preferences:s1:u-admin',
+			JSON.stringify({
+				theme: 'default',
+				font: 'sora',
+				completionQuotes: [],
+				sidebarPanels: defaultSidebarPanels,
+				listSort: { mode: 'created', direction: 'asc' },
+				streakSettings: { enabled: false, theme: 'ddr', resetMode: 'daily' },
+				showCompleted: false
+			})
+		);
+		uiPreferences.hydrateFromLocal();
+		expect(uiPreferences.get().showCompleted).toBe(false);
+	});
+
+	it('hydrateFromLocal defaults to true when field is missing (backward compat)', () => {
+		localStorage.setItem(
+			'tasksync:ui-preferences:s1:u-admin',
+			JSON.stringify({
+				theme: 'default',
+				font: 'sora',
+				completionQuotes: [],
+				sidebarPanels: defaultSidebarPanels,
+				listSort: { mode: 'created', direction: 'asc' },
+				streakSettings: { enabled: false, theme: 'ddr', resetMode: 'daily' }
+			})
+		);
+		uiPreferences.hydrateFromLocal();
+		expect(uiPreferences.get().showCompleted).toBe(true);
+	});
+
+	it('hydrateFromServer reads showCompleted from wire format', async () => {
+		mocks.api.getUiPreferences.mockResolvedValue({
+			theme: 'dark',
+			showCompleted: false
+		});
+		await uiPreferences.hydrateFromServer();
+		expect(uiPreferences.get().showCompleted).toBe(false);
+	});
+
+	it('hydrateFromServer defaults to true when showCompleted missing from wire', async () => {
+		mocks.api.getUiPreferences.mockResolvedValue({
+			theme: 'dark'
+		});
+		await uiPreferences.hydrateFromServer();
+		expect(uiPreferences.get().showCompleted).toBe(true);
+	});
+
+	it('setShowCompleted queues remote save', async () => {
+		vi.useFakeTimers();
+		mocks.api.updateUiPreferences.mockResolvedValue({
+			theme: 'default',
+			showCompleted: false
+		});
+
+		uiPreferences.setShowCompleted(false);
+		vi.advanceTimersByTime(300);
+		await Promise.resolve();
+
+		expect(mocks.api.updateUiPreferences).toHaveBeenCalledTimes(1);
+		expect(mocks.api.updateUiPreferences).toHaveBeenCalledWith(
+			expect.objectContaining({ showCompleted: false })
+		);
+	});
+});
