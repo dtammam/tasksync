@@ -1700,6 +1700,12 @@
 		color: var(--app-text);
 	}
 
+	.appearance label.toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+	}
+
 	input,
 	select {
 		background: linear-gradient(180deg, var(--surface-1), var(--surface-2));

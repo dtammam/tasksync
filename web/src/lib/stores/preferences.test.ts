@@ -289,16 +289,16 @@ describe('ui preferences — showCompleted', () => {
 		expect(uiPreferences.get().showCompleted).toBe(true);
 	});
 
-	it('hydrateFromServer reads showCompleted from wire format', async () => {
+	it('hydrateFromServer preserves local showCompleted (server does not persist this field)', async () => {
+		uiPreferences.setShowCompleted(false);
 		mocks.api.getUiPreferences.mockResolvedValue({
-			theme: 'dark',
-			showCompleted: false
+			theme: 'dark'
 		});
 		await uiPreferences.hydrateFromServer();
 		expect(uiPreferences.get().showCompleted).toBe(false);
 	});
 
-	it('hydrateFromServer defaults to true when showCompleted missing from wire', async () => {
+	it('hydrateFromServer keeps showCompleted true when locally true', async () => {
 		mocks.api.getUiPreferences.mockResolvedValue({
 			theme: 'dark'
 		});

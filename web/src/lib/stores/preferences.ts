@@ -275,6 +275,8 @@ const pushRemote = async (prefs: UiPreferences) => {
 	try {
 		const updated = await api.updateUiPreferences(toWire(prefs));
 		const normalized = fromWire(updated);
+		// Preserve client-only fields that the server doesn't persist yet.
+		normalized.showCompleted = prefs.showCompleted;
 		preferencesStore.set(normalized);
 		persist(normalized);
 	} catch {
@@ -421,6 +423,9 @@ export const uiPreferences = {
 				warnInvalidField('font', remote.font, 'server');
 			}
 			const normalized = fromWire(remote);
+			// Preserve client-only fields the server doesn't persist yet.
+			const local = get(preferencesStore);
+			normalized.showCompleted = local.showCompleted;
 			hydrateGuard.bump();
 			preferencesStore.set(normalized);
 			persist(normalized);
