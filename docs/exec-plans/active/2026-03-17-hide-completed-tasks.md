@@ -100,6 +100,7 @@ No migration needed. The field is additive with a safe default.
 ## Progress log
 
 - 2026-03-17: Plan created.
+- 2026-03-17: Implementation complete. All 6 files changed, 8 new tests added, all quality gates pass (lint, type-check, 254 unit tests).
 
 ## Decision log
 
