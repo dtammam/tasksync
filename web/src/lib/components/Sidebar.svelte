@@ -1092,6 +1092,15 @@
 									{/each}
 								</select>
 							</label>
+							<label class="toggle">
+								<input
+									type="checkbox"
+									data-testid="show-completed-toggle"
+									checked={$uiPreferences.showCompleted}
+									on:change={(e) => uiPreferences.setShowCompleted((e.currentTarget as HTMLInputElement).checked)}
+								/>
+								Show completed tasks
+							</label>
 						</div>
 					{:else if settingsActiveSection === 'quotes'}
 						<div class="card quotes" data-testid="quotes-panel">
@@ -1689,6 +1698,12 @@
 		gap: 4px;
 		font-size: var(--text-sm);
 		color: var(--app-text);
+	}
+
+	.appearance label.toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
 	}
 
 	input,

@@ -31,6 +31,10 @@ Within `web/src/lib/`:
   - `light` = `Plain White Light`
   - `dark` = `Discernable Dark`
   - `demo-theme` is retired and must not appear in selectable theme options.
+- Appearance panel includes a "Show completed tasks" toggle (`showCompleted` in `UiPreferences`):
+  - Default: `true` (completed sections visible — preserves existing behavior).
+  - When `false`, the "Completed" section is hidden on My Day and all list views.
+  - Client-local only (localStorage); not yet persisted server-side (no DB column). The preference store preserves the local value through `pushRemote` and `hydrateFromServer` roundtrips.
 
 ## In-app notifications
 

@@ -210,6 +210,7 @@
 	</div>
 </section>
 
+{#if $uiPreferences.showCompleted}
 <section class="block">
 	<div class="section-title">Completed</div>
 	<div class="stack" data-testid="completed-section">
@@ -224,6 +225,7 @@
 		{/if}
 	</div>
 </section>
+{/if}
 
 {#if importOpen}
 	<ImportTasksModal

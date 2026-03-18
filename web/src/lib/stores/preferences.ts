@@ -51,7 +51,8 @@ const defaultPreferences = (): UiPreferences => ({
 	completionQuotes: [],
 	sidebarPanels: defaultPanels(),
 	listSort: defaultListSort(),
-	streakSettings: defaultStreakSettings()
+	streakSettings: defaultStreakSettings(),
+	showCompleted: true
 });
 
 const validThemes: UiTheme[] = [
@@ -169,7 +170,8 @@ const toWire = (prefs: UiPreferences): UiPreferencesWire => ({
 	completionQuotesJson: JSON.stringify(prefs.completionQuotes),
 	sidebarPanelsJson: JSON.stringify(prefs.sidebarPanels),
 	listSortJson: JSON.stringify(prefs.listSort),
-	streakSettingsJson: JSON.stringify(prefs.streakSettings)
+	streakSettingsJson: JSON.stringify(prefs.streakSettings),
+	showCompleted: prefs.showCompleted
 });
 
 const fromWire = (wire: Partial<UiPreferencesWire>): UiPreferences => ({
@@ -184,7 +186,8 @@ const fromWire = (wire: Partial<UiPreferencesWire>): UiPreferences => ({
 	listSort: parseListSortJson(typeof wire.listSortJson === 'string' ? wire.listSortJson : undefined),
 	streakSettings: parseStreakSettingsJson(
 		typeof wire.streakSettingsJson === 'string' ? wire.streakSettingsJson : undefined
-	)
+	),
+	showCompleted: typeof wire.showCompleted === 'boolean' ? wire.showCompleted : true
 });
 
 const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;
@@ -219,7 +222,8 @@ const readLocal = (): UiPreferences | null => {
 			completionQuotes: normalizeCompletionQuotes(parsed.completionQuotes),
 			sidebarPanels: normalizePanels(parsed.sidebarPanels),
 			listSort: normalizeListSort(parsed.listSort as Partial<ListSortPreference> | undefined),
-			streakSettings: normalizeStreakSettings(parsed.streakSettings)
+			streakSettings: normalizeStreakSettings(parsed.streakSettings),
+			showCompleted: typeof parsed.showCompleted === 'boolean' ? parsed.showCompleted : true
 		};
 	} catch {
 		return null;
@@ -271,6 +275,8 @@ const pushRemote = async (prefs: UiPreferences) => {
 	try {
 		const updated = await api.updateUiPreferences(toWire(prefs));
 		const normalized = fromWire(updated);
+		// Preserve client-only fields that the server doesn't persist yet.
+		normalized.showCompleted = prefs.showCompleted;
 		preferencesStore.set(normalized);
 		persist(normalized);
 	} catch {
@@ -370,6 +376,15 @@ export const uiPreferences = {
 			return next;
 		});
 	},
+	setShowCompleted(show: boolean) {
+		hydrateGuard.bump();
+		preferencesStore.update((current) => {
+			const next = { ...current, showCompleted: show };
+			persist(next);
+			queueRemoteSave(next);
+			return next;
+		});
+	},
 	setAll(next: Partial<UiPreferences>, options?: { queueRemote?: boolean }) {
 		const normalized = {
 			theme: normalizeTheme(next.theme as string | undefined),
@@ -377,7 +392,8 @@ export const uiPreferences = {
 			completionQuotes: normalizeCompletionQuotes(next.completionQuotes),
 			sidebarPanels: normalizePanels(next.sidebarPanels),
 			listSort: normalizeListSort(next.listSort),
-			streakSettings: normalizeStreakSettings(next.streakSettings)
+			streakSettings: normalizeStreakSettings(next.streakSettings),
+			showCompleted: typeof next.showCompleted === 'boolean' ? next.showCompleted : true
 		};
 		hydrateGuard.bump();
 		preferencesStore.set(normalized);
@@ -407,6 +423,9 @@ export const uiPreferences = {
 				warnInvalidField('font', remote.font, 'server');
 			}
 			const normalized = fromWire(remote);
+			// Preserve client-only fields the server doesn't persist yet.
+			const local = get(preferencesStore);
+			normalized.showCompleted = local.showCompleted;
 			hydrateGuard.bump();
 			preferencesStore.set(normalized);
 			persist(normalized);

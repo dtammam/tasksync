@@ -85,6 +85,7 @@ export interface UiPreferences {
 	sidebarPanels: SidebarPanelState;
 	listSort: ListSortPreference;
 	streakSettings: StreakSettings;
+	showCompleted: boolean;
 }
 
 export type StreakTheme = 'ddr' | 'thps';
@@ -112,4 +113,5 @@ export interface UiPreferencesWire {
 	listSortJson?: string;
 	streakSettingsJson?: string;
 	streakStateJson?: string;
+	showCompleted?: boolean;
 }

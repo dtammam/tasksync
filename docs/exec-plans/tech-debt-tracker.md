@@ -11,7 +11,7 @@ Rules:
 
 | ID | Area | Severity | Summary | Owner | Next action |
 |---:|------|----------|---------|-------|-------------|
-(none — all items closed)
+| 041 | Store | Low | `showCompleted` preference is client-local only (localStorage); add server-side DB column + Rust handler so it syncs cross-device | unassigned | Add `show_completed` column to `user` table, wire through `auth_update_preferences` / `load_ui_preferences_for_user`, remove client-side preservation workaround in `pushRemote` / `hydrateFromServer` |
 
 ## Closed
 
