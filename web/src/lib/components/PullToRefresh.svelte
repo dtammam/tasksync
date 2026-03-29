@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
-	import { scale } from 'svelte/transition';
 	import {
-		PULL_EMOJIS,
-		computeEmojiIndex,
+		pickRandomPullEmoji,
 		applyPullDamping,
-		meetsRefreshThreshold
+		meetsRefreshThreshold,
+		REFRESH_EMOJI
 	} from './pullToRefreshUtils';
 
 	// ── Props ──────────────────────────────────────────────────────────────────
@@ -31,7 +30,7 @@
 
 	// ── Constants ──────────────────────────────────────────────────────────────
 
-	/** Pixel height of the pull indicator overlay. */
+	/** Pixel height of the pull indicator. */
 	const INDICATOR_HEIGHT = 56;
 
 	// ── Gesture state ──────────────────────────────────────────────────────────
@@ -39,7 +38,7 @@
 	/** Root element bound via bind:this; used to locate the <main> scroll container. */
 	let containerEl: HTMLDivElement;
 
-	/** Damped pull distance driven by touchmove; drives indicator position + emoji. */
+	/** Damped pull distance driven by touchmove; drives content translation + emoji. */
 	let pullDistance = 0;
 
 	/** True while a downward pull from scrollTop===0 is being tracked. */
@@ -48,11 +47,18 @@
 	/** True while a sync is in flight; blocks new gestures. */
 	let isRefreshing = false;
 
-	/** clientY of the initial touchstart contact. */
+	/** clientY recorded at touchstart (rebased to first qualifying touchmove). */
 	let startTouchY = 0;
 
-	/** True until the first touchmove direction has been evaluated. */
-	let isFirstMove = true;
+	/**
+	 * True after touchstart until the first touchmove resolves whether to track.
+	 * Allows the component to defer the scrollTop guard to touchmove so a gesture
+	 * can begin at the top of the scroll container even after partial scrolling.
+	 */
+	let pendingGesture = false;
+
+	/** Emoji picked once when tracking activates; stays fixed for the full gesture. */
+	let gestureEmoji = '';
 
 	// ── UI state ───────────────────────────────────────────────────────────────
 
@@ -62,43 +68,32 @@
 	/** Whether the user has prefers-reduced-motion enabled. */
 	let reducedMotion = false;
 
-	/** Enables CSS transitions on the indicator (retract after pull or after refresh). */
+	/** Enables CSS transitions on indicator + content (retract after pull or after refresh). */
 	let animateOut = false;
 
 	// ── Pending timer IDs (cleared on destroy to avoid stale-closure writes) ──
 
-	/** Timer that clears the animateOut flag after the retract transition. */
+	/** Timer that clears the animateOut flag after the retract transition completes. */
 	let animateOutTimer: ReturnType<typeof setTimeout> | null = null;
 
-	/** Timer that clears the aria-live statusMessage after screen readers have had time to announce it. */
+	/** Timer that clears the aria-live statusMessage after screen readers have announced it. */
 	let statusClearTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// ── Derived / reactive ─────────────────────────────────────────────────────
 
-	$: emojiIndex = computeEmojiIndex(pullDistance, threshold);
-
 	/**
-	 * Key for the {#key} block that drives emoji swap transitions.
-	 * -1 locks to the refreshing emoji; 0 is used for reduced-motion mode
-	 * so the static emoji never animates.
+	 * How far down the page content should be translated.
+	 * Proportional to pull progress (capped at INDICATOR_HEIGHT) during a gesture;
+	 * held at INDICATOR_HEIGHT while refreshing; 0 at rest.
 	 */
-	$: keyedIndex = isRefreshing ? -1 : reducedMotion ? 0 : emojiIndex;
+	$: contentTranslateY = isRefreshing
+		? INDICATOR_HEIGHT
+		: isTracking
+			? Math.min((pullDistance / threshold) * INDICATOR_HEIGHT, INDICATOR_HEIGHT)
+			: 0;
 
-	/** Emoji to display: hourglass while refreshing, recycle for reduced motion, else cycling. */
-	$: currentEmoji = isRefreshing
-		? '⏳'
-		: reducedMotion
-			? '🔄'
-			: PULL_EMOJIS[Math.max(0, emojiIndex)];
-
-	/**
-	 * Indicator translateY: slides from -INDICATOR_HEIGHT (hidden above) to 0 (fully visible).
-	 * Clamped so it never pushes below its natural position during over-pull.
-	 * Stays at 0 while refreshing.
-	 */
-	$: translateY = isRefreshing
-		? 0
-		: Math.min((pullDistance / threshold - 1) * INDICATOR_HEIGHT, 0);
+	/** Emoji to display: hourglass while refreshing, recycle for reduced motion, else gesture emoji. */
+	$: currentEmoji = isRefreshing ? REFRESH_EMOJI : reducedMotion ? '🔄' : gestureEmoji || '🔄';
 
 	/** Indicator opacity: fades from 0 to 1 as pull approaches threshold. */
 	$: indicatorOpacity = isRefreshing ? 1 : Math.min(pullDistance / threshold, 1);
@@ -107,7 +102,7 @@
 
 	/**
 	 * Return the nearest <main> ancestor used as the scroll container.
-	 * Reads scrollTop once per gesture (on touchstart) to avoid per-frame layout reads.
+	 * Called on touchmove (not touchstart) so partial-scroll-then-pull works correctly.
 	 */
 	function getScrollContainer(): HTMLElement | null {
 		if (!containerEl) return null;
@@ -117,64 +112,89 @@
 
 	// ── Touch event handlers ───────────────────────────────────────────────────
 
+	/**
+	 * Record the initial touch position and enter pending-gesture mode.
+	 * The scrollTop guard is deferred to touchmove so the gesture can activate
+	 * seamlessly once the user scrolls to the top.
+	 * Must be registered as a passive listener (no preventDefault needed here).
+	 */
 	function handleTouchStart(event: TouchEvent): void {
-		// Ignore new gestures while a sync is in flight.
 		if (isRefreshing) {
 			isTracking = false;
 			return;
 		}
 
-		// Scroll guard: only track if the scroll container is at the very top.
-		const main = getScrollContainer();
-		const scrollTop = main ? main.scrollTop : 0;
-		if (scrollTop > 0) {
-			isTracking = false;
-			return;
-		}
-
-		isTracking = true;
-		isFirstMove = true;
 		startTouchY = event.touches[0].clientY;
+		pendingGesture = true;
+		isTracking = false;
 		pullDistance = 0;
 		animateOut = false;
 	}
 
+	/**
+	 * Resolve pending gesture or accumulate pull distance.
+	 *
+	 * When pendingGesture is set, check whether conditions are met to begin
+	 * tracking (scroll container at top and finger moving downward). On the
+	 * first qualifying touchmove, startTouchY is rebased to the current position
+	 * and a single gesture emoji is chosen — it stays fixed for the entire drag.
+	 *
+	 * Once isTracking, accumulate damped pull distance and suppress native scroll.
+	 * Must be registered as a non-passive listener so preventDefault is available.
+	 */
 	function handleTouchMove(event: TouchEvent): void {
-		if (!isTracking) return;
+		if (!pendingGesture && !isTracking) return;
 
 		const currentY = event.touches[0].clientY;
-		const rawDelta = currentY - startTouchY;
 
-		// On the first move, abort if the gesture is upward or sideways.
-		if (isFirstMove) {
-			isFirstMove = false;
-			if (rawDelta <= 0) {
-				isTracking = false;
+		if (pendingGesture && !isTracking) {
+			const main = getScrollContainer();
+			const scrollTop = main ? main.scrollTop : 0;
+
+			if (scrollTop <= 0 && currentY > startTouchY) {
+				// Rebase so pull distance is measured from tracking activation point.
+				isTracking = true;
+				pendingGesture = false;
+				startTouchY = currentY;
+				gestureEmoji = pickRandomPullEmoji();
+				event.preventDefault(); // Claim the gesture so Chromium does not classify it as a scroll.
+			} else if (scrollTop > 0) {
+				// Container is scrolled — allow normal scroll, keep pending.
 				return;
+			} else {
+				// Finger moving up or horizontally — cancel gesture.
+				pendingGesture = false;
 			}
+			// Don't accumulate pull distance on the activation event itself.
+			return;
 		}
 
-		// If the user pulls back above the start point, retract to 0.
+		// isTracking is true here.
+		const rawDelta = currentY - startTouchY;
+
 		if (rawDelta <= 0) {
 			event.preventDefault();
 			pullDistance = 0;
 			return;
 		}
 
-		// Suppress native scroll while the indicator is showing.
 		event.preventDefault();
-
 		pullDistance = applyPullDamping(rawDelta);
 	}
 
+	/**
+	 * Settle the gesture: either trigger a refresh or retract the indicator.
+	 */
 	function handleTouchEnd(): void {
+		pendingGesture = false;
+
 		if (!isTracking) return;
 		isTracking = false;
 
 		if (meetsRefreshThreshold(pullDistance, threshold)) {
 			void doRefresh().catch((err: unknown) => console.error('doRefresh failed', err));
 		} else {
-			// Retract the indicator with a CSS transition.
+			// Retract the content and indicator with a CSS transition.
 			animateOut = true;
 			pullDistance = 0;
 			if (animateOutTimer !== null) clearTimeout(animateOutTimer);
@@ -183,6 +203,23 @@
 				animateOutTimer = null;
 			}, 300);
 		}
+	}
+
+	/**
+	 * Cancel the gesture cleanly without triggering a refresh.
+	 * Called when the browser cancels the touch (e.g. incoming call, gesture conflict).
+	 */
+	function handleTouchCancel(): void {
+		pendingGesture = false;
+		if (!isTracking) return;
+		isTracking = false;
+		animateOut = true;
+		pullDistance = 0;
+		if (animateOutTimer !== null) clearTimeout(animateOutTimer);
+		animateOutTimer = setTimeout(() => {
+			animateOut = false;
+			animateOutTimer = null;
+		}, 300);
 	}
 
 	// ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -202,12 +239,14 @@
 		containerEl.addEventListener('touchstart', handleTouchStart, { passive: true });
 		containerEl.addEventListener('touchmove', handleTouchMove, { passive: false });
 		containerEl.addEventListener('touchend', handleTouchEnd);
+		containerEl.addEventListener('touchcancel', handleTouchCancel);
 
 		return () => {
 			mql.removeEventListener('change', handleMqlChange);
 			containerEl.removeEventListener('touchstart', handleTouchStart);
 			containerEl.removeEventListener('touchmove', handleTouchMove);
 			containerEl.removeEventListener('touchend', handleTouchEnd);
+			containerEl.removeEventListener('touchcancel', handleTouchCancel);
 		};
 	});
 
@@ -215,7 +254,7 @@
 
 	/**
 	 * Enter refreshing state, dispatch the `refresh` event, await the promise
-	 * set by the parent, then animate the indicator out.
+	 * set by the parent, then animate the indicator and content back to rest.
 	 */
 	async function doRefresh(): Promise<void> {
 		if (isRefreshing) return;
@@ -236,10 +275,11 @@
 			console.warn('PullToRefresh: sync failed', err);
 			statusMessage = 'Refresh failed';
 		} finally {
-			// Animate indicator out via CSS transition.
+			// Animate content and indicator back to rest via CSS transition.
 			animateOut = true;
 			isRefreshing = false;
-			// Remove transition class once the animation completes.
+			// pullDistance is already 0; setting again drives contentTranslateY to 0.
+			pullDistance = 0;
 			if (animateOutTimer !== null) clearTimeout(animateOutTimer);
 			animateOutTimer = setTimeout(() => {
 				animateOut = false;
@@ -254,6 +294,7 @@
 		}
 	}
 
+	/** Trigger a refresh from the accessible button. */
 	function handleRefreshButton(): void {
 		void doRefresh().catch((err: unknown) => console.error('doRefresh failed', err));
 	}
@@ -274,23 +315,21 @@
 
 <div class="ptr-wrap" bind:this={containerEl}>
 	<!--
-		Pull indicator: fixed overlay animated with transform + opacity only.
-		touch-action: none prevents browser gesture interference while visible.
+		Pull indicator: absolute, sits at the top of ptr-wrap.
+		Revealed by content translating down; only opacity is animated.
+		touch-action: none prevents browser gesture interpretation while active.
 	-->
 	<div
 		class="ptr-indicator"
 		class:ptr-animate={animateOut}
 		class:ptr-reduced={reducedMotion}
-		style="transform: translateY({translateY}px); opacity: {indicatorOpacity};"
+		style="opacity: {indicatorOpacity};"
 		aria-hidden="true"
 	>
-		{#key keyedIndex}
-			<span
-				class="ptr-emoji"
-				class:ptr-spin={isRefreshing && !reducedMotion}
-				in:scale={{ duration: reducedMotion ? 0 : 150, start: 1.2, opacity: 1 }}
-			>{currentEmoji}</span>
-		{/key}
+		<span
+			class="ptr-emoji"
+			class:ptr-spin={isRefreshing && !reducedMotion}
+		>{currentEmoji}</span>
 	</div>
 
 	<!--
@@ -310,7 +349,17 @@
 	<!-- Visually hidden region that announces sync result to screen readers. -->
 	<span class="ptr-sr-only" aria-live="polite">{statusMessage}</span>
 
-	<slot />
+	<!--
+		Content wrapper: translates down to reveal the indicator during a pull.
+		ptr-animate enables the CSS transition for the retract animation.
+	-->
+	<div
+		class="ptr-content"
+		class:ptr-animate={animateOut}
+		style="transform: translateY({contentTranslateY}px);"
+	>
+		<slot />
+	</div>
 </div>
 
 <style>
@@ -321,33 +370,28 @@
 	}
 
 	/*
-	 * Fixed overlay below the app header.
-	 * Only transform and opacity are animated — no layout properties change.
-	 * will-change hints the compositor to promote this layer.
+	 * Indicator sits at the top of ptr-wrap (position: absolute).
+	 * Content translates down to reveal it — the indicator never moves.
+	 * Only opacity is animated; no layout properties change.
 	 */
 	.ptr-indicator {
-		position: fixed;
-		top: 56px;
+		position: absolute;
+		top: 0;
 		left: 0;
 		right: 0;
 		height: 56px;
-		z-index: 150;
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		pointer-events: none;
-		/* Prevent browser gesture interpretation while the overlay is active. */
 		touch-action: none;
-		will-change: transform, opacity;
-		/* No transition during active pull (for immediate, jank-free response). */
+		will-change: opacity;
 		transition: none;
 	}
 
-	/* Enable CSS transition for retract-after-pull and dismiss-after-refresh. */
+	/* Enable opacity transition for retract-after-pull and dismiss-after-refresh. */
 	.ptr-indicator.ptr-animate {
-		transition:
-			transform 0.3s ease,
-			opacity 0.3s ease;
+		transition: opacity 0.3s ease;
 	}
 
 	/* Reduced-motion: never transition. */
@@ -371,6 +415,21 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+
+	/*
+	 * Content wrapper: translates down during pull gesture to reveal the indicator.
+	 * Only transform is animated — no layout properties change.
+	 * will-change promotes this element to its own compositor layer.
+	 */
+	.ptr-content {
+		will-change: transform;
+		transition: none;
+	}
+
+	/* Enable transform transition for the retract animation. */
+	.ptr-content.ptr-animate {
+		transition: transform 0.3s ease;
 	}
 
 	/*
@@ -420,4 +479,5 @@
 		white-space: nowrap;
 		border: 0;
 	}
+
 </style>

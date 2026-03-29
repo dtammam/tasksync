@@ -53,7 +53,15 @@ test('pull-to-refresh gesture triggers sync @smoke', async ({ page }) => {
 		touchPoints: [touchPoint(cx, pullY)]
 	});
 
-	// (5) Indicator should be fully visible while held past threshold.
+	// (5a) Content wrapper must be translated down while the gesture is held.
+	// pullDistance ≈ 80px (160px raw × 0.5 damping), threshold = 64px →
+	// contentTranslateY = min((80/64)*56, 56) = 56px.
+	const content = page.locator('.ptr-content');
+	const style = await content.getAttribute('style');
+	expect(style).toContain('translateY(');
+	expect(style).not.toContain('translateY(0px)');
+
+	// (5b) Indicator should be fully visible while held past threshold.
 	// toHaveCSS retries with the configured expect.timeout (10 s), giving
 	// Svelte plenty of time to flush reactive updates to the DOM.
 	await expect(indicator).toHaveCSS('opacity', '1');

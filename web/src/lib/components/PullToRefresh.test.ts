@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import {
 	PULL_EMOJIS,
-	computeEmojiIndex,
+	REFRESH_EMOJI,
+	pickRandomPullEmoji,
 	applyPullDamping,
 	meetsRefreshThreshold,
 	PULL_DAMPING,
@@ -12,34 +13,30 @@ import PullToRefresh from './PullToRefresh.svelte';
 
 // ── Pure utility tests ─────────────────────────────────────────────────────
 
-describe('computeEmojiIndex', () => {
-	const threshold = 64;
+describe('REFRESH_EMOJI', () => {
+	it('is the hourglass emoji reserved for the refreshing/loading state', () => {
+		expect(REFRESH_EMOJI).toBe('⏳');
+	});
+});
 
-	it('returns 0 at pull distance 0', () => {
-		expect(computeEmojiIndex(0, threshold)).toBe(0);
+describe('pickRandomPullEmoji', () => {
+	it('returns a value that is a member of PULL_EMOJIS', () => {
+		const result = pickRandomPullEmoji();
+		expect(PULL_EMOJIS).toContain(result);
 	});
 
-	it('returns last emoji index at pull distance equal to threshold', () => {
-		expect(computeEmojiIndex(threshold, threshold)).toBe(PULL_EMOJIS.length - 1);
-	});
-
-	it('returns increasing indices as pull distance increases across bands', () => {
-		const bandSize = threshold / (PULL_EMOJIS.length - 1);
-		for (let i = 0; i < PULL_EMOJIS.length; i++) {
-			const dist = bandSize * i;
-			expect(computeEmojiIndex(dist, threshold)).toBe(i);
+	it('never returns the hourglass emoji (reserved for the refreshing state)', () => {
+		for (let i = 0; i < 100; i++) {
+			expect(pickRandomPullEmoji()).not.toBe('⏳');
 		}
 	});
 
-	it('clamps to last emoji index when pull distance exceeds threshold', () => {
-		expect(computeEmojiIndex(threshold * 2, threshold)).toBe(PULL_EMOJIS.length - 1);
-		expect(computeEmojiIndex(threshold * 10, threshold)).toBe(PULL_EMOJIS.length - 1);
-	});
-
-	it('returns second-to-last index just below threshold and last index at threshold', () => {
-		// Just below threshold the second-to-last emoji should show; at threshold the last.
-		expect(computeEmojiIndex(threshold - 0.001, threshold)).toBeLessThan(PULL_EMOJIS.length - 1);
-		expect(computeEmojiIndex(threshold, threshold)).toBe(PULL_EMOJIS.length - 1);
+	it('returns different values over many calls (confirms randomness, not a constant)', () => {
+		const results = new Set<string>();
+		for (let i = 0; i < 100; i++) {
+			results.add(pickRandomPullEmoji());
+		}
+		expect(results.size).toBeGreaterThan(1);
 	});
 });
 
@@ -202,7 +199,7 @@ function makeTouchEvent(
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSDOM touch shim
 	const touch = { identifier: 1, target, clientX: 0, clientY, pageX: 0, pageY: clientY, screenX: 0, screenY: clientY, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 } as any;
 	return new TouchEvent(type, {
-		touches: type === 'touchend' ? [] : [touch],
+		touches: type === 'touchend' || type === 'touchcancel' ? [] : [touch],
 		changedTouches: [touch],
 		bubbles: true,
 		cancelable: true
@@ -222,9 +219,10 @@ describe('PullToRefresh touch gesture', () => {
 		});
 		const wrap = container.firstElementChild as HTMLElement;
 
-		// Pull only 10px raw (5px after damping) — well below 64px threshold.
+		// touchmove at y=110 activates tracking (startTouchY rebased to 110), then
+		// touchend fires with pullDistance still 0 — well below 64px threshold.
 		await fireEvent(wrap, makeTouchEvent('touchstart', 100, wrap));
-		await fireEvent(wrap, makeTouchEvent('touchmove', 110, wrap)); // +10px raw → 5px damped
+		await fireEvent(wrap, makeTouchEvent('touchmove', 110, wrap)); // activates tracking
 		await fireEvent(wrap, makeTouchEvent('touchend', 110, wrap));
 
 		expect(dispatched).toBe(false);
@@ -238,10 +236,12 @@ describe('PullToRefresh touch gesture', () => {
 		});
 		const wrap = container.firstElementChild as HTMLElement;
 
-		// Pull 200px raw → 100px damped → exceeds 64px threshold.
+		// First touchmove activates tracking and rebases startTouchY to 10.
+		// Second touchmove moves 200px from the rebased origin → 100px damped → exceeds 64px threshold.
 		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
-		await fireEvent(wrap, makeTouchEvent('touchmove', 200, wrap));
-		await fireEvent(wrap, makeTouchEvent('touchend', 200, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap)); // activates tracking, rebase to 10
+		await fireEvent(wrap, makeTouchEvent('touchmove', 210, wrap)); // +200px raw → 100px damped > 64
+		await fireEvent(wrap, makeTouchEvent('touchend', 210, wrap));
 
 		expect(dispatchCount).toBe(1);
 	});
@@ -254,7 +254,7 @@ describe('PullToRefresh touch gesture', () => {
 		});
 		const wrap = container.firstElementChild as HTMLElement;
 
-		// Move up (negative delta).
+		// Move up (negative delta relative to startTouchY) — gesture is cancelled.
 		await fireEvent(wrap, makeTouchEvent('touchstart', 200, wrap));
 		await fireEvent(wrap, makeTouchEvent('touchmove', 100, wrap)); // upward
 		await fireEvent(wrap, makeTouchEvent('touchend', 100, wrap));
@@ -264,9 +264,9 @@ describe('PullToRefresh touch gesture', () => {
 
 	it('does not track gesture when scrollTop > 0 (scroll guard)', async () => {
 		// The component finds its scroll container via containerEl.closest('main').
-		// We render normally (so $$events is wired correctly) then reparent the
-		// container into a <main> element that has scrollTop > 0.
-		// closest() is a live DOM query, so moving the container after mount is fine.
+		// With the new model, the scrollTop check happens on touchmove (not touchstart),
+		// so a gesture that starts while scrolled remains blocked until the user returns
+		// to scrollTop === 0.
 		let dispatched = false;
 		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
 			dispatched = true;
@@ -280,6 +280,7 @@ describe('PullToRefresh touch gesture', () => {
 
 		const wrap = container.firstElementChild as HTMLElement;
 
+		// touchstart sets pendingGesture; touchmove finds scrollTop > 0 → stays pending, no tracking.
 		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
 		await fireEvent(wrap, makeTouchEvent('touchmove', 200, wrap));
 		await fireEvent(wrap, makeTouchEvent('touchend', 200, wrap));
@@ -300,16 +301,70 @@ describe('PullToRefresh touch gesture', () => {
 		});
 		const wrap = container.firstElementChild as HTMLElement;
 
-		// First gesture: trigger refresh.
+		// First gesture: activate tracking then pull past threshold.
 		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
-		await fireEvent(wrap, makeTouchEvent('touchmove', 200, wrap));
-		await fireEvent(wrap, makeTouchEvent('touchend', 200, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap)); // activates tracking, rebase to 10
+		await fireEvent(wrap, makeTouchEvent('touchmove', 210, wrap)); // 100px damped > 64
+		await fireEvent(wrap, makeTouchEvent('touchend', 210, wrap));
 		expect(dispatchCount).toBe(1);
 
 		// Second gesture: should be ignored because isRefreshing is true.
 		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
-		await fireEvent(wrap, makeTouchEvent('touchmove', 200, wrap));
-		await fireEvent(wrap, makeTouchEvent('touchend', 200, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 210, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchend', 210, wrap));
 		expect(dispatchCount).toBe(1);
+	});
+
+	it('ptr-content has a non-zero translateY inline style during a pull gesture', async () => {
+		const { container } = render(PullToRefresh, { threshold: 64 });
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// First touchmove activates tracking (rebase to y=10).
+		// Second touchmove accumulates pull: rawDelta=90 → 45px damped.
+		// contentTranslateY = Math.min(45/64 * 56, 56) ≈ 39.375px (non-zero).
+		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap)); // activates tracking
+		await fireEvent(wrap, makeTouchEvent('touchmove', 100, wrap)); // 90px raw → 45px damped
+
+		const content = container.querySelector('.ptr-content') as HTMLElement;
+		expect(content).toBeTruthy();
+
+		const styleAttr = content.getAttribute('style') ?? '';
+		const match = styleAttr.match(/translateY\((\d+(?:\.\d+)?)px\)/);
+		expect(match).toBeTruthy();
+		expect(parseFloat(match![1])).toBeGreaterThan(0);
+	});
+
+	it('touchcancel does not dispatch refresh even when pull distance exceeded threshold', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// Activate tracking and pull past threshold, then cancel.
+		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap));  // activates tracking, rebase to 10
+		await fireEvent(wrap, makeTouchEvent('touchmove', 210, wrap)); // +200px raw → 100px damped > 64
+		await fireEvent(wrap, makeTouchEvent('touchcancel', 210, wrap));
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('touchcancel resets ptr-content to translateY(0px)', async () => {
+		const { container } = render(PullToRefresh, { threshold: 64 });
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// Pull past threshold then cancel.
+		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap));
+		await fireEvent(wrap, makeTouchEvent('touchmove', 210, wrap)); // pull distance > 64
+		await fireEvent(wrap, makeTouchEvent('touchcancel', 210, wrap));
+
+		const content = container.querySelector('.ptr-content') as HTMLElement;
+		expect(content).toBeTruthy();
+		expect(content.getAttribute('style')).toContain('translateY(0px)');
 	});
 });

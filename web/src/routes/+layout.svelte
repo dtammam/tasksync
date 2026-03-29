@@ -100,10 +100,12 @@
 		// prevents the component from ever entering the "Refresh failed" state.
 		// Instead, run the sync operations directly so any rejection propagates to
 		// the component's own catch, which sets statusMessage and fires aria-live.
-		// The component's isRefreshing guard already prevents concurrent gestures,
-		// so no syncInFlight deduplication is needed here.
 		e.detail.promise = (async () => {
 			if (!auth.isAuthenticated()) return;
+			// Wait for any in-flight periodic sync to finish before starting PTR sync.
+			if (syncInFlight) {
+				await syncInFlight;
+			}
 			syncStatus.resetError();
 			const pullResult = await syncFromServer();
 			if (pullResult.newFromOthers?.length) {
@@ -700,7 +702,7 @@
 		height: 100vh;
 		overflow-y: auto;
 		overflow-x: hidden;
-		overscroll-behavior-y: contain;
+		overscroll-behavior-y: none;
 		min-width: 0;
 		scrollbar-width: thin;
 		scrollbar-color: var(--border-2) transparent;
