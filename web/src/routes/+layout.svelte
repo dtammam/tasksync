@@ -1,5 +1,6 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
+	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import StreakDisplay from '$lib/components/StreakDisplay.svelte';
 	import { onMount, onDestroy } from 'svelte';
@@ -92,6 +93,29 @@
 			}
 		})();
 		return syncInFlight;
+	};
+
+	const handlePullRefresh = (e: CustomEvent<{ promise: Promise<void> }>) => {
+		// Do NOT delegate to runSync() — its internal catch silences errors and
+		// prevents the component from ever entering the "Refresh failed" state.
+		// Instead, run the sync operations directly so any rejection propagates to
+		// the component's own catch, which sets statusMessage and fires aria-live.
+		e.detail.promise = (async () => {
+			if (!auth.isAuthenticated()) return;
+			// Wait for any in-flight periodic sync to finish before starting PTR sync.
+			if (syncInFlight) {
+				await syncInFlight;
+			}
+			syncStatus.resetError();
+			const pullResult = await syncFromServer();
+			if (pullResult.newFromOthers?.length) {
+				showRemoteTaskToast(pullResult.newFromOthers);
+			}
+			const pushResult = await pushPendingToServer();
+			if (pushResult.pushed || pushResult.created || pushResult.rejected) {
+				await syncFromServer();
+			}
+		})();
 	};
 
 	const requestSync = (reason = 'manual') => {
@@ -461,7 +485,9 @@
 				{/if}
 			</div>
 		</header>
-		<slot />
+		<PullToRefresh on:refresh={handlePullRefresh}>
+			<slot />
+		</PullToRefresh>
 	</main>
 </div>
 
@@ -676,6 +702,7 @@
 		height: 100vh;
 		overflow-y: auto;
 		overflow-x: hidden;
+		overscroll-behavior-y: none;
 		min-width: 0;
 		scrollbar-width: thin;
 		scrollbar-color: var(--border-2) transparent;
