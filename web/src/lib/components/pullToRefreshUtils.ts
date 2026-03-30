@@ -10,10 +10,10 @@ export const PULL_EMOJIS: readonly string[] = ['🚀', '⚙️', '🔄', '🎯',
 export const REFRESH_EMOJI = '⏳';
 
 /** Damping factor applied to raw touch delta. */
-export const PULL_DAMPING = 0.5;
+export const PULL_DAMPING = 0.7;
 
 /** Maximum pull distance in pixels (provides resistance feel). */
-export const PULL_MAX = 400;
+export const PULL_MAX = 300;
 
 /**
  * Pick a random emoji to show during the pull gesture.
