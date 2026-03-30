@@ -125,6 +125,7 @@ No expected impact on performance budgets. This changes a numeric constant used 
 - **2026-03-30:** Discovery complete. Exec plan written. Existing tests confirmed to use symbolic constant references — no test changes needed.
 - **2026-03-30:** Design complete. Recommend PULL_MAX = 400, keep PULL_DAMPING = 0.5. Single-constant change in pullToRefreshUtils.ts; no test modifications needed.
 - **2026-03-30:** Feature complete. PULL_MAX changed to 400, all quality gates pass (lint, check, 277 tests), acceptance criteria validated. Moving to completed.
+- **2026-03-30:** Post-deploy: contentTranslateY in PullToRefresh.svelte was still capped at INDICATOR_HEIGHT (56px), making the PULL_MAX increase invisible. Fixed by using pullDistance directly for content translation. Also replaced linear damping formula with exponential rubber-band curve (`PULL_MAX * (1 - exp(-rawDelta * PULL_DAMPING / PULL_MAX))`) for progressive resistance. Tests updated to validate diminishing-returns behavior. Scope expanded beyond original "single-constant change" — three files modified: pullToRefreshUtils.ts (formula), PullToRefresh.svelte (translateY), PullToRefresh.test.ts (curve tests). 278 tests passing.
 
 ## Decision log
 
