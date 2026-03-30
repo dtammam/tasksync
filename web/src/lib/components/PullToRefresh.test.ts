@@ -19,6 +19,20 @@ describe('REFRESH_EMOJI', () => {
 	});
 });
 
+describe('PULL_EMOJIS', () => {
+	const EXPECTED_EMOJIS = ['🚀', '⚙️', '🔄', '🎯', '💪', '🏆', '🌟', '📌', '⚡', '✨', '💨', '🔥', '🏁', '💥', '🧹'];
+
+	it('contains exactly 15 entries', () => {
+		expect(PULL_EMOJIS.length).toBe(15);
+	});
+
+	it('every element is one of the 15 expected emoji values', () => {
+		for (const emoji of PULL_EMOJIS) {
+			expect(EXPECTED_EMOJIS).toContain(emoji);
+		}
+	});
+});
+
 describe('pickRandomPullEmoji', () => {
 	it('returns a value that is a member of PULL_EMOJIS', () => {
 		const result = pickRandomPullEmoji();

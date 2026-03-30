@@ -4,7 +4,7 @@
  */
 
 /** Emoji set available during the pull gesture. */
-export const PULL_EMOJIS: readonly string[] = ['🚀', '⚙️', '🔄'];
+export const PULL_EMOJIS: readonly string[] = ['🚀', '⚙️', '🔄', '🎯', '💪', '🏆', '🌟', '📌', '⚡', '✨', '💨', '🔥', '🏁', '💥', '🧹'];
 
 /** Emoji shown during the refreshing/loading state. */
 export const REFRESH_EMOJI = '⏳';

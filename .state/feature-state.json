@@ -3,7 +3,7 @@
   "feature_name": "Pull-to-refresh cleanup: remove scope-creep refresh button, expand emoji set, investigate E2E flakiness, update docs",
   "stage": "implementation",
   "created_at": "2026-03-29",
-  "updated_at": "2026-03-29",
+  "updated_at": "2026-03-29T03:00",
   "tasks": [
     {
       "id": "task-1",
@@ -20,7 +20,7 @@
       "description": "In web/src/lib/components/pullToRefreshUtils.ts, replace the PULL_EMOJIS array (currently 3 entries) with exactly these 15: ['🚀', '⚙️', '🔄', '🎯', '💪', '🏆', '🌟', '📌', '⚡', '✨', '💨', '🔥', '🏁', '💥', '🧹']. Do NOT change REFRESH_EMOJI ('⏳') or pickRandomPullEmoji() logic. Update unit tests in PullToRefresh.test.ts to assert PULL_EMOJIS.length === 15 and that every element is one of the 15 specified values.",
       "files": ["web/src/lib/components/pullToRefreshUtils.ts", "web/src/lib/components/PullToRefresh.test.ts"],
       "definition_of_done": "PULL_EMOJIS has exactly 15 entries matching the spec. REFRESH_EMOJI is unchanged. pickRandomPullEmoji logic is unchanged. Unit tests assert array length and membership. All quality gates pass.",
-      "status": "pending",
+      "status": "complete",
       "acceptance_criteria": ["2.1", "2.2", "2.3", "2.4", "2.5"]
     },
     {
@@ -42,7 +42,7 @@
       "acceptance_criteria": ["4.1", "4.2", "4.3", "4.4", "4.5"]
     }
   ],
-  "completed_tasks": ["task-1"],
+  "completed_tasks": ["task-1", "task-2"],
   "artifacts": {
     "requirements": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
     "design": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
@@ -73,6 +73,11 @@
       "timestamp": "2026-03-29 02:30",
       "stage": "implementation",
       "note": "Stage advanced to implementation — routing task-1 (remove Refresh button) to software-developer"
+    },
+    {
+      "timestamp": "2026-03-29 03:00",
+      "stage": "implementation",
+      "note": "Routing task-2 (expand PULL_EMOJIS to 15 entries) to software-developer"
     }
   ]
 }
