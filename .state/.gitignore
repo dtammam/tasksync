@@ -1,0 +1,3 @@
+# Inbox files are ephemeral — written by the EM, consumed by specialists
+inbox/*.md
+!inbox/.gitkeep

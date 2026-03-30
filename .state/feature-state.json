@@ -1,0 +1,73 @@
+{
+  "feature_id": "ptr-button-and-fixed-positioning-fix",
+  "feature_name": "PTR fixes: remove floating refresh button and fix position:fixed children broken by will-change:transform",
+  "stage": "done",
+  "created_at": "2026-03-30",
+  "updated_at": "2026-03-30T03:30",
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Deep-dive fix: position:fixed broken by PTR transform containing block",
+      "description": "The will-change:transform removal did NOT fix position:fixed on the add-task input. Deep-dive investigation needed: (1) Compare current +layout.svelte, PullToRefresh.svelte, +page.svelte, and list/[id]/+page.svelte against main branch (before PTR landed) to find exactly what broke position:fixed. (2) Investigate whether .ptr-content's active transform (translateY, even when set to 0) creates a new containing block that breaks fixed descendants. (3) Find a fix that preserves PTR pull animation while not breaking position:fixed children. (4) Run quality gates after fixing.",
+      "files": ["web/src/lib/components/PullToRefresh.svelte", "web/src/routes/+layout.svelte", "web/src/routes/+page.svelte", "web/src/routes/list/[id]/+page.svelte"],
+      "done_when": "The add-task text input is sticky/fixed at the bottom of the viewport again, AND pull-to-refresh gesture still works with animation. Quality gates pass.",
+      "status": "done"
+    },
+    {
+      "id": 2,
+      "title": "Add unit tests for will-change and ptr-btn absence",
+      "description": "In PullToRefresh.test.ts: (1) Add a test asserting that .ptr-content does NOT have will-change:transform in its inline or computed styles after render. (2) Add a test asserting that no element with class .ptr-btn exists in the rendered DOM. (3) Ensure all existing PTR tests still pass.",
+      "files": ["web/src/lib/components/PullToRefresh.test.ts"],
+      "done_when": "Two new passing tests: one for will-change absence on .ptr-content, one for .ptr-btn absence. All existing tests pass. npm run test passes.",
+      "status": "done"
+    }
+  ],
+  "completed_tasks": [1, 2],
+  "artifacts": {
+    "requirements": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md",
+    "design": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md",
+    "exec_plan": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md"
+  },
+  "history": [
+    {
+      "timestamp": "2026-03-30 02:00",
+      "stage": "bootstrap",
+      "note": "Feature initiated: two PTR bugs — (1) remove unwanted floating refresh button (.ptr-btn) from PullToRefresh.svelte, (2) fix will-change:transform on .ptr-content breaking position:fixed children like the add-task input"
+    },
+    {
+      "timestamp": "2026-03-30 02:05",
+      "stage": "discovery",
+      "note": "Advanced to discovery — routing to product-manager for requirements and exec plan"
+    },
+    {
+      "timestamp": "2026-03-30 02:10",
+      "stage": "design",
+      "note": "Advanced to design — routing to principal-engineer to produce technical design for the will-change:transform fix"
+    },
+    {
+      "timestamp": "2026-03-30 02:20",
+      "stage": "tasks",
+      "note": "Advanced to tasks — broke design into 2 implementation tasks: (1) CSS fixes in PullToRefresh.svelte, (2) unit tests for will-change and ptr-btn absence"
+    },
+    {
+      "timestamp": "2026-03-30 02:30",
+      "stage": "implementation",
+      "note": "Starting implementation — routing Task 1 (CSS fixes: remove will-change, revert ptr-indicator to position:absolute) to software-developer"
+    },
+    {
+      "timestamp": "2026-03-30 02:45",
+      "stage": "implementation",
+      "note": "Routing Task 2 (unit tests for will-change and ptr-btn absence) to software-developer"
+    },
+    {
+      "timestamp": "2026-03-30 03:00",
+      "stage": "implementation",
+      "note": "Task 1 marked NOT complete — removing will-change:transform did NOT fix position:fixed. The active transform on .ptr-content (translateY) also creates a containing block. Re-routing Task 1 to SDE with deeper investigation scope."
+    },
+    {
+      "timestamp": "2026-03-30 03:30",
+      "stage": "done",
+      "note": "Feature complete. Exec plan archived to docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md. Both tasks done: position:fixed fix and regression tests."
+    }
+  ]
+}

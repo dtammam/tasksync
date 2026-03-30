@@ -1,4 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteTesting } from '@testing-library/svelte/vite';
 import { defineConfig } from 'vitest/config';
 import { loadEnv } from 'vite';
 
@@ -19,7 +20,7 @@ export default defineConfig(({ mode }) => {
 	const allowedHosts = parseAllowedHosts(env.VITE_ALLOWED_HOSTS);
 
 	return {
-		plugins: [sveltekit()],
+		plugins: [sveltekit(), svelteTesting()],
 		server: {
 			...(allowedHosts ? { allowedHosts } : {}),
 			fs: {

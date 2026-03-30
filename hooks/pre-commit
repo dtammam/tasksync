@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Load user tool paths (nvm, cargo, etc.) — hooks run with a stripped environment
-[ -f "$HOME/.profile" ]   && . "$HOME/.profile"
-[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+# Load user tool paths (hooks run with a stripped environment)
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
 
-echo "🧹 pre-commit: linting web client..."
-cd "$(git rev-parse --show-toplevel)" || exit 1
+echo "=== pre-commit ==="
 
-if [ -d "web" ]; then
-  (cd web && npm run lint && npm run check && npm run test)
-fi
+# Web: lint + type-check + unit tests
+echo "--- web: lint ---"
+(cd web && npm run lint)
 
-echo "🦀 pre-commit: rust fmt + clippy..."
-(cd server && cargo fmt -- --check && cargo clippy -- -D warnings)
+echo "--- web: type-check ---"
+(cd web && npm run check)
 
-echo "✅ pre-commit checks passed"
+echo "--- web: unit tests ---"
+(cd web && npm run test)
+
+# Server: format + clippy
+echo "--- server: fmt ---"
+cargo fmt -- --check
+
+echo "--- server: clippy ---"
+cargo clippy -- -D warnings
+
+echo "pre-commit checks passed"
