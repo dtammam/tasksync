@@ -16,6 +16,7 @@ Start here, then follow links. The goal is progressive disclosure: small entry p
 - Quality grading by domain: `QUALITY_SCORE.md`
 - Security posture: `SECURITY.md`
 - Agent-first repo scaffolding runbook: `CLAUDE.BLUEPRINT.md`
+- How this repo is maintained by AI: `AI-REPO-MAINTENANCE.md`
 
 ## Execution plans (for non-trivial work)
 
