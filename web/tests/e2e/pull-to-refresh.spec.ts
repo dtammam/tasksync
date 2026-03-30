@@ -79,17 +79,3 @@ test('pull-to-refresh gesture triggers sync @smoke', async ({ page, browserName 
 	// The CSS transition takes 300 ms; Playwright polls until the condition is met.
 	await expect(indicator).toHaveCSS('opacity', '0');
 });
-
-test('accessible refresh button is visible and functional on mobile @smoke', async ({ page }) => {
-	await page.goto('/');
-	await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
-
-	// (7) Accessible refresh button must be visible on mobile viewports (max-width 900px).
-	const refreshBtn = page.getByRole('button', { name: 'Refresh tasks' });
-	await expect(refreshBtn).toBeVisible();
-	await expect(refreshBtn).toBeEnabled();
-
-	// (8) Clicking the button triggers refresh; it re-enables once the sync settles.
-	await refreshBtn.click();
-	await expect(refreshBtn).toBeEnabled();
-});

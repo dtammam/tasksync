@@ -1,118 +1,63 @@
 {
-  "feature_id": "ptr-cleanup-and-polish",
-  "feature_name": "Pull-to-refresh cleanup: remove scope-creep refresh button, expand emoji set, investigate E2E flakiness, update docs",
-  "stage": "done",
-  "created_at": "2026-03-29",
-  "updated_at": "2026-03-30",
+  "feature_id": "ptr-button-and-fixed-positioning-fix",
+  "feature_name": "PTR fixes: remove floating refresh button and fix position:fixed children broken by will-change:transform",
+  "stage": "implementation",
+  "created_at": "2026-03-30",
+  "updated_at": "2026-03-30T02:45",
   "tasks": [
     {
-      "id": "task-1",
-      "title": "Remove scope-creep Refresh button from +layout.svelte",
-      "description": "Remove the 'Refresh' button element (on:click={refreshNow}) and the refreshNow function from web/src/routes/+layout.svelte. Do NOT remove the .refresh-btn CSS class or its :hover rule — they are shared with the Copy button which must remain. Do NOT touch the Copy button, copyTasks, copyLabel, setCopyLabel, collectCopyLines, or copyResetTimer.",
-      "files": ["web/src/routes/+layout.svelte"],
-      "definition_of_done": "Refresh button and refreshNow function are gone. Copy button still renders and works. .refresh-btn CSS retained. All quality gates pass (lint, check, vitest, cargo fmt, cargo clippy).",
-      "status": "complete",
-      "acceptance_criteria": ["1.1", "1.2", "1.3", "1.4", "1.5"]
+      "id": 1,
+      "title": "Remove will-change:transform from .ptr-content and revert .ptr-indicator to position:absolute",
+      "description": "In PullToRefresh.svelte: (1) Remove `will-change: transform` from the `.ptr-content` CSS rule so it no longer creates a containing block that breaks position:fixed descendants. (2) Add `position: relative` to `.ptr-wrap` to establish a containing block for the indicator. (3) Change `.ptr-indicator` from `position: relative; height: 56px; margin-bottom: -56px` to `position: absolute; top: 0; left: 0; right: 0; height: 56px` (remove margin-bottom). Update the CSS comment to reflect the new approach. All three changes are in PullToRefresh.svelte's <style> block only.",
+      "files": ["web/src/lib/components/PullToRefresh.svelte"],
+      "done_when": ".ptr-content has no will-change declaration; .ptr-wrap has position:relative; .ptr-indicator uses position:absolute with top/left/right:0; pull gesture still works visually.",
+      "status": "done"
     },
     {
-      "id": "task-2",
-      "title": "Expand PULL_EMOJIS to 15 entries and update unit tests",
-      "description": "In web/src/lib/components/pullToRefreshUtils.ts, replace the PULL_EMOJIS array (currently 3 entries) with exactly these 15: ['🚀', '⚙️', '🔄', '🎯', '💪', '🏆', '🌟', '📌', '⚡', '✨', '💨', '🔥', '🏁', '💥', '🧹']. Do NOT change REFRESH_EMOJI ('⏳') or pickRandomPullEmoji() logic. Update unit tests in PullToRefresh.test.ts to assert PULL_EMOJIS.length === 15 and that every element is one of the 15 specified values.",
-      "files": ["web/src/lib/components/pullToRefreshUtils.ts", "web/src/lib/components/PullToRefresh.test.ts"],
-      "definition_of_done": "PULL_EMOJIS has exactly 15 entries matching the spec. REFRESH_EMOJI is unchanged. pickRandomPullEmoji logic is unchanged. Unit tests assert array length and membership. All quality gates pass.",
-      "status": "complete",
-      "acceptance_criteria": ["2.1", "2.2", "2.3", "2.4", "2.5"]
-    },
-    {
-      "id": "task-3",
-      "title": "Fix E2E flakiness: CDP browser guard and webServer readiness",
-      "description": "In web/tests/e2e/pull-to-refresh.spec.ts, add test.skip(browserName !== 'chromium', 'CDP required for raw touch simulation') to the first test ('pull-to-refresh gesture triggers sync @smoke'). Update the test's destructured parameters to include browserName. The second test ('accessible refresh button') is unchanged. In web/playwright.config.ts, add url: 'http://localhost:4173' to the webServer block for explicit readiness detection. After applying fixes, run the full Playwright suite 3 consecutive times and document results in the exec plan progress log.",
-      "files": ["web/tests/e2e/pull-to-refresh.spec.ts", "web/playwright.config.ts"],
-      "definition_of_done": "CDP test skips on non-Chromium browsers. webServer config has explicit url. Full Playwright suite passes 3 consecutive runs without retries. No tests deleted or unconditionally skipped. All quality gates pass.",
-      "status": "complete",
-      "acceptance_criteria": ["3.1", "3.2", "3.3", "3.4", "3.5"]
-    },
-    {
-      "id": "task-4",
-      "title": "Update ARCHITECTURE.md, FRONTEND.md, and RELIABILITY.md with PTR documentation",
-      "description": "Add pull-to-refresh coverage to three docs: (1) docs/ARCHITECTURE.md — in Client Architecture section, add a bullet describing PullToRefresh as a gesture-driven sync trigger entry point. (2) docs/FRONTEND.md — add PullToRefresh.svelte and pullToRefreshUtils.ts to component/utility tables, note the data/-import boundary constraint. (3) docs/RELIABILITY.md — document the overscroll-behavior-y: none rule on <main> required to prevent browser native PTR conflict. Ensure all three docs are consistent with each other and with the shipped implementation.",
-      "files": ["docs/ARCHITECTURE.md", "docs/FRONTEND.md", "docs/RELIABILITY.md"],
-      "definition_of_done": "All three docs reference PTR components accurately. overscroll-behavior-y rule documented. Layer boundary constraint noted. Docs are internally consistent. All quality gates pass.",
-      "status": "complete",
-      "acceptance_criteria": ["4.1", "4.2", "4.3", "4.4", "4.5"]
+      "id": 2,
+      "title": "Add unit tests for will-change and ptr-btn absence",
+      "description": "In PullToRefresh.test.ts: (1) Add a test asserting that .ptr-content does NOT have will-change:transform in its inline or computed styles after render. (2) Add a test asserting that no element with class .ptr-btn exists in the rendered DOM. (3) Ensure all existing PTR tests still pass.",
+      "files": ["web/src/lib/components/PullToRefresh.test.ts"],
+      "done_when": "Two new passing tests: one for will-change absence on .ptr-content, one for .ptr-btn absence. All existing tests pass. npm run test passes.",
+      "status": "pending"
     }
   ],
-  "completed_tasks": ["task-1", "task-2", "task-3", "task-4"],
+  "completed_tasks": [],
   "artifacts": {
-    "requirements": "docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md",
-    "design": "docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md",
-    "exec_plan": "docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md"
+    "requirements": "docs/exec-plans/active/2026-03-30-ptr-bugfixes.md",
+    "design": "docs/exec-plans/active/2026-03-30-ptr-bugfixes.md",
+    "exec_plan": "docs/exec-plans/active/2026-03-30-ptr-bugfixes.md"
   },
   "history": [
     {
-      "timestamp": "2026-03-29 01:30",
+      "timestamp": "2026-03-30 02:00",
       "stage": "bootstrap",
-      "note": "Feature initiated: 4-item cleanup batch following pull-to-refresh feature — (1) remove unwanted refresh button, (2) expand PTR emoji set, (3) investigate E2E flakiness, (4) docs update"
+      "note": "Feature initiated: two PTR bugs — (1) remove unwanted floating refresh button (.ptr-btn) from PullToRefresh.svelte, (2) fix will-change:transform on .ptr-content breaking position:fixed children like the add-task input"
     },
     {
-      "timestamp": "2026-03-29 01:45",
+      "timestamp": "2026-03-30 02:05",
       "stage": "discovery",
-      "note": "Stage advanced to discovery — routing to product-manager for requirements gathering"
+      "note": "Advanced to discovery — routing to product-manager for requirements and exec plan"
     },
     {
-      "timestamp": "2026-03-29 02:00",
+      "timestamp": "2026-03-30 02:10",
       "stage": "design",
-      "note": "Stage advanced to design — routing to principal-engineer for technical design"
+      "note": "Advanced to design — routing to principal-engineer to produce technical design for the will-change:transform fix"
     },
     {
-      "timestamp": "2026-03-29 02:15",
+      "timestamp": "2026-03-30 02:20",
       "stage": "tasks",
-      "note": "Stage advanced to tasks — EM broke design into 4 independent tasks matching the 4 cleanup items"
+      "note": "Advanced to tasks — broke design into 2 implementation tasks: (1) CSS fixes in PullToRefresh.svelte, (2) unit tests for will-change and ptr-btn absence"
     },
     {
-      "timestamp": "2026-03-29 02:30",
+      "timestamp": "2026-03-30 02:30",
       "stage": "implementation",
-      "note": "Stage advanced to implementation — routing task-1 (remove Refresh button) to software-developer"
+      "note": "Starting implementation — routing Task 1 (CSS fixes: remove will-change, revert ptr-indicator to position:absolute) to software-developer"
     },
     {
-      "timestamp": "2026-03-29 03:00",
+      "timestamp": "2026-03-30 02:45",
       "stage": "implementation",
-      "note": "Routing task-2 (expand PULL_EMOJIS to 15 entries) to software-developer"
-    },
-    {
-      "timestamp": "2026-03-29 03:30",
-      "stage": "implementation",
-      "note": "Routing task-3 (fix E2E flakiness: CDP browser guard + webServer readiness) to software-developer"
-    },
-    {
-      "timestamp": "2026-03-30 00:37",
-      "stage": "implementation",
-      "note": "task-3 complete: CDP guard added to PTR gesture test (skips on Firefox/WebKit), explicit webServer url added to playwright.config.ts; 3 consecutive Chromium runs all passed"
-    },
-    {
-      "timestamp": "2026-03-30 00:45",
-      "stage": "implementation",
-      "note": "Routing task-4 (update ARCHITECTURE.md, FRONTEND.md, RELIABILITY.md with PTR documentation) to software-developer"
-    },
-    {
-      "timestamp": "2026-03-30 01:00",
-      "stage": "review",
-      "note": "All 4 tasks complete. Stage advanced to review — routing to quality-assurance for code review."
-    },
-    {
-      "timestamp": "2026-03-30 01:15",
-      "stage": "verification",
-      "note": "Stage advanced to verification — routing to build-specialist for full quality gate check"
-    },
-    {
-      "timestamp": "2026-03-30 01:30",
-      "stage": "acceptance",
-      "note": "All 4 tasks complete and verified. Stage advanced to acceptance — routing to product-manager for acceptance criteria validation."
-    },
-    {
-      "timestamp": "2026-03-30 01:45",
-      "stage": "done",
-      "note": "Feature complete. All 4 tasks delivered, all 20 acceptance criteria passed. Exec plan archived to docs/exec-plans/completed/."
+      "note": "Routing Task 2 (unit tests for will-change and ptr-btn absence) to software-developer"
     }
   ]
 }

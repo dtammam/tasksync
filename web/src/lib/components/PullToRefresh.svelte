@@ -294,11 +294,6 @@
 		}
 	}
 
-	/** Trigger a refresh from the accessible button. */
-	function handleRefreshButton(): void {
-		void doRefresh().catch((err: unknown) => console.error('doRefresh failed', err));
-	}
-
 	// ── Cleanup ────────────────────────────────────────────────────────────────
 
 	onDestroy(() => {
@@ -332,20 +327,6 @@
 		>{currentEmoji}</span>
 	</div>
 
-	<!--
-		Accessible refresh button: visible on mobile (max-width 900px), hidden on desktop.
-		Keyboard-reachable via Tab + Enter/Space.
-	-->
-	<button
-		class="ptr-btn"
-		type="button"
-		aria-label="Refresh tasks"
-		on:click={handleRefreshButton}
-		disabled={isRefreshing}
-	>
-		🔄
-	</button>
-
 	<!-- Visually hidden region that announces sync result to screen readers. -->
 	<span class="ptr-sr-only" aria-live="polite">{statusMessage}</span>
 
@@ -370,9 +351,8 @@
 	}
 
 	/*
-	 * Indicator sits at the top of ptr-wrap (position: absolute).
-	 * Content translates down to reveal it — the indicator never moves.
-	 * Only opacity is animated; no layout properties change.
+	 * Indicator sits absolutely at the top of .ptr-wrap, out of document flow.
+	 * Content translates down to reveal it. Only opacity is animated.
 	 */
 	.ptr-indicator {
 		position: absolute;
@@ -420,51 +400,16 @@
 	/*
 	 * Content wrapper: translates down during pull gesture to reveal the indicator.
 	 * Only transform is animated — no layout properties change.
-	 * will-change promotes this element to its own compositor layer.
+	 * No will-change here — it creates a containing block that breaks position:fixed descendants.
+	 * Modern browsers auto-promote elements with active transforms to the compositor.
 	 */
 	.ptr-content {
-		will-change: transform;
 		transition: none;
 	}
 
 	/* Enable transform transition for the retract animation. */
 	.ptr-content.ptr-animate {
 		transition: transform 0.3s ease;
-	}
-
-	/*
-	 * Refresh button: hidden on desktop, shown as a floating pill on mobile.
-	 * Positioned above the typical bottom nav / quick-add bar.
-	 */
-	.ptr-btn {
-		display: none;
-		position: fixed;
-		bottom: 80px;
-		right: 16px;
-		width: 48px;
-		height: 48px;
-		border-radius: 50%;
-		border: 2px solid var(--color-border, #d1d5db);
-		background: var(--color-surface, #ffffff);
-		font-size: 1.25rem;
-		line-height: 1;
-		cursor: pointer;
-		z-index: 50;
-		align-items: center;
-		justify-content: center;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-		padding: 0;
-	}
-
-	.ptr-btn:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	@media (max-width: 900px) {
-		.ptr-btn {
-			display: flex;
-		}
 	}
 
 	/* Visually hidden but announced by screen readers via aria-live. */

@@ -116,63 +116,10 @@ describe('PullToRefresh component', () => {
 		vi.clearAllMocks();
 	});
 
-	it('renders an accessible refresh button with aria-label "Refresh tasks"', () => {
-		const { getByRole } = render(PullToRefresh);
-		const btn = getByRole('button', { name: 'Refresh tasks' });
-		expect(btn).toBeTruthy();
-	});
-
 	it('renders an aria-live region for screen reader announcements', () => {
 		const { container } = render(PullToRefresh);
 		const liveRegion = container.querySelector('[aria-live="polite"]');
 		expect(liveRegion).toBeTruthy();
-	});
-
-	it('clicking the refresh button dispatches the refresh event exactly once', async () => {
-		let dispatchCount = 0;
-		const { getByRole } = renderWithRefreshHandler({}, (e) => {
-			dispatchCount++;
-			// Settle the promise immediately so the component exits refreshing state.
-			e.detail.promise = Promise.resolve();
-		});
-
-		const btn = getByRole('button', { name: 'Refresh tasks' });
-		await fireEvent.click(btn);
-
-		expect(dispatchCount).toBe(1);
-	});
-
-	it('does not dispatch refresh while a sync is already in flight (double-fire prevention)', async () => {
-		let dispatchCount = 0;
-		// eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional hanging promise
-		const hangingPromise = new Promise<void>(() => {});
-		const { getByRole } = renderWithRefreshHandler({}, (e) => {
-			dispatchCount++;
-			e.detail.promise = hangingPromise;
-		});
-
-		const btn = getByRole('button', { name: 'Refresh tasks' });
-
-		// First click — triggers sync.
-		await fireEvent.click(btn);
-		// Second click — should be ignored because isRefreshing is true.
-		await fireEvent.click(btn);
-
-		expect(dispatchCount).toBe(1);
-	});
-
-	it('refresh button is disabled while a sync is in flight', async () => {
-		// eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional hanging promise
-		const hangingPromise = new Promise<void>(() => {});
-		const { getByRole } = renderWithRefreshHandler({}, (e) => {
-			e.detail.promise = hangingPromise;
-		});
-
-		const btn = getByRole('button', { name: 'Refresh tasks' });
-		await fireEvent.click(btn);
-
-		// After first click, button should be disabled.
-		expect(btn).toBeDisabled();
 	});
 
 	it('displays static recycle emoji when prefers-reduced-motion is enabled', () => {
