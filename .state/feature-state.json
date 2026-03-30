@@ -1,125 +1,78 @@
 {
-  "feature_id": "ptr-ux-refinements",
-  "feature_name": "Pull-to-refresh UX refinements: content translation + single emoji per pull",
-  "stage": "done",
+  "feature_id": "ptr-cleanup-and-polish",
+  "feature_name": "Pull-to-refresh cleanup: remove scope-creep refresh button, expand emoji set, investigate E2E flakiness, update docs",
+  "stage": "implementation",
   "created_at": "2026-03-29",
-  "updated_at": "2026-03-30",
+  "updated_at": "2026-03-29",
   "tasks": [
     {
-      "id": "T1",
-      "title": "Simplify emoji utilities and unit tests",
-      "description": "In pullToRefreshUtils.ts: replace PULL_EMOJIS contents with ['rocket', 'gear', 'hourglass', 'sync']. Delete computeEmojiIndex() and its JSDoc. Add pickRandomPullEmoji() that returns a random element from PULL_EMOJIS excluding hourglass. In PullToRefresh.test.ts: remove computeEmojiIndex tests, add tests for pickRandomPullEmoji (returns value from set, never returns hourglass).",
-      "files": [
-        "web/src/lib/components/pullToRefreshUtils.ts",
-        "web/src/lib/components/PullToRefresh.test.ts"
-      ],
-      "done_when": "computeEmojiIndex deleted, pickRandomPullEmoji exists and is tested, all unit tests pass"
+      "id": "task-1",
+      "title": "Remove scope-creep Refresh button from +layout.svelte",
+      "description": "Remove the 'Refresh' button element (on:click={refreshNow}) and the refreshNow function from web/src/routes/+layout.svelte. Do NOT remove the .refresh-btn CSS class or its :hover rule — they are shared with the Copy button which must remain. Do NOT touch the Copy button, copyTasks, copyLabel, setCopyLabel, collectCopyLines, or copyResetTimer.",
+      "files": ["web/src/routes/+layout.svelte"],
+      "definition_of_done": "Refresh button and refreshNow function are gone. Copy button still renders and works. .refresh-btn CSS retained. All quality gates pass (lint, check, vitest, cargo fmt, cargo clippy).",
+      "status": "complete",
+      "acceptance_criteria": ["1.1", "1.2", "1.3", "1.4", "1.5"]
     },
     {
-      "id": "T2",
-      "title": "Rework PullToRefresh component to content-translation model",
-      "description": "Major rework of PullToRefresh.svelte: (1) Template: wrap slot in div.ptr-content with inline translateY(contentTranslateY), change indicator to position:absolute, remove {#key} block and scale transition, render currentEmoji directly. (2) Gesture: add gestureEmoji variable set via pickRandomPullEmoji() at tracking start, rewrite handleTouchStart to always record startTouchY with pendingGesture flag, rewrite handleTouchMove for seamless scroll-to-pull (check scrollTop<=0 when pendingGesture && !isTracking), add reactive contentTranslateY from pullDistance. (3) CSS: indicator to position:absolute, add .ptr-content with will-change:transform, add overscroll-behavior-y:none on scoped :global(main), animate-out on both indicator and content. (4) Emoji: currentEmoji reads gestureEmoji during pull, hourglass during refresh, sync for reduced-motion. Update component render tests accordingly.",
-      "files": [
-        "web/src/lib/components/PullToRefresh.svelte",
-        "web/src/lib/components/PullToRefresh.test.ts"
-      ],
-      "done_when": "Content translates down during pull gesture, indicator appears in vacated space, single emoji per pull, seamless scroll-to-pull works, reduced-motion respected, unit tests pass"
+      "id": "task-2",
+      "title": "Expand PULL_EMOJIS to 15 entries and update unit tests",
+      "description": "In web/src/lib/components/pullToRefreshUtils.ts, replace the PULL_EMOJIS array (currently 3 entries) with exactly these 15: ['🚀', '⚙️', '🔄', '🎯', '💪', '🏆', '🌟', '📌', '⚡', '✨', '💨', '🔥', '🏁', '💥', '🧹']. Do NOT change REFRESH_EMOJI ('⏳') or pickRandomPullEmoji() logic. Update unit tests in PullToRefresh.test.ts to assert PULL_EMOJIS.length === 15 and that every element is one of the 15 specified values.",
+      "files": ["web/src/lib/components/pullToRefreshUtils.ts", "web/src/lib/components/PullToRefresh.test.ts"],
+      "definition_of_done": "PULL_EMOJIS has exactly 15 entries matching the spec. REFRESH_EMOJI is unchanged. pickRandomPullEmoji logic is unchanged. Unit tests assert array length and membership. All quality gates pass.",
+      "status": "pending",
+      "acceptance_criteria": ["2.1", "2.2", "2.3", "2.4", "2.5"]
     },
     {
-      "id": "T3",
-      "title": "QA fixes + E2E test updates",
-      "description": "Combined task: (1) Add touchcancel handler mirroring touchend behavior in PullToRefresh.svelte, (2) Move overscroll-behavior-y:none from PullToRefresh :global(main) to +layout.svelte scoped main rule, (3) Restructure PULL_EMOJIS to exclude hourglass from the random pool without filtering, (4) Remove unnecessary will-change:transform from .ptr-indicator CSS, (5) Update E2E tests for new DOM structure.",
-      "files": [
-        "web/src/lib/components/PullToRefresh.svelte",
-        "web/src/lib/components/pullToRefreshUtils.ts",
-        "web/src/routes/+layout.svelte",
-        "web/tests/e2e/pull-to-refresh.spec.ts",
-        "web/src/lib/components/PullToRefresh.test.ts"
-      ],
-      "done_when": "touchcancel resets gesture state, overscroll-behavior-y:none is in +layout.svelte (not PullToRefresh), PULL_EMOJIS has no hourglass in random pool, .ptr-indicator has no will-change:transform, E2E spec updated, all quality gates pass (npm run lint, npm run check, npm run test, npm run test:e2e:smoke)"
+      "id": "task-3",
+      "title": "Fix E2E flakiness: CDP browser guard and webServer readiness",
+      "description": "In web/tests/e2e/pull-to-refresh.spec.ts, add test.skip(browserName !== 'chromium', 'CDP required for raw touch simulation') to the first test ('pull-to-refresh gesture triggers sync @smoke'). Update the test's destructured parameters to include browserName. The second test ('accessible refresh button') is unchanged. In web/playwright.config.ts, add url: 'http://localhost:4173' to the webServer block for explicit readiness detection. After applying fixes, run the full Playwright suite 3 consecutive times and document results in the exec plan progress log.",
+      "files": ["web/tests/e2e/pull-to-refresh.spec.ts", "web/playwright.config.ts"],
+      "definition_of_done": "CDP test skips on non-Chromium browsers. webServer config has explicit url. Full Playwright suite passes 3 consecutive runs without retries. No tests deleted or unconditionally skipped. All quality gates pass.",
+      "status": "pending",
+      "acceptance_criteria": ["3.1", "3.2", "3.3", "3.4", "3.5"]
+    },
+    {
+      "id": "task-4",
+      "title": "Update ARCHITECTURE.md, FRONTEND.md, and RELIABILITY.md with PTR documentation",
+      "description": "Add pull-to-refresh coverage to three docs: (1) docs/ARCHITECTURE.md — in Client Architecture section, add a bullet describing PullToRefresh as a gesture-driven sync trigger entry point. (2) docs/FRONTEND.md — add PullToRefresh.svelte and pullToRefreshUtils.ts to component/utility tables, note the data/-import boundary constraint. (3) docs/RELIABILITY.md — document the overscroll-behavior-y: none rule on <main> required to prevent browser native PTR conflict. Ensure all three docs are consistent with each other and with the shipped implementation.",
+      "files": ["docs/ARCHITECTURE.md", "docs/FRONTEND.md", "docs/RELIABILITY.md"],
+      "definition_of_done": "All three docs reference PTR components accurately. overscroll-behavior-y rule documented. Layer boundary constraint noted. Docs are internally consistent. All quality gates pass.",
+      "status": "pending",
+      "acceptance_criteria": ["4.1", "4.2", "4.3", "4.4", "4.5"]
     }
   ],
-  "completed_tasks": ["T1", "T2", "T3"],
+  "completed_tasks": ["task-1"],
   "artifacts": {
-    "requirements": "docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md",
-    "design": "docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md",
-    "exec_plan": "docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md"
+    "requirements": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
+    "design": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
+    "exec_plan": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md"
   },
   "history": [
     {
-      "timestamp": "2026-03-29 21:00",
+      "timestamp": "2026-03-29 01:30",
       "stage": "bootstrap",
-      "note": "Feature initiated: UX refinements for shipped pull-to-refresh (content translation + single emoji per pull)"
+      "note": "Feature initiated: 4-item cleanup batch following pull-to-refresh feature — (1) remove unwanted refresh button, (2) expand PTR emoji set, (3) investigate E2E flakiness, (4) docs update"
     },
     {
-      "timestamp": "2026-03-29 21:05",
+      "timestamp": "2026-03-29 01:45",
+      "stage": "discovery",
+      "note": "Stage advanced to discovery — routing to product-manager for requirements gathering"
+    },
+    {
+      "timestamp": "2026-03-29 02:00",
       "stage": "design",
-      "note": "Skipped Discovery (requirements clear from user feedback). Exec plan created. Advancing to Design."
+      "note": "Stage advanced to design — routing to principal-engineer for technical design"
     },
     {
-      "timestamp": "2026-03-29 21:30",
+      "timestamp": "2026-03-29 02:15",
       "stage": "tasks",
-      "note": "Task breakdown complete: 3 tasks (T1 emoji utils, T2 component rework, T3 E2E updates)"
+      "note": "Stage advanced to tasks — EM broke design into 4 independent tasks matching the 4 cleanup items"
     },
     {
-      "timestamp": "2026-03-29 21:35",
-      "stage": "design-review",
-      "note": "PE validated design: content-translation via translateY on .ptr-content wrapper, seamless scroll-to-pull via touchmove scrollTop check, single random emoji per pull. Confirmed overscroll-behavior-y upgrade from existing contain to none on main. Design respects RELIABILITY.md compositor-only animation rule and FRONTEND.md layer boundaries."
-    },
-    {
-      "timestamp": "2026-03-29 21:40",
+      "timestamp": "2026-03-29 02:30",
       "stage": "implementation",
-      "note": "Starting implementation of T1: Simplify emoji utilities and unit tests"
-    },
-    {
-      "timestamp": "2026-03-29 22:00",
-      "stage": "implementation",
-      "note": "T1 complete (utils + tests already updated). Starting T2: Rework PullToRefresh component to content-translation model"
-    },
-    {
-      "timestamp": "2026-03-29 23:00",
-      "stage": "review",
-      "note": "Routing to QA for code review of all changes on feat/pull-to-refresh branch"
-    },
-    {
-      "timestamp": "2026-03-29 23:30",
-      "stage": "implementation",
-      "note": "T2 verified complete (component rework with content-translation, preventDefault fix, unit tests pass). Starting T3: Update E2E tests for new DOM structure"
-    },
-    {
-      "timestamp": "2026-03-29 23:45",
-      "stage": "implementation",
-      "note": "QA returned REQUEST CHANGES. T3 expanded to include 4 QA fixes: (1) missing touchcancel handler, (2) overscroll-behavior-y specificity conflict, (3) PULL_EMOJIS array cleanup, (4) remove unnecessary will-change on .ptr-indicator. Rewriting SDE inbox with combined scope."
-    },
-    {
-      "timestamp": "2026-03-29 23:55",
-      "stage": "verification",
-      "note": "All tasks (T1, T2, T3) complete. Routing to build-specialist to run full quality gates."
-    },
-    {
-      "timestamp": "2026-03-30 00:10",
-      "stage": "review",
-      "note": "Build verification passed. Routing to QA for final sanity-check review after all QA fixes (touchcancel, overscroll-behavior-y, emoji array, will-change removal) applied."
-    },
-    {
-      "timestamp": "2026-03-30 00:20",
-      "stage": "implementation",
-      "note": "QA review returned 5 findings (1 CRITICAL, 3 WARNING, 1 SUGGESTION). Routing to SDE for combined fix pass on T3."
-    },
-    {
-      "timestamp": "2026-03-30 00:35",
-      "stage": "review",
-      "note": "Re-review after 5 QA fixes applied (touchcancel handler, overscroll-behavior-y specificity, PULL_EMOJIS cleanup, will-change removal, syncInFlight guard). Routing to QA for focused verification."
-    },
-    {
-      "timestamp": "2026-03-30 00:45",
-      "stage": "acceptance",
-      "note": "All tasks (T1, T2, T3) confirmed complete. Routing to product-manager for acceptance validation against all 8 acceptance criteria."
-    },
-    {
-      "timestamp": "2026-03-30 01:00",
-      "stage": "done",
-      "note": "Feature complete. Exec plan moved to docs/exec-plans/completed/. All 8 acceptance criteria passed."
+      "note": "Stage advanced to implementation — routing task-1 (remove Refresh button) to software-developer"
     }
   ]
 }
