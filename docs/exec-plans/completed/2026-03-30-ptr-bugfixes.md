@@ -25,14 +25,14 @@ Remove the unintended floating refresh button introduced as scope creep in `Pull
 
 ## Acceptance criteria
 
-- [ ] No element with class `.ptr-btn` exists in the rendered DOM when `PullToRefresh` is mounted.
-- [ ] `PullToRefresh.svelte` contains no `handleRefreshButton` function, no `.ptr-btn` markup, and no `.ptr-btn` CSS rules.
-- [ ] The `.ptr-content` element does not carry a static `will-change: transform` declaration that creates a new CSS containing block at rest.
-- [ ] A `position: fixed` descendant inside `PullToRefresh` (e.g. the add-task input) remains positioned relative to the viewport when the page is scrolled — it does not scroll with the page content.
-- [ ] The pull-to-refresh gesture continues to function correctly: pulling down from `scrollTop === 0` reveals the indicator, releasing past the threshold dispatches the `refresh` event, and the retract animation completes.
-- [ ] Unit tests assert that `.ptr-btn` is absent from the DOM after render.
-- [ ] All existing PTR unit tests continue to pass.
-- [ ] `npm run lint`, `npm run check`, and `npm run test` all pass with no errors.
+- [x] No element with class `.ptr-btn` exists in the rendered DOM when `PullToRefresh` is mounted.
+- [x] `PullToRefresh.svelte` contains no `handleRefreshButton` function, no `.ptr-btn` markup, and no `.ptr-btn` CSS rules.
+- [x] The `.ptr-content` element does not carry a static `will-change: transform` declaration that creates a new CSS containing block at rest.
+- [x] A `position: fixed` descendant inside `PullToRefresh` (e.g. the add-task input) remains positioned relative to the viewport when the page is scrolled — it does not scroll with the page content.
+- [x] The pull-to-refresh gesture continues to function correctly: pulling down from `scrollTop === 0` reveals the indicator, releasing past the threshold dispatches the `refresh` event, and the retract animation completes.
+- [x] Unit tests assert that `.ptr-btn` is absent from the DOM after render.
+- [x] All existing PTR unit tests continue to pass.
+- [x] `npm run lint`, `npm run check`, and `npm run test` all pass with no errors.
 
 ## Design
 
@@ -113,6 +113,7 @@ Add two new tests to the existing `PullToRefresh component` describe block:
 
 - 2026-03-30: Exec plan created by product-manager. Discovery complete.
 - 2026-03-30: Design complete (principal-engineer). Approach: remove static `will-change: transform` from `.ptr-content` entirely (fixes containing-block side effect); revert `.ptr-indicator` from `position: relative; margin-bottom: -56px` to `position: absolute` (cleaner, original design). No conditional toggle — modern browsers auto-promote transforms.
+- 2026-03-30: Feature complete. All acceptance criteria met. Exec plan archived to completed/.
 
 ## Decision log
 
