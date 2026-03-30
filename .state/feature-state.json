@@ -3,7 +3,7 @@
   "feature_name": "Increase pull-to-refresh maximum drag distance to roughly half screen height",
   "stage": "done",
   "created_at": "2026-03-30",
-  "updated_at": "2026-03-30T05:00",
+  "updated_at": "2026-03-30T05:30",
   "tasks": [],
   "completed_tasks": [
     {
@@ -70,6 +70,21 @@
       "timestamp": "2026-03-30 05:00",
       "stage": "done",
       "note": "Feature complete. Exec plan moved to docs/exec-plans/completed/. CLAUDE.md updated."
+    },
+    {
+      "timestamp": "2026-03-30 05:10",
+      "stage": "review",
+      "note": "Stage transition: done -> review. Running optional QA code review post-completion to verify consistency of docs, tests, and actual changes."
+    },
+    {
+      "timestamp": "2026-03-30 05:25",
+      "stage": "acceptance",
+      "note": "Stage transition: review -> acceptance. Scope expanded beyond original plan. Routing to product-manager for acceptance validation against updated criteria."
+    },
+    {
+      "timestamp": "2026-03-30 05:30",
+      "stage": "done",
+      "note": "Feature complete. All acceptance criteria met. State finalized."
     }
   ]
 }
