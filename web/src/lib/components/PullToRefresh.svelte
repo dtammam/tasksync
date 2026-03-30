@@ -337,7 +337,7 @@
 	<div
 		class="ptr-content"
 		class:ptr-animate={animateOut}
-		style="transform: translateY({contentTranslateY}px);"
+		style={contentTranslateY > 0 ? `transform: translateY(${contentTranslateY}px)` : ''}
 	>
 		<slot />
 	</div>

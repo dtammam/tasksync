@@ -314,7 +314,7 @@ describe('PullToRefresh touch gesture', () => {
 		expect(dispatched).toBe(false);
 	});
 
-	it('touchcancel resets ptr-content to translateY(0px)', async () => {
+	it('touchcancel resets ptr-content transform (no inline transform at rest)', async () => {
 		const { container } = render(PullToRefresh, { threshold: 64 });
 		const wrap = container.firstElementChild as HTMLElement;
 
@@ -326,6 +326,7 @@ describe('PullToRefresh touch gesture', () => {
 
 		const content = container.querySelector('.ptr-content') as HTMLElement;
 		expect(content).toBeTruthy();
-		expect(content.getAttribute('style')).toContain('translateY(0px)');
+		const style = content.getAttribute('style') ?? '';
+		expect(style).not.toContain('translateY(');
 	});
 });
