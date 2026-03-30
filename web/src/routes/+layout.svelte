@@ -127,10 +127,6 @@
 		return runSync();
 	};
 
-	const refreshNow = () => {
-		if (typeof window === 'undefined') return;
-		window.location.reload();
-	};
 
 
 	const setCopyLabel = (label: string) => {
@@ -474,9 +470,6 @@
 						{/if}
 					</span>
 				{/if}
-				<button class="refresh-btn" type="button" on:click={refreshNow}>
-					Refresh
-				</button>
 				<button class="refresh-btn" type="button" on:click={copyTasks}>
 					{copyLabel}
 				</button>

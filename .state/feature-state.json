@@ -1,125 +1,73 @@
 {
-  "feature_id": "ptr-ux-refinements",
-  "feature_name": "Pull-to-refresh UX refinements: content translation + single emoji per pull",
+  "feature_id": "ptr-button-and-fixed-positioning-fix",
+  "feature_name": "PTR fixes: remove floating refresh button and fix position:fixed children broken by will-change:transform",
   "stage": "done",
-  "created_at": "2026-03-29",
-  "updated_at": "2026-03-30",
+  "created_at": "2026-03-30",
+  "updated_at": "2026-03-30T03:30",
   "tasks": [
     {
-      "id": "T1",
-      "title": "Simplify emoji utilities and unit tests",
-      "description": "In pullToRefreshUtils.ts: replace PULL_EMOJIS contents with ['rocket', 'gear', 'hourglass', 'sync']. Delete computeEmojiIndex() and its JSDoc. Add pickRandomPullEmoji() that returns a random element from PULL_EMOJIS excluding hourglass. In PullToRefresh.test.ts: remove computeEmojiIndex tests, add tests for pickRandomPullEmoji (returns value from set, never returns hourglass).",
-      "files": [
-        "web/src/lib/components/pullToRefreshUtils.ts",
-        "web/src/lib/components/PullToRefresh.test.ts"
-      ],
-      "done_when": "computeEmojiIndex deleted, pickRandomPullEmoji exists and is tested, all unit tests pass"
+      "id": 1,
+      "title": "Deep-dive fix: position:fixed broken by PTR transform containing block",
+      "description": "The will-change:transform removal did NOT fix position:fixed on the add-task input. Deep-dive investigation needed: (1) Compare current +layout.svelte, PullToRefresh.svelte, +page.svelte, and list/[id]/+page.svelte against main branch (before PTR landed) to find exactly what broke position:fixed. (2) Investigate whether .ptr-content's active transform (translateY, even when set to 0) creates a new containing block that breaks fixed descendants. (3) Find a fix that preserves PTR pull animation while not breaking position:fixed children. (4) Run quality gates after fixing.",
+      "files": ["web/src/lib/components/PullToRefresh.svelte", "web/src/routes/+layout.svelte", "web/src/routes/+page.svelte", "web/src/routes/list/[id]/+page.svelte"],
+      "done_when": "The add-task text input is sticky/fixed at the bottom of the viewport again, AND pull-to-refresh gesture still works with animation. Quality gates pass.",
+      "status": "done"
     },
     {
-      "id": "T2",
-      "title": "Rework PullToRefresh component to content-translation model",
-      "description": "Major rework of PullToRefresh.svelte: (1) Template: wrap slot in div.ptr-content with inline translateY(contentTranslateY), change indicator to position:absolute, remove {#key} block and scale transition, render currentEmoji directly. (2) Gesture: add gestureEmoji variable set via pickRandomPullEmoji() at tracking start, rewrite handleTouchStart to always record startTouchY with pendingGesture flag, rewrite handleTouchMove for seamless scroll-to-pull (check scrollTop<=0 when pendingGesture && !isTracking), add reactive contentTranslateY from pullDistance. (3) CSS: indicator to position:absolute, add .ptr-content with will-change:transform, add overscroll-behavior-y:none on scoped :global(main), animate-out on both indicator and content. (4) Emoji: currentEmoji reads gestureEmoji during pull, hourglass during refresh, sync for reduced-motion. Update component render tests accordingly.",
-      "files": [
-        "web/src/lib/components/PullToRefresh.svelte",
-        "web/src/lib/components/PullToRefresh.test.ts"
-      ],
-      "done_when": "Content translates down during pull gesture, indicator appears in vacated space, single emoji per pull, seamless scroll-to-pull works, reduced-motion respected, unit tests pass"
-    },
-    {
-      "id": "T3",
-      "title": "QA fixes + E2E test updates",
-      "description": "Combined task: (1) Add touchcancel handler mirroring touchend behavior in PullToRefresh.svelte, (2) Move overscroll-behavior-y:none from PullToRefresh :global(main) to +layout.svelte scoped main rule, (3) Restructure PULL_EMOJIS to exclude hourglass from the random pool without filtering, (4) Remove unnecessary will-change:transform from .ptr-indicator CSS, (5) Update E2E tests for new DOM structure.",
-      "files": [
-        "web/src/lib/components/PullToRefresh.svelte",
-        "web/src/lib/components/pullToRefreshUtils.ts",
-        "web/src/routes/+layout.svelte",
-        "web/tests/e2e/pull-to-refresh.spec.ts",
-        "web/src/lib/components/PullToRefresh.test.ts"
-      ],
-      "done_when": "touchcancel resets gesture state, overscroll-behavior-y:none is in +layout.svelte (not PullToRefresh), PULL_EMOJIS has no hourglass in random pool, .ptr-indicator has no will-change:transform, E2E spec updated, all quality gates pass (npm run lint, npm run check, npm run test, npm run test:e2e:smoke)"
+      "id": 2,
+      "title": "Add unit tests for will-change and ptr-btn absence",
+      "description": "In PullToRefresh.test.ts: (1) Add a test asserting that .ptr-content does NOT have will-change:transform in its inline or computed styles after render. (2) Add a test asserting that no element with class .ptr-btn exists in the rendered DOM. (3) Ensure all existing PTR tests still pass.",
+      "files": ["web/src/lib/components/PullToRefresh.test.ts"],
+      "done_when": "Two new passing tests: one for will-change absence on .ptr-content, one for .ptr-btn absence. All existing tests pass. npm run test passes.",
+      "status": "done"
     }
   ],
-  "completed_tasks": ["T1", "T2", "T3"],
+  "completed_tasks": [1, 2],
   "artifacts": {
-    "requirements": "docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md",
-    "design": "docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md",
-    "exec_plan": "docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md"
+    "requirements": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md",
+    "design": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md",
+    "exec_plan": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md"
   },
   "history": [
     {
-      "timestamp": "2026-03-29 21:00",
+      "timestamp": "2026-03-30 02:00",
       "stage": "bootstrap",
-      "note": "Feature initiated: UX refinements for shipped pull-to-refresh (content translation + single emoji per pull)"
+      "note": "Feature initiated: two PTR bugs — (1) remove unwanted floating refresh button (.ptr-btn) from PullToRefresh.svelte, (2) fix will-change:transform on .ptr-content breaking position:fixed children like the add-task input"
     },
     {
-      "timestamp": "2026-03-29 21:05",
+      "timestamp": "2026-03-30 02:05",
+      "stage": "discovery",
+      "note": "Advanced to discovery — routing to product-manager for requirements and exec plan"
+    },
+    {
+      "timestamp": "2026-03-30 02:10",
       "stage": "design",
-      "note": "Skipped Discovery (requirements clear from user feedback). Exec plan created. Advancing to Design."
+      "note": "Advanced to design — routing to principal-engineer to produce technical design for the will-change:transform fix"
     },
     {
-      "timestamp": "2026-03-29 21:30",
+      "timestamp": "2026-03-30 02:20",
       "stage": "tasks",
-      "note": "Task breakdown complete: 3 tasks (T1 emoji utils, T2 component rework, T3 E2E updates)"
+      "note": "Advanced to tasks — broke design into 2 implementation tasks: (1) CSS fixes in PullToRefresh.svelte, (2) unit tests for will-change and ptr-btn absence"
     },
     {
-      "timestamp": "2026-03-29 21:35",
-      "stage": "design-review",
-      "note": "PE validated design: content-translation via translateY on .ptr-content wrapper, seamless scroll-to-pull via touchmove scrollTop check, single random emoji per pull. Confirmed overscroll-behavior-y upgrade from existing contain to none on main. Design respects RELIABILITY.md compositor-only animation rule and FRONTEND.md layer boundaries."
-    },
-    {
-      "timestamp": "2026-03-29 21:40",
+      "timestamp": "2026-03-30 02:30",
       "stage": "implementation",
-      "note": "Starting implementation of T1: Simplify emoji utilities and unit tests"
+      "note": "Starting implementation — routing Task 1 (CSS fixes: remove will-change, revert ptr-indicator to position:absolute) to software-developer"
     },
     {
-      "timestamp": "2026-03-29 22:00",
+      "timestamp": "2026-03-30 02:45",
       "stage": "implementation",
-      "note": "T1 complete (utils + tests already updated). Starting T2: Rework PullToRefresh component to content-translation model"
+      "note": "Routing Task 2 (unit tests for will-change and ptr-btn absence) to software-developer"
     },
     {
-      "timestamp": "2026-03-29 23:00",
-      "stage": "review",
-      "note": "Routing to QA for code review of all changes on feat/pull-to-refresh branch"
-    },
-    {
-      "timestamp": "2026-03-29 23:30",
+      "timestamp": "2026-03-30 03:00",
       "stage": "implementation",
-      "note": "T2 verified complete (component rework with content-translation, preventDefault fix, unit tests pass). Starting T3: Update E2E tests for new DOM structure"
+      "note": "Task 1 marked NOT complete — removing will-change:transform did NOT fix position:fixed. The active transform on .ptr-content (translateY) also creates a containing block. Re-routing Task 1 to SDE with deeper investigation scope."
     },
     {
-      "timestamp": "2026-03-29 23:45",
-      "stage": "implementation",
-      "note": "QA returned REQUEST CHANGES. T3 expanded to include 4 QA fixes: (1) missing touchcancel handler, (2) overscroll-behavior-y specificity conflict, (3) PULL_EMOJIS array cleanup, (4) remove unnecessary will-change on .ptr-indicator. Rewriting SDE inbox with combined scope."
-    },
-    {
-      "timestamp": "2026-03-29 23:55",
-      "stage": "verification",
-      "note": "All tasks (T1, T2, T3) complete. Routing to build-specialist to run full quality gates."
-    },
-    {
-      "timestamp": "2026-03-30 00:10",
-      "stage": "review",
-      "note": "Build verification passed. Routing to QA for final sanity-check review after all QA fixes (touchcancel, overscroll-behavior-y, emoji array, will-change removal) applied."
-    },
-    {
-      "timestamp": "2026-03-30 00:20",
-      "stage": "implementation",
-      "note": "QA review returned 5 findings (1 CRITICAL, 3 WARNING, 1 SUGGESTION). Routing to SDE for combined fix pass on T3."
-    },
-    {
-      "timestamp": "2026-03-30 00:35",
-      "stage": "review",
-      "note": "Re-review after 5 QA fixes applied (touchcancel handler, overscroll-behavior-y specificity, PULL_EMOJIS cleanup, will-change removal, syncInFlight guard). Routing to QA for focused verification."
-    },
-    {
-      "timestamp": "2026-03-30 00:45",
-      "stage": "acceptance",
-      "note": "All tasks (T1, T2, T3) confirmed complete. Routing to product-manager for acceptance validation against all 8 acceptance criteria."
-    },
-    {
-      "timestamp": "2026-03-30 01:00",
+      "timestamp": "2026-03-30 03:30",
       "stage": "done",
-      "note": "Feature complete. Exec plan moved to docs/exec-plans/completed/. All 8 acceptance criteria passed."
+      "note": "Feature complete. Exec plan archived to docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md. Both tasks done: position:fixed fix and regression tests."
     }
   ]
 }

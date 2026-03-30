@@ -30,6 +30,7 @@ export default defineConfig({
 	],
 	webServer: {
 		command: 'npm run dev -- --host --port 4173',
+		url: 'http://localhost:4173',
 		reuseExistingServer: !process.env.CI,
 		stdout: 'ignore',
 		stderr: 'pipe'
