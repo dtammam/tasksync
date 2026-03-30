@@ -1,73 +1,75 @@
 {
-  "feature_id": "ptr-button-and-fixed-positioning-fix",
-  "feature_name": "PTR fixes: remove floating refresh button and fix position:fixed children broken by will-change:transform",
+  "feature_id": "ptr-increase-max-drag",
+  "feature_name": "Increase pull-to-refresh maximum drag distance to roughly half screen height",
   "stage": "done",
   "created_at": "2026-03-30",
-  "updated_at": "2026-03-30T03:30",
-  "tasks": [
+  "updated_at": "2026-03-30T05:00",
+  "tasks": [],
+  "completed_tasks": [
     {
-      "id": 1,
-      "title": "Deep-dive fix: position:fixed broken by PTR transform containing block",
-      "description": "The will-change:transform removal did NOT fix position:fixed on the add-task input. Deep-dive investigation needed: (1) Compare current +layout.svelte, PullToRefresh.svelte, +page.svelte, and list/[id]/+page.svelte against main branch (before PTR landed) to find exactly what broke position:fixed. (2) Investigate whether .ptr-content's active transform (translateY, even when set to 0) creates a new containing block that breaks fixed descendants. (3) Find a fix that preserves PTR pull animation while not breaking position:fixed children. (4) Run quality gates after fixing.",
-      "files": ["web/src/lib/components/PullToRefresh.svelte", "web/src/routes/+layout.svelte", "web/src/routes/+page.svelte", "web/src/routes/list/[id]/+page.svelte"],
-      "done_when": "The add-task text input is sticky/fixed at the bottom of the viewport again, AND pull-to-refresh gesture still works with animation. Quality gates pass.",
-      "status": "done"
-    },
-    {
-      "id": 2,
-      "title": "Add unit tests for will-change and ptr-btn absence",
-      "description": "In PullToRefresh.test.ts: (1) Add a test asserting that .ptr-content does NOT have will-change:transform in its inline or computed styles after render. (2) Add a test asserting that no element with class .ptr-btn exists in the rendered DOM. (3) Ensure all existing PTR tests still pass.",
-      "files": ["web/src/lib/components/PullToRefresh.test.ts"],
-      "done_when": "Two new passing tests: one for will-change absence on .ptr-content, one for .ptr-btn absence. All existing tests pass. npm run test passes.",
+      "id": "T1",
+      "title": "Change PULL_MAX from 150 to 400 in pullToRefreshUtils.ts",
+      "description": "In web/src/lib/components/pullToRefreshUtils.ts, change the PULL_MAX constant from 150 to 400. Keep PULL_DAMPING at 0.5 (no change). Run lint, type-check, and unit tests to confirm all pass without modification.",
+      "files": ["web/src/lib/components/pullToRefreshUtils.ts"],
+      "definition_of_done": "PULL_MAX is 400, PULL_DAMPING is 0.5, npm run lint + npm run check + npm run test all pass with no changes to test files.",
       "status": "done"
     }
   ],
-  "completed_tasks": [1, 2],
   "artifacts": {
-    "requirements": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md",
-    "design": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md",
-    "exec_plan": "docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md"
+    "requirements": "docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md",
+    "design": "docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md",
+    "exec_plan": "docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md"
   },
   "history": [
     {
-      "timestamp": "2026-03-30 02:00",
+      "timestamp": "2026-03-30 04:00",
       "stage": "bootstrap",
-      "note": "Feature initiated: two PTR bugs — (1) remove unwanted floating refresh button (.ptr-btn) from PullToRefresh.svelte, (2) fix will-change:transform on .ptr-content breaking position:fixed children like the add-task input"
+      "note": "Feature initiated: increase PTR max drag distance from 150px to roughly half screen height for a more natural pull gesture feel"
     },
     {
-      "timestamp": "2026-03-30 02:05",
+      "timestamp": "2026-03-30 04:05",
       "stage": "discovery",
-      "note": "Advanced to discovery — routing to product-manager for requirements and exec plan"
+      "note": "Stage transition: bootstrap -> discovery. Routing to product-manager for requirements."
     },
     {
-      "timestamp": "2026-03-30 02:10",
+      "timestamp": "2026-03-30 04:10",
       "stage": "design",
-      "note": "Advanced to design — routing to principal-engineer to produce technical design for the will-change:transform fix"
+      "note": "Stage transition: discovery -> design. Routing to principal-engineer for technical design."
     },
     {
-      "timestamp": "2026-03-30 02:20",
+      "timestamp": "2026-03-30 04:15",
+      "stage": "design",
+      "note": "Design complete. PULL_MAX = 400, PULL_DAMPING unchanged at 0.5. Single-constant change, no test modifications needed."
+    },
+    {
+      "timestamp": "2026-03-30 04:20",
       "stage": "tasks",
-      "note": "Advanced to tasks — broke design into 2 implementation tasks: (1) CSS fixes in PullToRefresh.svelte, (2) unit tests for will-change and ptr-btn absence"
+      "note": "Stage transition: design -> tasks. One task: change PULL_MAX from 150 to 400."
     },
     {
-      "timestamp": "2026-03-30 02:30",
+      "timestamp": "2026-03-30 04:25",
       "stage": "implementation",
-      "note": "Starting implementation — routing Task 1 (CSS fixes: remove will-change, revert ptr-indicator to position:absolute) to software-developer"
+      "note": "Stage transition: tasks -> implementation. Routing T1 to software-developer: change PULL_MAX from 150 to 400."
     },
     {
-      "timestamp": "2026-03-30 02:45",
+      "timestamp": "2026-03-30 04:35",
       "stage": "implementation",
-      "note": "Routing Task 2 (unit tests for will-change and ptr-btn absence) to software-developer"
+      "note": "T1 complete. PULL_MAX changed from 150 to 400 in pullToRefreshUtils.ts. All quality gates pass: lint (0 errors), check (0 errors, 0 warnings), test (277 passed, 0 failed)."
     },
     {
-      "timestamp": "2026-03-30 03:00",
-      "stage": "implementation",
-      "note": "Task 1 marked NOT complete — removing will-change:transform did NOT fix position:fixed. The active transform on .ptr-content (translateY) also creates a containing block. Re-routing Task 1 to SDE with deeper investigation scope."
+      "timestamp": "2026-03-30 04:40",
+      "stage": "verification",
+      "note": "Stage transition: implementation -> verification. All tasks complete. Routing to build-specialist for full quality gate validation."
     },
     {
-      "timestamp": "2026-03-30 03:30",
+      "timestamp": "2026-03-30 04:50",
+      "stage": "acceptance",
+      "note": "Stage transition: verification -> acceptance. All tasks in completed_tasks. Routing to product-manager for acceptance criteria validation."
+    },
+    {
+      "timestamp": "2026-03-30 05:00",
       "stage": "done",
-      "note": "Feature complete. Exec plan archived to docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md. Both tasks done: position:fixed fix and regression tests."
+      "note": "Feature complete. Exec plan moved to docs/exec-plans/completed/. CLAUDE.md updated."
     }
   ]
 }

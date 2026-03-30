@@ -13,7 +13,7 @@ export const REFRESH_EMOJI = '⏳';
 export const PULL_DAMPING = 0.5;
 
 /** Maximum pull distance in pixels (provides resistance feel). */
-export const PULL_MAX = 150;
+export const PULL_MAX = 400;
 
 /**
  * Pick a random emoji to show during the pull gesture.
