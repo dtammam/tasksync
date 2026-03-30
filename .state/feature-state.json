@@ -3,14 +3,18 @@
   "feature_name": "Close mobile task shelf on ALL action button taps, not just star",
   "stage": "done",
   "created_at": "2026-03-30",
-  "updated_at": "2026-03-30T20:00",
+  "updated_at": "2026-03-30T21:30",
   "tasks": [],
   "completed_tasks": [
     {
       "id": "T1",
       "title": "Add closeActions() to all four handlers and write tests",
       "description": "In TaskRow.svelte, add a closeActions() call at the end of toggleStar, punt, addTomorrow, and addNextWeek. Write unit tests for all four handlers asserting showActions === false after the action fires (plus regression tests for deleteTask and openDetailFromMenu). Write one Playwright @smoke E2E test for the Star action's shelf-close behavior. Run all quality gates and fix any failures.",
-      "files": ["web/src/lib/components/TaskRow.svelte", "web/src/lib/components/TaskRow.test.ts", "web/tests/e2e/"],
+      "files": [
+        "web/src/lib/components/TaskRow.svelte",
+        "web/src/lib/components/TaskRow.test.ts",
+        "web/tests/e2e/"
+      ],
       "done_when": "All four handlers call closeActions(), unit tests pass for all six action handlers, E2E smoke test passes for Star shelf-close, all quality gates green.",
       "status": "done"
     }
@@ -75,6 +79,21 @@
       "timestamp": "2026-03-30 20:00",
       "stage": "done",
       "note": "Feature complete. Exec plan moved to completed/. All 9 acceptance criteria passed. No tech debt created."
+    },
+    {
+      "timestamp": "2026-03-30 20:30",
+      "stage": "review",
+      "note": "Post-completion review requested. Main session scope-crept by directly fixing a flaky E2E test (smoke.spec.ts) instead of routing through SDE. QA to review full diff against main."
+    },
+    {
+      "timestamp": "2026-03-30 21:00",
+      "stage": "acceptance",
+      "note": "Re-acceptance after post-completion QA review. All tasks in completed_tasks. Routed to product-manager for acceptance validation."
+    },
+    {
+      "timestamp": "2026-03-30 21:30",
+      "stage": "done",
+      "note": "Feature complete. Archived."
     }
   ]
 }
