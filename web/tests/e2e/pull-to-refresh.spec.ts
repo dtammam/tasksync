@@ -3,7 +3,8 @@ import { devices, expect, test } from '@playwright/test';
 // All tests in this file run with a mobile device profile (touch enabled).
 test.use({ ...devices['Pixel 5'] });
 
-test('pull-to-refresh gesture triggers sync @smoke', async ({ page }) => {
+test('pull-to-refresh gesture triggers sync @smoke', async ({ page, browserName }) => {
+	test.skip(browserName !== 'chromium', 'CDP required for raw touch simulation');
 	await page.goto('/');
 	await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 
