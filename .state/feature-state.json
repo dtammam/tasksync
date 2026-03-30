@@ -3,7 +3,7 @@
   "feature_name": "Pull-to-refresh cleanup: remove scope-creep refresh button, expand emoji set, investigate E2E flakiness, update docs",
   "stage": "implementation",
   "created_at": "2026-03-29",
-  "updated_at": "2026-03-29T03:30",
+  "updated_at": "2026-03-30T00:45",
   "tasks": [
     {
       "id": "task-1",
@@ -38,11 +38,11 @@
       "description": "Add pull-to-refresh coverage to three docs: (1) docs/ARCHITECTURE.md — in Client Architecture section, add a bullet describing PullToRefresh as a gesture-driven sync trigger entry point. (2) docs/FRONTEND.md — add PullToRefresh.svelte and pullToRefreshUtils.ts to component/utility tables, note the data/-import boundary constraint. (3) docs/RELIABILITY.md — document the overscroll-behavior-y: none rule on <main> required to prevent browser native PTR conflict. Ensure all three docs are consistent with each other and with the shipped implementation.",
       "files": ["docs/ARCHITECTURE.md", "docs/FRONTEND.md", "docs/RELIABILITY.md"],
       "definition_of_done": "All three docs reference PTR components accurately. overscroll-behavior-y rule documented. Layer boundary constraint noted. Docs are internally consistent. All quality gates pass.",
-      "status": "pending",
+      "status": "complete",
       "acceptance_criteria": ["4.1", "4.2", "4.3", "4.4", "4.5"]
     }
   ],
-  "completed_tasks": ["task-1", "task-2", "task-3"],
+  "completed_tasks": ["task-1", "task-2", "task-3", "task-4"],
   "artifacts": {
     "requirements": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
     "design": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
@@ -88,6 +88,11 @@
       "timestamp": "2026-03-30 00:37",
       "stage": "implementation",
       "note": "task-3 complete: CDP guard added to PTR gesture test (skips on Firefox/WebKit), explicit webServer url added to playwright.config.ts; 3 consecutive Chromium runs all passed"
+    },
+    {
+      "timestamp": "2026-03-30 00:45",
+      "stage": "implementation",
+      "note": "Routing task-4 (update ARCHITECTURE.md, FRONTEND.md, RELIABILITY.md with PTR documentation) to software-developer"
     }
   ]
 }

@@ -26,6 +26,12 @@ These budgets must be backed by:
   - duplicates are not created
   - conflict resolution follows documented rules
 
+## Pull-to-refresh (browser gesture interop)
+
+- `<main>` in `+layout.svelte` sets `overscroll-behavior-y: none`. This is required to prevent the browser's native pull-to-refresh gesture from conflicting with the custom `PullToRefresh` component.
+- The value is `none` (not `contain`): both `none` and `contain` suppress browser-native PTR, but `none` additionally prevents scroll chaining to parent elements — appropriate here because `<main>` is the outermost scroll container.
+- Do not weaken this rule (e.g. by removing the property or changing it to `auto`) without a replacement mechanism that prevents the native gesture from racing with `PullToRefresh`'s touch handlers.
+
 ## Sync invariants (must be testable)
 
 - Push is idempotent (re-sending the same payload does not create duplicates)

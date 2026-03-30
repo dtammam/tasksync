@@ -118,6 +118,7 @@ Components extracted from route-level files live under `web/src/lib/components/`
 | `settings/SoundSettings.svelte` | `Sidebar.svelte` | Intentional store access (`soundSettings`). Owns all custom-sound upload/clear/preview logic. |
 | `settings/MemberList.svelte` | `Sidebar.svelte` | Props in, events out (`reset`, `delete`, `grantChange`). Uses `ListPermissions` internally. |
 | `settings/ListPermissions.svelte` | `Sidebar.svelte` | Props in, events out (`grantChange`). Renders grant grid for contributor members. |
+| `PullToRefresh.svelte` | `routes/+layout.svelte` | Wraps `<main>` slot content. Dispatches `refresh` event outward; parent sets `event.detail.promise` to the sync promise. No store access. Must not import from `data/` — gesture utility logic is in co-located `pullToRefreshUtils.ts`. |
 
 Utilities extracted from route/layout files live under `web/src/lib/utils/`:
 
@@ -125,6 +126,12 @@ Utilities extracted from route/layout files live under `web/src/lib/utils/`:
 |---|---|---|
 | `keyboardOffset.ts` | `routes/+layout.svelte` | `installKeyboardOffsetTracker(el)` — sets `--mobile-keyboard-offset` CSS var; returns cleanup. |
 | `shareText.ts` | `routes/+layout.svelte` | `copyToClipboard(text)` with `execCommand` fallback. No DOM coupling beyond function params. |
+
+Co-located component utilities under `web/src/lib/components/`:
+
+| Utility | Used by | Notes |
+|---|---|---|
+| `pullToRefreshUtils.ts` | `PullToRefresh.svelte` | Pure functions: `pickRandomPullEmoji`, `applyPullDamping`, `meetsRefreshThreshold`. No store or `data/` imports. Independently unit-tested. |
 
 ## “No spaghetti” import rules (enforced by ESLint)
 

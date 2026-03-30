@@ -357,6 +357,22 @@ rendering paths.
   All quality gates pass: lint, svelte-check, vitest (281 tests), cargo fmt,
   cargo clippy.
 
+- 2026-03-30 (task-4): Updated three project docs with pull-to-refresh coverage.
+  1. `docs/ARCHITECTURE.md` — added a **Pull-to-refresh** bullet in the Client Architecture
+     section (after Audio). Describes `PullToRefresh.svelte` as a gesture-driven sync trigger
+     entry point: wraps `<main>` content in `+layout.svelte`, dispatches a `refresh` event
+     handled by the layout, with pure utility logic co-located in `pullToRefreshUtils.ts`.
+  2. `docs/FRONTEND.md` — added `PullToRefresh.svelte` to the "Extracted UI components"
+     table (notes: wraps slot content, no store access, dispatches events out, must not import
+     from `data/`). Added a new "Co-located component utilities" sub-table with a row for
+     `pullToRefreshUtils.ts` (pure functions, no store/data imports, independently tested).
+  3. `docs/RELIABILITY.md` — added a new "Pull-to-refresh (browser gesture interop)" section
+     documenting the `overscroll-behavior-y: none` rule on `<main>` (set in `+layout.svelte`).
+     Notes that the value is `none` (not `contain`), which additionally prevents scroll chaining
+     to parent elements, and warns against weakening the rule without a replacement mechanism.
+  All quality gates pass: lint (0 errors), svelte-check (0 errors), vitest (281 tests passed),
+  cargo fmt (clean), cargo clippy (0 warnings).
+
 ## Decision log
 
 - 2026-03-30: PULL_EMOJIS set confirmed by user: 15 task/productivity-themed
