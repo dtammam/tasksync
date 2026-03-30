@@ -12,6 +12,7 @@ Rules:
 | ID | Area | Severity | Summary | Owner | Next action |
 |---:|------|----------|---------|-------|-------------|
 | 041 | Store | Low | `showCompleted` preference is client-local only (localStorage); add server-side DB column + Rust handler so it syncs cross-device | unassigned | Add `show_completed` column to `user` table, wire through `auth_update_preferences` / `load_ui_preferences_for_user`, remove client-side preservation workaround in `pushRemote` / `hydrateFromServer` |
+| 042 | UI | Low | `TaskRow.svelte` action-menu close inconsistency: `deleteTask` and `openDetailFromMenu` use inline `showActions = false` while newer handlers (`toggleStar`, `punt`, `addTomorrow`, `addNextWeek`) use `closeActions()` | unassigned | Replace inline `showActions = false` with `closeActions()` in `deleteTask` and `openDetailFromMenu` for consistency |
 
 ## Closed
 

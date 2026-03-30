@@ -38,10 +38,12 @@ const nextWeekIso = () => {
 const addTomorrow = () => {
 	if (!canEditTask) return;
 	tasks.setDueDate(task.id, tomorrowIso());
+	closeActions();
 };
 const addNextWeek = () => {
 	if (!canEditTask) return;
 	tasks.setDueDate(task.id, nextWeekIso());
+	closeActions();
 };
 
 const isTodayTs = (ts: unknown): boolean => {
@@ -72,6 +74,7 @@ const recurrencePreview = (taskValue: Task | null | undefined, count = 1): strin
 const punt = () => {
 	if (!canPunt) return;
 	tasks.punt(task.id);
+	closeActions();
 };
 
 const handleToggleStatus = () => {
@@ -102,6 +105,7 @@ onDestroy(() => {
 const toggleStar = () => {
 	if (!canEditTask) return;
 	tasks.setPriority(task.id, task.priority > 0 ? 0 : 1);
+	closeActions();
 };
 
 const closeActions = () => (showActions = false);
