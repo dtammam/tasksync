@@ -282,8 +282,8 @@ describe('PullToRefresh touch gesture', () => {
 		const wrap = container.firstElementChild as HTMLElement;
 
 		// First touchmove activates tracking (rebase to y=10).
-		// Second touchmove accumulates pull: rawDelta=90 → 45px damped.
-		// contentTranslateY = Math.min(45/64 * 56, 56) ≈ 39.375px (non-zero).
+		// Second touchmove accumulates pull: rawDelta=90 → 45px damped (PULL_DAMPING=0.5).
+		// contentTranslateY = pullDistance = 45px (non-zero).
 		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
 		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap)); // activates tracking
 		await fireEvent(wrap, makeTouchEvent('touchmove', 100, wrap)); // 90px raw → 45px damped
