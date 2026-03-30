@@ -473,13 +473,11 @@ test.describe('List view', () => {
 			return row;
 		};
 
-		const dueSoonRow = await openTaskMenu(dueSoonTitle);
+		await openTaskMenu(dueSoonTitle);
 		await page.getByRole('button', { name: 'Tomorrow' }).click();
-		await dueSoonRow.getByRole('button', { name: 'Close', exact: true }).click();
 
-		const dueLaterRow = await openTaskMenu(dueLaterTitle);
+		await openTaskMenu(dueLaterTitle);
 		await page.getByRole('button', { name: 'Next week' }).click();
-		await dueLaterRow.getByRole('button', { name: 'Close', exact: true }).click();
 
 		await page.getByTestId('list-sort-mode').selectOption('due_date');
 		await page.getByTestId('list-sort-direction').selectOption('asc');
