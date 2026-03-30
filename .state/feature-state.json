@@ -1,9 +1,9 @@
 {
   "feature_id": "ptr-cleanup-and-polish",
   "feature_name": "Pull-to-refresh cleanup: remove scope-creep refresh button, expand emoji set, investigate E2E flakiness, update docs",
-  "stage": "implementation",
+  "stage": "done",
   "created_at": "2026-03-29",
-  "updated_at": "2026-03-30T00:45",
+  "updated_at": "2026-03-30",
   "tasks": [
     {
       "id": "task-1",
@@ -44,9 +44,9 @@
   ],
   "completed_tasks": ["task-1", "task-2", "task-3", "task-4"],
   "artifacts": {
-    "requirements": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
-    "design": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md",
-    "exec_plan": "docs/exec-plans/active/2026-03-30-ptr-cleanup-polish.md"
+    "requirements": "docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md",
+    "design": "docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md",
+    "exec_plan": "docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md"
   },
   "history": [
     {
@@ -93,6 +93,26 @@
       "timestamp": "2026-03-30 00:45",
       "stage": "implementation",
       "note": "Routing task-4 (update ARCHITECTURE.md, FRONTEND.md, RELIABILITY.md with PTR documentation) to software-developer"
+    },
+    {
+      "timestamp": "2026-03-30 01:00",
+      "stage": "review",
+      "note": "All 4 tasks complete. Stage advanced to review — routing to quality-assurance for code review."
+    },
+    {
+      "timestamp": "2026-03-30 01:15",
+      "stage": "verification",
+      "note": "Stage advanced to verification — routing to build-specialist for full quality gate check"
+    },
+    {
+      "timestamp": "2026-03-30 01:30",
+      "stage": "acceptance",
+      "note": "All 4 tasks complete and verified. Stage advanced to acceptance — routing to product-manager for acceptance criteria validation."
+    },
+    {
+      "timestamp": "2026-03-30 01:45",
+      "stage": "done",
+      "note": "Feature complete. All 4 tasks delivered, all 20 acceptance criteria passed. Exec plan archived to docs/exec-plans/completed/."
     }
   ]
 }

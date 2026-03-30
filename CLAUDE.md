@@ -222,6 +222,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md` — PTR cleanup: remove scope-creep refresh button, expand emoji set to 15, fix E2E flakiness, update docs (complete 2026-03-29)
 - `docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md` — Pull-to-refresh UX refinements: content translation + single emoji per pull (complete 2026-03-29)
 - `docs/exec-plans/completed/2026-03-29-pull-to-refresh.md` — Pull-to-refresh gesture with animated emoji for mobile/PWA (complete 2026-03-29)
 - `docs/exec-plans/completed/2026-03-17-hide-completed-tasks.md` — Add "Show completed tasks" appearance toggle to hide completed sections on My Day and list views (complete 2026-03-17)

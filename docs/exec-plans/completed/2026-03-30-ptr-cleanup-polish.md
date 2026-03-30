@@ -59,50 +59,50 @@ the pull-to-refresh feature.
 ## Acceptance criteria
 
 ### Item 1 — Remove scope-creep Refresh button
-- [ ] 1.1 The "Refresh" button (`on:click={refreshNow}`) is absent from the
+- [x] 1.1 The "Refresh" button (`on:click={refreshNow}`) is absent from the
       rendered layout in all routes.
-- [ ] 1.2 The `refreshNow` function is removed from `+layout.svelte`.
-- [ ] 1.3 No CSS rules exist in `+layout.svelte` solely to style the removed
+- [x] 1.2 The `refreshNow` function is removed from `+layout.svelte`.
+- [x] 1.3 No CSS rules exist in `+layout.svelte` solely to style the removed
       Refresh button (dead styles pruned). The Copy button's styles remain if
       they are still needed.
-- [ ] 1.4 The "Copy" button remains present and functional.
-- [ ] 1.5 All quality gates pass after this change.
+- [x] 1.4 The "Copy" button remains present and functional.
+- [x] 1.5 All quality gates pass after this change.
 
 ### Item 2 — Expand PULL_EMOJIS
-- [ ] 2.1 `PULL_EMOJIS` in `pullToRefreshUtils.ts` contains exactly 15 entries:
+- [x] 2.1 `PULL_EMOJIS` in `pullToRefreshUtils.ts` contains exactly 15 entries:
       `['🚀', '⚙️', '🔄', '🎯', '💪', '🏆', '🌟', '📌', '⚡', '✨', '💨',
       '🔥', '🏁', '💥', '🧹']`.
-- [ ] 2.2 `REFRESH_EMOJI` remains `'⏳'` and is unchanged.
-- [ ] 2.3 `pickRandomPullEmoji()` logic is unchanged.
-- [ ] 2.4 Unit tests for `pullToRefreshUtils.ts` are updated to assert the new
+- [x] 2.2 `REFRESH_EMOJI` remains `'⏳'` and is unchanged.
+- [x] 2.3 `pickRandomPullEmoji()` logic is unchanged.
+- [x] 2.4 Unit tests for `pullToRefreshUtils.ts` are updated to assert the new
       array length (15) and that every emoji in the array is one of the 15
       specified values.
-- [ ] 2.5 All quality gates pass after this change.
+- [x] 2.5 All quality gates pass after this change.
 
 ### Item 3 — E2E flakiness investigation and fix
-- [ ] 3.1 Root cause(s) of Webkit and Chromium flakiness are documented in this
+- [x] 3.1 Root cause(s) of Webkit and Chromium flakiness are documented in this
       plan's progress log with specific failing tests identified.
-- [ ] 3.2 Fixes are applied that address the root cause (not workarounds such as
+- [x] 3.2 Fixes are applied that address the root cause (not workarounds such as
       blanket retry increases or test skips).
-- [ ] 3.3 The full Playwright test suite (Chromium + Webkit; @smoke and full
+- [x] 3.3 The full Playwright test suite (Chromium + Webkit; @smoke and full
       matrix) passes on at least 3 consecutive local runs without a single retry
       needed after the fix.
-- [ ] 3.4 No existing test is deleted or unconditionally skipped to achieve 3.3.
-- [ ] 3.5 All quality gates pass after this change.
+- [x] 3.4 No existing test is deleted or unconditionally skipped to achieve 3.3.
+- [x] 3.5 All quality gates pass after this change.
 
 ### Item 4 — Documentation update
-- [ ] 4.1 `docs/ARCHITECTURE.md` references the `PullToRefresh` component and its
+- [x] 4.1 `docs/ARCHITECTURE.md` references the `PullToRefresh` component and its
       role as a sync trigger entry point (or documents why it does not belong
       there if that determination is made during implementation).
-- [ ] 4.2 `docs/FRONTEND.md` documents `PullToRefresh.svelte` and
+- [x] 4.2 `docs/FRONTEND.md` documents `PullToRefresh.svelte` and
       `pullToRefreshUtils.ts` within the component layer, noting the
       `data/`-import boundary constraint.
-- [ ] 4.3 `docs/RELIABILITY.md` notes the `overscroll-behavior-y: contain` rule
+- [x] 4.3 `docs/RELIABILITY.md` notes the `overscroll-behavior-y: contain` rule
       required on `<main>` for PTR to function correctly (or equivalent
       reliability invariant the PE deems appropriate).
-- [ ] 4.4 All three docs are internally consistent with each other and with the
+- [x] 4.4 All three docs are internally consistent with each other and with the
       shipped implementation.
-- [ ] 4.5 All quality gates pass after this change.
+- [x] 4.5 All quality gates pass after this change.
 
 ## Design
 
@@ -372,6 +372,9 @@ rendering paths.
      to parent elements, and warns against weakening the rule without a replacement mechanism.
   All quality gates pass: lint (0 errors), svelte-check (0 errors), vitest (281 tests passed),
   cargo fmt (clean), cargo clippy (0 warnings).
+
+- 2026-03-30: Feature complete. All 4 tasks implemented, reviewed, verified, and accepted.
+  Exec plan moved to `docs/exec-plans/completed/`. No tech debt created.
 
 ## Decision log
 
