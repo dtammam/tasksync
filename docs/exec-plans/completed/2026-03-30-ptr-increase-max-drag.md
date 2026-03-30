@@ -126,7 +126,9 @@ No expected impact on performance budgets. This changes a numeric constant used 
 - **2026-03-30:** Design complete. Recommend PULL_MAX = 400, keep PULL_DAMPING = 0.5. Single-constant change in pullToRefreshUtils.ts; no test modifications needed.
 - **2026-03-30:** Feature complete. PULL_MAX changed to 400, all quality gates pass (lint, check, 277 tests), acceptance criteria validated. Moving to completed.
 - **2026-03-30:** Post-deploy: contentTranslateY in PullToRefresh.svelte was still capped at INDICATOR_HEIGHT (56px), making the PULL_MAX increase invisible. Fixed by using pullDistance directly for content translation. Also replaced linear damping formula with exponential rubber-band curve (`PULL_MAX * (1 - exp(-rawDelta * PULL_DAMPING / PULL_MAX))`) for progressive resistance. Tests updated to validate diminishing-returns behavior. Scope expanded beyond original "single-constant change" — three files modified: pullToRefreshUtils.ts (formula), PullToRefresh.svelte (translateY), PullToRefresh.test.ts (curve tests). 278 tests passing.
+- **2026-03-30:** Iterative tuning: PULL_MAX 400→300→200→140, PULL_DAMPING 0.5→0.7→0.9. Final values: PULL_MAX=140 (~17.5% screen height), PULL_DAMPING=0.9. Gives a snappy, firm rubber-band feel with a noticeable stop. User confirmed "basically perfect."
 
 ## Decision log
 
 - **2026-03-30:** User rejected viewport-relative `PULL_MAX`. Fixed pixel value chosen. Target range: 380–420px.
+- **2026-03-30:** Final tuned values after iterative testing: PULL_MAX=140, PULL_DAMPING=0.9. User preferred shorter, firmer pull over the originally planned ~half-screen distance.

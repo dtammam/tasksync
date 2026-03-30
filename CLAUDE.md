@@ -222,7 +222,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
-- `docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md` — Increase PTR max drag distance: PULL_MAX from 150 to 400 for more spacious pull gesture feel (complete 2026-03-30)
+- `docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md` — PTR drag distance: exponential rubber-band curve, PULL_MAX=140 (~17.5% screen), PULL_DAMPING=0.9 for snappy pull feel (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md` — PTR bug fixes: remove will-change:transform breaking position:fixed children, revert ptr-indicator to position:absolute, add regression tests (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md` — PTR cleanup: remove scope-creep refresh button, expand emoji set to 15, fix E2E flakiness, update docs (complete 2026-03-29)
 - `docs/exec-plans/completed/2026-03-29-ptr-ux-refinements.md` — Pull-to-refresh UX refinements: content translation + single emoji per pull (complete 2026-03-29)
