@@ -83,13 +83,13 @@
 
 	/**
 	 * How far down the page content should be translated.
-	 * Proportional to pull progress (capped at INDICATOR_HEIGHT) during a gesture;
-	 * held at INDICATOR_HEIGHT while refreshing; 0 at rest.
+	 * Follows pullDistance directly during a gesture (already damped and clamped to
+	 * PULL_MAX by applyPullDamping); held at INDICATOR_HEIGHT while refreshing; 0 at rest.
 	 */
 	$: contentTranslateY = isRefreshing
 		? INDICATOR_HEIGHT
 		: isTracking
-			? Math.min((pullDistance / threshold) * INDICATOR_HEIGHT, INDICATOR_HEIGHT)
+			? pullDistance
 			: 0;
 
 	/** Emoji to display: hourglass while refreshing, recycle for reduced motion, else gesture emoji. */
