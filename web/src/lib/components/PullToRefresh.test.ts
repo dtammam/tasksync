@@ -6,7 +6,6 @@ import {
 	pickRandomPullEmoji,
 	applyPullDamping,
 	meetsRefreshThreshold,
-	PULL_DAMPING,
 	PULL_MAX
 } from './pullToRefreshUtils';
 import PullToRefresh from './PullToRefresh.svelte';
@@ -55,19 +54,31 @@ describe('pickRandomPullEmoji', () => {
 });
 
 describe('applyPullDamping', () => {
-	it('applies the configured damping factor', () => {
-		expect(applyPullDamping(100)).toBe(100 * PULL_DAMPING);
+	it('returns a damped value greater than 0 and less than rawDelta for small input', () => {
+		const result = applyPullDamping(100);
+		expect(result).toBeGreaterThan(0);
+		expect(result).toBeLessThan(100);
 	});
 
-	it('clamps to PULL_MAX regardless of raw delta', () => {
-		expect(applyPullDamping(1000)).toBe(PULL_MAX);
+	it('provides progressive resistance — each equal step contributes less output than the last', () => {
+		const d100 = applyPullDamping(100);
+		const d200 = applyPullDamping(200);
+		const d300 = applyPullDamping(300);
+		// Each 100px raw step should add less to output than the previous step.
+		expect(d200 - d100).toBeLessThan(d100);
+		expect(d300 - d200).toBeLessThan(d200 - d100);
+	});
+
+	it('never exceeds PULL_MAX even for very large raw delta', () => {
+		expect(applyPullDamping(10_000)).toBeLessThanOrEqual(PULL_MAX);
+		expect(applyPullDamping(100_000)).toBeLessThanOrEqual(PULL_MAX);
 	});
 
 	it('returns 0 for zero delta', () => {
 		expect(applyPullDamping(0)).toBe(0);
 	});
 
-	it('is a monotonic function up to the clamp ceiling', () => {
+	it('is a monotonic function — larger raw delta always yields larger output', () => {
 		expect(applyPullDamping(50)).toBeLessThan(applyPullDamping(100));
 		expect(applyPullDamping(100)).toBeLessThan(applyPullDamping(200));
 	});
@@ -282,8 +293,8 @@ describe('PullToRefresh touch gesture', () => {
 		const wrap = container.firstElementChild as HTMLElement;
 
 		// First touchmove activates tracking (rebase to y=10).
-		// Second touchmove accumulates pull: rawDelta=90 → 45px damped (PULL_DAMPING=0.5).
-		// contentTranslateY = pullDistance = 45px (non-zero).
+		// Second touchmove accumulates pull: rawDelta=90 → damped value > 0 via rubber-band curve.
+		// contentTranslateY = pullDistance (non-zero).
 		await fireEvent(wrap, makeTouchEvent('touchstart', 0, wrap));
 		await fireEvent(wrap, makeTouchEvent('touchmove', 10, wrap)); // activates tracking
 		await fireEvent(wrap, makeTouchEvent('touchmove', 100, wrap)); // 90px raw → 45px damped
