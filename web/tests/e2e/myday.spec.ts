@@ -65,7 +65,7 @@ const seedSuggestions = async (page: Page) => {
 	await expect(row).toHaveCount(1);
 	await row.getByRole('button', { name: '⋯' }).click();
 	await page.getByRole('button', { name: 'Star' }).click();
-	await row.getByRole('button', { name: 'Close', exact: true }).click();
+	// Star now auto-closes the shelf; no manual Close click needed.
 
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
@@ -473,13 +473,11 @@ test.describe('List view', () => {
 			return row;
 		};
 
-		const dueSoonRow = await openTaskMenu(dueSoonTitle);
+		await openTaskMenu(dueSoonTitle);
 		await page.getByRole('button', { name: 'Tomorrow' }).click();
-		await dueSoonRow.getByRole('button', { name: 'Close', exact: true }).click();
 
-		const dueLaterRow = await openTaskMenu(dueLaterTitle);
+		await openTaskMenu(dueLaterTitle);
 		await page.getByRole('button', { name: 'Next week' }).click();
-		await dueLaterRow.getByRole('button', { name: 'Close', exact: true }).click();
 
 		await page.getByTestId('list-sort-mode').selectOption('due_date');
 		await page.getByTestId('list-sort-direction').selectOption('asc');
@@ -527,6 +525,8 @@ test.describe('List view', () => {
 		await rowB.getByRole('button', { name: 'Star' }).click();
 		await expect(rowB.getByTestId('task-star-indicator')).toHaveCount(1);
 
+		// Star auto-closes the shelf; re-open it to access Details.
+		await rowB.getByRole('button', { name: '⋯' }).click();
 		await rowB.getByRole('button', { name: 'Details' }).click();
 		const detailStarToggle = page.getByTestId('detail-star-toggle');
 		await expect(detailStarToggle).toHaveText(/Starred/);

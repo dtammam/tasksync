@@ -54,6 +54,7 @@ Each command moves the feature one stage forward. Run them in order.
 | **`/review`** | Routes to QA for code review (optional, recommended for non-trivial changes) | Run task **"Run Quality Assurance"** -> fix or proceed |
 | **`/accept`** | Routes to PM to validate every acceptance criterion | Run task **"Run Product Manager"** -> **`/done`** |
 | **`/done`** | Archives plan, commits, pushes, creates PR, offers release tagging | Merge PR -> **`/kickoff`** for next feature |
+| **`/showme`** | Read-only status: shows last agent's work, files changed, next step | Review status -> proceed |
 | **`/commit-only`** | Stages and commits (no push) | -- |
 | **`/commit-and-push`** | Stages, commits, pushes | -- |
 
@@ -222,6 +223,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-03-30-shelf-close-all-actions.md` — Close mobile task shelf on ALL action button taps (star, punt, tomorrow, next-week), unit tests for all six handlers, E2E smoke for star (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md` — PTR drag distance: exponential rubber-band curve, PULL_MAX=140 (~17.5% screen), PULL_DAMPING=0.9 for snappy pull feel (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md` — PTR bug fixes: remove will-change:transform breaking position:fixed children, revert ptr-indicator to position:absolute, add regression tests (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-cleanup-polish.md` — PTR cleanup: remove scope-creep refresh button, expand emoji set to 15, fix E2E flakiness, update docs (complete 2026-03-29)
