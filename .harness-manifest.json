@@ -1,0 +1,206 @@
+{
+  "harness_version": "0.1.0",
+  "installed_at": "2026-04-01T15:25:13Z",
+  "files": {
+    ".claude/agents/build-specialist.md": {
+      "category": "harness-owned",
+      "checksum": "89ee2c20f9baf4aa237be72639f5b26cd05450f730cf8c4fb4663ce794e2c887"
+    },
+    ".claude/agents/engineering-manager.md": {
+      "category": "harness-owned",
+      "checksum": "17ddbb82c6865eccea123f047a294b8ff475c90b0e2ce3bbf5946eb3da4eb36d"
+    },
+    ".claude/agents/principal-engineer.md": {
+      "category": "harness-owned",
+      "checksum": "9ffbd4f4f1a6d4068fe5353fc814371e8b2f18e7d2d2b5891aec4c7545bbc5bb"
+    },
+    ".claude/agents/product-manager.md": {
+      "category": "harness-owned",
+      "checksum": "7b6b50310dfce797c2dfe58131d0c314bf38bbc96298ca956738ab4066fff523"
+    },
+    ".claude/agents/quality-assurance.md": {
+      "category": "harness-owned",
+      "checksum": "a09384e461727a528ee3f182b050e73f003277a0877b934030fc9eaae461fa27"
+    },
+    ".claude/agents/software-developer.md": {
+      "category": "harness-owned",
+      "checksum": "d949c79cccece348e58173334cc1d966ec3fc306728278f20901ab7e8cf94509"
+    },
+    ".claude/commands/commit-and-push.md": {
+      "category": "harness-owned",
+      "checksum": "2260e0fa035aeccbc764358867731f7937ac6da97c235088cb01393e20558552"
+    },
+    ".claude/commands/commit-only.md": {
+      "category": "harness-owned",
+      "checksum": "19787aaf3e94e17ba375f855c4b3aac95c75d62b0225ce69620e05c12d941388"
+    },
+    ".claude/commands/kickoff-complex.md": {
+      "category": "harness-owned",
+      "checksum": "d5290bf9035f887f078f2d6a36e18a0f0bf77375d232b88e78c8afd7dceddfea"
+    },
+    ".claude/commands/kickoff.md": {
+      "category": "harness-owned",
+      "checksum": "ec2ab04aa1dc891597cf7ba70893dcf8d3086e0d0c8be8e4162ce599254e8636"
+    },
+    ".claude/commands/prep-build-verify.md": {
+      "category": "harness-owned",
+      "checksum": "1670fed984fbe4d609476996848a01a3f3cea434d9d231535e447ab8ee6921e6"
+    },
+    ".claude/commands/prep-em-done.md": {
+      "category": "harness-owned",
+      "checksum": "e2f828c843c421cfb7d2cf81d8db251045898b443d73bcd7c6bf2bc2326e96d7"
+    },
+    ".claude/commands/prep-em-tasks.md": {
+      "category": "harness-owned",
+      "checksum": "dcbf4ef561f67b35b93be0d4eeceb0ec884fe0e194d3c51f2a98b7999c2972f9"
+    },
+    ".claude/commands/prep-pe-design.md": {
+      "category": "harness-owned",
+      "checksum": "c30452db22a28f5645346133401c327ba0c360968433c8c5d50a6681e134d276"
+    },
+    ".claude/commands/prep-pm-accept.md": {
+      "category": "harness-owned",
+      "checksum": "5319851cab0500f2047f8d0d0092aa125ca75c2177ca05f412b133a7477061e0"
+    },
+    ".claude/commands/prep-pm-discover.md": {
+      "category": "harness-owned",
+      "checksum": "8b05799f0ff1f76890f86c0837e37b2198c14d49927a155ee882c7f5c9990b1d"
+    },
+    ".claude/commands/prep-qa-review.md": {
+      "category": "harness-owned",
+      "checksum": "1039f4f7df21cab3d8dc19b850efc6d84c3bd28c317b08a767dfa4384b888675"
+    },
+    ".claude/commands/prep-sde-implement.md": {
+      "category": "harness-owned",
+      "checksum": "d3acec40cbb6e3663b90973e0e3940eb23b7aee3ee05ab465c421f91f6a87fde"
+    },
+    ".claude/commands/run-build.md": {
+      "category": "harness-owned",
+      "checksum": "6e97db67e3019b362a1bd8cdbe0793d2bc012d19bb116cae19258e6a47dab52d"
+    },
+    ".claude/commands/run-pe.md": {
+      "category": "harness-owned",
+      "checksum": "82cef26a659a0b17809630ed03c0c435133348dccce2d7f668e3d54763f276c8"
+    },
+    ".claude/commands/run-pm.md": {
+      "category": "harness-owned",
+      "checksum": "62f217582ea8558c0f3b2dcbb4e90a7d46732301faf4f9807a215f63e8de5d97"
+    },
+    ".claude/commands/run-qa.md": {
+      "category": "harness-owned",
+      "checksum": "e0e7310d8d0a03f9243e398d44ec4eb801cc92a26c34e8d7456a065b200ff9cc"
+    },
+    ".claude/commands/run-sde.md": {
+      "category": "harness-owned",
+      "checksum": "01e76106dc1726668580a7843cf373511f3ea0e3e4c273625e5d7f232767f900"
+    },
+    ".claude/commands/seed.md": {
+      "category": "harness-owned",
+      "checksum": "031717b8cf3425b98760a3eb0752b72c8aa67df122b41a2598ef57b9b1f871cc"
+    },
+    ".claude/commands/show-me.md": {
+      "category": "harness-owned",
+      "checksum": "07c2f3a3548501aff10e084fad3990ce64ffd65ccfbb3d9af36017a17bd85150"
+    },
+    ".claude/hooks/session-start.sh": {
+      "category": "harness-owned",
+      "checksum": "834226473aa31880be8640ffba86ee44f3b42d99b2d28568d952a82388b93d22"
+    },
+    ".claude/settings.json": {
+      "category": "harness-owned",
+      "checksum": "2890cef08119ae185f7a1975bc06538f68ffaddbedead788e65406ddf967d14a"
+    },
+    ".state/inbox/.gitkeep": {
+      "category": "scaffold",
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    ".state/plans/active/.gitkeep": {
+      "category": "scaffold",
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    ".state/plans/completed/.gitkeep": {
+      "category": "scaffold",
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    ".state/plans/legacy/.gitkeep": {
+      "category": "scaffold",
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "CLAUDE.md": {
+      "category": "project-owned",
+      "checksum": "5849dda1734967336bb6e745733709bf4e0c74a95c6fba6f39be00f62fa00370"
+    },
+    "VERSION": {
+      "category": "harness-owned",
+      "checksum": "e9dd8507f4bf0c6f42458e41aea833ad0bd3f6127272335eee9bf4d58541ed67"
+    },
+    "docs/AGENTS.md": {
+      "category": "harness-owned",
+      "checksum": "bb52882ab82f67f5f25b53206ef744f76931e23e0e5453a8ae7ee7ecb02e4292"
+    },
+    "docs/ARCHITECTURE.md": {
+      "category": "project-owned",
+      "checksum": "2dceea1fb1cbc6271772efd8e4ebc50fcf7183c30e2a0ecec3d7a8e8640b309b"
+    },
+    "docs/CONTRIBUTING.md": {
+      "category": "project-owned",
+      "checksum": "915c62805ccbc31b9140feab6bca32e8556350f0b74540cf73cee7d29e7c5994"
+    },
+    "docs/QUALITY_SCORE.md": {
+      "category": "project-owned",
+      "checksum": "b87fcd168ede08f3c64380ed8c1a89834eb03741faeaa009a741695a3a5a2672"
+    },
+    "docs/RELIABILITY.md": {
+      "category": "project-owned",
+      "checksum": "7cf18aa19d715e16ef5576b1c42ef9dddcce27e245966a842e02614815fd62a8"
+    },
+    "docs/exec-plans/active/.gitkeep": {
+      "category": "scaffold",
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "docs/exec-plans/completed/.gitkeep": {
+      "category": "scaffold",
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "docs/exec-plans/tech-debt-tracker.md": {
+      "category": "scaffold",
+      "checksum": "a8b704806dc78c036093fa602dd13a76e1b24b12396239d17114634a9ffb3132"
+    },
+    "docs/references/.gitkeep": {
+      "category": "scaffold",
+      "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "hooks/pre-commit": {
+      "category": "harness-owned",
+      "checksum": "c3f4e28f2115239e8bfe4fb26460178048bbb677b82cf1860ce1213271f42c7d"
+    },
+    "hooks/pre-push": {
+      "category": "harness-owned",
+      "checksum": "933ae4cd72f51deb490e2d48ebb0e0ed0d8a1f51665655f3a91ca45afe204c64"
+    },
+    "scripts/run-build-specialist.sh": {
+      "category": "harness-owned",
+      "checksum": "d958b962399650b7f954de180104f30634345995d323dfb2941160fdea0e011a"
+    },
+    "scripts/run-principal-engineer.sh": {
+      "category": "harness-owned",
+      "checksum": "fde117cc4da5e9d4250c508dc6409eaadafc5f178311df51fec11f96387cd4e1"
+    },
+    "scripts/run-product-manager.sh": {
+      "category": "harness-owned",
+      "checksum": "be98963322c53d5b124033a2853be5925db6cd49fd062547d6382533786ace00"
+    },
+    "scripts/run-quality-assurance.sh": {
+      "category": "harness-owned",
+      "checksum": "a6d6bdefdda3db772a3752a78e88f17c42de5509cf5113174c877eaa71aabba5"
+    },
+    "scripts/run-software-developer.sh": {
+      "category": "harness-owned",
+      "checksum": "9d4575a6987c073d8c9f1f18b25dfe5135ae6c80ca1cee6c535c4b4fd613a5e1"
+    },
+    "setup.sh": {
+      "category": "scaffold",
+      "checksum": "cbf4ed7125347f906d2aa26974dc97f0e4ff73b163a33eaf76531e7f6630d3e2"
+    }
+  }
+}

@@ -27,7 +27,7 @@ Review the task breakdown above.
 
 ## When approved
 
-Run **`/implement`** to start the first task.
+Run **`/prep-sde-implement`** to start the first task.
 
 ---
 

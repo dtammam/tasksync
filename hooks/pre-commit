@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
+# Pre-commit hook — runs fast checks before every commit.
+# Customize the commands below for your tech stack.
 set -euo pipefail
 
-# Load user tool paths (hooks run with a stripped environment)
-[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+# Source profile for tool paths (nvm, cargo, etc.)
+[ -f "$HOME/.profile" ] && source "$HOME/.profile" 2>/dev/null || true
 
-echo "=== pre-commit ==="
+echo "Running pre-commit checks..."
 
-# Web: lint + type-check + unit tests
-echo "--- web: lint ---"
-(cd web && npm run lint)
+# --- Node/TypeScript (web) ---
+cd web
+npx eslint .
+npx svelte-kit sync && npx svelte-check --tsconfig ./tsconfig.json
+npm run test
+cd ..
 
-echo "--- web: type-check ---"
-(cd web && npm run check)
-
-echo "--- web: unit tests ---"
-(cd web && npm run test)
-
-# Server: format + clippy
-echo "--- server: fmt ---"
+# --- Rust (server) ---
+cd server
 cargo fmt -- --check
-
-echo "--- server: clippy ---"
 cargo clippy -- -D warnings
+cd ..
 
-echo "pre-commit checks passed"
+echo "Pre-commit checks passed."

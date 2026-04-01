@@ -39,8 +39,8 @@ Run the VS Code task **"Run Quality Assurance"** via **Terminal -> Run Task...**
 
 ## When done
 
-- If verdict is **APPROVE** -> run `/done` to close the feature
-- If verdict is **REQUEST CHANGES** -> run `/implement` to fix the issues
+- If verdict is **APPROVE** -> run `/prep-em-done` to close the feature
+- If verdict is **REQUEST CHANGES** -> run `/prep-sde-implement` to fix the issues
 - If verdict is **NEEDS DISCUSSION** -> discuss with the team, then decide
 
 ---
@@ -48,5 +48,5 @@ Run the VS Code task **"Run Quality Assurance"** via **Terminal -> Run Task...**
 ## Rules
 
 - The QA engineer reports only — it does not fix code.
-- Can be run at any point, but most useful after `/verify` passes and before `/done`.
+- Can be run at any point, but most useful after `/prep-build-verify` passes and before `/prep-em-done`.
 - Optional step — not required in the standard workflow, but recommended for non-trivial changes.

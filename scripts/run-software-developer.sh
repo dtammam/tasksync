@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AGENT="software-developer"
-INBOX=".state/inbox/${AGENT}.md"
+AGENT=".claude/agents/software-developer.md"
+INBOX=".state/inbox/software-developer.md"
 
-if [[ ! -f "$INBOX" ]] || [[ ! -s "$INBOX" ]]; then
-  echo "Error: ${INBOX} does not exist or is empty."
-  echo "Run the appropriate slash command in Session 1 first (e.g. /implement)."
+if [ ! -f "$INBOX" ] || [ ! -s "$INBOX" ]; then
+  echo "ERROR: No inbox file at $INBOX (or it's empty)."
+  echo "The engineering-manager must write one first."
   exit 1
 fi
 
-exec claude --dangerously-skip-permissions --agent "$AGENT" "@${INBOX}"
+echo "Invoking software-developer agent..."
+echo "Inbox: $INBOX"
+echo "---"
+
+claude --agent "$AGENT" < "$INBOX"

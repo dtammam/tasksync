@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
+# Pre-push hook — runs full checks before pushing.
+# Customize the commands below for your tech stack.
 set -euo pipefail
 
-[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+# Source profile for tool paths (nvm, cargo, etc.)
+[ -f "$HOME/.profile" ] && source "$HOME/.profile" 2>/dev/null || true
 
-echo "=== pre-push ==="
+echo "Running pre-push checks..."
 
-# Web: unit tests + Playwright smoke (Chromium only, @smoke tag)
-echo "--- web: unit tests ---"
-(cd web && npm run test)
+# --- Node/TypeScript (web) ---
+cd web
+npm run test
+npm run test:e2e:smoke
+cd ..
 
-echo "--- web: e2e smoke ---"
-(cd web && npm run test:e2e:smoke)
-
-# Server: full test suite
-echo "--- server: tests ---"
+# --- Rust (server) ---
+cd server
 cargo test
+cd ..
 
-echo "pre-push checks passed"
+echo "Pre-push checks passed."

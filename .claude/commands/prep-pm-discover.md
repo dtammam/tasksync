@@ -28,7 +28,7 @@ Run the VS Code task **"Run Product Manager"** via **Terminal -> Run Task...**
 
 ## When done
 
-Run **`/design`** to produce the technical design.
+Run **`/prep-pe-design`** to produce the technical design.
 
 ---
 
@@ -36,5 +36,5 @@ Run **`/design`** to produce the technical design.
 
 - ONE stage only. Do not chain into Design.
 - The EM outputs instructions — it does not run the PM itself.
-- The exec plan file must exist at `docs/exec-plans/active/` before `/design`
+- The exec plan file must exist at `docs/exec-plans/active/` before `/prep-pe-design`
   will proceed.

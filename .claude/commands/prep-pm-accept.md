@@ -27,8 +27,8 @@ Run the VS Code task **"Run Product Manager"** via **Terminal -> Run Task...**
 
 ## When done
 
-- If all criteria **pass** -> run **`/done`** to close the feature
-- If any criteria **fail** -> run **`/implement`** to fix, or defer to tech debt
+- If all criteria **pass** -> run **`/prep-em-done`** to close the feature
+- If any criteria **fail** -> run **`/prep-sde-implement`** to fix, or defer to tech debt
 
 ---
 
