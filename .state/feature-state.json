@@ -1,9 +1,9 @@
 {
   "feature_id": "last-day-of-month-recurrence",
   "feature_name": "Last Day of Month Recurrence Option",
-  "stage": "implementation",
+  "stage": "acceptance",
   "created_at": "2026-04-01",
-  "updated_at": "2026-04-01T00:07",
+  "updated_at": "2026-04-01T00:11",
   "tasks": [
     {
       "id": "task-1",
@@ -35,10 +35,10 @@
       "description": "Add one Playwright @smoke test that opens a task detail, selects 'Last day of month' from the recurrence dropdown, and verifies the selection persists. Place in an appropriate E2E spec file (new recurrence.spec.ts or existing task-detail spec).",
       "files": ["web/tests/e2e/"],
       "done_when": "E2E smoke test passes via npm run test:e2e:smoke, the test verifies 'Last day of month' appears in dropdown and can be selected",
-      "status": "pending"
+      "status": "done"
     }
   ],
-  "completed_tasks": ["task-1", "task-2", "task-3"],
+  "completed_tasks": ["task-1", "task-2", "task-3", "task-4"],
   "artifacts": {
     "requirements": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
     "design": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
@@ -52,6 +52,10 @@
     { "timestamp": "2026-04-01 00:04", "stage": "implementation", "note": "Starting implementation of task-1: Add lastDayOfMonth rule to recurrence tuple and labels" },
     { "timestamp": "2026-04-01 00:05", "stage": "implementation", "note": "task-1 already complete in source (tuple + labels present). Marked done. Moving to task-2: Implement lastDayOfMonth helper and switch cases." },
     { "timestamp": "2026-04-01 00:06", "stage": "implementation", "note": "task-2 already complete in source (lastDayOfMonth helper + both switch cases present). Marked done. Moving to task-3: Add unit tests for lastDayOfMonth recurrence." },
-    { "timestamp": "2026-04-01 00:07", "stage": "implementation", "note": "task-3 already complete in source (isRecurrenceRule test + 13 nextDue tests + 14 prevDue tests for lastDayOfMonth all present). Marked done. Moving to task-4: Add E2E smoke test for lastDayOfMonth dropdown selection." }
+    { "timestamp": "2026-04-01 00:07", "stage": "implementation", "note": "task-3 already complete in source (isRecurrenceRule test + 13 nextDue tests + 14 prevDue tests for lastDayOfMonth all present). Marked done. Moving to task-4: Add E2E smoke test for lastDayOfMonth dropdown selection." },
+    { "timestamp": "2026-04-01 00:08", "stage": "review", "note": "All 4 tasks complete (task-4 E2E smoke test confirmed in myday.spec.ts). Moving to code review before acceptance." },
+    { "timestamp": "2026-04-01 00:09", "stage": "acceptance", "note": "All 4 tasks in completed_tasks. Moving to acceptance: PM to validate every acceptance criterion." },
+    { "timestamp": "2026-04-01 00:10", "stage": "verification", "note": "Running verification: build-specialist to run all quality gates before acceptance." },
+    { "timestamp": "2026-04-01 00:11", "stage": "acceptance", "note": "All 4 tasks in completed_tasks. Moving to acceptance: PM to validate every acceptance criterion against code and tests." }
   ]
 }
