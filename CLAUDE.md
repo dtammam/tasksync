@@ -45,18 +45,20 @@ Each command moves the feature one stage forward. Run them in order.
 
 | Command | What it does | Then you do |
 |---------|-------------|-------------|
-| **`/kickoff`** | Initializes state, reads project context, summarizes starting point | Review summary -> **`/discover`** |
-| **`/discover`** | Routes to PM to gather requirements and write exec plan | Run task **"Run Product Manager"** -> **`/design`** |
-| **`/design`** | Routes to PE to produce technical design in exec plan | Run task **"Run Principal Engineer"** -> **`/tasks`** |
-| **`/tasks`** | EM breaks design into small, testable tasks with definitions of done | Review tasks -> **`/implement`** |
-| **`/implement`** | Routes ONE task to SDE for implementation | Run task **"Run Software Developer"** -> repeat or **`/verify`** |
-| **`/verify`** | Routes to build specialist to run all quality gates | Run task **"Run Build Specialist"** -> **`/accept`** |
-| **`/review`** | Routes to QA for code review (optional, recommended for non-trivial changes) | Run task **"Run Quality Assurance"** -> fix or proceed |
-| **`/accept`** | Routes to PM to validate every acceptance criterion | Run task **"Run Product Manager"** -> **`/done`** |
-| **`/done`** | Archives plan, commits, pushes, creates PR, offers release tagging | Merge PR -> **`/kickoff`** for next feature |
-| **`/showme`** | Read-only status: shows last agent's work, files changed, next step | Review status -> proceed |
+| **`/kickoff`** | Initializes state, reads project context, summarizes starting point | Review summary → **`/prep-pm-discover`** |
+| **`/kickoff-complex`** | Plan-gated intake for multi-domain or risky changes | Review summary → **`/prep-pm-discover`** |
+| **`/prep-pm-discover`** | Prep Discovery — route to Product Manager | Run **`/run-pm`** → **`/prep-pe-design`** |
+| **`/prep-pe-design`** | Prep Design — route to Principal Engineer | Run **`/run-pe`** → **`/prep-em-tasks`** |
+| **`/prep-em-tasks`** | EM breaks design into small, testable tasks with definitions of done | Review tasks → **`/prep-sde-implement`** |
+| **`/prep-sde-implement`** | Prep Implementation — route ONE task to Software Developer | Run **`/run-sde`** → repeat or **`/prep-build-verify`** |
+| **`/prep-build-verify`** | Prep Verification — route to Build Specialist | Run **`/run-build`** → **`/prep-pm-accept`** |
+| **`/prep-qa-review`** | Prep Review — route to QA (optional, recommended for non-trivial changes) | Run **`/run-qa`** → fix or proceed |
+| **`/prep-pm-accept`** | Prep Acceptance — route to Product Manager | Run **`/run-pm`** → **`/prep-em-done`** |
+| **`/prep-em-done`** | Archives plan, commits, pushes, creates PR, offers release tagging | Merge PR → **`/kickoff`** for next feature |
+| **`/show-me`** | Read-only status: shows last agent's work, files changed, next step | Review status → proceed |
 | **`/commit-only`** | Stages and commits (no push) | -- |
 | **`/commit-and-push`** | Stages, commits, pushes | -- |
+| **`/seed`** | One-shot project onboarding and placeholder filling | -- |
 
 ### VS Code tasks (`.vscode/tasks.json`)
 
@@ -71,7 +73,7 @@ can be invoked via shell scripts or slash commands instead of VS Code tasks.
 
 **Two-session model:**
 
-- **Session 1 (EM):** Uses existing slash commands (`/kickoff`, `/discover`, etc.) — unchanged.
+- **Session 1 (EM):** Uses `/kickoff` and `/prep-*` commands to advance the pipeline.
 - **Session 2 (Specialist workbench):** Runs specialist agents via `/run-*` commands.
 
 | Slash command | Shell script | Equivalent VS Code task |
@@ -97,16 +99,35 @@ agents. These are `.gitignore`d — only `.gitkeep` is tracked.
 ### Workflow
 
 ```
-/kickoff -> /discover -> /design -> /tasks -> /implement -> /verify -> /accept -> /done
-                                                ↑            |
-                                                └── (next) ──┘
+/kickoff → /prep-pm-discover → /prep-pe-design → /prep-em-tasks → /prep-sde-implement → /prep-build-verify → /prep-pm-accept → /prep-em-done
+                                                                    ↑                      |
+                                                                    └────── (next task) ────┘
 
-Optional at any point: /review (code review)
+Optional at any point: /prep-qa-review (code review)
 ```
 
 Every stage transition requires explicit user approval. No auto-progression.
 The user runs each command manually. The engineering-manager runs ONE stage
 per invocation and stops.
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `.state/feature-state.json` | Lifecycle state (EM reads/writes) |
+| `.state/inbox/*.md` | Agent inbox files (EM writes, specialists read) |
+| `docs/ARCHITECTURE.md` | System architecture |
+| `docs/CONTRIBUTING.md` | Coding standards (all agents read) |
+| `docs/exec-plans/active/*.md` | Active execution plans |
+| `docs/exec-plans/tech-debt-tracker.md` | Technical debt tracking |
+
+### Project-specific configuration
+
+- **Language/framework:** TypeScript (SvelteKit 2 / Svelte 5) + Rust (Axum)
+- **Build command:** `cd web && npm run build` / `cd server && cargo build`
+- **Test command:** `cd web && npm run test` / `cd server && cargo test`
+- **Lint command:** `cd web && npm run lint && npm run check` / `cd server && cargo clippy -- -D warnings`
+- **Format command:** `cd web && npm run format:write` / `cd server && cargo fmt`
 
 ## Session protocol
 
