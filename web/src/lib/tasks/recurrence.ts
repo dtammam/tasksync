@@ -6,7 +6,8 @@ export const recurrenceRules = [
 	'monthly',
 	'quarterly',
 	'biannual',
-	'annual'
+	'annual',
+	'lastDayOfMonth'
 ] as const;
 
 export type RecurrenceRule = (typeof recurrenceRules)[number];
@@ -19,7 +20,8 @@ export const recurrenceRuleLabels: Record<RecurrenceRule, string> = {
 	monthly: 'Monthly',
 	quarterly: 'Quarterly',
 	biannual: 'Twice yearly',
-	annual: 'Annually'
+	annual: 'Annually',
+	lastDayOfMonth: 'Last day of month'
 };
 
 export const toLocalIsoDate = (date: Date) => {
@@ -74,6 +76,12 @@ const addMonths = (dateStr: string, months: number) => {
 	return toLocalIsoDate(d);
 };
 
+const lastDayOfMonth = (dateStr: string, monthOffset: number): string => {
+	const d = parseIsoDate(dateStr);
+	const snapped = new Date(d.getFullYear(), d.getMonth() + monthOffset + 1, 0);
+	return toLocalIsoDate(snapped);
+};
+
 export const isRecurrenceRule = (rule?: string): rule is RecurrenceRule =>
 	typeof rule === 'string' && recurrenceRules.includes(rule as RecurrenceRule);
 
@@ -98,6 +106,8 @@ export const nextDueForRecurrence = (current: string | undefined, recur?: string
 			return addMonths(anchor, 6);
 		case 'annual':
 			return addMonths(anchor, 12);
+		case 'lastDayOfMonth':
+			return lastDayOfMonth(anchor, 1);
 	}
 };
 
@@ -120,5 +130,7 @@ export const prevDueForRecurrence = (current: string | undefined, recur?: string
 			return addMonths(current, -6);
 		case 'annual':
 			return addMonths(current, -12);
+		case 'lastDayOfMonth':
+			return lastDayOfMonth(current, -1);
 	}
 };

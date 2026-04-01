@@ -151,6 +151,25 @@ test.describe('My Day', () => {
 		await page.getByRole('button', { name: '×' }).click();
 	});
 
+	test('@smoke can select last day of month recurrence and persists to IDB', async ({ page }) => {
+		const title = makeTitle('LDM recur');
+
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+
+		const row = page.getByTestId('task-row').filter({ hasText: title });
+		await expect(row).toHaveCount(1);
+		await row.getByRole('button', { name: '⋯' }).click();
+		await row.getByRole('button', { name: 'Details' }).click();
+
+		await page.getByLabel('Recurrence').selectOption('lastDayOfMonth');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect
+			.poll(async () => (await readTaskFromIdb(page, title))?.recurrence_id ?? null)
+			.toBe('lastDayOfMonth');
+	});
+
 	test('shows Marked Done state in details immediately after status toggle', async ({ page }) => {
 		const title = makeTitle('Detail mark done');
 		await page.getByTestId('new-task-input').fill(title);

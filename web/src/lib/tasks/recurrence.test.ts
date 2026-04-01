@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextDueForRecurrence, prevDueForRecurrence } from './recurrence';
+import { isRecurrenceRule, nextDueForRecurrence, prevDueForRecurrence } from './recurrence';
 
 describe('nextDueForRecurrence', () => {
 	it('returns undefined for an invalid recurrence rule', () => {
@@ -102,5 +102,123 @@ describe('prevDueForRecurrence', () => {
 	it('subtracts one weekday when anchor is mid-week', () => {
 		// 2026-03-11 is Wednesday → previous weekday is Tuesday 2026-03-10
 		expect(prevDueForRecurrence('2026-03-11', 'weekdays')).toBe('2026-03-10');
+	});
+});
+
+describe('isRecurrenceRule', () => {
+	it('recognises lastDayOfMonth as a valid recurrence rule', () => {
+		expect(isRecurrenceRule('lastDayOfMonth')).toBe(true);
+	});
+});
+
+describe('nextDueForRecurrence - lastDayOfMonth', () => {
+	it('advances Jan 31 to Feb 28 in non-leap year', () => {
+		expect(nextDueForRecurrence('2026-01-31', 'lastDayOfMonth')).toBe('2026-02-28');
+	});
+
+	it('advances Jan 31 to Feb 29 in leap year 2024', () => {
+		expect(nextDueForRecurrence('2024-01-31', 'lastDayOfMonth')).toBe('2024-02-29');
+	});
+
+	it('advances Feb 28 to Mar 31', () => {
+		expect(nextDueForRecurrence('2026-02-28', 'lastDayOfMonth')).toBe('2026-03-31');
+	});
+
+	it('advances Mar 31 to Apr 30', () => {
+		expect(nextDueForRecurrence('2026-03-31', 'lastDayOfMonth')).toBe('2026-04-30');
+	});
+
+	it('advances Apr 30 to May 31', () => {
+		expect(nextDueForRecurrence('2026-04-30', 'lastDayOfMonth')).toBe('2026-05-31');
+	});
+
+	it('advances May 31 to Jun 30', () => {
+		expect(nextDueForRecurrence('2026-05-31', 'lastDayOfMonth')).toBe('2026-06-30');
+	});
+
+	it('advances Jun 30 to Jul 31', () => {
+		expect(nextDueForRecurrence('2026-06-30', 'lastDayOfMonth')).toBe('2026-07-31');
+	});
+
+	it('advances Jul 31 to Aug 31', () => {
+		expect(nextDueForRecurrence('2026-07-31', 'lastDayOfMonth')).toBe('2026-08-31');
+	});
+
+	it('advances Aug 31 to Sep 30', () => {
+		expect(nextDueForRecurrence('2026-08-31', 'lastDayOfMonth')).toBe('2026-09-30');
+	});
+
+	it('advances Sep 30 to Oct 31', () => {
+		expect(nextDueForRecurrence('2026-09-30', 'lastDayOfMonth')).toBe('2026-10-31');
+	});
+
+	it('advances Oct 31 to Nov 30', () => {
+		expect(nextDueForRecurrence('2026-10-31', 'lastDayOfMonth')).toBe('2026-11-30');
+	});
+
+	it('advances Nov 30 to Dec 31', () => {
+		expect(nextDueForRecurrence('2026-11-30', 'lastDayOfMonth')).toBe('2026-12-31');
+	});
+
+	it('advances Dec 31 to Jan 31 of next year (year boundary)', () => {
+		expect(nextDueForRecurrence('2026-12-31', 'lastDayOfMonth')).toBe('2027-01-31');
+	});
+});
+
+describe('prevDueForRecurrence - lastDayOfMonth', () => {
+	it('goes back from Feb 28 to Jan 31 in non-leap year', () => {
+		expect(prevDueForRecurrence('2026-02-28', 'lastDayOfMonth')).toBe('2026-01-31');
+	});
+
+	it('goes back from Feb 29 to Jan 31 in leap year 2024', () => {
+		expect(prevDueForRecurrence('2024-02-29', 'lastDayOfMonth')).toBe('2024-01-31');
+	});
+
+	it('goes back from Mar 31 to Feb 28 in non-leap year', () => {
+		expect(prevDueForRecurrence('2026-03-31', 'lastDayOfMonth')).toBe('2026-02-28');
+	});
+
+	it('goes back from Mar 31 to Feb 29 in leap year 2024', () => {
+		expect(prevDueForRecurrence('2024-03-31', 'lastDayOfMonth')).toBe('2024-02-29');
+	});
+
+	it('goes back from Apr 30 to Mar 31', () => {
+		expect(prevDueForRecurrence('2026-04-30', 'lastDayOfMonth')).toBe('2026-03-31');
+	});
+
+	it('goes back from May 31 to Apr 30', () => {
+		expect(prevDueForRecurrence('2026-05-31', 'lastDayOfMonth')).toBe('2026-04-30');
+	});
+
+	it('goes back from Jun 30 to May 31', () => {
+		expect(prevDueForRecurrence('2026-06-30', 'lastDayOfMonth')).toBe('2026-05-31');
+	});
+
+	it('goes back from Jul 31 to Jun 30', () => {
+		expect(prevDueForRecurrence('2026-07-31', 'lastDayOfMonth')).toBe('2026-06-30');
+	});
+
+	it('goes back from Aug 31 to Jul 31', () => {
+		expect(prevDueForRecurrence('2026-08-31', 'lastDayOfMonth')).toBe('2026-07-31');
+	});
+
+	it('goes back from Sep 30 to Aug 31', () => {
+		expect(prevDueForRecurrence('2026-09-30', 'lastDayOfMonth')).toBe('2026-08-31');
+	});
+
+	it('goes back from Oct 31 to Sep 30', () => {
+		expect(prevDueForRecurrence('2026-10-31', 'lastDayOfMonth')).toBe('2026-09-30');
+	});
+
+	it('goes back from Nov 30 to Oct 31', () => {
+		expect(prevDueForRecurrence('2026-11-30', 'lastDayOfMonth')).toBe('2026-10-31');
+	});
+
+	it('goes back from Dec 31 to Nov 30', () => {
+		expect(prevDueForRecurrence('2026-12-31', 'lastDayOfMonth')).toBe('2026-11-30');
+	});
+
+	it('goes back from Jan 31 to Dec 31 of prior year (year boundary)', () => {
+		expect(prevDueForRecurrence('2026-01-31', 'lastDayOfMonth')).toBe('2025-12-31');
 	});
 });
