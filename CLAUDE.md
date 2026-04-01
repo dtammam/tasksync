@@ -223,6 +223,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-04-01-last-day-of-month-recurrence.md` — Add `lastDayOfMonth` recurrence rule: day-0 snap algorithm, forward/backward switch cases, 28 unit tests, E2E smoke test (complete 2026-04-01)
 - `docs/exec-plans/completed/2026-03-30-shelf-close-all-actions.md` — Close mobile task shelf on ALL action button taps (star, punt, tomorrow, next-week), unit tests for all six handlers, E2E smoke for star (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md` — PTR drag distance: exponential rubber-band curve, PULL_MAX=140 (~17.5% screen), PULL_DAMPING=0.9 for snappy pull feel (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-bugfixes.md` — PTR bug fixes: remove will-change:transform breaking position:fixed children, revert ptr-indicator to position:absolute, add regression tests (complete 2026-03-30)

@@ -1,9 +1,9 @@
 {
   "feature_id": "last-day-of-month-recurrence",
   "feature_name": "Last Day of Month Recurrence Option",
-  "stage": "acceptance",
+  "stage": "done",
   "created_at": "2026-04-01",
-  "updated_at": "2026-04-01T00:11",
+  "updated_at": "2026-04-01T00:13",
   "tasks": [
     {
       "id": "task-1",
@@ -40,9 +40,9 @@
   ],
   "completed_tasks": ["task-1", "task-2", "task-3", "task-4"],
   "artifacts": {
-    "requirements": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
-    "design": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
-    "exec_plan": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md"
+    "requirements": "docs/exec-plans/completed/2026-04-01-last-day-of-month-recurrence.md",
+    "design": "docs/exec-plans/completed/2026-04-01-last-day-of-month-recurrence.md",
+    "exec_plan": "docs/exec-plans/completed/2026-04-01-last-day-of-month-recurrence.md"
   },
   "history": [
     { "timestamp": "2026-04-01 00:00", "stage": "bootstrap", "note": "Feature initiated: Add last-day-of-month recurrence option to fix month-end tasks landing on wrong dates" },
@@ -56,6 +56,8 @@
     { "timestamp": "2026-04-01 00:08", "stage": "review", "note": "All 4 tasks complete (task-4 E2E smoke test confirmed in myday.spec.ts). Moving to code review before acceptance." },
     { "timestamp": "2026-04-01 00:09", "stage": "acceptance", "note": "All 4 tasks in completed_tasks. Moving to acceptance: PM to validate every acceptance criterion." },
     { "timestamp": "2026-04-01 00:10", "stage": "verification", "note": "Running verification: build-specialist to run all quality gates before acceptance." },
-    { "timestamp": "2026-04-01 00:11", "stage": "acceptance", "note": "All 4 tasks in completed_tasks. Moving to acceptance: PM to validate every acceptance criterion against code and tests." }
+    { "timestamp": "2026-04-01 00:11", "stage": "acceptance", "note": "All 4 tasks in completed_tasks. Moving to acceptance: PM to validate every acceptance criterion against code and tests." },
+    { "timestamp": "2026-04-01 00:12", "stage": "acceptance", "note": "ACCEPT — all 9 acceptance criteria pass: isRecurrenceRule, regression check, nextDue/prevDue for all 12 months (leap + non-leap), dropdown label, E2E persistence smoke test, due-date roll, regression on existing 8 rules, and all quality gates (lint/check/test/e2e:smoke clean, 313 unit tests + 14 E2E smoke tests pass)." },
+    { "timestamp": "2026-04-01 00:13", "stage": "done", "note": "Feature complete. Exec plan moved to docs/exec-plans/completed/. All 9 acceptance criteria passed. No tech debt created." }
   ]
 }
