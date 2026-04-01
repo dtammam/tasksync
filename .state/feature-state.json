@@ -1,1 +1,54 @@
-{}
+{
+  "feature_id": "last-day-of-month-recurrence",
+  "feature_name": "Last Day of Month Recurrence Option",
+  "stage": "implementation",
+  "created_at": "2026-04-01",
+  "updated_at": "2026-04-01T00:04",
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "Add lastDayOfMonth rule to recurrence tuple and labels",
+      "description": "Append 'lastDayOfMonth' to the recurrenceRules tuple (after 'annual') and add 'lastDayOfMonth: \"Last day of month\"' to recurrenceRuleLabels in web/src/lib/tasks/recurrence.ts. After this change, isRecurrenceRule('lastDayOfMonth') must return true and TypeScript must compile cleanly (the Record<RecurrenceRule, string> type enforces the label entry).",
+      "files": ["web/src/lib/tasks/recurrence.ts"],
+      "done_when": "isRecurrenceRule('lastDayOfMonth') returns true, npm run check passes, existing tests still pass",
+      "status": "pending"
+    },
+    {
+      "id": "task-2",
+      "title": "Implement lastDayOfMonth helper and switch cases",
+      "description": "Add the private helper function lastDayOfMonth(dateStr: string, monthOffset: number): string using the day-0 snap algorithm (new Date(y, m + monthOffset + 1, 0)). Add case 'lastDayOfMonth': return lastDayOfMonth(anchor, 1) to nextDueForRecurrence and case 'lastDayOfMonth': return lastDayOfMonth(current, -1) to prevDueForRecurrence.",
+      "files": ["web/src/lib/tasks/recurrence.ts"],
+      "done_when": "Both switch statements handle lastDayOfMonth, npm run check passes, existing tests still pass",
+      "status": "pending"
+    },
+    {
+      "id": "task-3",
+      "title": "Add unit tests for lastDayOfMonth recurrence",
+      "description": "Add comprehensive unit tests in web/src/lib/tasks/recurrence.test.ts: (1) isRecurrenceRule('lastDayOfMonth') returns true, (2) nextDueForRecurrence with lastDayOfMonth for all 12 month forward transitions including Feb in leap year (2024) and non-leap year (2026) and Dec->Jan year boundary, (3) prevDueForRecurrence with lastDayOfMonth for all 12 month backward transitions including Mar->Feb in leap/non-leap years and Jan->Dec year boundary.",
+      "files": ["web/src/lib/tasks/recurrence.test.ts"],
+      "done_when": "All new tests pass via npm run test, all existing tests still pass, coverage includes forward/backward for all 12 months plus leap year edge cases",
+      "status": "pending"
+    },
+    {
+      "id": "task-4",
+      "title": "Add E2E smoke test for lastDayOfMonth dropdown selection",
+      "description": "Add one Playwright @smoke test that opens a task detail, selects 'Last day of month' from the recurrence dropdown, and verifies the selection persists. Place in an appropriate E2E spec file (new recurrence.spec.ts or existing task-detail spec).",
+      "files": ["web/tests/e2e/"],
+      "done_when": "E2E smoke test passes via npm run test:e2e:smoke, the test verifies 'Last day of month' appears in dropdown and can be selected",
+      "status": "pending"
+    }
+  ],
+  "completed_tasks": [],
+  "artifacts": {
+    "requirements": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
+    "design": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
+    "exec_plan": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md"
+  },
+  "history": [
+    { "timestamp": "2026-04-01 00:00", "stage": "bootstrap", "note": "Feature initiated: Add last-day-of-month recurrence option to fix month-end tasks landing on wrong dates" },
+    { "timestamp": "2026-04-01 00:01", "stage": "discovery", "note": "Moving to discovery: PM to gather requirements and write exec plan" },
+    { "timestamp": "2026-04-01 00:02", "stage": "design", "note": "Moving to design: PE to produce technical design in exec plan" },
+    { "timestamp": "2026-04-01 00:03", "stage": "tasks", "note": "Task breakdown complete: 4 tasks covering rule registration, helper + switch cases, unit tests, and E2E smoke test" },
+    { "timestamp": "2026-04-01 00:04", "stage": "implementation", "note": "Starting implementation of task-1: Add lastDayOfMonth rule to recurrence tuple and labels" }
+  ]
+}

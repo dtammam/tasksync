@@ -6,7 +6,8 @@ export const recurrenceRules = [
 	'monthly',
 	'quarterly',
 	'biannual',
-	'annual'
+	'annual',
+	'lastDayOfMonth'
 ] as const;
 
 export type RecurrenceRule = (typeof recurrenceRules)[number];
@@ -19,7 +20,8 @@ export const recurrenceRuleLabels: Record<RecurrenceRule, string> = {
 	monthly: 'Monthly',
 	quarterly: 'Quarterly',
 	biannual: 'Twice yearly',
-	annual: 'Annually'
+	annual: 'Annually',
+	lastDayOfMonth: 'Last day of month'
 };
 
 export const toLocalIsoDate = (date: Date) => {
