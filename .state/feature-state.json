@@ -3,7 +3,7 @@
   "feature_name": "Last Day of Month Recurrence Option",
   "stage": "implementation",
   "created_at": "2026-04-01",
-  "updated_at": "2026-04-01T00:06",
+  "updated_at": "2026-04-01T00:07",
   "tasks": [
     {
       "id": "task-1",
@@ -27,7 +27,7 @@
       "description": "Add comprehensive unit tests in web/src/lib/tasks/recurrence.test.ts: (1) isRecurrenceRule('lastDayOfMonth') returns true, (2) nextDueForRecurrence with lastDayOfMonth for all 12 month forward transitions including Feb in leap year (2024) and non-leap year (2026) and Dec->Jan year boundary, (3) prevDueForRecurrence with lastDayOfMonth for all 12 month backward transitions including Mar->Feb in leap/non-leap years and Jan->Dec year boundary.",
       "files": ["web/src/lib/tasks/recurrence.test.ts"],
       "done_when": "All new tests pass via npm run test, all existing tests still pass, coverage includes forward/backward for all 12 months plus leap year edge cases",
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "task-4",
@@ -38,7 +38,7 @@
       "status": "pending"
     }
   ],
-  "completed_tasks": ["task-1", "task-2"],
+  "completed_tasks": ["task-1", "task-2", "task-3"],
   "artifacts": {
     "requirements": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
     "design": "docs/exec-plans/active/2026-04-01-last-day-of-month-recurrence.md",
@@ -51,6 +51,7 @@
     { "timestamp": "2026-04-01 00:03", "stage": "tasks", "note": "Task breakdown complete: 4 tasks covering rule registration, helper + switch cases, unit tests, and E2E smoke test" },
     { "timestamp": "2026-04-01 00:04", "stage": "implementation", "note": "Starting implementation of task-1: Add lastDayOfMonth rule to recurrence tuple and labels" },
     { "timestamp": "2026-04-01 00:05", "stage": "implementation", "note": "task-1 already complete in source (tuple + labels present). Marked done. Moving to task-2: Implement lastDayOfMonth helper and switch cases." },
-    { "timestamp": "2026-04-01 00:06", "stage": "implementation", "note": "task-2 already complete in source (lastDayOfMonth helper + both switch cases present). Marked done. Moving to task-3: Add unit tests for lastDayOfMonth recurrence." }
+    { "timestamp": "2026-04-01 00:06", "stage": "implementation", "note": "task-2 already complete in source (lastDayOfMonth helper + both switch cases present). Marked done. Moving to task-3: Add unit tests for lastDayOfMonth recurrence." },
+    { "timestamp": "2026-04-01 00:07", "stage": "implementation", "note": "task-3 already complete in source (isRecurrenceRule test + 13 nextDue tests + 14 prevDue tests for lastDayOfMonth all present). Marked done. Moving to task-4: Add E2E smoke test for lastDayOfMonth dropdown selection." }
   ]
 }
