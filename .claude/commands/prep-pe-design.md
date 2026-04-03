@@ -28,7 +28,7 @@ Run the VS Code task **"Run Principal Engineer"** via **Terminal -> Run Task...*
 
 ## When done
 
-Run **`/tasks`** to break the design into implementable tasks.
+Run **`/prep-em-tasks`** to break the design into implementable tasks.
 
 ---
 
@@ -36,4 +36,4 @@ Run **`/tasks`** to break the design into implementable tasks.
 
 - ONE stage only. Do not chain into Tasks.
 - The EM outputs instructions — it does not run the PE itself.
-- The Design section of the exec plan must be filled before `/tasks` will proceed.
+- The Design section of the exec plan must be filled before `/prep-em-tasks` will proceed.

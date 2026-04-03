@@ -29,9 +29,9 @@ Run the VS Code task **"Run Software Developer"** via **Terminal -> Run Task...*
 
 ## When done
 
-- If **more tasks remain** -> run **`/implement`** again for the next task
-- If **all tasks are complete** -> run **`/verify`** to validate the build
-- Optional: run **`/review`** for a code review at any point
+- If **more tasks remain** -> run **`/prep-sde-implement`** again for the next task
+- If **all tasks are complete** -> run **`/prep-build-verify`** to validate the build
+- Optional: run **`/prep-qa-review`** for a code review at any point
 
 ---
 
@@ -39,4 +39,4 @@ Run the VS Code task **"Run Software Developer"** via **Terminal -> Run Task...*
 
 - ONE task per invocation.
 - The EM outputs instructions — it does not run the SDE itself.
-- If all tasks are already complete, the EM should tell the user to run `/verify`.
+- If all tasks are already complete, the EM should tell the user to run `/prep-build-verify`.

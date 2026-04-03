@@ -1,12 +1,9 @@
-# Run the Software Developer specialist agent.
+# Run the Software Developer agent.
 
-Executes the software-developer agent using the inbox file prepared by the EM.
-Use this in Session 2 (specialist workbench) after the EM has routed work via `/implement` in Session 1.
+Invoke the software-developer specialist agent from the mobile workflow (Session 2).
+Use this in Session 2 (specialist workbench) after the EM has routed work via `/prep-sde-implement` in Session 1.
 
-## Procedure
-
-Run the shell script:
-
-```
-bash scripts/run-software-developer.sh
-```
+## Workflow
+1. Verify `.state/inbox/software-developer.md` exists and is non-empty
+2. If missing or empty, stop with: "No inbox file found. The EM must write one first."
+3. Execute: `bash scripts/run-software-developer.sh`

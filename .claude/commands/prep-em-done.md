@@ -60,7 +60,7 @@ The feature is closed. The PR is open. Merge when ready. Run **`/kickoff`** to s
 
 ## Rules
 
-- Only run this after `/accept` has passed.
+- Only run this after `/prep-pm-accept` has passed.
 - If tech debt was created during implementation, it must be recorded in
   `docs/exec-plans/tech-debt-tracker.md` before closing.
 - Never use `--no-verify`. Never force-push.

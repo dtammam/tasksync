@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
+# Pre-push hook — runs full checks before pushing.
 set -euo pipefail
 
-[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+# Source profile for tool paths (nvm, cargo, etc.)
+[ -f "$HOME/.profile" ] && source "$HOME/.profile" 2>/dev/null || true
 
-echo "=== pre-push ==="
+echo "Running pre-push checks..."
 
-# Web: unit tests + Playwright smoke (Chromium only, @smoke tag)
-echo "--- web: unit tests ---"
-(cd web && npm run test)
+# --- Web (Node/TypeScript) ---
+cd web
+npm run test
 
-echo "--- web: e2e smoke ---"
-(cd web && npm run test:e2e:smoke)
+# E2E smoke (Chromium-only); set SKIP_PLAYWRIGHT=1 to skip
+if [ "${SKIP_PLAYWRIGHT:-0}" != "1" ]; then
+  npm run test:e2e:smoke
+fi
+cd ..
 
-# Server: full test suite
-echo "--- server: tests ---"
+# --- Server (Rust) ---
 cargo test
 
-echo "pre-push checks passed"
+echo "Pre-push checks passed."

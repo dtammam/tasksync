@@ -26,10 +26,10 @@ Run the VS Code task **"Run Build Specialist"** via **Terminal -> Run Task...**
 
 ## When done
 
-- If all checks **pass** and tasks remain -> run **`/implement`** for the next task
-- If all checks **pass** and all tasks complete -> run **`/accept`**
-- If any checks **fail** -> run **`/implement`** to fix, or handle manually
-- Optional: run **`/review`** for a code review before acceptance
+- If all checks **pass** and tasks remain -> run **`/prep-sde-implement`** for the next task
+- If all checks **pass** and all tasks complete -> run **`/prep-pm-accept`**
+- If any checks **fail** -> run **`/prep-sde-implement`** to fix, or handle manually
+- Optional: run **`/prep-qa-review`** for a code review before acceptance
 
 ---
 
