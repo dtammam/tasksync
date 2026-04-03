@@ -1,137 +1,115 @@
 # Onboard the agent framework into this repository.
 
-Reads existing repo documentation, build config, and codebase structure to fill in all TODO placeholders and configure the agent pipeline for this project. Designed for brownfield repos that already have code, docs, and conventions.
-
-## Input
-
-$ARGUMENTS can provide hints (e.g., "this is a Python FastAPI project" or "we use pnpm"). If empty, the agent discovers everything from the repo.
-
-## Procedure
-
-1. Invoke the engineering-manager agent with this instruction:
-
-   "This is a SEED operation — onboarding the agent framework into an existing
-   repository. Do NOT run the normal feature pipeline. Instead, act as a
-   setup assistant and perform the following steps.
-
-   Additional context from the user: [$ARGUMENTS]
-
-   ### Step 1: Discover the project
-
-   Read and catalog everything you can find about this project:
-   - README.md, CONTRIBUTING.md, or any existing contributor docs
-   - Build config files: package.json, Cargo.toml, pyproject.toml, Makefile,
-     Dockerfile, docker-compose.yml, go.mod, build.gradle, CMakeLists.txt, etc.
-   - CI config: .github/workflows/*.yml, .gitlab-ci.yml, Jenkinsfile, etc.
-   - Existing lint/format config: .eslintrc*, .prettierrc*, rustfmt.toml,
-     ruff.toml, .flake8, .golangci.yml, etc.
-   - Test config: jest.config.*, pytest.ini, .mocharc.*, vitest.config.*, etc.
-   - Source directory structure (top-level ls + one level deep in src/ or equivalent)
-   - Any existing CLAUDE.md (preserve user customizations, merge with template)
-   - docs/ directory contents if present
-
-   From this, determine:
-   - **Language/framework** (e.g., TypeScript + Next.js, Rust + clap, Python + FastAPI)
-   - **Build command** (e.g., npm run build, cargo build, make)
-   - **Test command** (e.g., npm test, cargo test, pytest)
-   - **Lint command** (e.g., npm run lint, cargo clippy -- -D warnings, ruff check .)
-   - **Format check command** (e.g., npm run format:check, cargo fmt -- --check, ruff format --check .)
-   - **Main branch name** (check git remote or default)
-   - **Package manager** (npm, pnpm, yarn, pip, cargo, go, etc.)
-   - **Existing coding standards** (from any contributor docs or lint configs)
-   - **Architecture patterns** (monorepo? microservices? MVC? layers?)
-   - **Performance constraints** (any SLAs, budgets, or benchmarks mentioned anywhere)
-   - **Existing non-negotiables** (e.g., no unsafe, 100% type coverage, required CI checks)
-
-   ### Step 2: Fill in CLAUDE.md
-
-   Read the current CLAUDE.md. Replace every TODO and placeholder:
-   - Quality gates: fill in pre-commit and pre-push with actual commands
-   - Commands section: list the real build/test/lint/format commands
-   - Non-negotiables: carry over anything from existing docs + lint configs
-   - Active work: note any in-progress branches or open PRs if discoverable
-
-   Preserve the agent architecture sections unchanged. Only fill in the
-   project-specific sections.
-
-   ### Step 3: Fill in docs/CONTRIBUTING.md
-
-   Read the current docs/CONTRIBUTING.md. Replace placeholders:
-   - Coding standards: fill in format, lint, test commands
-   - Add any project-specific standards discovered from existing docs or configs
-   - Preserve the universal design principles already in the file
-   - Add setup instructions (what to run after cloning)
-
-   If the repo already had a CONTRIBUTING.md before agent-pack was installed,
-   merge the agent-pack template's structure with the existing content —
-   keep the user's original standards and add the missing sections.
-
-   ### Step 4: Fill in docs/ARCHITECTURE.md
-
-   Read the current docs/ARCHITECTURE.md. Replace the template with actual
-   architecture based on what you discovered:
-   - Overview of the system
-   - Major components/modules and their responsibilities
-   - How they interact (data flow, API boundaries, layer structure)
-   - Key dependencies and why they exist
-
-   If the repo already has architecture docs elsewhere, reference or consolidate them.
-
-   ### Step 5: Fill in docs/RELIABILITY.md
-
-   Read the current docs/RELIABILITY.md. Replace placeholders:
-   - If the project has benchmarks, SLAs, or perf tests: document those budgets
-   - If not: propose sensible defaults based on the project type and note they
-     are provisional
-
-   ### Step 6: Fill in hooks/
-
-   Read hooks/pre-commit and hooks/pre-push. Replace the placeholder warnings
-   with the actual commands discovered in Step 1.
-
-   ### Step 7: Present a summary
-
-   Output a structured report:
-
-   ```
-   Seed Report: [repo name]
-
-   Language/framework: [detected]
-   Package manager: [detected]
-   Build: [command]
-   Test: [command]
-   Lint: [command]
-   Format: [command]
-
-   Files updated:
-   - CLAUDE.md — [what was filled in]
-   - docs/CONTRIBUTING.md — [what was filled in]
-   - docs/ARCHITECTURE.md — [what was filled in]
-   - docs/RELIABILITY.md — [what was filled in]
-   - hooks/pre-commit — [commands configured]
-   - hooks/pre-push — [commands configured]
-
-   Warnings:
-   - [anything that needs manual attention]
-
-   Ready to use: /kickoff <your feature>
-   ```
-
-   Do NOT advance to any other stage. This is a one-shot setup operation."
-
-2. Relay the engineering-manager's seed report to the user.
-
----
-
-## When done
-
-Review the changes, then run **`/kickoff <feature>`** to start your first feature.
-
----
+One-shot onboarding command that auto-detects project configuration and fills in template placeholders.
 
 ## Rules
 
-- This is a one-shot setup command, not part of the normal pipeline.
-- Preserve any existing user content — merge, don't replace.
-- If something can't be auto-detected, note it as needing manual attention.
-- Do not start a feature lifecycle. Just configure the framework and stop.
+- This command does NOT start a feature lifecycle.
+- This command does NOT interact with `.state/feature-state.json`.
+- This command does NOT create execution plans or tasks.
+- This is a ONE-SHOT operation. It runs, produces a report, and finishes.
+- NEVER silently overwrite existing non-placeholder content.
+
+## Workflow
+
+1. Invoke the engineering-manager agent with the following SEED instruction (use the Agent tool with the `engineering-manager` agent):
+
+   ```
+   SEED INSTRUCTION -- NOT A FEATURE KICKOFF
+
+   This is a one-shot onboarding operation. Do NOT create a feature lifecycle
+   entry. Do NOT write to .state/feature-state.json. Do NOT create an
+   execution plan.
+
+   Your job:
+
+   A. SCAN the codebase to auto-detect:
+      - Primary language(s) and framework(s)
+      - Build command (e.g., `cargo build`, `npm run build`, `go build ./...`)
+      - Test command (e.g., `cargo test`, `npm test`, `pytest`)
+      - Lint command (e.g., `cargo clippy`, `npx eslint .`, `ruff check .`)
+      - Format command (e.g., `cargo fmt`, `npx prettier --write .`, `black .`)
+      - Package manager (e.g., cargo, npm, pip, go modules)
+      - High-level architecture patterns (monolith, microservices, monorepo, etc.)
+      - Existing coding conventions (naming style, module organization, error handling patterns)
+
+      Detection sources: look for Cargo.toml, package.json, go.mod, pyproject.toml,
+      Makefile, Dockerfile, CI config files (.github/workflows/, .gitlab-ci.yml),
+      existing source files, and any existing documentation.
+
+   B. CHECK for remaining placeholders in these target files:
+      - CLAUDE.md
+      - docs/CONTRIBUTING.md
+      - docs/ARCHITECTURE.md
+      - docs/RELIABILITY.md
+      - hooks/pre-commit
+      - hooks/pre-push
+
+      Placeholders are tokens matching the pattern: {{PLACEHOLDER_NAME}} or {{TODO}}.
+
+      If NO placeholders remain in ANY target file, produce a NO-OP REPORT:
+        - State that all placeholders are already filled.
+        - Summarize the current detected values for each field.
+        - Offer to re-scan if the user wants to update values.
+        - Do NOT modify any files.
+        - STOP here.
+
+   C. FILL IN detected values by replacing placeholder tokens in each target file:
+      - {{LANGUAGE}} -> detected primary language
+      - {{FRAMEWORK}} -> detected framework (or "None" if not applicable)
+      - {{PACKAGE_MANAGER}} -> detected package manager
+      - {{BUILD_CMD}} -> detected build command
+      - {{TEST_CMD}} -> detected test command
+      - {{LINT_CMD}} -> detected lint command
+      - {{FORMAT_CMD}} -> detected format command
+      - {{STYLE_RULES}} -> observed coding style conventions
+      - {{NAMING_CONVENTIONS}} -> observed file/variable naming patterns
+      - {{SYSTEM_OVERVIEW}} -> high-level architecture description
+      - {{COMPONENT_LIST}} -> detected major components/modules
+      - {{DATA_FLOW_DESCRIPTION}} -> how data moves through the system
+      - {{CONSTRAINTS}} -> detected technical constraints
+      - {{ERROR_HANDLING_PATTERNS}} -> observed error handling approach
+      - {{LOGGING_CONVENTIONS}} -> observed logging patterns
+      - {{UNIT_TEST_APPROACH}} -> detected unit test setup
+      - {{INTEGRATION_TEST_APPROACH}} -> detected integration test setup
+      - {{E2E_TEST_APPROACH}} -> detected E2E test setup
+      - {{MONITORING_APPROACH}} -> detected monitoring setup
+      - {{TEST_CMD_FAST}} -> fast test subset command
+      - {{DOMAIN_1}} -> primary domain name
+
+      For hooks/pre-commit and hooks/pre-push:
+      - Uncomment the appropriate tech-stack section based on detected language
+      - Fill in any placeholder commands
+      - Leave other commented sections as-is
+
+      PRESERVATION RULES:
+      - Only replace the placeholder token itself. Do not alter surrounding text.
+      - If a file contains both placeholder tokens and user-written content,
+        preserve all user-written content exactly as-is.
+      - If a placeholder cannot be auto-detected, leave the placeholder in place
+        and flag it in the report.
+
+   D. PRODUCE a structured seed report with these sections:
+
+      ## Seed Report
+
+      ### Detected Configuration
+      | Field | Value | Confidence | Source |
+      |-------|-------|------------|--------|
+      (one row per detected value, with the file/signal that informed the detection)
+
+      ### Files Modified
+      - List each file that was modified and what placeholders were filled
+
+      ### Unresolved Placeholders
+      - List any placeholders that could NOT be auto-detected
+      - For each, explain why and suggest how the user can fill it manually
+
+      ### Recommendations
+      - Any additional setup steps the user should take
+
+   E. STOP. Do not proceed to any pipeline stage.
+   ```
+
+2. Present the seed report to the user.
+3. If the engineering-manager reports a no-op (all placeholders filled), relay that to the user and offer to re-run with `--force` semantics (re-scan and update).

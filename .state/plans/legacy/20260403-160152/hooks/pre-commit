@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Load user tool paths (hooks run with a stripped environment)
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+
+echo "=== pre-commit ==="
+
+# Web: lint + type-check + unit tests
+echo "--- web: lint ---"
+(cd web && npm run lint)
+
+echo "--- web: type-check ---"
+(cd web && npm run check)
+
+echo "--- web: unit tests ---"
+(cd web && npm run test)
+
+# Server: format + clippy
+echo "--- server: fmt ---"
+cargo fmt -- --check
+
+echo "--- server: clippy ---"
+cargo clippy -- -D warnings
+
+echo "pre-commit checks passed"

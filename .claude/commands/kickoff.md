@@ -1,34 +1,29 @@
 # Start here. Bootstraps a new feature into the agent pipeline.
 
-Tell the system what you want to build — it initializes state, reads project context, and prepares for requirements gathering.
+Use this command to begin a new feature. It initializes pipeline state and
+points you to the first prep command.
 
 ## Input
 
-$ARGUMENTS should be a brief description of the feature or change.
-If empty, ask the user what they want to build.
+$ARGUMENTS = optional one-line feature description.
 
 ## Procedure
 
-1. Invoke the engineering-manager agent with this instruction:
+Invoke the **engineering-manager** agent with these instructions:
 
-   "The user wants to start a new feature: [$ARGUMENTS]. Run the Bootstrap
-   stage ONLY. Initialize the state file, read existing context, summarize
-   the starting state, and stop. Do NOT proceed to Discovery or any other
-   stage. Output what you did and ask if the user is ready to move to
-   Discovery."
-
-2. Relay the engineering-manager's output to the user.
-
----
-
-## Next step
-
-Review the summary. When ready, run **`/discover`** to start requirements gathering.
-
----
+> 1. Check `docs/exec-plans/active/` for overlapping plans. If a plan already
+>    covers this area, warn the user and confirm before proceeding.
+> 2. Check `docs/exec-plans/tech-debt-tracker.md` for related debt items.
+>    If any exist, mention them so the user can decide whether to bundle.
+> 3. If `$ARGUMENTS` is non-empty, use it as the feature name/description.
+>    Otherwise, ask the user for a one-line feature description.
+> 4. Initialize `.state/feature-state.json` with the feature name and
+>    stage set to `discovery`.
+> 5. Tell the user: "Run **`/prep-pm-discover`** to begin requirements gathering."
 
 ## Rules
 
-- ONE stage only. Do not chain into Discovery.
-- If `.state/feature-state.json` already has an active feature, the EM should
-  warn about this and ask whether to archive it or continue it.
+- This command ONLY bootstraps. It does NOT run discovery, design, or any
+  other stage.
+- Do not invoke any specialist agent.
+- Do not auto-progress to the next stage.

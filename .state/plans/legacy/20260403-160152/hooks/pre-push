@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+
+echo "=== pre-push ==="
+
+# Web: unit tests + Playwright smoke (Chromium only, @smoke tag)
+echo "--- web: unit tests ---"
+(cd web && npm run test)
+
+echo "--- web: e2e smoke ---"
+(cd web && npm run test:e2e:smoke)
+
+# Server: full test suite
+echo "--- server: tests ---"
+cargo test
+
+echo "pre-push checks passed"
