@@ -118,7 +118,7 @@ test.describe('PTR touch gesture', () => {
 test.describe('PTR desktop pointer gesture', () => {
 	// No device override — uses default desktop viewport
 
-	test('pull-to-refresh mouse drag triggers sync @smoke', async ({ page }) => {
+	test('pull-to-refresh mouse drag triggers sync @smoke', async ({ page, browserName }) => {
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 
@@ -128,9 +128,14 @@ test.describe('PTR desktop pointer gesture', () => {
 		await expect(indicator).toHaveCSS('opacity', '0');
 
 		// Wait for hydration — pointer listeners must be registered before interacting.
-		const client = await page.context().newCDPSession(page);
-		await waitForPtrListeners(page, client, 'pointerdown');
-		await client.detach();
+		// CDP is Chromium-only; fall back to a delay on other browsers.
+		if (browserName === 'chromium') {
+			const client = await page.context().newCDPSession(page);
+			await waitForPtrListeners(page, client, 'pointerdown');
+			await client.detach();
+		} else {
+			await page.waitForTimeout(2000);
+		}
 
 		// Reset scroll position so the component's scroll guard does not fire.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
@@ -170,7 +175,7 @@ test.describe('PTR desktop pointer gesture', () => {
 test.describe('PTR wheel gesture', () => {
 	// No device override — uses default desktop viewport
 
-	test('wheel gesture triggers sync @smoke', async ({ page }) => {
+	test('wheel gesture triggers sync @smoke', async ({ page, browserName }) => {
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 
@@ -180,9 +185,14 @@ test.describe('PTR wheel gesture', () => {
 		await expect(indicator).toHaveCSS('opacity', '0');
 
 		// Wait for hydration — wheel listener must be registered before interacting.
-		const client = await page.context().newCDPSession(page);
-		await waitForPtrListeners(page, client, 'wheel');
-		await client.detach();
+		// CDP is Chromium-only; fall back to a delay on other browsers.
+		if (browserName === 'chromium') {
+			const client = await page.context().newCDPSession(page);
+			await waitForPtrListeners(page, client, 'wheel');
+			await client.detach();
+		} else {
+			await page.waitForTimeout(2000);
+		}
 
 		// Reset scroll position so the wheel scroll guard (scrollTop === 0) is satisfied.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
