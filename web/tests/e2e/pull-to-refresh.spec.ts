@@ -1,7 +1,35 @@
-import { devices, expect, test } from '@playwright/test';
+import { type CDPSession, devices, expect, type Page, test } from '@playwright/test';
+
+/**
+ * Wait for the PullToRefresh component's onMount to register event listeners.
+ * SSR renders the DOM before JS hydration completes, so visual assertions
+ * (heading visible, indicator opacity) pass while event listeners haven't
+ * been attached yet. This polls via CDP until the specified listener type
+ * appears on .ptr-wrap.
+ */
+async function waitForPtrListeners(
+	page: Page,
+	client: CDPSession,
+	listenerType: string
+): Promise<void> {
+	const { root } = await client.send('DOM.getDocument');
+	const { nodeId } = await client.send('DOM.querySelector', {
+		nodeId: root.nodeId,
+		selector: '.ptr-wrap'
+	});
+	const { object } = await client.send('DOM.resolveNode', { nodeId });
+	await expect(async () => {
+		const { listeners } = await client.send('DOMDebugger.getEventListeners', {
+			objectId: object.objectId!,
+			depth: 0
+		});
+		expect(listeners.some((l: { type: string }) => l.type === listenerType)).toBe(true);
+	}).toPass({ timeout: 10_000 });
+}
 
 // --- Touch gesture tests (mobile device) ---
 test.describe('PTR touch gesture', () => {
+	test.skip(({ browserName }) => browserName === 'firefox', 'isMobile not supported in Firefox');
 	// Omit defaultBrowserType: test.use() inside a describe block cannot set
 	// defaultBrowserType because it forces a new worker.
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -36,6 +64,7 @@ test.describe('PTR touch gesture', () => {
 		// inside page.evaluate() are untrusted and do not reliably trigger
 		// addEventListener-registered handlers in Chromium's device-emulation mode.
 		const client = await page.context().newCDPSession(page);
+		await waitForPtrListeners(page, client, 'touchstart');
 
 		function touchPoint(x: number, y: number) {
 			return { x, y, radiusX: 0.5, radiusY: 0.5, rotationAngle: 0, force: 0.5, id: 1 };
@@ -63,9 +92,8 @@ test.describe('PTR touch gesture', () => {
 		// pullDistance ≈ 80px (160px raw × 0.5 damping), threshold = 64px →
 		// contentTranslateY = min((80/64)*56, 56) = 56px.
 		const content = page.locator('.ptr-content');
-		const style = await content.getAttribute('style');
-		expect(style).toContain('translateY(');
-		expect(style).not.toContain('translateY(0px)');
+		await expect(content).toHaveAttribute('style', /translateY\(/);
+		await expect(content).not.toHaveAttribute('style', /translateY\(0px\)/);
 
 		// (5b) Indicator should be fully visible while held past threshold.
 		// toHaveCSS retries with the configured expect.timeout (10 s), giving
@@ -99,6 +127,11 @@ test.describe('PTR desktop pointer gesture', () => {
 		// Indicator starts hidden (opacity 0).
 		await expect(indicator).toHaveCSS('opacity', '0');
 
+		// Wait for hydration — pointer listeners must be registered before interacting.
+		const client = await page.context().newCDPSession(page);
+		await waitForPtrListeners(page, client, 'pointerdown');
+		await client.detach();
+
 		// Reset scroll position so the component's scroll guard does not fire.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
 
@@ -118,9 +151,8 @@ test.describe('PTR desktop pointer gesture', () => {
 
 		// While still holding, content wrapper must be translated down.
 		const content = page.locator('.ptr-content');
-		const style = await content.getAttribute('style');
-		expect(style).toContain('translateY(');
-		expect(style).not.toContain('translateY(0px)');
+		await expect(content).toHaveAttribute('style', /translateY\(/);
+		await expect(content).not.toHaveAttribute('style', /translateY\(0px\)/);
 
 		// Indicator should be fully visible while held past threshold.
 		await expect(indicator).toHaveCSS('opacity', '1');
@@ -146,6 +178,11 @@ test.describe('PTR wheel gesture', () => {
 
 		// Indicator starts hidden (opacity 0).
 		await expect(indicator).toHaveCSS('opacity', '0');
+
+		// Wait for hydration — wheel listener must be registered before interacting.
+		const client = await page.context().newCDPSession(page);
+		await waitForPtrListeners(page, client, 'wheel');
+		await client.detach();
 
 		// Reset scroll position so the wheel scroll guard (scrollTop === 0) is satisfied.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
@@ -174,9 +211,8 @@ test.describe('PTR wheel gesture', () => {
 
 		// Content wrapper must be translated down during the active gesture.
 		const content = page.locator('.ptr-content');
-		const style = await content.getAttribute('style');
-		expect(style).toContain('translateY(');
-		expect(style).not.toContain('translateY(0px)');
+		await expect(content).toHaveAttribute('style', /translateY\(/);
+		await expect(content).not.toHaveAttribute('style', /translateY\(0px\)/);
 
 		// Indicator must be fully visible while pull distance exceeds threshold.
 		await expect(indicator).toHaveCSS('opacity', '1');
