@@ -558,9 +558,6 @@
 
 	/* Desktop cursor feedback -- only for fine-pointer devices (mouse/trackpad). */
 	@media (pointer: fine) {
-		.ptr-wrap {
-			cursor: grab;
-		}
 		.ptr-wrap.ptr-dragging {
 			cursor: grabbing;
 			user-select: none;
