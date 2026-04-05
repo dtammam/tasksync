@@ -133,3 +133,60 @@ test.describe('PTR desktop pointer gesture', () => {
 		await expect(indicator).toHaveCSS('opacity', '0');
 	});
 });
+
+// --- Wheel/trackpad gesture tests ---
+test.describe('PTR wheel gesture', () => {
+	// No device override — uses default desktop viewport
+
+	test('wheel gesture triggers sync @smoke', async ({ page }) => {
+		await page.goto('/');
+		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
+
+		const indicator = page.locator('.ptr-indicator');
+
+		// Indicator starts hidden (opacity 0).
+		await expect(indicator).toHaveCSS('opacity', '0');
+
+		// Reset scroll position so the wheel scroll guard (scrollTop === 0) is satisfied.
+		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
+
+		// Position the mouse over the .ptr-wrap element before dispatching wheel events.
+		// page.mouse.wheel() dispatches the event at the current mouse cursor position;
+		// the cursor must be within .ptr-wrap so that the containerEl event listener fires.
+		const wrapBox = await page.locator('.ptr-wrap').boundingBox();
+		if (!wrapBox) throw new Error('.ptr-wrap not found');
+		const cx = Math.round(wrapBox.x + wrapBox.width / 2);
+		const cy = Math.round(wrapBox.y + 10);
+		await page.mouse.move(cx, cy);
+
+		// Send multiple wheel-up events (negative deltaY) to accumulate pull distance
+		// past the 64px refresh threshold.
+		//
+		// The damping formula is: PULL_MAX * (1 - exp(-wheelAccumulator * 0.9 / 140)).
+		// To reach pullDistance >= 64px, wheelAccumulator must exceed ~95px.
+		// Sending 5 × 40px = 200px raw delta yields pullDistance ≈ 99px, well past threshold.
+		//
+		// page.mouse.wheel() dispatches real WheelEvent objects in DOM_DELTA_PIXEL mode,
+		// which the component's handleWheel handler normalises and accumulates.
+		for (let i = 0; i < 5; i++) {
+			await page.mouse.wheel(0, -40);
+		}
+
+		// Content wrapper must be translated down during the active gesture.
+		const content = page.locator('.ptr-content');
+		const style = await content.getAttribute('style');
+		expect(style).toContain('translateY(');
+		expect(style).not.toContain('translateY(0px)');
+
+		// Indicator must be fully visible while pull distance exceeds threshold.
+		await expect(indicator).toHaveCSS('opacity', '1');
+
+		// The wheel handler uses a 150ms debounce for gesture-end detection.
+		// After the last wheel event, allow the debounce to settle.
+		// Playwright's toHaveCSS auto-retries, so no explicit wait is needed beyond
+		// leaving enough time for the debounce (150ms) + CSS transition (300ms) to complete.
+
+		// After settle, indicator animates out — opacity returns to 0.
+		await expect(indicator).toHaveCSS('opacity', '0');
+	});
+});

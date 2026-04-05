@@ -63,6 +63,12 @@
 	/** True while a mouse pointer drag gesture is active; drives CSS cursor state. */
 	let isPointerDragging = false;
 
+	/** Raw accumulated deltaY (pixels) across wheel events in a single gesture. */
+	let wheelAccumulator = 0;
+
+	/** Debounce timer for wheel-end detection; cleared on destroy. */
+	let wheelEndTimer: ReturnType<typeof setTimeout> | null = null;
+
 	// ── UI state ───────────────────────────────────────────────────────────────
 
 	/** Text for the aria-live region; set after each sync settles. */
@@ -345,6 +351,98 @@
 		}, 300);
 	}
 
+	// ── Wheel event handlers (trackpad / mouse wheel) ─────────────────────────
+
+	/**
+	 * Normalize a WheelEvent deltaY value to pixels based on the deltaMode.
+	 *
+	 * - DOM_DELTA_PIXEL (0): use as-is (trackpad, most browsers)
+	 * - DOM_DELTA_LINE  (1): multiply by 24px (line-height estimate, classic mouse wheel)
+	 * - DOM_DELTA_PAGE  (2): multiply by 800px (viewport-height estimate, rare)
+	 */
+	function normalizeDeltaY(event: WheelEvent): number {
+		switch (event.deltaMode) {
+			case WheelEvent.DOM_DELTA_LINE:
+				return event.deltaY * 24;
+			case WheelEvent.DOM_DELTA_PAGE:
+				return event.deltaY * 800;
+			default:
+				// DOM_DELTA_PIXEL (0) or unknown -- use as-is
+				return event.deltaY;
+		}
+	}
+
+	/**
+	 * Handle wheel/trackpad scroll gestures for pull-to-refresh.
+	 *
+	 * Lifecycle:
+	 * 1. **Activation**: when at scrollTop <= 0 and deltaY < 0 (scrolling up past top),
+	 *    begin tracking; pick gesture emoji; reset accumulator.
+	 * 2. **Accumulation**: while tracking, accumulate damped pull distance and call
+	 *    preventDefault() to suppress native scroll.
+	 * 3. **End detection**: 150ms debounce timer. On fire, either trigger refresh or retract.
+	 * 4. **Cancellation**: deltaY > 0 during tracking reverses out of the gesture.
+	 *
+	 * Must be registered as { passive: false } because it calls preventDefault during tracking.
+	 */
+	function handleWheel(event: WheelEvent): void {
+		const scrollContainer = getScrollContainer();
+		const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+
+		// Activation: start tracking if all conditions are met.
+		if (!isTracking && !isRefreshing && scrollTop <= 0 && event.deltaY < 0) {
+			isTracking = true;
+			gestureEmoji = pickRandomPullEmoji();
+			wheelAccumulator = 0;
+			animateOut = false;
+		}
+
+		if (!isTracking) return;
+
+		// Cancellation: reverse scroll exits the gesture immediately.
+		if (event.deltaY > 0) {
+			isTracking = false;
+			if (wheelEndTimer !== null) {
+				clearTimeout(wheelEndTimer);
+				wheelEndTimer = null;
+			}
+			animateOut = true;
+			pullDistance = 0;
+			if (animateOutTimer !== null) clearTimeout(animateOutTimer);
+			animateOutTimer = setTimeout(() => {
+				animateOut = false;
+				animateOutTimer = null;
+			}, 300);
+			return;
+		}
+
+		// Accumulation: update pull distance with the new wheel delta.
+		const normalizedDelta = normalizeDeltaY(event);
+		wheelAccumulator += Math.abs(normalizedDelta);
+		pullDistance = applyPullDamping(wheelAccumulator);
+		event.preventDefault();
+
+		// End detection: reset debounce timer on every wheel event.
+		if (wheelEndTimer !== null) clearTimeout(wheelEndTimer);
+		wheelEndTimer = setTimeout(() => {
+			wheelEndTimer = null;
+			if (!isTracking) return;
+			isTracking = false;
+
+			if (meetsRefreshThreshold(pullDistance, threshold)) {
+				void doRefresh().catch((err: unknown) => console.error('doRefresh failed', err));
+			} else {
+				animateOut = true;
+				pullDistance = 0;
+				if (animateOutTimer !== null) clearTimeout(animateOutTimer);
+				animateOutTimer = setTimeout(() => {
+					animateOut = false;
+					animateOutTimer = null;
+				}, 300);
+			}
+		}, 150);
+	}
+
 	// ── Lifecycle ──────────────────────────────────────────────────────────────
 
 	onMount(() => {
@@ -371,6 +469,10 @@
 		containerEl.addEventListener('pointerup', handlePointerUp);
 		containerEl.addEventListener('lostpointercapture', handleLostPointerCapture);
 
+		// Register wheel listener for trackpad/mouse wheel input.
+		// Must be non-passive because it calls preventDefault during active pull gestures.
+		containerEl.addEventListener('wheel', handleWheel, { passive: false });
+
 		return () => {
 			mql.removeEventListener('change', handleMqlChange);
 			containerEl.removeEventListener('touchstart', handleTouchStart);
@@ -381,6 +483,7 @@
 			containerEl.removeEventListener('pointermove', handlePointerMove);
 			containerEl.removeEventListener('pointerup', handlePointerUp);
 			containerEl.removeEventListener('lostpointercapture', handleLostPointerCapture);
+			containerEl.removeEventListener('wheel', handleWheel);
 		};
 	});
 
@@ -438,6 +541,10 @@
 		if (statusClearTimer !== null) {
 			clearTimeout(statusClearTimer);
 			statusClearTimer = null;
+		}
+		if (wheelEndTimer !== null) {
+			clearTimeout(wheelEndTimer);
+			wheelEndTimer = null;
 		}
 	});
 </script>
