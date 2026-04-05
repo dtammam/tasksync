@@ -236,7 +236,6 @@
 	function handlePointerDown(event: PointerEvent): void {
 		if (event.pointerType !== 'mouse' || isRefreshing) return;
 
-		containerEl.setPointerCapture(event.pointerId);
 		startTouchY = event.clientY;
 		pendingGesture = true;
 		isTracking = false;
@@ -268,6 +267,10 @@
 				startTouchY = currentY;
 				gestureEmoji = pickRandomPullEmoji();
 				isPointerDragging = true;
+				// Capture the pointer now that we know this is a pull gesture,
+				// not a normal click. Capturing on pointerdown would swallow
+				// click events on child elements (buttons, links, etc.).
+				containerEl.setPointerCapture(event.pointerId);
 				event.preventDefault(); // Claim the gesture so the browser does not classify it as a scroll.
 			} else if (scrollTop > 0) {
 				// Container is scrolled — allow normal scroll, keep pending.

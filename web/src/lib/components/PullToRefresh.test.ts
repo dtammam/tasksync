@@ -249,14 +249,17 @@ describe('PullToRefresh pointer gesture', () => {
 		expect(dispatched).toBe(false);
 	});
 
-	it('calls setPointerCapture with the event pointerId on pointerdown', async () => {
+	it('calls setPointerCapture on pointermove when pull gesture activates, not on pointerdown', async () => {
 		const { container } = render(PullToRefresh, { threshold: 64 });
 		const wrap = container.firstElementChild as HTMLElement;
 		const spy = vi.fn();
 		wrap.setPointerCapture = spy;
 
 		await fireEvent(wrap, makePointerEvent('pointerdown', 0, 'mouse', 42));
+		expect(spy).not.toHaveBeenCalled();
 
+		// First pointermove activates the gesture and should capture the pointer.
+		await fireEvent(wrap, makePointerEvent('pointermove', 10, 'mouse', 42));
 		expect(spy).toHaveBeenCalledWith(42);
 	});
 
