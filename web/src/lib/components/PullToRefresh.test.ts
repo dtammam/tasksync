@@ -156,6 +156,181 @@ describe('PullToRefresh component', () => {
 	});
 });
 
+// ── Pointer gesture behavioral tests (mouse only) ─────────────────────────
+
+// Shim PointerEvent if JSDOM has not implemented it.
+if (typeof globalThis.PointerEvent === 'undefined') {
+	// @ts-expect-error -- minimal shim for JSDOM
+	globalThis.PointerEvent = class PointerEvent extends MouseEvent {
+		readonly pointerId: number;
+		readonly pointerType: string;
+		constructor(type: string, init: PointerEventInit & { pointerId?: number; pointerType?: string } = {}) {
+			super(type, init);
+			this.pointerId = init.pointerId ?? 0;
+			this.pointerType = init.pointerType ?? '';
+		}
+	};
+}
+
+function makePointerEvent(type: string, clientY: number, pointerType = 'mouse', pointerId = 1): PointerEvent {
+	return new PointerEvent(type, {
+		pointerType,
+		pointerId,
+		clientY,
+		bubbles: true,
+		cancelable: true
+	});
+}
+
+describe('PullToRefresh pointer gesture', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('dispatches refresh exactly once when pointer pull exceeds threshold', async () => {
+		let dispatchCount = 0;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatchCount++;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// pointerdown at Y=0, first pointermove at Y=10 activates tracking (rebase to 10),
+		// second pointermove at Y=210 (+200px raw → ~100px damped > 64px threshold).
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));   // activates tracking, rebase to 10
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));  // +200px raw → >64px damped
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+
+		expect(dispatchCount).toBe(1);
+	});
+
+	it('does not dispatch refresh when pointer pull is below threshold', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// Activate tracking then release immediately with pullDistance still ~0.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));  // activates tracking
+		await fireEvent(wrap, makePointerEvent('pointerup', 10));    // pullDistance is 0 (activation event)
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('ignores pointerType touch and pen events even when pull exceeds threshold', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// pointerType: 'touch' — should be ignored.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0, 'touch'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10, 'touch'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210, 'touch'));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210, 'touch'));
+
+		expect(dispatched).toBe(false);
+
+		// pointerType: 'pen' — should also be ignored.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0, 'pen'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10, 'pen'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210, 'pen'));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210, 'pen'));
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('calls setPointerCapture with the event pointerId on pointerdown', async () => {
+		const { container } = render(PullToRefresh, { threshold: 64 });
+		const wrap = container.firstElementChild as HTMLElement;
+		const spy = vi.fn();
+		wrap.setPointerCapture = spy;
+
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0, 'mouse', 42));
+
+		expect(spy).toHaveBeenCalledWith(42);
+	});
+
+	it('does not dispatch refresh when lostpointercapture fires instead of pointerup', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// Activate tracking and accumulate pull past threshold, then lose capture.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));   // activates tracking
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));  // +200px raw → >64px damped
+		await fireEvent(wrap, makePointerEvent('lostpointercapture', 210));
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('does not track pointer gesture when scrollTop > 0', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+
+		const main = document.createElement('main');
+		Object.defineProperty(main, 'scrollTop', { value: 50, configurable: true });
+		document.body.appendChild(main);
+		main.appendChild(container);
+
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// pointerdown enters pending, pointermove finds scrollTop > 0 → stays pending, no tracking.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+
+		expect(dispatched).toBe(false);
+
+		// Cleanup
+		document.body.removeChild(main);
+	});
+
+	it('blocks new pointer gestures while isRefreshing is true', async () => {
+		let dispatchCount = 0;
+		// eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional hanging promise
+		const hangingPromise = new Promise<void>(() => {});
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatchCount++;
+			e.detail.promise = hangingPromise;
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// First gesture triggers refresh (hangs indefinitely, so isRefreshing stays true).
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));   // activates tracking
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));  // >64px damped
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+		expect(dispatchCount).toBe(1);
+
+		// Second gesture: isRefreshing is true, so pointerdown should return early.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+		expect(dispatchCount).toBe(1);
+	});
+});
+
 // ── Touch gesture behavioral tests ────────────────────────────────────────
 
 /**
