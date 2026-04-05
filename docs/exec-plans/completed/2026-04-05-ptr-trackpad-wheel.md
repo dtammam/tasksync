@@ -212,6 +212,7 @@ Add `describe('PTR wheel gesture')` with a `@smoke`-tagged test:
 ## Progress log
 
 - 2026-04-05: Requirements gathered and exec plan created (discovery phase)
+- 2026-04-05: Feature complete. All 5 tasks done, all 18 acceptance criteria met. Archived to completed/ (done phase)
 
 ## Decision log
 
