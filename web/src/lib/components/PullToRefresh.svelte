@@ -60,6 +60,15 @@
 	/** Emoji picked once when tracking activates; stays fixed for the full gesture. */
 	let gestureEmoji = '';
 
+	/** True while a mouse pointer drag gesture is active; drives CSS cursor state. */
+	let isPointerDragging = false;
+
+	/** Raw accumulated deltaY (pixels) across wheel events in a single gesture. */
+	let wheelAccumulator = 0;
+
+	/** Debounce timer for wheel-end detection; cleared on destroy. */
+	let wheelEndTimer: ReturnType<typeof setTimeout> | null = null;
+
 	// ── UI state ───────────────────────────────────────────────────────────────
 
 	/** Text for the aria-live region; set after each sync settles. */
@@ -222,6 +231,218 @@
 		}, 300);
 	}
 
+	// ── Pointer event handlers (mouse only) ───────────────────────────────────
+
+	/**
+	 * Record the initial pointer position and enter pending-gesture mode.
+	 * Only handles mouse input; touch and pen are handled by the touch event handlers.
+	 * Calls setPointerCapture so the gesture tracks reliably even if the cursor
+	 * leaves the element bounds during drag.
+	 */
+	function handlePointerDown(event: PointerEvent): void {
+		if (event.pointerType !== 'mouse' || isRefreshing) return;
+
+		startTouchY = event.clientY;
+		pendingGesture = true;
+		isTracking = false;
+		pullDistance = 0;
+		animateOut = false;
+		isPointerDragging = false;
+	}
+
+	/**
+	 * Resolve pending gesture or accumulate pull distance for mouse input.
+	 * Mirrors handleTouchMove exactly: deferred scrollTop guard, rebase on activation,
+	 * damped pull accumulation, and preventDefault to suppress native scroll/pan.
+	 * Must be registered as non-passive so preventDefault is available.
+	 */
+	function handlePointerMove(event: PointerEvent): void {
+		if (event.pointerType !== 'mouse') return;
+		if (!pendingGesture && !isTracking) return;
+
+		const currentY = event.clientY;
+
+		if (pendingGesture && !isTracking) {
+			const main = getScrollContainer();
+			const scrollTop = main ? main.scrollTop : 0;
+
+			if (scrollTop <= 0 && currentY > startTouchY) {
+				// Rebase so pull distance is measured from tracking activation point.
+				isTracking = true;
+				pendingGesture = false;
+				startTouchY = currentY;
+				gestureEmoji = pickRandomPullEmoji();
+				isPointerDragging = true;
+				// Capture the pointer now that we know this is a pull gesture,
+				// not a normal click. Capturing on pointerdown would swallow
+				// click events on child elements (buttons, links, etc.).
+				containerEl.setPointerCapture(event.pointerId);
+				event.preventDefault(); // Claim the gesture so the browser does not classify it as a scroll.
+			} else if (scrollTop > 0) {
+				// Container is scrolled — allow normal scroll, keep pending.
+				return;
+			} else {
+				// Pointer moving up or horizontally — cancel gesture.
+				pendingGesture = false;
+			}
+			// Don't accumulate pull distance on the activation event itself.
+			return;
+		}
+
+		// isTracking is true here.
+		const rawDelta = currentY - startTouchY;
+
+		if (rawDelta <= 0) {
+			event.preventDefault();
+			pullDistance = 0;
+			return;
+		}
+
+		event.preventDefault();
+		pullDistance = applyPullDamping(rawDelta);
+	}
+
+	/**
+	 * Settle the mouse gesture: either trigger a refresh or retract the indicator.
+	 * Mirrors handleTouchEnd exactly.
+	 */
+	function handlePointerUp(event: PointerEvent): void {
+		if (event.pointerType !== 'mouse') return;
+
+		pendingGesture = false;
+		isPointerDragging = false;
+
+		if (!isTracking) return;
+		isTracking = false;
+
+		if (meetsRefreshThreshold(pullDistance, threshold)) {
+			void doRefresh().catch((err: unknown) => console.error('doRefresh failed', err));
+		} else {
+			// Retract the content and indicator with a CSS transition.
+			animateOut = true;
+			pullDistance = 0;
+			if (animateOutTimer !== null) clearTimeout(animateOutTimer);
+			animateOutTimer = setTimeout(() => {
+				animateOut = false;
+				animateOutTimer = null;
+			}, 300);
+		}
+	}
+
+	/**
+	 * Cancel the mouse gesture cleanly without triggering a refresh.
+	 * Called when the browser loses pointer capture (e.g. window blur, system dialog).
+	 * Mirrors handleTouchCancel exactly.
+	 */
+	function handleLostPointerCapture(event: PointerEvent): void {
+		if (event.pointerType !== 'mouse') return;
+
+		pendingGesture = false;
+		isPointerDragging = false;
+
+		if (!isTracking) return;
+		isTracking = false;
+		animateOut = true;
+		pullDistance = 0;
+		if (animateOutTimer !== null) clearTimeout(animateOutTimer);
+		animateOutTimer = setTimeout(() => {
+			animateOut = false;
+			animateOutTimer = null;
+		}, 300);
+	}
+
+	// ── Wheel event handlers (trackpad / mouse wheel) ─────────────────────────
+
+	/**
+	 * Normalize a WheelEvent deltaY value to pixels based on the deltaMode.
+	 *
+	 * - DOM_DELTA_PIXEL (0): use as-is (trackpad, most browsers)
+	 * - DOM_DELTA_LINE  (1): multiply by 24px (line-height estimate, classic mouse wheel)
+	 * - DOM_DELTA_PAGE  (2): multiply by 800px (viewport-height estimate, rare)
+	 */
+	function normalizeDeltaY(event: WheelEvent): number {
+		switch (event.deltaMode) {
+			case WheelEvent.DOM_DELTA_LINE:
+				return event.deltaY * 24;
+			case WheelEvent.DOM_DELTA_PAGE:
+				return event.deltaY * 800;
+			default:
+				// DOM_DELTA_PIXEL (0) or unknown -- use as-is
+				return event.deltaY;
+		}
+	}
+
+	/**
+	 * Handle wheel/trackpad scroll gestures for pull-to-refresh.
+	 *
+	 * Lifecycle:
+	 * 1. **Activation**: when at scrollTop <= 0 and deltaY < 0 (scrolling up past top),
+	 *    begin tracking; pick gesture emoji; reset accumulator.
+	 * 2. **Accumulation**: while tracking, accumulate damped pull distance and call
+	 *    preventDefault() to suppress native scroll.
+	 * 3. **End detection**: 150ms debounce timer. On fire, either trigger refresh or retract.
+	 * 4. **Cancellation**: deltaY > 0 during tracking reverses out of the gesture.
+	 *
+	 * Must be registered as { passive: false } because it calls preventDefault during tracking.
+	 */
+	function handleWheel(event: WheelEvent): void {
+		const scrollContainer = getScrollContainer();
+		const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+
+		// Activation: start tracking if all conditions are met.
+		if (!isTracking && !isRefreshing && scrollTop <= 0 && event.deltaY < 0) {
+			isTracking = true;
+			gestureEmoji = pickRandomPullEmoji();
+			wheelAccumulator = 0;
+			animateOut = false;
+		}
+
+		if (!isTracking) return;
+
+		// Cancellation: reverse scroll exits the gesture immediately.
+		if (event.deltaY > 0) {
+			isTracking = false;
+			if (wheelEndTimer !== null) {
+				clearTimeout(wheelEndTimer);
+				wheelEndTimer = null;
+			}
+			animateOut = true;
+			pullDistance = 0;
+			if (animateOutTimer !== null) clearTimeout(animateOutTimer);
+			animateOutTimer = setTimeout(() => {
+				animateOut = false;
+				animateOutTimer = null;
+			}, 300);
+			return;
+		}
+
+		// Accumulation: update pull distance with the new wheel delta.
+		const normalizedDelta = normalizeDeltaY(event);
+		wheelAccumulator += Math.abs(normalizedDelta);
+		pullDistance = applyPullDamping(wheelAccumulator);
+		event.preventDefault();
+
+		// End detection: reset debounce timer on every wheel event.
+		if (wheelEndTimer !== null) clearTimeout(wheelEndTimer);
+		wheelEndTimer = setTimeout(() => {
+			wheelEndTimer = null;
+			if (!isTracking) return;
+			isTracking = false;
+
+			if (meetsRefreshThreshold(pullDistance, threshold)) {
+				void doRefresh().catch((err: unknown) => console.error('doRefresh failed', err));
+			} else {
+				animateOut = true;
+				pullDistance = 0;
+				if (animateOutTimer !== null) clearTimeout(animateOutTimer);
+				animateOutTimer = setTimeout(() => {
+					animateOut = false;
+					animateOutTimer = null;
+				}, 300);
+			}
+		}, 150);
+	}
+
 	// ── Lifecycle ──────────────────────────────────────────────────────────────
 
 	onMount(() => {
@@ -241,12 +462,28 @@
 		containerEl.addEventListener('touchend', handleTouchEnd);
 		containerEl.addEventListener('touchcancel', handleTouchCancel);
 
+		// Register pointer listeners for desktop mouse input alongside touch handlers.
+		// pointermove is non-passive so we can call preventDefault during active gesture.
+		containerEl.addEventListener('pointerdown', handlePointerDown);
+		containerEl.addEventListener('pointermove', handlePointerMove, { passive: false });
+		containerEl.addEventListener('pointerup', handlePointerUp);
+		containerEl.addEventListener('lostpointercapture', handleLostPointerCapture);
+
+		// Register wheel listener for trackpad/mouse wheel input.
+		// Must be non-passive because it calls preventDefault during active pull gestures.
+		containerEl.addEventListener('wheel', handleWheel, { passive: false });
+
 		return () => {
 			mql.removeEventListener('change', handleMqlChange);
 			containerEl.removeEventListener('touchstart', handleTouchStart);
 			containerEl.removeEventListener('touchmove', handleTouchMove);
 			containerEl.removeEventListener('touchend', handleTouchEnd);
 			containerEl.removeEventListener('touchcancel', handleTouchCancel);
+			containerEl.removeEventListener('pointerdown', handlePointerDown);
+			containerEl.removeEventListener('pointermove', handlePointerMove);
+			containerEl.removeEventListener('pointerup', handlePointerUp);
+			containerEl.removeEventListener('lostpointercapture', handleLostPointerCapture);
+			containerEl.removeEventListener('wheel', handleWheel);
 		};
 	});
 
@@ -305,10 +542,14 @@
 			clearTimeout(statusClearTimer);
 			statusClearTimer = null;
 		}
+		if (wheelEndTimer !== null) {
+			clearTimeout(wheelEndTimer);
+			wheelEndTimer = null;
+		}
 	});
 </script>
 
-<div class="ptr-wrap" bind:this={containerEl}>
+<div class="ptr-wrap" class:ptr-dragging={isPointerDragging} bind:this={containerEl}>
 	<!--
 		Pull indicator: absolute, sits at the top of ptr-wrap.
 		Revealed by content translating down; only opacity is animated.
@@ -423,6 +664,14 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	/* Desktop cursor feedback -- only for fine-pointer devices (mouse/trackpad). */
+	@media (pointer: fine) {
+		.ptr-wrap.ptr-dragging {
+			cursor: grabbing;
+			user-select: none;
+		}
 	}
 
 </style>

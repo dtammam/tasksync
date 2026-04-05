@@ -223,6 +223,8 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-04-05-ptr-trackpad-wheel.md` — Add trackpad/wheel gesture support to pull-to-refresh: wheel event handler with deltaY normalization, debounce end detection, 10+ unit tests, E2E smoke test, E2E flake fixes (complete 2026-04-05)
+- `docs/exec-plans/completed/2026-04-04-ptr-desktop-viewport.md` — Add desktop mouse/pointer gesture support to pull-to-refresh with unit tests, E2E tests, and an exec plan (complete 2026-04-05)
 - `docs/exec-plans/completed/2026-04-01-last-day-of-month-recurrence.md` — Add `lastDayOfMonth` recurrence rule: day-0 snap algorithm, forward/backward switch cases, 28 unit tests, E2E smoke test (complete 2026-04-01)
 - `docs/exec-plans/completed/2026-03-30-shelf-close-all-actions.md` — Close mobile task shelf on ALL action button taps (star, punt, tomorrow, next-week), unit tests for all six handlers, E2E smoke for star (complete 2026-03-30)
 - `docs/exec-plans/completed/2026-03-30-ptr-increase-max-drag.md` — PTR drag distance: exponential rubber-band curve, PULL_MAX=140 (~17.5% screen), PULL_DAMPING=0.9 for snappy pull feel (complete 2026-03-30)

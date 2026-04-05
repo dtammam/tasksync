@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import {
 	PULL_EMOJIS,
@@ -153,6 +153,184 @@ describe('PullToRefresh component', () => {
 		expect(emoji?.textContent).toBe('🔄');
 
 		vi.restoreAllMocks();
+	});
+});
+
+// ── Pointer gesture behavioral tests (mouse only) ─────────────────────────
+
+// Shim PointerEvent if JSDOM has not implemented it.
+if (typeof globalThis.PointerEvent === 'undefined') {
+	// @ts-expect-error -- minimal shim for JSDOM
+	globalThis.PointerEvent = class PointerEvent extends MouseEvent {
+		readonly pointerId: number;
+		readonly pointerType: string;
+		constructor(type: string, init: PointerEventInit & { pointerId?: number; pointerType?: string } = {}) {
+			super(type, init);
+			this.pointerId = init.pointerId ?? 0;
+			this.pointerType = init.pointerType ?? '';
+		}
+	};
+}
+
+function makePointerEvent(type: string, clientY: number, pointerType = 'mouse', pointerId = 1): PointerEvent {
+	return new PointerEvent(type, {
+		pointerType,
+		pointerId,
+		clientY,
+		bubbles: true,
+		cancelable: true
+	});
+}
+
+describe('PullToRefresh pointer gesture', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('dispatches refresh exactly once when pointer pull exceeds threshold', async () => {
+		let dispatchCount = 0;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatchCount++;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// pointerdown at Y=0, first pointermove at Y=10 activates tracking (rebase to 10),
+		// second pointermove at Y=210 (+200px raw → ~100px damped > 64px threshold).
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));   // activates tracking, rebase to 10
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));  // +200px raw → >64px damped
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+
+		expect(dispatchCount).toBe(1);
+	});
+
+	it('does not dispatch refresh when pointer pull is below threshold', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// Activate tracking then release immediately with pullDistance still ~0.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));  // activates tracking
+		await fireEvent(wrap, makePointerEvent('pointerup', 10));    // pullDistance is 0 (activation event)
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('ignores pointerType touch and pen events even when pull exceeds threshold', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// pointerType: 'touch' — should be ignored.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0, 'touch'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10, 'touch'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210, 'touch'));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210, 'touch'));
+
+		expect(dispatched).toBe(false);
+
+		// pointerType: 'pen' — should also be ignored.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0, 'pen'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10, 'pen'));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210, 'pen'));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210, 'pen'));
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('calls setPointerCapture on pointermove when pull gesture activates, not on pointerdown', async () => {
+		const { container } = render(PullToRefresh, { threshold: 64 });
+		const wrap = container.firstElementChild as HTMLElement;
+		const spy = vi.fn();
+		wrap.setPointerCapture = spy;
+
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0, 'mouse', 42));
+		expect(spy).not.toHaveBeenCalled();
+
+		// First pointermove activates the gesture and should capture the pointer.
+		await fireEvent(wrap, makePointerEvent('pointermove', 10, 'mouse', 42));
+		expect(spy).toHaveBeenCalledWith(42);
+	});
+
+	it('does not dispatch refresh when lostpointercapture fires instead of pointerup', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// Activate tracking and accumulate pull past threshold, then lose capture.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));   // activates tracking
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));  // +200px raw → >64px damped
+		await fireEvent(wrap, makePointerEvent('lostpointercapture', 210));
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('does not track pointer gesture when scrollTop > 0', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+
+		const main = document.createElement('main');
+		Object.defineProperty(main, 'scrollTop', { value: 50, configurable: true });
+		document.body.appendChild(main);
+		main.appendChild(container);
+
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// pointerdown enters pending, pointermove finds scrollTop > 0 → stays pending, no tracking.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+
+		expect(dispatched).toBe(false);
+
+		// Cleanup
+		document.body.removeChild(main);
+	});
+
+	it('blocks new pointer gestures while isRefreshing is true', async () => {
+		let dispatchCount = 0;
+		// eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional hanging promise
+		const hangingPromise = new Promise<void>(() => {});
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatchCount++;
+			e.detail.promise = hangingPromise;
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// First gesture triggers refresh (hangs indefinitely, so isRefreshing stays true).
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));   // activates tracking
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));  // >64px damped
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+		expect(dispatchCount).toBe(1);
+
+		// Second gesture: isRefreshing is true, so pointerdown should return early.
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10));
+		await fireEvent(wrap, makePointerEvent('pointermove', 210));
+		await fireEvent(wrap, makePointerEvent('pointerup', 210));
+		expect(dispatchCount).toBe(1);
 	});
 });
 
@@ -339,5 +517,311 @@ describe('PullToRefresh touch gesture', () => {
 		expect(content).toBeTruthy();
 		const style = content.getAttribute('style') ?? '';
 		expect(style).not.toContain('translateY(');
+	});
+});
+
+// ── Wheel gesture behavioral tests (trackpad / mouse wheel) ───────────────
+
+/**
+ * Helper to create and dispatch a WheelEvent on a target element.
+ * Constructs a WheelEvent directly so deltaMode can be controlled precisely.
+ */
+function dispatchWheel(
+	target: HTMLElement,
+	deltaY: number,
+	deltaMode: number = WheelEvent.DOM_DELTA_PIXEL
+): void {
+	target.dispatchEvent(
+		new WheelEvent('wheel', { deltaY, deltaMode, bubbles: true, cancelable: true })
+	);
+}
+
+describe('PullToRefresh wheel gesture', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('dispatches refresh exactly once when cumulative wheel delta exceeds threshold', async () => {
+		let dispatchCount = 0;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatchCount++;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// Three wheel events of -100px each → wheelAccumulator = 300 → pullDistance well above 64px.
+		dispatchWheel(wrap, -100);
+		dispatchWheel(wrap, -100);
+		dispatchWheel(wrap, -100);
+
+		// Advance past the 150ms debounce — gesture should settle and trigger refresh.
+		vi.advanceTimersByTime(150);
+		await Promise.resolve();
+
+		expect(dispatchCount).toBe(1);
+	});
+
+	it('retracts to zero and does not dispatch refresh when wheel delta is below threshold', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// A small delta that won't produce a damped distance >= 64px.
+		dispatchWheel(wrap, -5);
+
+		vi.advanceTimersByTime(150);
+		await Promise.resolve();
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('does not activate wheel gesture when scrollTop > 0 (scroll guard)', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+
+		const main = document.createElement('main');
+		Object.defineProperty(main, 'scrollTop', { value: 50, configurable: true });
+		document.body.appendChild(main);
+		main.appendChild(container);
+
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// Large negative deltaY that would exceed threshold if tracking were active.
+		dispatchWheel(wrap, -200);
+		dispatchWheel(wrap, -200);
+		dispatchWheel(wrap, -200);
+
+		vi.advanceTimersByTime(150);
+		await Promise.resolve();
+
+		expect(dispatched).toBe(false);
+
+		// Cleanup
+		document.body.removeChild(main);
+	});
+
+	it('cancels gesture and retracts immediately when a positive deltaY arrives during tracking', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// Start pulling up to activate tracking.
+		dispatchWheel(wrap, -100);
+		dispatchWheel(wrap, -100);
+
+		// Reverse scroll — cancels the gesture immediately without waiting for debounce.
+		dispatchWheel(wrap, 50);
+
+		// Advance timer to confirm no deferred refresh fires either.
+		vi.advanceTimersByTime(300);
+		await Promise.resolve();
+
+		expect(dispatched).toBe(false);
+	});
+
+	it('does not settle before 150ms but settles at exactly 150ms', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+
+		dispatchWheel(wrap, -200);
+		dispatchWheel(wrap, -200);
+
+		// Not yet settled at 140ms.
+		vi.advanceTimersByTime(140);
+		await Promise.resolve();
+		expect(dispatched).toBe(false);
+
+		// Settled at 150ms.
+		vi.advanceTimersByTime(10);
+		await Promise.resolve();
+		expect(dispatched).toBe(true);
+	});
+
+	it('resets the 150ms debounce timer when a new wheel event arrives before it fires', async () => {
+		let dispatched = false;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatched = true;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// First wheel event starts the debounce timer.
+		dispatchWheel(wrap, -200);
+
+		// 100ms later — still within the window — send another wheel event.
+		vi.advanceTimersByTime(100);
+		dispatchWheel(wrap, -200);
+
+		// 100ms after the second event (200ms total) — the reset timer hasn't fired yet
+		// because the second event reset it; gesture should still be active at this point.
+		// Actually, 100ms after the second event IS less than 150ms, so still active.
+		vi.advanceTimersByTime(100);
+		await Promise.resolve();
+		// Still not settled (timer was reset by second event, only 100ms have passed since then).
+		expect(dispatched).toBe(false);
+
+		// Final 50ms — now the timer fires (150ms since the second event).
+		vi.advanceTimersByTime(50);
+		await Promise.resolve();
+		expect(dispatched).toBe(true);
+	});
+
+	it('does not activate wheel gesture when isRefreshing is true', async () => {
+		let dispatchCount = 0;
+		// eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional hanging promise
+		const hangingPromise = new Promise<void>(() => {});
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatchCount++;
+			e.detail.promise = hangingPromise;
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+
+		// First gesture triggers refresh and hangs — isRefreshing stays true.
+		dispatchWheel(wrap, -200);
+		dispatchWheel(wrap, -200);
+		vi.advanceTimersByTime(150);
+		await Promise.resolve();
+		expect(dispatchCount).toBe(1);
+
+		// Second gesture: isRefreshing is true, so it should be blocked.
+		dispatchWheel(wrap, -200);
+		dispatchWheel(wrap, -200);
+		vi.advanceTimersByTime(150);
+		await Promise.resolve();
+		expect(dispatchCount).toBe(1);
+	});
+
+	it('wheel handler skips fresh activation when isTracking is already set by a pointer gesture', async () => {
+		// The activation guard `!isTracking && ...` prevents the wheel handler from
+		// re-initializing gesture state (resetting wheelAccumulator, picking new emoji)
+		// when tracking is already active. This test verifies that a pointer gesture
+		// holds isTracking = true right up through the wheel debounce window, preventing
+		// the wheel from re-triggering doRefresh() independently via the activation path.
+		//
+		// We set up a pointer gesture that keeps isTracking = true (by sending pointermove
+		// to activate, then NOT sending pointerup), dispatch wheel events, and confirm
+		// refresh fires exactly once — via the wheel debounce — rather than twice.
+		let dispatchCount = 0;
+		const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+			dispatchCount++;
+			e.detail.promise = Promise.resolve();
+		});
+		const wrap = container.firstElementChild as HTMLElement;
+		wrap.setPointerCapture = vi.fn();
+
+		// Activate pointer tracking (isTracking = true, pullDistance ≈ 0).
+		await fireEvent(wrap, makePointerEvent('pointerdown', 0));
+		await fireEvent(wrap, makePointerEvent('pointermove', 10)); // activates isTracking
+
+		// Wheel events arrive while pointer gesture is active.
+		// Because isTracking is already true, the activation block is SKIPPED
+		// (no re-initialization). The accumulation branch runs, builds pull distance,
+		// and the debounce fires refresh. Confirm refresh fires exactly once, not twice
+		// (the activation guard prevents double-initialization).
+		dispatchWheel(wrap, -200);
+		dispatchWheel(wrap, -200);
+		vi.advanceTimersByTime(150);
+		await Promise.resolve();
+
+		expect(dispatchCount).toBe(1);
+	});
+
+	it('DOM_DELTA_LINE events produce a pull distance proportional to their pixel equivalent', async () => {
+		// deltaMode LINE (1): deltaY is multiplied by 24px.
+		// -3 lines × 24 = -72px raw → similar accumulation to -72px in PIXEL mode.
+		let pixelPullDistance = 0;
+		let linePullDistance = 0;
+
+		// Measure pixel-mode pull: -72px raw.
+		{
+			const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+				e.detail.promise = Promise.resolve();
+			});
+			const wrap = container.firstElementChild as HTMLElement;
+			dispatchWheel(wrap, -72, WheelEvent.DOM_DELTA_PIXEL);
+			// Read pullDistance from translateY style on ptr-content.
+			await Promise.resolve();
+			const content = container.querySelector('.ptr-content') as HTMLElement;
+			const style = content?.getAttribute('style') ?? '';
+			const match = style.match(/translateY\((\d+(?:\.\d+)?)px\)/);
+			pixelPullDistance = match ? parseFloat(match[1]) : 0;
+		}
+
+		// Measure LINE-mode pull: -3 lines (= -72px after ×24 normalization).
+		{
+			const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+				e.detail.promise = Promise.resolve();
+			});
+			const wrap = container.firstElementChild as HTMLElement;
+			dispatchWheel(wrap, -3, WheelEvent.DOM_DELTA_LINE);
+			await Promise.resolve();
+			const content = container.querySelector('.ptr-content') as HTMLElement;
+			const style = content?.getAttribute('style') ?? '';
+			const match = style.match(/translateY\((\d+(?:\.\d+)?)px\)/);
+			linePullDistance = match ? parseFloat(match[1]) : 0;
+		}
+
+		// Both should produce the same non-zero pull distance.
+		expect(pixelPullDistance).toBeGreaterThan(0);
+		expect(linePullDistance).toBeGreaterThan(0);
+		expect(linePullDistance).toBeCloseTo(pixelPullDistance, 5);
+	});
+
+	it('DOM_DELTA_PAGE events produce a pull distance proportional to their pixel equivalent', async () => {
+		// deltaMode PAGE (2): deltaY is multiplied by 800px.
+		// -1 page × 800 = -800px raw → same accumulation as -800px in PIXEL mode.
+		let pixelPullDistance = 0;
+		let pagePullDistance = 0;
+
+		// Measure pixel-mode pull: -800px raw.
+		{
+			const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+				e.detail.promise = Promise.resolve();
+			});
+			const wrap = container.firstElementChild as HTMLElement;
+			dispatchWheel(wrap, -800, WheelEvent.DOM_DELTA_PIXEL);
+			await Promise.resolve();
+			const content = container.querySelector('.ptr-content') as HTMLElement;
+			const style = content?.getAttribute('style') ?? '';
+			const match = style.match(/translateY\((\d+(?:\.\d+)?)px\)/);
+			pixelPullDistance = match ? parseFloat(match[1]) : 0;
+		}
+
+		// Measure PAGE-mode pull: -1 page (= -800px after ×800 normalization).
+		{
+			const { container } = renderWithRefreshHandler({ threshold: 64 }, (e) => {
+				e.detail.promise = Promise.resolve();
+			});
+			const wrap = container.firstElementChild as HTMLElement;
+			dispatchWheel(wrap, -1, WheelEvent.DOM_DELTA_PAGE);
+			await Promise.resolve();
+			const content = container.querySelector('.ptr-content') as HTMLElement;
+			const style = content?.getAttribute('style') ?? '';
+			const match = style.match(/translateY\((\d+(?:\.\d+)?)px\)/);
+			pagePullDistance = match ? parseFloat(match[1]) : 0;
+		}
+
+		// Both should produce the same non-zero pull distance.
+		expect(pixelPullDistance).toBeGreaterThan(0);
+		expect(pagePullDistance).toBeGreaterThan(0);
+		expect(pagePullDistance).toBeCloseTo(pixelPullDistance, 5);
 	});
 });
