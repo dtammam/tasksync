@@ -59,14 +59,14 @@ Enable the existing pull-to-refresh gesture on desktop browsers by adding pointe
 4. A single random emoji is chosen per gesture and remains fixed for the entire drag
 5. Content translates downward during drag, identical to touch behavior
 6. `doRefresh()` dispatches the same `refresh` CustomEvent with `detail.promise` support
-7. On hybrid/touch devices, touch gestures continue to work — no double-fire or regression
-8. Pointer events only activate for `pointerType === 'mouse'` — pen and touch are excluded
+7. On hybrid/touch devices, touch gestures continue to work -- no double-fire or regression
+8. Pointer events only activate for `pointerType === 'mouse'` -- pen and touch are excluded
 9. `setPointerCapture` is used so the gesture tracks reliably even if the cursor leaves the element
 10. Text selection is suppressed during active drag (`user-select: none`)
 11. Cursor shows `grab` at rest (when at scroll top) and `grabbing` during drag, behind `@media (pointer: fine)`
 12. `aria-live="polite"` region announces "Tasks refreshed" or "Refresh failed" for pointer-initiated refreshes
 13. `prefers-reduced-motion` is respected (no spin animation, static emoji) for pointer gestures
-14. Scrolling works normally when not at scroll top — pointer handlers do not interfere
+14. Scrolling works normally when not at scroll top -- pointer handlers do not interfere
 15. New unit tests cover: pointer gesture start/move/end, threshold behavior, pointerType filtering, pointer capture
 16. New or updated E2E test verifies desktop PTR gesture in Chromium
 
@@ -79,7 +79,7 @@ Enable the existing pull-to-refresh gesture on desktop browsers by adding pointe
 
 ## Rollout / migration plan
 
-No migration needed. Additive change — new event listeners alongside existing ones. No data model or sync changes.
+No migration needed. Additive change -- new event listeners alongside existing ones. No data model or sync changes.
 
 ## Design
 
@@ -171,7 +171,7 @@ The existing touch handlers (`handleTouchStart`, `handleTouchMove`, `handleTouch
 All CSS changes are scoped to the component's `<style>` block in `PullToRefresh.svelte`:
 
 ```css
-/* Desktop cursor feedback — only for fine-pointer devices (mouse/trackpad). */
+/* Desktop cursor feedback -- only for fine-pointer devices (mouse/trackpad). */
 @media (pointer: fine) {
   .ptr-wrap {
     cursor: grab;
@@ -245,10 +245,11 @@ The `@media (pointer: fine)` CSS rule is evaluated once by the browser at styles
 ## Progress log
 
 - 2026-04-04: Requirements gathered and exec plan created (discovery phase)
-- 2026-04-04: Technical design completed (design phase) — pointer event handlers alongside touch, pointerType filtering, setPointerCapture, CSS cursor feedback behind @media (pointer: fine)
+- 2026-04-04: Technical design completed (design phase) -- pointer event handlers alongside touch, pointerType filtering, setPointerCapture, CSS cursor feedback behind @media (pointer: fine)
+- 2026-04-05: Feature complete. All 4 tasks implemented, verified, reviewed, and accepted. Moved to completed.
 
 ## Decision log
 
-- 2026-04-04: Chose pointer events over raw mouse events — modern API with `pointerType` filtering and `setPointerCapture` support
-- 2026-04-04: Keep existing touch handlers intact — avoid mobile regression risk; migration is a future tech-debt item
-- 2026-04-04: Filter to `pointerType === 'mouse'` only — prevents double-handling on hybrid devices
+- 2026-04-04: Chose pointer events over raw mouse events -- modern API with `pointerType` filtering and `setPointerCapture` support
+- 2026-04-04: Keep existing touch handlers intact -- avoid mobile regression risk; migration is a future tech-debt item
+- 2026-04-04: Filter to `pointerType === 'mouse'` only -- prevents double-handling on hybrid devices
