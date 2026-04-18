@@ -3,7 +3,7 @@
   "feature_name": "iOS native app — investigate wrapping the existing SvelteKit PWA as a native iOS app, including configurable server URL and persistent local storage",
   "stage": "implementation",
   "created_at": "2026-04-18",
-  "updated_at": "2026-04-18T00:06",
+  "updated_at": "2026-04-18T00:07",
 
 
   "tasks": [
@@ -38,7 +38,7 @@
         "web/src/lib/stores/serverUrl.test.ts"
       ],
       "done_when": "Store exists with full validation logic. Unit tests pass covering valid URLs, invalid URLs, clear, default fallback, and runtime config writes. lint + check + test all pass.",
-      "status": "pending"
+      "status": "built"
     },
     {
       "id": "T4",
@@ -100,6 +100,7 @@
     { "timestamp": "2026-04-18 00:03", "stage": "design", "note": "Moved to design — routing to principal-engineer for technical design" },
     { "timestamp": "2026-04-18 00:04", "stage": "tasks", "note": "Moved to tasks — EM broke design into 7 discrete implementation tasks" },
     { "timestamp": "2026-04-18 00:05", "stage": "implementation", "note": "Starting T1: Switch SvelteKit to adapter-static" },
-    { "timestamp": "2026-04-18 00:06", "stage": "implementation", "note": "Starting T2: Make API client base URL dynamic" }
+    { "timestamp": "2026-04-18 00:06", "stage": "implementation", "note": "Starting T2: Make API client base URL dynamic" },
+    { "timestamp": "2026-04-18 00:07", "stage": "implementation", "note": "Starting T3: Create serverUrl store with validation and persistence" }
   ]
 }
