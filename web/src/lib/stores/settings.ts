@@ -110,7 +110,7 @@ const validateAndWarnSettings = (raw: Partial<SoundSettings>, source: string) =>
 
 const soundSettingsStore = writable<SoundSettings>(defaultSoundSettings);
 const hydrateGuard = createHydrateGuard();
-let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let remoteSaveTimer: number | null = null;
 let pendingRemotePayload: { settings: SoundSettings; clearCustomSound: boolean } | null = null;
 
 const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;

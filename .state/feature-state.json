@@ -3,7 +3,7 @@
   "feature_name": "iOS native app — investigate wrapping the existing SvelteKit PWA as a native iOS app, including configurable server URL and persistent local storage",
   "stage": "implementation",
   "created_at": "2026-04-18",
-  "updated_at": "2026-04-18T00:08",
+  "updated_at": "2026-04-18T00:09",
 
 
   "tasks": [
@@ -63,7 +63,7 @@
         "web/ios/"
       ],
       "done_when": "Capacitor packages installed. capacitor.config.ts exists. web/ios/ Xcode project generated. npm run build && cd web && npx cap sync ios runs without errors. Quality gates (lint, check, test) still pass.",
-      "status": "pending"
+      "status": "built"
     },
     {
       "id": "T6",
@@ -102,6 +102,7 @@
     { "timestamp": "2026-04-18 00:05", "stage": "implementation", "note": "Starting T1: Switch SvelteKit to adapter-static" },
     { "timestamp": "2026-04-18 00:06", "stage": "implementation", "note": "Starting T2: Make API client base URL dynamic" },
     { "timestamp": "2026-04-18 00:07", "stage": "implementation", "note": "Starting T3: Create serverUrl store with validation and persistence" },
-    { "timestamp": "2026-04-18 00:08", "stage": "implementation", "note": "Starting T4: Add Server settings UI section" }
+    { "timestamp": "2026-04-18 00:08", "stage": "implementation", "note": "Starting T4: Add Server settings UI section" },
+    { "timestamp": "2026-04-18 00:09", "stage": "implementation", "note": "Starting T5: Add Capacitor project and configuration" }
   ]
 }

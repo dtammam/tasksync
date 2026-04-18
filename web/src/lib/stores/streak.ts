@@ -59,7 +59,7 @@ export const streakDisplay = { subscribe: displayStore.subscribe };
 // Fade-out timer
 // ---------------------------------------------------------------------------
 
-let fadeTimer: ReturnType<typeof setTimeout> | null = null;
+let fadeTimer: number | null = null;
 const DISPLAY_TIMEOUT_MS = 3000;
 
 const scheduleHide = () => {
@@ -76,7 +76,7 @@ const scheduleHide = () => {
 // Server sync (debounced)
 // ---------------------------------------------------------------------------
 
-let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let syncTimer: number | null = null;
 let pendingSyncPayload: StreakState | null = null;
 
 const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;

@@ -263,7 +263,7 @@ preferencesStore.subscribe((prefs) => {
 });
 
 const hydrateGuard = createHydrateGuard();
-let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let remoteSaveTimer: number | null = null;
 let pendingRemotePayload: UiPreferences | null = null;
 
 const persist = (prefs: UiPreferences) => {

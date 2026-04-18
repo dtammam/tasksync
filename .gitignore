@@ -41,3 +41,10 @@ tasksync.code-workspace
 coverage/
 .turbo/
 .cache/
+
+# Capacitor / Xcode
+web/ios/App/DerivedData/
+web/ios/App/build/
+web/ios/App/Pods/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/

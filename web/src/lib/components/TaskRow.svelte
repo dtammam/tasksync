@@ -16,7 +16,7 @@ let showActions = false;
 let deleting = false;
 let actionError = '';
 let statusAck = false;
-let toggleTimer: ReturnType<typeof setTimeout> | null = null;
+let toggleTimer: number | null = null;
 
 const addToMyDay = () => {
 	tasks.setDueToday(task.id);
