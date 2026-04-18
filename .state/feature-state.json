@@ -3,7 +3,7 @@
   "feature_name": "iOS native app — investigate wrapping the existing SvelteKit PWA as a native iOS app, including configurable server URL and persistent local storage",
   "stage": "implementation",
   "created_at": "2026-04-18",
-  "updated_at": "2026-04-18",
+  "updated_at": "2026-04-18T00:06",
 
 
   "tasks": [
@@ -27,7 +27,7 @@
         "web/src/lib/api/client.ts"
       ],
       "done_when": "baseUrl is a function (getBaseUrl), all API calls use it, existing tests pass, and a new test confirms changing window.__TASKSYNC_RUNTIME_CONFIG__.apiUrl between calls results in different base URLs.",
-      "status": "pending"
+      "status": "built"
     },
     {
       "id": "T3",
@@ -99,6 +99,7 @@
     { "timestamp": "2026-04-18 00:02", "stage": "discovery", "note": "PM produced exec plan at docs/exec-plans/active/2026-04-18-ios-native-app.md" },
     { "timestamp": "2026-04-18 00:03", "stage": "design", "note": "Moved to design — routing to principal-engineer for technical design" },
     { "timestamp": "2026-04-18 00:04", "stage": "tasks", "note": "Moved to tasks — EM broke design into 7 discrete implementation tasks" },
-    { "timestamp": "2026-04-18 00:05", "stage": "implementation", "note": "Starting T1: Switch SvelteKit to adapter-static" }
+    { "timestamp": "2026-04-18 00:05", "stage": "implementation", "note": "Starting T1: Switch SvelteKit to adapter-static" },
+    { "timestamp": "2026-04-18 00:06", "stage": "implementation", "note": "Starting T2: Make API client base URL dynamic" }
   ]
 }
