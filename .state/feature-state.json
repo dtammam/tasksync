@@ -3,7 +3,7 @@
   "feature_name": "iOS native app — investigate wrapping the existing SvelteKit PWA as a native iOS app, including configurable server URL and persistent local storage",
   "stage": "implementation",
   "created_at": "2026-04-18",
-  "updated_at": "2026-04-18T00:09",
+  "updated_at": "2026-04-18T00:11",
 
 
   "tasks": [
@@ -74,7 +74,7 @@
         "web/src/routes/+layout.svelte"
       ],
       "done_when": "When running in Capacitor with no server URL configured, a prompt appears on first launch. After saving or skipping, the prompt does not reappear. In browser context, the prompt never appears. lint + check + test pass.",
-      "status": "pending"
+      "status": "built"
     },
     {
       "id": "T7",
@@ -103,6 +103,8 @@
     { "timestamp": "2026-04-18 00:06", "stage": "implementation", "note": "Starting T2: Make API client base URL dynamic" },
     { "timestamp": "2026-04-18 00:07", "stage": "implementation", "note": "Starting T3: Create serverUrl store with validation and persistence" },
     { "timestamp": "2026-04-18 00:08", "stage": "implementation", "note": "Starting T4: Add Server settings UI section" },
-    { "timestamp": "2026-04-18 00:09", "stage": "implementation", "note": "Starting T5: Add Capacitor project and configuration" }
+    { "timestamp": "2026-04-18 00:09", "stage": "implementation", "note": "Starting T5: Add Capacitor project and configuration" },
+    { "timestamp": "2026-04-18 00:10", "stage": "implementation", "note": "Starting T6: Add Capacitor first-launch server URL prompt" },
+    { "timestamp": "2026-04-18 00:11", "stage": "implementation", "note": "Starting T7: Write iOS build documentation" }
   ]
 }
