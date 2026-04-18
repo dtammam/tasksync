@@ -1,27 +1,13 @@
 <script lang="ts">
-	import { serverUrl } from '$lib/stores/serverUrl';
+	import { serverUrl, validateServerUrl } from '$lib/stores/serverUrl';
 
 	let urlDraft = serverUrl.getEffective();
 	let urlError = '';
 	let urlMessage = '';
 	let urlMessageTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const validateUrl = (raw: string): string | null => {
-		const trimmed = raw.trim();
-		if (!trimmed) return 'Enter a valid http:// or https:// URL.';
-		try {
-			const parsed = new URL(trimmed);
-			if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-				return 'Enter a valid http:// or https:// URL.';
-			}
-			return null;
-		} catch {
-			return 'Enter a valid http:// or https:// URL.';
-		}
-	};
-
 	const saveUrl = () => {
-		const err = validateUrl(urlDraft);
+		const err = validateServerUrl(urlDraft);
 		if (err) {
 			urlError = err;
 			urlMessage = '';
@@ -55,9 +41,10 @@
 		<input
 			type="text"
 			data-testid="server-url-input"
-			bind:value={urlDraft}
+			value={urlDraft}
 			placeholder="https://your-server.example.com"
-			on:input={() => {
+			on:input={(event) => {
+				urlDraft = (event.currentTarget as HTMLInputElement).value;
 				urlError = '';
 			}}
 		/>

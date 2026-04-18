@@ -30,6 +30,24 @@ function validateAndNormalize(raw: string): string | null {
 	return parsed.origin.replace(/\/+$/, '');
 }
 
+/**
+ * Validate a raw URL string for use as a server URL.
+ * Returns an error message on failure, or null on success.
+ */
+export function validateServerUrl(raw: string): string | null {
+	const trimmed = raw.trim();
+	if (!trimmed) return 'Enter a valid http:// or https:// URL.';
+	try {
+		const parsed = new URL(trimmed);
+		if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+			return 'Enter a valid http:// or https:// URL.';
+		}
+		return null;
+	} catch {
+		return 'Enter a valid http:// or https:// URL.';
+	}
+}
+
 function writeRuntimeConfig(url: string | null): void {
 	if (typeof window === 'undefined') return;
 	if (url) {
@@ -57,7 +75,11 @@ function initFromStorage(): string | null {
 	}
 
 	// Invalid stored value — clear it
-	localStorage.removeItem(STORAGE_KEY);
+	try {
+		localStorage.removeItem(STORAGE_KEY);
+	} catch (err) {
+		console.error('[serverUrl] failed to clear invalid URL from localStorage:', err);
+	}
 	return null;
 }
 
@@ -74,13 +96,21 @@ export const serverUrl = {
 		const validated = validateAndNormalize(url);
 		if (!validated) return;
 
-		localStorage.setItem(STORAGE_KEY, validated);
+		try {
+			localStorage.setItem(STORAGE_KEY, validated);
+		} catch (err) {
+			console.error('[serverUrl] failed to persist URL to localStorage:', err);
+		}
 		writeRuntimeConfig(validated);
 		store.set(validated);
 	},
 
 	clear(): void {
-		localStorage.removeItem(STORAGE_KEY);
+		try {
+			localStorage.removeItem(STORAGE_KEY);
+		} catch (err) {
+			console.error('[serverUrl] failed to clear URL from localStorage:', err);
+		}
 		writeRuntimeConfig(null);
 		store.set(null);
 	},

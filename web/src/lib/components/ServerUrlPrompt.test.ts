@@ -22,6 +22,19 @@ vi.mock('$lib/stores/serverUrl', () => ({
 		set: mockServerUrlSet,
 		getEffective: mockServerUrlGetEffective,
 		subscribe: mockServerUrlSubscribe
+	},
+	validateServerUrl: (raw: string): string | null => {
+		const trimmed = raw.trim();
+		if (!trimmed) return 'Enter a valid http:// or https:// URL.';
+		try {
+			const parsed = new URL(trimmed);
+			if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+				return 'Enter a valid http:// or https:// URL.';
+			}
+			return null;
+		} catch {
+			return 'Enter a valid http:// or https:// URL.';
+		}
 	}
 }));
 

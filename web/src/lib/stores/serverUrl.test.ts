@@ -135,6 +135,17 @@ describe('serverUrl store', () => {
 		warnSpy.mockRestore();
 	});
 
+	it('rejects javascript: protocol URLs', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(vi.fn());
+		const serverUrl = await loadStore();
+		serverUrl.set('javascript:alert(1)');
+
+		expect(serverUrl.get()).toBeNull();
+		expect(localStorage.getItem('tasksync:server-url')).toBeNull();
+		expect(warnSpy).toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
 	it('is reactive via subscribe', async () => {
 		const serverUrl = await loadStore();
 		const values: (string | null)[] = [];

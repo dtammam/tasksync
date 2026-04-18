@@ -3,7 +3,7 @@
   "feature_name": "iOS native app — investigate wrapping the existing SvelteKit PWA as a native iOS app, including configurable server URL and persistent local storage",
   "stage": "implementation",
   "created_at": "2026-04-18",
-  "updated_at": "2026-04-18T00:11",
+  "updated_at": "2026-04-18T00:15",
 
 
   "tasks": [
@@ -85,6 +85,23 @@
       ],
       "done_when": "docs/IOS.md exists with complete, beginner-friendly build instructions. A first-time iOS developer can follow it from zero to running the app on a simulator.",
       "status": "built"
+    },
+    {
+      "id": "T8",
+      "title": "QA fix-up: address 5 warnings from code review",
+      "description": "Fix all 5 QA warnings: W1 revert unrelated ReturnType changes, W2 deduplicate URL validation, W3 fix inconsistent input binding, W4 add localStorage error handling, W5 add javascript: URL rejection test",
+      "files": [
+        "web/src/lib/stores/serverUrl.ts",
+        "web/src/lib/stores/serverUrl.test.ts",
+        "web/src/lib/components/settings/ServerSettings.svelte",
+        "web/src/lib/components/ServerUrlPrompt.svelte",
+        "web/src/lib/components/TaskRow.svelte",
+        "web/src/lib/stores/preferences.ts",
+        "web/src/lib/stores/settings.ts",
+        "web/src/lib/stores/streak.ts"
+      ],
+      "done_when": "All 5 warnings resolved: unrelated timer type changes reverted, URL validation exists in one place only, ServerSettings uses consistent input binding, localStorage writes in serverUrl.ts are wrapped in try/catch with console.error, javascript:alert(1) test exists and passes. lint + check + test all pass.",
+      "status": "built"
     }
   ],
   "completed_tasks": [],
@@ -105,6 +122,10 @@
     { "timestamp": "2026-04-18 00:08", "stage": "implementation", "note": "Starting T4: Add Server settings UI section" },
     { "timestamp": "2026-04-18 00:09", "stage": "implementation", "note": "Starting T5: Add Capacitor project and configuration" },
     { "timestamp": "2026-04-18 00:10", "stage": "implementation", "note": "Starting T6: Add Capacitor first-launch server URL prompt" },
-    { "timestamp": "2026-04-18 00:11", "stage": "implementation", "note": "Starting T7: Write iOS build documentation" }
+    { "timestamp": "2026-04-18 00:11", "stage": "implementation", "note": "Starting T7: Write iOS build documentation" },
+    { "timestamp": "2026-04-18 00:12", "stage": "verification", "note": "All 7 tasks built — routing to build-specialist for verification" },
+    { "timestamp": "2026-04-18 00:13", "stage": "review", "note": "Build verification passed — routing to quality-assurance for code review" },
+    { "timestamp": "2026-04-18 00:14", "stage": "implementation", "note": "QA returned REQUEST CHANGES with 5 warnings — routing fix-up task T8 to software-developer" },
+    { "timestamp": "2026-04-18 00:15", "stage": "review", "note": "T8 fix-up built — routing to quality-assurance for re-review of W1-W5 fixes" }
   ]
 }

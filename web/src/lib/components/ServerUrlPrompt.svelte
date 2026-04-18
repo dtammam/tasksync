@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Capacitor } from '@capacitor/core';
-	import { serverUrl } from '$lib/stores/serverUrl';
+	import { serverUrl, validateServerUrl } from '$lib/stores/serverUrl';
 
 	const PROMPTED_KEY = 'tasksync:server-url-prompted';
 
@@ -20,22 +20,8 @@
 		}
 	});
 
-	const validateUrl = (raw: string): string | null => {
-		const trimmed = raw.trim();
-		if (!trimmed) return 'Please enter a valid URL starting with http:// or https://';
-		try {
-			const parsed = new URL(trimmed);
-			if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-				return 'Please enter a valid URL starting with http:// or https://';
-			}
-			return null;
-		} catch {
-			return 'Please enter a valid URL starting with http:// or https://';
-		}
-	};
-
 	const handleSave = () => {
-		const err = validateUrl(urlDraft);
+		const err = validateServerUrl(urlDraft);
 		if (err) {
 			urlError = err;
 			return;
