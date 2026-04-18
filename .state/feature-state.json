@@ -84,7 +84,7 @@
         "docs/IOS.md"
       ],
       "done_when": "docs/IOS.md exists with complete, beginner-friendly build instructions. A first-time iOS developer can follow it from zero to running the app on a simulator.",
-      "status": "pending"
+      "status": "built"
     }
   ],
   "completed_tasks": [],
