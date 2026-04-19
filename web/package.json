@@ -21,8 +21,9 @@
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
+		"@capacitor/cli": "^8.3.1",
 		"@playwright/test": "^1.49.1",
-		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/adapter-static": "^3.0.0",
 		"@sveltejs/kit": "^2.50.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
 		"@testing-library/jest-dom": "^6.6.3",
@@ -47,6 +48,8 @@
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
+		"@capacitor/core": "^8.3.1",
+		"@capacitor/ios": "^8.3.1",
 		"idb": "^8.0.3"
 	}
 }

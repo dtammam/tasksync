@@ -65,7 +65,7 @@ const DISPLAY_TIMEOUT_MS = 3000;
 const scheduleHide = () => {
 	if (fadeTimer) clearTimeout(fadeTimer);
 	fadeTimer = typeof window !== 'undefined'
-		? window.setTimeout(() => {
+		? setTimeout(() => {
 				fadeTimer = null;
 				displayStore.update((d) => ({ ...d, visible: false, breaking: false, isDayComplete: false, isComboDropped: false }));
 			}, DISPLAY_TIMEOUT_MS)
@@ -94,7 +94,7 @@ const queueStateSync = (state: StreakState) => {
 	if (typeof window === 'undefined') return;
 	pendingSyncPayload = state;
 	if (syncTimer) clearTimeout(syncTimer);
-	syncTimer = window.setTimeout(() => {
+	syncTimer = setTimeout(() => {
 		syncTimer = null;
 		const payload = pendingSyncPayload;
 		pendingSyncPayload = null;

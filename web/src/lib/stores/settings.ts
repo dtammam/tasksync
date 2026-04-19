@@ -148,9 +148,9 @@ const queueRemoteSave = (settings: SoundSettings, options?: { clearCustomSound?:
 		clearCustomSound: options?.clearCustomSound ?? false
 	};
 	if (remoteSaveTimer) {
-		window.clearTimeout(remoteSaveTimer);
+		clearTimeout(remoteSaveTimer);
 	}
-	remoteSaveTimer = window.setTimeout(() => {
+	remoteSaveTimer = setTimeout(() => {
 		remoteSaveTimer = null;
 		const payload = pendingRemotePayload;
 		pendingRemotePayload = null;

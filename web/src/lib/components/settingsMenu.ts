@@ -1,4 +1,4 @@
-export type SettingsSectionId = 'account' | 'appearance' | 'quotes' | 'sound' | 'streak' | 'lists' | 'members' | 'backups';
+export type SettingsSectionId = 'account' | 'appearance' | 'quotes' | 'sound' | 'streak' | 'lists' | 'members' | 'backups' | 'server';
 
 export interface SettingsSection {
 	id: SettingsSectionId;
@@ -55,6 +55,12 @@ const baseSections: SettingsSection[] = [
 		label: 'Backups',
 		description: 'Export or restore your space backup',
 		adminOnly: true,
+	},
+	{
+		id: 'server',
+		label: 'Server',
+		description: 'Configure server URL for sync',
+		adminOnly: false,
 	},
 ];
 

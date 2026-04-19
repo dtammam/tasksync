@@ -88,7 +88,7 @@ const handleToggleStatus = () => {
 		return;
 	}
 	statusAck = true;
-	toggleTimer = window.setTimeout(() => {
+	toggleTimer = setTimeout(() => {
 		statusAck = false;
 		toggleTimer = null;
 		tasks.toggle(task.id);
@@ -97,7 +97,7 @@ const handleToggleStatus = () => {
 
 onDestroy(() => {
 	if (toggleTimer) {
-		window.clearTimeout(toggleTimer);
+		clearTimeout(toggleTimer);
 		toggleTimer = null;
 	}
 });

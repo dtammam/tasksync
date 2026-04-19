@@ -72,6 +72,25 @@ describe('api client', () => {
 		expect(String(url)).not.toContain('runtime.example');
 	});
 
+	it('re-reads runtime config URL between calls without re-importing', async () => {
+		window.__TASKSYNC_RUNTIME_CONFIG__ = { apiUrl: 'https://server-one.example' };
+		(fetch as unknown as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce(jsonResponse(200, '{"user_id":"u1"}'))
+			.mockResolvedValueOnce(jsonResponse(200, '{"user_id":"u2"}'));
+
+		const { api } = await import('./client');
+
+		await api.me();
+
+		window.__TASKSYNC_RUNTIME_CONFIG__.apiUrl = 'https://server-two.example';
+
+		await api.me();
+
+		const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+		expect(String(calls[0][0])).toBe('https://server-one.example/auth/me');
+		expect(String(calls[1][0])).toBe('https://server-two.example/auth/me');
+	});
+
 	it('returns undefined for 204 responses', async () => {
 		(fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(jsonResponse(204));
 		const { api } = await import('./client');

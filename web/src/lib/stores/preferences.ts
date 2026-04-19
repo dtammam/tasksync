@@ -288,9 +288,9 @@ const queueRemoteSave = (prefs: UiPreferences) => {
 	if (!canSyncRemote() || typeof window === 'undefined') return;
 	pendingRemotePayload = prefs;
 	if (remoteSaveTimer) {
-		window.clearTimeout(remoteSaveTimer);
+		clearTimeout(remoteSaveTimer);
 	}
-	remoteSaveTimer = window.setTimeout(() => {
+	remoteSaveTimer = setTimeout(() => {
 		remoteSaveTimer = null;
 		const payload = pendingRemotePayload;
 		pendingRemotePayload = null;
