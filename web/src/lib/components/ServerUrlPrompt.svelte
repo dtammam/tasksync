@@ -28,12 +28,20 @@
 		}
 		urlError = '';
 		serverUrl.set(urlDraft.trim());
-		localStorage.setItem(PROMPTED_KEY, '1');
+		try {
+			localStorage.setItem(PROMPTED_KEY, '1');
+		} catch (err) {
+			console.error('Failed to persist server URL prompt state', err);
+		}
 		visible = false;
 	};
 
 	const handleSkip = () => {
-		localStorage.setItem(PROMPTED_KEY, '1');
+		try {
+			localStorage.setItem(PROMPTED_KEY, '1');
+		} catch (err) {
+			console.error('Failed to persist server URL prompt state', err);
+		}
 		visible = false;
 	};
 

@@ -38,17 +38,17 @@ Wrap the existing TaskSync SvelteKit PWA in a native iOS shell to prevent Indexe
 
 ## Acceptance criteria
 
-- [ ] A written investigation report is produced that documents the wrapper approach chosen (e.g. Capacitor vs. manual WKWebView) and the rationale, covering: setup complexity for a beginner, storage persistence guarantees, service worker support, Web Audio support, and WebSocket support
-- [ ] An Xcode project (or Capacitor project) exists in the repository (or is documented as a separate repo/directory) that builds and runs the TaskSync SvelteKit PWA inside a WKWebView on an iOS simulator and on a real device
-- [ ] IndexedDB and OPFS data written inside the native app wrapper is NOT evicted after 7 days of the app not being used (verified by consulting official Apple documentation or Capacitor documentation, or by manual test on device)
-- [ ] A configurable server URL setting is accessible from within the app (e.g. in an existing Settings or Appearance panel) that allows the user to enter a custom URL and have the sync engine connect to that server instead of the compiled-in default
-- [ ] The server URL setting persists across app restarts (stored in localStorage or IDB with wire format validation; invalid URLs fall back to default with a console.warn)
-- [ ] The server URL setting is accessible on first launch (new install / first-time setup flow) so a user can configure their self-hosted server before any sync attempt
-- [ ] All existing offline-first invariants hold inside the native wrapper: the app shell loads from local cache when offline, tasks can be created/edited offline, queued changes sync when connectivity returns
-- [ ] All existing quality gates pass on the web/ codebase after any changes made to support this feature: lint, svelte-check, vitest, and the Playwright @smoke suite
-- [ ] The build pipeline (how to go from source to a .ipa or TestFlight build) is documented in a new `docs/IOS.md` or as a section added to an existing doc
-- [ ] Pull-to-refresh gestures, Web Audio completion sounds, and streak features work correctly inside the WKWebView shell (verified by manual test on simulator or device)
-- [ ] No new tech debt is introduced without a corresponding entry in `docs/exec-plans/tech-debt-tracker.md`
+- [x] A written investigation report is produced that documents the wrapper approach chosen (e.g. Capacitor vs. manual WKWebView) and the rationale, covering: setup complexity for a beginner, storage persistence guarantees, service worker support, Web Audio support, and WebSocket support
+- [x] An Xcode project (or Capacitor project) exists in the repository (or is documented as a separate repo/directory) that builds and runs the TaskSync SvelteKit PWA inside a WKWebView on an iOS simulator and on a real device
+- [x] IndexedDB and OPFS data written inside the native app wrapper is NOT evicted after 7 days of the app not being used (verified by consulting official Apple documentation or Capacitor documentation, or by manual test on device)
+- [x] A configurable server URL setting is accessible from within the app (e.g. in an existing Settings or Appearance panel) that allows the user to enter a custom URL and have the sync engine connect to that server instead of the compiled-in default
+- [x] The server URL setting persists across app restarts (stored in localStorage or IDB with wire format validation; invalid URLs fall back to default with a console.warn)
+- [x] The server URL setting is accessible on first launch (new install / first-time setup flow) so a user can configure their self-hosted server before any sync attempt
+- [x] All existing offline-first invariants hold inside the native wrapper: the app shell loads from local cache when offline, tasks can be created/edited offline, queued changes sync when connectivity returns
+- [x] All existing quality gates pass on the web/ codebase after any changes made to support this feature: lint, svelte-check, vitest, and the Playwright @smoke suite
+- [x] The build pipeline (how to go from source to a .ipa or TestFlight build) is documented in a new `docs/IOS.md` or as a section added to an existing doc
+- [x] Pull-to-refresh gestures, Web Audio completion sounds, and streak features work correctly inside the WKWebView shell (verified by manual test on simulator or device)
+- [x] No new tech debt is introduced without a corresponding entry in `docs/exec-plans/tech-debt-tracker.md`
 
 ## Design
 
@@ -540,6 +540,7 @@ Create `docs/IOS.md` with: prerequisites, step-by-step build instructions, Xcode
 
 - 2026-04-18: Exec plan created by product-manager. Discovery stage complete.
 - 2026-04-18: Technical design completed (design phase)
+- 2026-04-19: Feature complete. All 9 tasks (T1-T9) implemented, verified, QA-reviewed, and accepted. Moved to done.
 
 ## Decision log
 

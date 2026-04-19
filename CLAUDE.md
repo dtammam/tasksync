@@ -223,6 +223,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-04-18-ios-native-app.md` — Capacitor iOS wrapper for SvelteKit PWA: adapter-static, configurable server URL store with validation, settings UI, first-launch prompt, Xcode project scaffold, iOS build docs (complete 2026-04-19)
 - `docs/exec-plans/completed/2026-04-05-ptr-trackpad-wheel.md` — Add trackpad/wheel gesture support to pull-to-refresh: wheel event handler with deltaY normalization, debounce end detection, 10+ unit tests, E2E smoke test, E2E flake fixes (complete 2026-04-05)
 - `docs/exec-plans/completed/2026-04-04-ptr-desktop-viewport.md` — Add desktop mouse/pointer gesture support to pull-to-refresh with unit tests, E2E tests, and an exec plan (complete 2026-04-05)
 - `docs/exec-plans/completed/2026-04-01-last-day-of-month-recurrence.md` — Add `lastDayOfMonth` recurrence rule: day-0 snap algorithm, forward/backward switch cases, 28 unit tests, E2E smoke test (complete 2026-04-01)

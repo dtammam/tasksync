@@ -1,3 +1,5 @@
+// adapter-static is required for Capacitor iOS — the native app serves
+// pre-rendered static files from the WKWebView bundle.
 import adapter from '@sveltejs/adapter-static';
 import path from 'node:path';
 

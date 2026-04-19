@@ -110,7 +110,7 @@ const validateAndWarnSettings = (raw: Partial<SoundSettings>, source: string) =>
 
 const soundSettingsStore = writable<SoundSettings>(defaultSoundSettings);
 const hydrateGuard = createHydrateGuard();
-let remoteSaveTimer: number | null = null;
+let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingRemotePayload: { settings: SoundSettings; clearCustomSound: boolean } | null = null;
 
 const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;
@@ -148,9 +148,9 @@ const queueRemoteSave = (settings: SoundSettings, options?: { clearCustomSound?:
 		clearCustomSound: options?.clearCustomSound ?? false
 	};
 	if (remoteSaveTimer) {
-		window.clearTimeout(remoteSaveTimer);
+		clearTimeout(remoteSaveTimer);
 	}
-	remoteSaveTimer = window.setTimeout(() => {
+	remoteSaveTimer = setTimeout(() => {
 		remoteSaveTimer = null;
 		const payload = pendingRemotePayload;
 		pendingRemotePayload = null;

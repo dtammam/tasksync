@@ -59,13 +59,13 @@ export const streakDisplay = { subscribe: displayStore.subscribe };
 // Fade-out timer
 // ---------------------------------------------------------------------------
 
-let fadeTimer: number | null = null;
+let fadeTimer: ReturnType<typeof setTimeout> | null = null;
 const DISPLAY_TIMEOUT_MS = 3000;
 
 const scheduleHide = () => {
 	if (fadeTimer) clearTimeout(fadeTimer);
 	fadeTimer = typeof window !== 'undefined'
-		? window.setTimeout(() => {
+		? setTimeout(() => {
 				fadeTimer = null;
 				displayStore.update((d) => ({ ...d, visible: false, breaking: false, isDayComplete: false, isComboDropped: false }));
 			}, DISPLAY_TIMEOUT_MS)
@@ -76,7 +76,7 @@ const scheduleHide = () => {
 // Server sync (debounced)
 // ---------------------------------------------------------------------------
 
-let syncTimer: number | null = null;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSyncPayload: StreakState | null = null;
 
 const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;
@@ -94,7 +94,7 @@ const queueStateSync = (state: StreakState) => {
 	if (typeof window === 'undefined') return;
 	pendingSyncPayload = state;
 	if (syncTimer) clearTimeout(syncTimer);
-	syncTimer = window.setTimeout(() => {
+	syncTimer = setTimeout(() => {
 		syncTimer = null;
 		const payload = pendingSyncPayload;
 		pendingSyncPayload = null;
