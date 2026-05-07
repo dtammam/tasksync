@@ -135,106 +135,108 @@
 	});
 </script>
 
-<header class="page-header">
-	<div>
-		<p class="eyebrow">List</p>
-		<h1>{listName}</h1>
-		<p class="sub">Tasks in this list.</p>
-	</div>
-	<div class="actions">
-		<div class="sorter">
-			<label>
-				<span>Sort</span>
-				<select
-					value={$uiPreferences.listSort.mode}
-					data-testid="list-sort-mode"
-					aria-label="Sort tasks"
-					on:change={(event) => uiPreferences.setListSort({ mode: (event.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').ListSortMode })}
-				>
-					<option value="created">Creation</option>
-					<option value="alpha">Alphabetical</option>
-					<option value="due_date">Due date</option>
-				</select>
-			</label>
-			<label class="order-control">
-				<span>Order</span>
-				<select
-					value={$uiPreferences.listSort.direction}
-					data-testid="list-sort-direction"
-					aria-label="Sort direction"
-					on:change={(event) => uiPreferences.setListSort({ direction: (event.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').ListSortDirection })}
-				>
-					<option value="asc">Ascending</option>
-					<option value="desc">Descending</option>
-				</select>
-			</label>
+<div class="page-content">
+	<header class="page-header">
+		<div>
+			<p class="eyebrow">List</p>
+			<h1>{listName}</h1>
+			<p class="sub">Tasks in this list.</p>
 		</div>
-		<div class="tools">
-			<button
-				type="button"
-				class="ghost-pill"
-				data-testid="list-import-open"
-				on:click={openImport}
-			>
-				Import
-			</button>
-			<button
-				type="button"
-				class="ghost-pill"
-				data-testid="list-uncheck-all"
-				on:click={uncheckAllCompleted}
-				disabled={uncheckEligibleCount === 0}
-			>
-				Uncheck all
-			</button>
+		<div class="actions">
+			<div class="sorter">
+				<label>
+					<span>Sort</span>
+					<select
+						value={$uiPreferences.listSort.mode}
+						data-testid="list-sort-mode"
+						aria-label="Sort tasks"
+						on:change={(event) => uiPreferences.setListSort({ mode: (event.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').ListSortMode })}
+					>
+						<option value="created">Creation</option>
+						<option value="alpha">Alphabetical</option>
+						<option value="due_date">Due date</option>
+					</select>
+				</label>
+				<label class="order-control">
+					<span>Order</span>
+					<select
+						value={$uiPreferences.listSort.direction}
+						data-testid="list-sort-direction"
+						aria-label="Sort direction"
+						on:change={(event) => uiPreferences.setListSort({ direction: (event.currentTarget as HTMLSelectElement).value as import('$shared/types/settings').ListSortDirection })}
+					>
+						<option value="asc">Ascending</option>
+						<option value="desc">Descending</option>
+					</select>
+				</label>
+			</div>
+			<div class="tools">
+				<button
+					type="button"
+					class="ghost-pill"
+					data-testid="list-import-open"
+					on:click={openImport}
+				>
+					Import
+				</button>
+				<button
+					type="button"
+					class="ghost-pill"
+					data-testid="list-uncheck-all"
+					on:click={uncheckAllCompleted}
+					disabled={uncheckEligibleCount === 0}
+				>
+					Uncheck all
+				</button>
+			</div>
 		</div>
-	</div>
-</header>
+	</header>
 
-{#if listActionMessage}
-	<p class="ok-msg" data-testid="list-action-message">{listActionMessage}</p>
-{/if}
+	{#if listActionMessage}
+		<p class="ok-msg" data-testid="list-action-message">{listActionMessage}</p>
+	{/if}
 
-<section class="block">
-	<div class="section-title">Pending</div>
-	<div class="stack">
-		{#if pendingTasks.length}
-			{#each pendingTasks as task (task.id)}
-				<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
-					<TaskRow {task} on:openDetail={openDetail} />
-				</div>
-			{/each}
-		{:else}
-			<p class="empty">No pending tasks.</p>
-		{/if}
-	</div>
-</section>
+	<section class="block">
+		<div class="section-title">Pending</div>
+		<div class="stack">
+			{#if pendingTasks.length}
+				{#each pendingTasks as task (task.id)}
+					<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
+						<TaskRow {task} on:openDetail={openDetail} />
+					</div>
+				{/each}
+			{:else}
+				<p class="empty">No pending tasks.</p>
+			{/if}
+		</div>
+	</section>
 
-{#if $uiPreferences.showCompleted}
-<section class="block">
-	<div class="section-title">Completed</div>
-	<div class="stack" data-testid="completed-section">
-		{#if completedTasks.length}
-			{#each completedTasks as task (task.id)}
-				<div transition:fade={{ duration: 150 }}>
-					<TaskRow {task} on:openDetail={openDetail} />
-				</div>
-			{/each}
-		{:else}
-			<p class="empty subtle">No completed tasks yet.</p>
-		{/if}
-	</div>
-</section>
-{/if}
+	{#if $uiPreferences.showCompleted}
+	<section class="block">
+		<div class="section-title">Completed</div>
+		<div class="stack" data-testid="completed-section">
+			{#if completedTasks.length}
+				{#each completedTasks as task (task.id)}
+					<div transition:fade={{ duration: 150 }}>
+						<TaskRow {task} on:openDetail={openDetail} />
+					</div>
+				{/each}
+			{:else}
+				<p class="empty subtle">No completed tasks yet.</p>
+			{/if}
+		</div>
+	</section>
+	{/if}
 
-{#if importOpen}
-	<ImportTasksModal
-		{listId}
-		{listName}
-		on:close={() => (importOpen = false)}
-		on:imported={onImported}
-	/>
-{/if}
+	{#if importOpen}
+		<ImportTasksModal
+			{listId}
+			{listName}
+			on:close={() => (importOpen = false)}
+			on:imported={onImported}
+		/>
+	{/if}
+</div>
 
 <TaskDetailDrawer task={detailTask} open={!!detailTask} on:close={closeDetail} />
 
@@ -253,6 +255,10 @@
 </div>
 
 <style>
+	.page-content {
+		padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+	}
+
 	.page-header {
 		display: flex;
 		justify-content: space-between;
