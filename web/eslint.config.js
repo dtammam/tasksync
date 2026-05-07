@@ -18,7 +18,9 @@ const ignores = [
 	'eslint.config.js',
 	'playwright.config.ts',
 	'svelte.config.js',
-	'vite.config.ts'
+	'vite.config.ts',
+	'capacitor.config.ts',
+	'ios/**'
 ];
 
 export default [

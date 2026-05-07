@@ -1,6 +1,7 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
+	import ServerUrlPrompt from '$lib/components/ServerUrlPrompt.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import StreakDisplay from '$lib/components/StreakDisplay.svelte';
 	import { onMount, onDestroy } from 'svelte';
@@ -429,6 +430,7 @@
 		</div>
 	{/if}
 	<StreakDisplay />
+	<ServerUrlPrompt />
 	<main>
 		<header class="app-header">
 			<div class="brand">

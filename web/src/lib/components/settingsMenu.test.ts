@@ -9,6 +9,7 @@ describe('settings menu helpers', () => {
 			'quotes',
 			'sound',
 			'streak',
+			'server',
 		]);
 	});
 
@@ -22,6 +23,7 @@ describe('settings menu helpers', () => {
 			'lists',
 			'members',
 			'backups',
+			'server',
 		]);
 	});
 

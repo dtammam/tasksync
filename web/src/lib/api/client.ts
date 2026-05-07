@@ -35,7 +35,7 @@ const runtimeApiUrl = () => {
 	return configured ? configured : undefined;
 };
 
-const baseUrl = runtimeApiUrl() ?? import.meta.env.VITE_API_URL ?? defaultApiUrl();
+const getBaseUrl = () => runtimeApiUrl() ?? import.meta.env.VITE_API_URL ?? defaultApiUrl();
 
 export class ApiError extends Error {
 	status: number;
@@ -89,7 +89,7 @@ export const apiErrorStatus = (err: unknown): number | null => {
 export type { SyncList as SyncList, SyncTask as SyncTask } from '$shared/types/sync';
 
 const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> => {
-	const res = await fetch(`${baseUrl}${path}`, {
+	const res = await fetch(`${getBaseUrl()}${path}`, {
 		...opts,
 		headers: {
 			'content-type': 'application/json',

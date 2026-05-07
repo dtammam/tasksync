@@ -15,6 +15,7 @@
 	import type { ListGrant, SpaceMember } from '$shared/types/auth';
 	import type { List } from '$shared/types/list';
 	import SoundSettingsPanel from '$lib/components/settings/SoundSettings.svelte';
+	import ServerSettings from '$lib/components/settings/ServerSettings.svelte';
 	import MemberList from '$lib/components/settings/MemberList.svelte';
 	import ColorSwatchPicker from '$lib/components/ColorSwatchPicker.svelte';
 
@@ -1102,6 +1103,8 @@
 								Show completed tasks
 							</label>
 						</div>
+					{:else if settingsActiveSection === 'server'}
+						<ServerSettings />
 					{:else if settingsActiveSection === 'quotes'}
 						<div class="card quotes" data-testid="quotes-panel">
 							<p class="muted-note">
