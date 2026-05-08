@@ -9,6 +9,7 @@
 	export let canResolve: (task: Task) => boolean = () => true;
 	export let deletingId = '';
 	export let actionError = '';
+	export let suppressTransitions = false;
 
 	const dispatch = createEventDispatcher<{
 		markDone: { task: Task };
@@ -23,7 +24,7 @@
 		<div class="section-title">Missed ({tasks.length})</div>
 		<div class="stack" data-testid="missed-section">
 			{#each tasks as task (task.id)}
-				<div class="missed-item" transition:fade={{ duration: 150 }}>
+				<div class="missed-item" transition:fade={{ duration: suppressTransitions ? 0 : 150 }}>
 					<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail />
 					<div class="missed-actions">
 						{#if task.recurrence_id}

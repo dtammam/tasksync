@@ -10,7 +10,11 @@
 	import { onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { uiPreferences, DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
+	import { hydrated } from '$lib/stores/hydration';
 	import type { Task } from '$shared/types/task';
+
+	// Hydration transition suppression: All fly/fade transitions use duration: $hydrated ? <ms> : 0
+	// so items appear instantly on cold launch (no layout shift) but animate normally on user actions.
 
 	$: activeQuotes = $uiPreferences.completionQuotes?.length
 		? $uiPreferences.completionQuotes
@@ -293,6 +297,7 @@
 		canResolve={canResolveMissed}
 		deletingId={deletingMissedId}
 		actionError={missedActionError}
+		suppressTransitions={!$hydrated}
 		on:markDone={(e) => markMissedDone(e.detail.task)}
 		on:skip={(e) => skipMissed(e.detail.task)}
 		on:delete={(e) => deleteMissed(e.detail.task)}
@@ -304,12 +309,12 @@
 		<div class="stack">
 				{#if sortedPending.length}
 				{#each sortedPending as task (task.id)}
-					<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
+					<div in:fly={{ y: -6, duration: $hydrated ? 150 : 0 }} out:fade={{ duration: $hydrated ? 150 : 0 }}>
 						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
 					</div>
 				{/each}
 			{:else if $myDayCompleted?.length}
-				<div class="bliss" data-testid="bliss-state" in:fly={{ y: -4, duration: 200 }}>
+				<div class="bliss" data-testid="bliss-state" in:fly={{ y: -4, duration: $hydrated ? 200 : 0 }} class:no-animate={!$hydrated}>
 					<span class="bliss-icon">✓</span>
 					<span class="bliss-headline">{blissMessage}</span>
 					<span class="bliss-sub">That's everything for today.</span>
@@ -326,7 +331,7 @@
 		<div class="stack" data-testid="completed-section">
 				{#if sortedCompleted.length}
 				{#each sortedCompleted as task (task.id)}
-					<div transition:fade={{ duration: 150 }}>
+					<div transition:fade={{ duration: $hydrated ? 150 : 0 }}>
 						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
 					</div>
 				{/each}
@@ -458,6 +463,7 @@
 		from { transform: scale(0.97); opacity: 0; }
 		to { transform: scale(1); opacity: 1; }
 	}
+	.bliss.no-animate { animation: none; }
 	.bliss-icon {
 		font-size: 20px;
 		color: #4ade80;

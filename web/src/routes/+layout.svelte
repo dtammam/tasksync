@@ -16,6 +16,7 @@
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { streak } from '$lib/stores/streak';
 	import { auth } from '$lib/stores/auth';
+	import { markHydrated } from '$lib/stores/hydration';
 	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
 	import { syncStatus } from '$lib/sync/status';
 	import { createSyncCoordinator } from '$lib/sync/coordinator';
@@ -277,6 +278,7 @@
 		await hydrateScopedStores();
 		lastScopeKey = storageScopeFromAuth(auth.get());
 		appReady = true;
+		markHydrated();
 
 		// Do not block first paint on best-effort remote preference/member refresh.
 		void (async () => {
