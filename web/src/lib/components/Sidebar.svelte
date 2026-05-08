@@ -770,6 +770,9 @@
 					<option value="alpha">Alphabetical</option>
 				</select>
 			</label>
+		</div>
+
+		<div class="sidebar-zone-lists">
 			{#if sidebarLists}
 				{#each sidebarLists as list}
 					{#if list.id === 'my-day'}
@@ -778,15 +781,7 @@
 							<span class="list-name">{list.name}</span>
 							<span class="count">{$myDayPending?.length ?? 0}</span>
 						</a>
-					{/if}
-				{/each}
-			{/if}
-		</div>
-
-		<div class="sidebar-zone-lists">
-			{#if sidebarLists}
-				{#each sidebarLists as list}
-					{#if list.id !== 'my-day'}
+					{:else}
 						<a
 							class:selected={$page.url.pathname === `/list/${list.id}`}
 							class:dragging={draggedListId === list.id}
@@ -1419,7 +1414,7 @@
 		height: 100vh;
 		position: sticky;
 		top: 0;
-		overflow-y: auto;
+		overflow: hidden;
 		overflow-x: hidden;
 		box-sizing: border-box;
 	}
@@ -1427,13 +1422,33 @@
 	.sidebar-main {
 		display: flex;
 		flex-direction: column;
+		height: 100%;
 		gap: 6px;
 	}
 
-	.sidebar-zone-top,
-	.sidebar-zone-lists,
+	.sidebar-zone-top {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		flex-shrink: 0;
+	}
+
+	.sidebar-zone-lists {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior-y: contain;
+		-webkit-overflow-scrolling: touch;
+	}
+
 	.sidebar-zone-bottom {
-		display: contents;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		flex-shrink: 0;
 	}
 
 	.title-row {
@@ -2129,39 +2144,10 @@
 			max-width: none;
 			padding: 12px 10px;
 			height: 100%;
-			overflow: hidden;
 		}
 
 		.sidebar-main {
-			display: flex;
-			flex-direction: column;
-			height: 100%;
 			gap: 0;
-		}
-
-		.sidebar-zone-top {
-			display: flex;
-			flex-direction: column;
-			gap: 6px;
-			flex-shrink: 0;
-		}
-
-		.sidebar-zone-lists {
-			display: flex;
-			flex-direction: column;
-			gap: 6px;
-			flex: 1;
-			min-height: 0;
-			overflow-y: auto;
-			overscroll-behavior-y: contain;
-			-webkit-overflow-scrolling: touch;
-		}
-
-		.sidebar-zone-bottom {
-			display: flex;
-			flex-direction: column;
-			gap: 6px;
-			flex-shrink: 0;
 		}
 
 		.app-title {
