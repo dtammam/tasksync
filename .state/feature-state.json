@@ -1,1 +1,28 @@
-{}
+{
+  "feature_id": "sidebar-zones-desktop-myday-fix",
+  "feature_name": "Sidebar: move My Day to scrollable zone and apply three-zone layout on desktop",
+  "stage": "implementation",
+  "created_at": "2026-05-08",
+  "updated_at": "2026-05-08",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Move My Day to scrollable zone and apply three-zone layout universally",
+      "description": "Two fixes in Sidebar.svelte: (1) Remove My Day from sidebar-zone-top and render all sidebarLists items in sidebar-zone-lists without filtering. (2) Move the three-zone flexbox layout from the mobile media query into base styles so it applies at all screen sizes.",
+      "files": ["web/src/lib/components/Sidebar.svelte"],
+      "done_when": "My Day appears in the scrollable middle zone on both mobile and desktop. The frozen top zone contains only the title row, section label, and sort controls. The three-zone flexbox layout is active at all viewport widths. All quality gates pass: lint, check, test, test:e2e:smoke.",
+      "status": "built"
+    }
+  ],
+  "completed_tasks": [],
+  "artifacts": {
+    "requirements": null,
+    "design": null,
+    "exec_plan": null
+  },
+  "history": [
+    { "timestamp": "2026-05-08 22:00", "stage": "bootstrap", "note": "Patch task initialized for sidebar zone fixes" },
+    { "timestamp": "2026-05-08 22:00", "stage": "implementation", "note": "Routed T1 to SDE: My Day zone fix + desktop three-zone layout" },
+    { "timestamp": "2026-05-08 22:16", "stage": "implementation", "note": "T1 built: moved My Day from sidebar-zone-top into sidebar-zone-lists alongside all other lists; applied three-zone flexbox layout to base styles (not just mobile media query); .sidebar now overflow:hidden, .sidebar-main has height:100%, zones get flex layout universally. All quality gates pass." }
+  ]
+}
