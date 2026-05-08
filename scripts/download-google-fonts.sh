@@ -3,7 +3,7 @@
 #
 # Downloads woff2 font files from Google Fonts CSS2 API for all 20 font
 # families used in TaskSync and generates per-family font.css files with
-# @font-face declarations using relative paths and font-display: swap.
+# @font-face declarations using relative paths and font-display: block.
 #
 # Usage:
 #   ./scripts/download-google-fonts.sh
@@ -57,7 +57,7 @@ FAMILY_NAMES=(
   "PT Mono"
 )
 
-# Google Fonts CSS2 URLs — same URLs as the fontUrls map in app.html (same index as SLUGS)
+# Google Fonts CSS2 URLs — same URLs as the fontFaceCSS map in app.html (same index as SLUGS)
 FONT_URLS=(
   "https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap"
   "https://fonts.googleapis.com/css2?family=Sono:wght@400;500;600;700;800&display=swap"
@@ -131,7 +131,7 @@ for i in "${!SLUGS[@]}"; do
   CSS_FILE="$OUT_DIR/font.css"
   {
     printf "/* %s - downloaded from Google Fonts CSS2 API */\n" "$FAMILY"
-    printf "/* font-display: swap ensures text is always visible during font load */\n"
+    printf "/* font-display: block prevents fallback font flash during load */\n"
     printf "/* Source: fonts.googleapis.com/css2 with Chrome user-agent (woff2) */\n"
     printf "\n"
   } > "$CSS_FILE"
@@ -197,7 +197,7 @@ for i in "${!SLUGS[@]}"; do
       printf "  font-family: '%s';\n" "$FAMILY"
       printf "  font-style: normal;\n"
       printf "  font-weight: %s;\n" "$WEIGHT"
-      printf "  font-display: swap;\n"
+      printf "  font-display: block;\n"
       printf "  src: url('./%s') format('woff2');\n" "$WOFF2_FILENAME"
       if [[ -n "$UNICODE_RANGE" ]]; then
         printf "  unicode-range: %s;\n" "$UNICODE_RANGE"

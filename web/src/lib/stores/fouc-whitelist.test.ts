@@ -42,6 +42,9 @@ function extractInlineArray(html: string, varName: string): string[] {
  * Extract an object literal from the inline FOUC script in app.html.
  * Finds the block matching `var <varName> = { ... };` and returns the
  * key-value pairs parsed from the brace-enclosed content.
+ *
+ * Handles values containing escaped single quotes (\'). The returned
+ * values have escape sequences unescaped so callers receive clean strings.
  */
 function extractInlineObjectMap(html: string, varName: string): Record<string, string> {
 	const pattern = new RegExp('var\\s+' + varName + '\\s*=\\s*\\{(.+?)\\};', 's');
@@ -53,13 +56,48 @@ function extractInlineObjectMap(html: string, varName: string): Record<string, s
 		);
 	}
 	const inner = match[1];
-	const pairPattern = /'([^']+)'\s*:\s*'([^']+)'/g;
+	// Match key-value pairs where values may contain escaped single quotes (\').
+	// Pattern: 'key': 'value-possibly-containing-\'-escapes'
+	const pairPattern = /'((?:[^'\\]|\\.)*)'\s*:\s*'((?:[^'\\]|\\.)*)'/g;
 	const result: Record<string, string> = {};
 	let pairMatch: RegExpExecArray | null;
 	while ((pairMatch = pairPattern.exec(inner)) !== null) {
-		result[pairMatch[1]] = pairMatch[2];
+		const key = pairMatch[1];
+		// Unescape \' -> ' so callers receive clean string content.
+		const value = pairMatch[2].replace(/\\'/g, "'");
+		result[key] = value;
 	}
 	return result;
+}
+
+/**
+ * Build the expected inlined CSS for a given font slug by reading the
+ * on-disk font.css file and applying the same transforms the generation
+ * script uses:
+ *   1. Strip CSS block comments.
+ *   2. Rewrite relative url('./file') to absolute url('/fonts/<slug>/file').
+ *   3. Collapse whitespace to a single space.
+ */
+function buildExpectedFontFaceCSS(slug: string, staticDir: string): string {
+	const cssPath = resolve(staticDir, 'fonts', slug, 'font.css');
+	let css = readFileSync(cssPath, 'utf-8');
+
+	// Strip CSS block comments.
+	css = css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+	// Rewrite relative URL references to absolute.
+	css = css.replace(/url\(['"]?\.\/([\w.-]+)['"]?\)/g, `url('/fonts/${slug}/$1')`);
+
+	// Collapse whitespace: trim each line, then collapse all remaining
+	// whitespace sequences into a single space, and trim the whole result.
+	css = css
+		.split('\n')
+		.map((line) => line.trim())
+		.join(' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+
+	return css;
 }
 
 describe('FOUC whitelist sync', () => {
@@ -75,45 +113,69 @@ describe('FOUC whitelist sync', () => {
 		expect(inlineFonts).toEqual(validFonts);
 	});
 
-	it('font path map covers all web-font slugs', () => {
-		const fontPaths = extractInlineObjectMap(html, 'fontPaths');
+	it('fontFaceCSS map covers all web-font slugs', () => {
+		const fontFaceCSS = extractInlineObjectMap(html, 'fontFaceCSS');
 		const systemFonts = ['georgia', 'sf-pro', 'system'];
 		const expectedWebFonts = validFonts.filter((f) => !systemFonts.includes(f));
-		expect(Object.keys(fontPaths).sort()).toEqual(expectedWebFonts.sort());
+		expect(Object.keys(fontFaceCSS).sort()).toEqual(expectedWebFonts.sort());
 	});
 
-	it('system-font slugs are absent from fontPaths map', () => {
-		const fontPaths = extractInlineObjectMap(html, 'fontPaths');
-		expect(fontPaths['georgia']).toBeUndefined();
-		expect(fontPaths['sf-pro']).toBeUndefined();
-		expect(fontPaths['system']).toBeUndefined();
+	it('system-font slugs are absent from fontFaceCSS map', () => {
+		const fontFaceCSS = extractInlineObjectMap(html, 'fontFaceCSS');
+		expect(fontFaceCSS['georgia']).toBeUndefined();
+		expect(fontFaceCSS['sf-pro']).toBeUndefined();
+		expect(fontFaceCSS['system']).toBeUndefined();
 	});
 
-	it('every font path follows /fonts/<slug>/font.css structure', () => {
-		const fontPaths = extractInlineObjectMap(html, 'fontPaths');
-		for (const [key, value] of Object.entries(fontPaths)) {
-			expect(value, `font path for "${key}" must follow /fonts/<slug>/font.css`).toBe(
-				`/fonts/${key}/font.css`
+	it('every fontFaceCSS value contains @font-face blocks with font-display: block and absolute woff2 URLs', () => {
+		const fontFaceCSS = extractInlineObjectMap(html, 'fontFaceCSS');
+		for (const [slug, css] of Object.entries(fontFaceCSS)) {
+			// Must contain at least one @font-face block.
+			expect(css, `fontFaceCSS["${slug}"] must contain at least one @font-face block`).toContain(
+				'@font-face'
+			);
+
+			// Must use font-display: block (not swap).
+			expect(css, `fontFaceCSS["${slug}"] must use font-display: block`).toContain(
+				'font-display: block'
+			);
+
+			// Must not contain font-display: swap.
+			expect(css, `fontFaceCSS["${slug}"] must not contain font-display: swap`).not.toContain(
+				'font-display: swap'
+			);
+
+			// Must contain absolute woff2 URLs referencing /fonts/<slug>/.
+			expect(
+				css,
+				`fontFaceCSS["${slug}"] must contain absolute URL /fonts/${slug}/`
+			).toContain(`/fonts/${slug}/`);
+
+			// Must not contain relative ./ URLs.
+			expect(css, `fontFaceCSS["${slug}"] must not contain relative ./ URLs`).not.toContain(
+				"url('./"
 			);
 		}
 	});
 
-	it('every font.css file exists and contains font-display: swap', () => {
+	it('every on-disk font.css file contains font-display: block', () => {
 		// web/static is 4 levels up from this test file:
 		// web/src/lib/stores/fouc-whitelist.test.ts -> ../../../../static
 		const staticDir = resolve(new URL(import.meta.url).pathname, '../../../../static');
-		const fontPaths = extractInlineObjectMap(html, 'fontPaths');
-		for (const [slug, fontPath] of Object.entries(fontPaths)) {
-			// Strip the leading '/' to get a relative path suitable for joining
-			const fullPath = resolve(staticDir, fontPath.replace(/^\//, ''));
+		const systemFonts = ['georgia', 'sf-pro', 'system'];
+		const webFontSlugs = validFonts.filter((f) => !systemFonts.includes(f));
+
+		for (const slug of webFontSlugs) {
+			const fullPath = resolve(staticDir, 'fonts', slug, 'font.css');
 			const content = readFileSync(fullPath, 'utf-8');
 
-			// Assert at least one @font-face block exists
-			expect(content, `font.css for "${slug}" must contain at least one @font-face block`).toMatch(
-				/@font-face/
-			);
+			// Assert at least one @font-face block exists.
+			expect(
+				content,
+				`font.css for "${slug}" must contain at least one @font-face block`
+			).toMatch(/@font-face/);
 
-			// Assert every @font-face block contains font-display: swap
+			// Assert every @font-face block contains font-display: block.
 			const fontFaceBlocks = content.match(/@font-face\s*\{[^}]*\}/g) ?? [];
 			expect(
 				fontFaceBlocks.length,
@@ -122,9 +184,23 @@ describe('FOUC whitelist sync', () => {
 			for (const block of fontFaceBlocks) {
 				expect(
 					block,
-					`every @font-face in font.css for "${slug}" must contain font-display: swap`
-				).toContain('font-display: swap');
+					`every @font-face in font.css for "${slug}" must contain font-display: block`
+				).toContain('font-display: block');
 			}
+		}
+	});
+
+	it('fontFaceCSS map in app.html matches source font.css files (no drift)', () => {
+		// web/static is 4 levels up from this test file.
+		const staticDir = resolve(new URL(import.meta.url).pathname, '../../../../static');
+		const fontFaceCSS = extractInlineObjectMap(html, 'fontFaceCSS');
+
+		for (const [slug, inlinedCSS] of Object.entries(fontFaceCSS)) {
+			const expected = buildExpectedFontFaceCSS(slug, staticDir);
+			expect(
+				inlinedCSS,
+				`fontFaceCSS["${slug}"] in app.html must match the processed content of fonts/${slug}/font.css`
+			).toBe(expected);
 		}
 	});
 });
