@@ -35,7 +35,9 @@ const defaultListSort = (): ListSortPreference => ({
 	direction: 'asc'
 });
 
-const validFonts: UiFont[] = [
+// SYNC: These arrays are duplicated in web/src/app.html (inline FOUC-prevention
+// script). A unit test (fouc-whitelist.test.ts) enforces they stay in sync.
+export const validFonts: UiFont[] = [
 	'sora', 'sono', 'inter', 'inter-tight', 'jetbrains-mono',
 	'atkinson-hyperlegible', 'atkinson-hyperlegible-next',
 	'ibm-plex-sans', 'ibm-plex-mono', 'ibm-plex-serif',
@@ -55,7 +57,7 @@ const defaultPreferences = (): UiPreferences => ({
 	showCompleted: true
 });
 
-const validThemes: UiTheme[] = [
+export const validThemes: UiTheme[] = [
 	'default',
 	'dark',
 	'light',

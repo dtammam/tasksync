@@ -256,6 +256,7 @@ describe('tasks store helpers', () => {
 	});
 
 	it('clears a missed recurring task from missed when skipping to next occurrence', () => {
+		// Fake timer: today is 2026-02-02. Yesterday is 2026-02-01.
 		tasks.setAll([
 			baseTask({
 				id: 'missed-recurring',
@@ -269,8 +270,68 @@ describe('tasks store helpers', () => {
 
 		tasks.skip('missed-recurring');
 
+		// Task is no longer in the missed bucket.
 		expect(get(myDayMissed)).toEqual([]);
-		expect(get(myDayPending).map((t) => t.id)).toEqual(['missed-recurring']);
+		// Task advances strictly past today (to 2026-02-03), so it is not in myDayPending either.
+		const skipped = tasks.getAll().find((t) => t.id === 'missed-recurring');
+		expect(skipped?.due_date).toBe('2026-02-03');
+	});
+
+	it('skip() on a daily task overdue by 1 day advances due_date strictly after today', () => {
+		// Fake timer: today is 2026-02-02. Yesterday is 2026-02-01.
+		tasks.setAll([
+			baseTask({
+				id: 'skip-overdue-1',
+				recurrence_id: 'daily',
+				due_date: '2026-02-01',
+				status: 'pending'
+			})
+		]);
+
+		tasks.skip('skip-overdue-1');
+
+		const updated = tasks.getAll().find((t) => t.id === 'skip-overdue-1');
+		// Should land on tomorrow (2026-02-03), not today or in the past.
+		expect(updated?.due_date).toBe('2026-02-03');
+	});
+
+	it('skip() on a daily task overdue by 3 days advances due_date strictly after today', () => {
+		// Fake timer: today is 2026-02-02. Three days ago is 2026-01-30.
+		tasks.setAll([
+			baseTask({
+				id: 'skip-overdue-3',
+				recurrence_id: 'daily',
+				due_date: '2026-01-30',
+				status: 'pending'
+			})
+		]);
+
+		tasks.skip('skip-overdue-3');
+
+		const updated = tasks.getAll().find((t) => t.id === 'skip-overdue-3');
+		// Should land on tomorrow (2026-02-03), not a date still in the past.
+		expect(updated?.due_date).toBe('2026-02-03');
+	});
+
+	it('skip() on a daily task with punted_from_due_date clears punt state and advances past today', () => {
+		// Fake timer: today is 2026-02-02. Yesterday is 2026-02-01, two days ago is 2026-01-31.
+		tasks.setAll([
+			baseTask({
+				id: 'skip-punted',
+				recurrence_id: 'daily',
+				due_date: '2026-02-01',
+				punted_from_due_date: '2026-01-31',
+				status: 'pending'
+			})
+		]);
+
+		tasks.skip('skip-punted');
+
+		const updated = tasks.getAll().find((t) => t.id === 'skip-punted');
+		// due_date should be strictly after today (tomorrow or later).
+		expect(updated?.due_date).toBe('2026-02-03');
+		// punted_from_due_date should be cleared by clearPuntState.
+		expect(updated?.punted_from_due_date).toBeUndefined();
 	});
 
 	it('skip() breaks the streak combo', () => {

@@ -519,7 +519,7 @@ export const tasks = {
 					didSkip = true;
 					return {
 						...clearPuntState(t),
-						due_date: nextRecurringDueAfterCurrent(t),
+						due_date: nextRecurringDueAfterToday(t),
 						updated_ts: now,
 						dirty: true
 					};
