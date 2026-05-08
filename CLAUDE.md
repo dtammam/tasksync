@@ -223,6 +223,11 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-05-09-gate-content-behind-hydration.md` — Gate page content behind IDB hydration: wrap slot in {#if appReady} gate in +layout.svelte to prevent flash of empty-state UI on cold launch (complete 2026-05-09)
+- `docs/exec-plans/completed/2026-05-09-fix-myday-hydration-shift.md` — Fix My Day hydration layout shift: suppress fly/fade/scale transitions during IDB hydration via conditional duration:0 driven by new hydrated store (complete 2026-05-09)
+- `docs/exec-plans/completed/2026-05-08-self-host-google-fonts.md` — Self-host Google Fonts: replace CDN URLs with local woff2 static assets, download script, service worker filter, updated FOUC tests (complete 2026-05-09)
+- `docs/exec-plans/completed/2026-05-08-dynamic-font-loading.md` — Dynamic single-font loading: replace all-fonts Google Fonts stylesheet with per-user font injection in FOUC inline script, 3 sync tests (complete 2026-05-08)
+- `docs/exec-plans/completed/2026-05-08-polish-fouc-skip-drag.md` — Polish batch: FOUC fix (inline theme/font script), daily skip bug fix, draggable sidebar lists with E2E test (complete 2026-05-08)
 - `docs/exec-plans/completed/2026-05-07-fix-task-list-hidden-behind-input.md` — Fix task list items hidden behind fixed add-task input: added `.page-content` wrapper with bottom padding to list route, CSS-only fix (complete 2026-05-07)
 - `docs/exec-plans/completed/2026-04-18-ios-native-app.md` — Capacitor iOS wrapper for SvelteKit PWA: adapter-static, configurable server URL store with validation, settings UI, first-launch prompt, Xcode project scaffold, iOS build docs (complete 2026-04-19)
 - `docs/exec-plans/completed/2026-04-05-ptr-trackpad-wheel.md` — Add trackpad/wheel gesture support to pull-to-refresh: wheel event handler with deltaY normalization, debounce end detection, 10+ unit tests, E2E smoke test, E2E flake fixes (complete 2026-04-05)

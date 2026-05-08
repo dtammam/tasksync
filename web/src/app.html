@@ -45,47 +45,38 @@
 							fontSlug = prefs.font;
 						}
 					}
-					var fontUrls = {
-						'sora': 'https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap',
-						'sono': 'https://fonts.googleapis.com/css2?family=Sono:wght@400;500;600;700;800&display=swap',
-						'inter': 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
-						'inter-tight': 'https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&display=swap',
-						'jetbrains-mono': 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap',
-						'atkinson-hyperlegible': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap',
-						'atkinson-hyperlegible-next': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700&display=swap',
-						'ibm-plex-sans': 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap',
-						'ibm-plex-mono': 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap',
-						'ibm-plex-serif': 'https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;600;700&display=swap',
-						'roboto': 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap',
-						'roboto-slab': 'https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&display=swap',
-						'roboto-mono': 'https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600;700&display=swap',
-						'dm-mono': 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap',
-						'comfortaa': 'https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&display=swap',
-						'poppins': 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap',
-						'victor-mono': 'https://fonts.googleapis.com/css2?family=Victor+Mono:wght@400;500;600;700&display=swap',
-						'pt-sans': 'https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap',
-						'pt-serif': 'https://fonts.googleapis.com/css2?family=PT+Serif:wght@400;700&display=swap',
-						'pt-mono': 'https://fonts.googleapis.com/css2?family=PT+Mono&display=swap'
+					var fontPaths = {
+						'sora': '/fonts/sora/font.css',
+						'sono': '/fonts/sono/font.css',
+						'inter': '/fonts/inter/font.css',
+						'inter-tight': '/fonts/inter-tight/font.css',
+						'jetbrains-mono': '/fonts/jetbrains-mono/font.css',
+						'atkinson-hyperlegible': '/fonts/atkinson-hyperlegible/font.css',
+						'atkinson-hyperlegible-next': '/fonts/atkinson-hyperlegible-next/font.css',
+						'ibm-plex-sans': '/fonts/ibm-plex-sans/font.css',
+						'ibm-plex-mono': '/fonts/ibm-plex-mono/font.css',
+						'ibm-plex-serif': '/fonts/ibm-plex-serif/font.css',
+						'roboto': '/fonts/roboto/font.css',
+						'roboto-slab': '/fonts/roboto-slab/font.css',
+						'roboto-mono': '/fonts/roboto-mono/font.css',
+						'dm-mono': '/fonts/dm-mono/font.css',
+						'comfortaa': '/fonts/comfortaa/font.css',
+						'poppins': '/fonts/poppins/font.css',
+						'victor-mono': '/fonts/victor-mono/font.css',
+						'pt-sans': '/fonts/pt-sans/font.css',
+						'pt-serif': '/fonts/pt-serif/font.css',
+						'pt-mono': '/fonts/pt-mono/font.css'
 					};
-					var url = fontUrls[fontSlug];
-					if (url) {
-						var pc1 = document.createElement('link');
-						pc1.rel = 'preconnect';
-						pc1.href = 'https://fonts.googleapis.com';
-						document.head.appendChild(pc1);
-						var pc2 = document.createElement('link');
-						pc2.rel = 'preconnect';
-						pc2.href = 'https://fonts.gstatic.com';
-						pc2.crossOrigin = 'anonymous';
-						document.head.appendChild(pc2);
+					var cssPath = fontPaths[fontSlug];
+					if (cssPath) {
 						var pl = document.createElement('link');
 						pl.rel = 'preload';
 						pl.as = 'style';
-						pl.href = url;
+						pl.href = cssPath;
 						document.head.appendChild(pl);
 						var sl = document.createElement('link');
 						sl.rel = 'stylesheet';
-						sl.href = url;
+						sl.href = cssPath;
 						document.head.appendChild(sl);
 					}
 				}
