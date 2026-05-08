@@ -32,6 +32,8 @@
 	let listError = '';
 	let busy = false;
 	let listSortMode = 'manual';
+	let draggedListId: string | null = null;
+	let dragOverListId: string | null = null;
 	let listSortLoaded = false;
 	const LIST_SORT_KEY = 'tasksync:sort:sidebar-lists';
 
@@ -368,6 +370,65 @@
 		} finally {
 			busy = false;
 		}
+	};
+
+	const handleDragStart = (event: DragEvent, listId: string) => {
+		draggedListId = listId;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+		}
+	};
+
+	const handleDragOver = (event: DragEvent, listId: string) => {
+		event.preventDefault();
+		if (listId === draggedListId || listId === 'my-day') return;
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'move';
+		}
+		dragOverListId = listId;
+	};
+
+	const handleDragLeave = (listId: string) => {
+		if (dragOverListId === listId) {
+			dragOverListId = null;
+		}
+	};
+
+	const handleDrop = async (event: DragEvent, targetListId: string) => {
+		event.preventDefault();
+		if (!draggedListId || draggedListId === targetListId || targetListId === 'my-day') return;
+
+		const ordered = sortByOrder(($lists ?? []).filter((l) => l.id !== 'my-day'));
+		const sourceIndex = ordered.findIndex((l) => l.id === draggedListId);
+		const targetIndex = ordered.findIndex((l) => l.id === targetListId);
+		if (sourceIndex === -1 || targetIndex === -1) return;
+
+		const reordered = [...ordered];
+		const [moving] = reordered.splice(sourceIndex, 1);
+		reordered.splice(targetIndex, 0, moving);
+
+		const updates: Promise<unknown>[] = [];
+		reordered.forEach((list, index) => {
+			const nextOrder = manualOrderValue(index);
+			if ((list.order ?? '') !== nextOrder) {
+				updates.push(lists.updateRemote(list.id, { order: nextOrder }));
+			}
+		});
+
+		listError = '';
+		try {
+			await Promise.all(updates);
+		} catch (err) {
+			listError = err instanceof Error ? err.message : String(err);
+		} finally {
+			draggedListId = null;
+			dragOverListId = null;
+		}
+	};
+
+	const handleDragEnd = () => {
+		draggedListId = null;
+		dragOverListId = null;
 	};
 
 	const deleteList = async (id: string) => {
@@ -717,7 +778,29 @@
 						<span class="count">{$myDayPending?.length ?? 0}</span>
 					</a>
 				{:else}
-					<a class:selected={$page.url.pathname === `/list/${list.id}`} href={`/list/${list.id}`}>
+					<a
+						class:selected={$page.url.pathname === `/list/${list.id}`}
+						class:dragging={draggedListId === list.id}
+						class:drag-over={dragOverListId === list.id}
+						href={`/list/${list.id}`}
+						data-testid="sidebar-list-item"
+						draggable={adminMode && listSortMode === 'manual'}
+						on:dragstart={adminMode && listSortMode === 'manual'
+							? (e) => handleDragStart(e, list.id)
+							: undefined}
+						on:dragover={adminMode && listSortMode === 'manual'
+							? (e) => handleDragOver(e, list.id)
+							: undefined}
+						on:dragleave={adminMode && listSortMode === 'manual'
+							? () => handleDragLeave(list.id)
+							: undefined}
+						on:drop={adminMode && listSortMode === 'manual'
+							? (e) => handleDrop(e, list.id)
+							: undefined}
+						on:dragend={adminMode && listSortMode === 'manual'
+							? () => handleDragEnd()
+							: undefined}
+					>
 						<span class="icon">{list.icon ?? '•'}</span>
 						<span class="list-name">{list.name}</span>
 						<span class="count">{$listCounts?.[list.id]?.pending ?? 0}</span>
@@ -1452,6 +1535,15 @@
 	a.selected .count,
 	.sidebar-nav-action.selected .count {
 		color: var(--app-text);
+	}
+
+	a.dragging {
+		opacity: 0.5;
+	}
+
+	a.drag-over {
+		border-color: var(--surface-accent);
+		box-shadow: inset 0 0 0 1px var(--surface-accent);
 	}
 
 	.list-sort {

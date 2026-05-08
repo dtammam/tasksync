@@ -13,6 +13,7 @@ Rules:
 |---:|------|----------|---------|-------|-------------|
 | 041 | Store | Low | `showCompleted` preference is client-local only (localStorage); add server-side DB column + Rust handler so it syncs cross-device | unassigned | Add `show_completed` column to `user` table, wire through `auth_update_preferences` / `load_ui_preferences_for_user`, remove client-side preservation workaround in `pushRemote` / `hydrateFromServer` |
 | 042 | UI | Low | `TaskRow.svelte` action-menu close inconsistency: `deleteTask` and `openDetailFromMenu` use inline `showActions = false` while newer handlers (`toggleStar`, `punt`, `addTomorrow`, `addNextWeek`) use `closeActions()` | unassigned | Replace inline `showActions = false` with `closeActions()` in `deleteTask` and `openDetailFromMenu` for consistency |
+| 043 | Store | Low | `handleDrop` in `Sidebar.svelte` is async but its Promise is silently discarded by the Svelte event handler wrapper. Internal try/catch handles errors so no correctness bug, but violates "No fire-and-forget" coding standard | unassigned | Wrap the async body in a `.catch(console.error)` self-invoking pattern, or extract the async logic into a non-event-handler function called with explicit `.catch()` |
 
 ## Closed
 

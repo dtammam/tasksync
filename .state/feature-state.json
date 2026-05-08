@@ -1,1 +1,82 @@
-{}
+{
+  "feature_id": "polish-fouc-skip-drag",
+  "feature_name": "Polish batch: FOUC fix, daily skip investigation, draggable lists",
+  "stage": "done",
+  "created_at": "2026-05-08",
+  "updated_at": "2026-05-08T19:30",
+
+  "tasks": [],
+  "completed_tasks": [
+    {
+      "id": "T1",
+      "title": "Fix daily skip bug -- swap to nextRecurringDueAfterToday",
+      "description": "In skip() in tasks.ts, change nextRecurringDueAfterCurrent(t) to nextRecurringDueAfterToday(t). Add three new unit tests: skip daily 1-day overdue, skip daily 3-day overdue, skip daily with punted_from_due_date.",
+      "files": ["web/src/lib/stores/tasks.ts", "web/src/lib/stores/tasks.test.ts"],
+      "done_when": "skip() calls nextRecurringDueAfterToday; three new tests pass; all existing skip/recurrence tests pass; npm run test clean",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "FOUC fix -- inline theme/font script in app.html",
+      "description": "Add synchronous inline script to app.html head that reads localStorage ui-preferences, validates against hardcoded theme/font whitelists, sets data-ui-theme and data-ui-font on html element. Add whitelist-sync unit test. Add cross-reference comments in both app.html and preferences.ts.",
+      "files": ["web/src/app.html", "web/src/lib/stores/preferences.ts", "web/src/lib/stores/fouc-whitelist.test.ts"],
+      "done_when": "Inline script sets theme/font attributes before first paint; SSR-safe guard present; whitelist-sync test passes; npm run check + lint + test all pass",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Draggable lists -- add HTML5 DnD to sidebar list items",
+      "description": "Add native HTML5 drag-and-drop to sidebar list items in Sidebar.svelte. Gate on adminMode && listSortMode === 'manual'. My Day excluded. Compute reorder on drop using sortByOrder + manualOrderValue, call lists.updateRemote(). CSS-only visual feedback (.dragging, .drag-over classes).",
+      "files": ["web/src/lib/components/Sidebar.svelte"],
+      "done_when": "Admin manual-sort lists are draggable; drop reorders correctly via updateRemote; My Day pinned and non-draggable; alpha/contributor mode has no drag; CSS classes only; arrow buttons in settings unchanged; npm run check + lint pass",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Draggable lists -- E2E smoke test",
+      "description": "Add one Playwright @smoke E2E test: as admin in manual sort mode, drag list A below list B, verify sidebar order changes. Test in smoke.spec.ts or new sidebar-drag.spec.ts.",
+      "files": ["web/tests/e2e/sidebar-drag.spec.ts"],
+      "done_when": "One new @smoke test passes on Chromium via npm run test:e2e:smoke; all existing E2E smoke tests still pass",
+      "status": "done"
+    }
+  ],
+  "artifacts": {
+    "requirements": "docs/exec-plans/active/2026-05-08-polish-fouc-skip-drag.md",
+    "design": "docs/exec-plans/active/2026-05-08-polish-fouc-skip-drag.md",
+    "exec_plan": "docs/exec-plans/active/2026-05-08-polish-fouc-skip-drag.md"
+  },
+  "verification": {
+    "timestamp": "2026-05-08T18:30",
+    "result": "ALL PASS",
+    "gates": {
+      "npm_run_lint": "PASS",
+      "npm_run_check": "PASS",
+      "npm_run_test": "PASS (359/359)",
+      "npm_run_test_e2e_smoke": "PASS (17/17)",
+      "cargo_fmt_check": "PASS",
+      "cargo_clippy": "PASS",
+      "cargo_test": "PASS (40/40)"
+    }
+  },
+  "acceptance": {
+    "timestamp": "2026-05-08T19:30",
+    "result": "ALL CRITERIA MET",
+    "criteria_met": 23,
+    "criteria_total": 23
+  },
+  "history": [
+    { "timestamp": "2026-05-08 10:00", "stage": "bootstrap", "note": "Feature initiated with three items: FOUC fix, daily skip recurrence investigation, draggable lists" },
+    { "timestamp": "2026-05-08 10:05", "stage": "discovery", "note": "Moved to discovery; PM inbox written for requirements gathering" },
+    { "timestamp": "2026-05-08 10:30", "stage": "discovery", "note": "Discovery complete. Exec plan written to docs/exec-plans/active/2026-05-08-polish-fouc-skip-drag.md. Requirements, scope, constraints, and acceptance criteria defined for all three items." },
+    { "timestamp": "2026-05-08 11:00", "stage": "design", "note": "Moved to design. PE inbox written for technical design of all three items." },
+    { "timestamp": "2026-05-08 11:30", "stage": "design", "note": "Design complete. All three items designed: FOUC inline script in app.html, daily skip bug confirmed and fix specified (swap nextRecurringDueAfterCurrent for nextRecurringDueAfterToday in skip()), draggable lists via native HTML5 DnD in Sidebar.svelte. Implementation order: skip fix -> FOUC -> drag." },
+    { "timestamp": "2026-05-08 12:00", "stage": "tasks", "note": "Task breakdown complete. 4 tasks: T1 skip fix (1 line + 3 tests), T2 FOUC inline script + whitelist sync test, T3 sidebar DnD implementation, T4 DnD E2E smoke test. Order: T1 -> T2 -> T3 -> T4 (T4 depends on T3)." },
+    { "timestamp": "2026-05-08 14:00", "stage": "implementation", "note": "T1 built and verified. Routing T2 (FOUC fix - inline theme/font script in app.html) to software-developer." },
+    { "timestamp": "2026-05-08 15:30", "stage": "implementation", "note": "T2 built (FOUC fix). Routing T3 (Draggable lists - HTML5 DnD in sidebar) to software-developer." },
+    { "timestamp": "2026-05-08 17:00", "stage": "implementation", "note": "T3 built (Draggable lists - HTML5 DnD). Routing T4 (Draggable lists E2E smoke test) to software-developer." },
+    { "timestamp": "2026-05-08 18:00", "stage": "verification", "note": "All 4 tasks built (T1-T4). Routing to build-specialist for full quality gate run and quality-assurance for code review." },
+    { "timestamp": "2026-05-08 18:30", "stage": "verification", "note": "VERIFICATION COMPLETE: All quality gates passed. npm lint (PASS), npm check (PASS), npm test (359/359 PASS), npm test:e2e:smoke (17/17 PASS), cargo fmt (PASS), cargo clippy (PASS), cargo test (40/40 PASS)." },
+    { "timestamp": "2026-05-08 19:00", "stage": "acceptance", "note": "QA code review APPROVED. One W2 finding tracked to tech debt (async handleDrop in Sidebar.svelte has silently discarded Promise). All 4 tasks marked verified. Routing to PM for acceptance validation against exec plan criteria." },
+    { "timestamp": "2026-05-08 19:30", "stage": "acceptance", "note": "ACCEPTANCE COMPLETE: All 23 acceptance criteria verified PASS. PM sign-off given. Feature ready for /done." }
+  ]
+}

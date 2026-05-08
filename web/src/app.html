@@ -7,6 +7,48 @@
 			window.__TASKSYNC_RUNTIME_CONFIG__ = window.__TASKSYNC_RUNTIME_CONFIG__ || {};
 		</script>
 		<script src="/runtime-config.js"></script>
+		<script>
+			// Inline FOUC-prevention script: sets data-ui-theme and data-ui-font on <html>
+			// before first paint so the correct theme/font CSS variables apply immediately.
+			// Must run synchronously during HTML parsing — do NOT add type="module" or defer.
+			try {
+				if (typeof localStorage !== 'undefined') {
+					// SYNC: These whitelists must match validThemes and validFonts in
+					// web/src/lib/stores/preferences.ts. A unit test (fouc-whitelist.test.ts)
+					// enforces this.
+					var validThemes = ['default','dark','light','shades-of-coffee','miami-beach','simple-dark','matrix','black-gold','okabe-ito','theme-from-1970','shades-of-gray-light','catppuccin-latte','catppuccin-frappe','catppuccin-macchiato','catppuccin-mocha','you-need-a-dark-mode','butterfly'];
+					var validFonts = ['sora','sono','inter','inter-tight','jetbrains-mono','atkinson-hyperlegible','atkinson-hyperlegible-next','ibm-plex-sans','ibm-plex-mono','ibm-plex-serif','roboto','roboto-slab','roboto-mono','dm-mono','comfortaa','poppins','victor-mono','pt-sans','pt-serif','pt-mono','georgia','sf-pro','system'];
+					var PREFIX = 'tasksync:ui-preferences:';
+					var scopedValue = null;
+					var anonValue = null;
+					for (var i = 0; i < localStorage.length; i++) {
+						var key = localStorage.key(i);
+						if (key && key.indexOf(PREFIX) === 0) {
+							var suffix = key.slice(PREFIX.length);
+							if (suffix === 'anon') {
+								anonValue = localStorage.getItem(key);
+							} else {
+								// Scoped key (space_id:user_id) — prefer over anon
+								scopedValue = localStorage.getItem(key);
+							}
+						}
+					}
+					var raw = scopedValue !== null ? scopedValue : anonValue;
+					if (raw !== null) {
+						var prefs = JSON.parse(raw);
+						if (prefs && typeof prefs.theme === 'string' && validThemes.indexOf(prefs.theme) !== -1) {
+							document.documentElement.setAttribute('data-ui-theme', prefs.theme);
+						}
+						if (prefs && typeof prefs.font === 'string' && validFonts.indexOf(prefs.font) !== -1) {
+							document.documentElement.setAttribute('data-ui-font', prefs.font);
+						}
+					}
+				}
+			} catch (e) {
+				// Intentionally silent: logging infrastructure is not yet available at
+				// HTML-shell parse time. Any error here must not block the page load.
+			}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
