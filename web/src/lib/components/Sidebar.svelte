@@ -747,78 +747,91 @@
 
 <nav class="sidebar">
 	<div class="sidebar-main">
-		<div class="title-row">
-			<div class="app-title">tasksync</div>
-			<button
-				class={`pin ${navPinned ? 'active' : ''}`}
-				type="button"
-				data-testid="nav-pin"
-				aria-pressed={navPinned}
-				on:click={togglePin}
-				title={navPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
-			>
-				{navPinned ? 'Unpin' : 'Pin'}
-			</button>
+		<div class="sidebar-zone-top">
+			<div class="title-row">
+				<div class="app-title">tasksync</div>
+				<button
+					class={`pin ${navPinned ? 'active' : ''}`}
+					type="button"
+					data-testid="nav-pin"
+					aria-pressed={navPinned}
+					on:click={togglePin}
+					title={navPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+				>
+					{navPinned ? 'Unpin' : 'Pin'}
+				</button>
+			</div>
+
+			<div class="section-label">Today</div>
+			<label class="list-sort">
+				Sort lists
+				<select bind:value={listSortMode} aria-label="Sort lists">
+					<option value="manual">Manual</option>
+					<option value="alpha">Alphabetical</option>
+				</select>
+			</label>
+			{#if sidebarLists}
+				{#each sidebarLists as list}
+					{#if list.id === 'my-day'}
+						<a class:selected={$page.url.pathname === '/'} href="/">
+							<span class="icon">🌅</span>
+							<span class="list-name">{list.name}</span>
+							<span class="count">{$myDayPending?.length ?? 0}</span>
+						</a>
+					{/if}
+				{/each}
+			{/if}
 		</div>
 
-		<div class="section-label">Today</div>
-		<label class="list-sort">
-			Sort lists
-			<select bind:value={listSortMode} aria-label="Sort lists">
-				<option value="manual">Manual</option>
-				<option value="alpha">Alphabetical</option>
-			</select>
-		</label>
-		{#if sidebarLists}
-			{#each sidebarLists as list}
-				{#if list.id === 'my-day'}
-					<a class:selected={$page.url.pathname === '/'} href="/">
-						<span class="icon">🌅</span>
-						<span class="list-name">{list.name}</span>
-						<span class="count">{$myDayPending?.length ?? 0}</span>
-					</a>
-				{:else}
-					<a
-						class:selected={$page.url.pathname === `/list/${list.id}`}
-						class:dragging={draggedListId === list.id}
-						class:drag-over={dragOverListId === list.id}
-						href={`/list/${list.id}`}
-						data-testid="sidebar-list-item"
-						draggable={adminMode && listSortMode === 'manual'}
-						on:dragstart={adminMode && listSortMode === 'manual'
-							? (e) => handleDragStart(e, list.id)
-							: undefined}
-						on:dragover={adminMode && listSortMode === 'manual'
-							? (e) => handleDragOver(e, list.id)
-							: undefined}
-						on:dragleave={adminMode && listSortMode === 'manual'
-							? () => handleDragLeave(list.id)
-							: undefined}
-						on:drop={adminMode && listSortMode === 'manual'
-							? (e) => handleDrop(e, list.id)
-							: undefined}
-						on:dragend={adminMode && listSortMode === 'manual'
-							? () => handleDragEnd()
-							: undefined}
-					>
-						<span class="icon">{list.icon ?? '•'}</span>
-						<span class="list-name">{list.name}</span>
-						<span class="count">{$listCounts?.[list.id]?.pending ?? 0}</span>
-					</a>
-				{/if}
-			{/each}
-		{/if}
-		<div class="section-label muted">Workspace</div>
-		<button
-			class="sidebar-nav-action settings-entry selected"
-			type="button"
-			data-testid="settings-open"
-			on:click={() => openSettings(settingsActiveSection)}
-		>
-			<span class="icon">⚙️</span>
-			<span>Settings</span>
-			<span class="count">›</span>
-		</button>
+		<div class="sidebar-zone-lists">
+			{#if sidebarLists}
+				{#each sidebarLists as list}
+					{#if list.id !== 'my-day'}
+						<a
+							class:selected={$page.url.pathname === `/list/${list.id}`}
+							class:dragging={draggedListId === list.id}
+							class:drag-over={dragOverListId === list.id}
+							href={`/list/${list.id}`}
+							data-testid="sidebar-list-item"
+							draggable={adminMode && listSortMode === 'manual'}
+							on:dragstart={adminMode && listSortMode === 'manual'
+								? (e) => handleDragStart(e, list.id)
+								: undefined}
+							on:dragover={adminMode && listSortMode === 'manual'
+								? (e) => handleDragOver(e, list.id)
+								: undefined}
+							on:dragleave={adminMode && listSortMode === 'manual'
+								? () => handleDragLeave(list.id)
+								: undefined}
+							on:drop={adminMode && listSortMode === 'manual'
+								? (e) => handleDrop(e, list.id)
+								: undefined}
+							on:dragend={adminMode && listSortMode === 'manual'
+								? () => handleDragEnd()
+								: undefined}
+						>
+							<span class="icon">{list.icon ?? '•'}</span>
+							<span class="list-name">{list.name}</span>
+							<span class="count">{$listCounts?.[list.id]?.pending ?? 0}</span>
+						</a>
+					{/if}
+				{/each}
+			{/if}
+		</div>
+
+		<div class="sidebar-zone-bottom">
+			<div class="section-label muted">Workspace</div>
+			<button
+				class="sidebar-nav-action settings-entry selected"
+				type="button"
+				data-testid="settings-open"
+				on:click={() => openSettings(settingsActiveSection)}
+			>
+				<span class="icon">⚙️</span>
+				<span>Settings</span>
+				<span class="count">›</span>
+			</button>
+		</div>
 	</div>
 </nav>
 
@@ -1415,6 +1428,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+	}
+
+	.sidebar-zone-top,
+	.sidebar-zone-lists,
+	.sidebar-zone-bottom {
+		display: contents;
 	}
 
 	.title-row {
@@ -2109,6 +2128,40 @@
 		.sidebar {
 			max-width: none;
 			padding: 12px 10px;
+			height: 100%;
+			overflow: hidden;
+		}
+
+		.sidebar-main {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+			gap: 0;
+		}
+
+		.sidebar-zone-top {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			flex-shrink: 0;
+		}
+
+		.sidebar-zone-lists {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			flex: 1;
+			min-height: 0;
+			overflow-y: auto;
+			overscroll-behavior-y: contain;
+			-webkit-overflow-scrolling: touch;
+		}
+
+		.sidebar-zone-bottom {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			flex-shrink: 0;
 		}
 
 		.app-title {
