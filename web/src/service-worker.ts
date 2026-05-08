@@ -45,7 +45,7 @@ const isApiRequest = (url: URL) => {
 
 const shellAssets = [
 	...build,
-	...files,
+	...files.filter((f) => !f.startsWith('/fonts/')),
 	'/',
 	'/runtime-config.js',
 	'/manifest.webmanifest',
