@@ -480,7 +480,7 @@
 			</div>
 		</header>
 		<PullToRefresh on:refresh={handlePullRefresh}>
-			<slot />
+			{#if appReady}<slot />{/if}
 		</PullToRefresh>
 	</main>
 </div>

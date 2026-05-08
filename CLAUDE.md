@@ -223,6 +223,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-05-09-gate-content-behind-hydration.md` — Gate page content behind IDB hydration: wrap slot in {#if appReady} gate in +layout.svelte to prevent flash of empty-state UI on cold launch (complete 2026-05-09)
 - `docs/exec-plans/completed/2026-05-09-fix-myday-hydration-shift.md` — Fix My Day hydration layout shift: suppress fly/fade/scale transitions during IDB hydration via conditional duration:0 driven by new hydrated store (complete 2026-05-09)
 - `docs/exec-plans/completed/2026-05-08-self-host-google-fonts.md` — Self-host Google Fonts: replace CDN URLs with local woff2 static assets, download script, service worker filter, updated FOUC tests (complete 2026-05-09)
 - `docs/exec-plans/completed/2026-05-08-dynamic-font-loading.md` — Dynamic single-font loading: replace all-fonts Google Fonts stylesheet with per-user font injection in FOUC inline script, 3 sync tests (complete 2026-05-08)
