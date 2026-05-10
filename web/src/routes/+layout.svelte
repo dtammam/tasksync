@@ -724,6 +724,7 @@
 	}
 
 	.nav-toggle {
+		display: none;
 		background: var(--surface-1);
 		border: 1px solid var(--border-1);
 		color: var(--app-text);
