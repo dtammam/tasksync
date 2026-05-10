@@ -746,7 +746,7 @@
 				<div class="app-title">tasksync</div>
 			</div>
 
-			<div class="section-label">Today</div>
+			<div class="section-label">Lists</div>
 			<label class="list-sort">
 				Sort lists
 				<select bind:value={listSortMode} aria-label="Sort lists">

@@ -223,6 +223,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-05-10-rename-today-to-lists.md` — Rename sidebar top-zone section label from "Today" to "Lists" in Sidebar.svelte (line 749), single-string copy change bundled on feat/remove-sidebar-pin branch (complete 2026-05-10)
 - `docs/exec-plans/completed/2026-05-09-sidebar-fixed-zones.md` — Sidebar fixed zones on mobile: three-zone flexbox layout (frozen top, scrollable middle, frozen bottom) in Sidebar.svelte with display:contents desktop passthrough, E2E test (complete 2026-05-09)
 - `docs/exec-plans/completed/2026-05-09-gate-content-behind-hydration.md` — Gate page content behind IDB hydration: wrap slot in {#if appReady} gate in +layout.svelte to prevent flash of empty-state UI on cold launch (complete 2026-05-09)
 - `docs/exec-plans/completed/2026-05-09-fix-myday-hydration-shift.md` — Fix My Day hydration layout shift: suppress fly/fade/scale transitions during IDB hydration via conditional duration:0 driven by new hydrated store (complete 2026-05-09)
