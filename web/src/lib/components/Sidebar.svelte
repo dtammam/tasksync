@@ -19,8 +19,6 @@
 	import MemberList from '$lib/components/settings/MemberList.svelte';
 	import ColorSwatchPicker from '$lib/components/ColorSwatchPicker.svelte';
 
-	export let navPinned = false;
-
 	const dispatch = createEventDispatcher();
 
 	let newListName = '';
@@ -293,10 +291,6 @@
 	const manualOrderValue = (index: number): string => `m-${String(index).padStart(4, '0')}`;
 
 	$: adminMode = $auth.status === 'authenticated' && $auth.user?.role === 'admin';
-
-	const togglePin = () => {
-		dispatch('togglePin', { pinned: !navPinned });
-	};
 
 	const createList = async () => {
 		if (!adminMode) return;
@@ -750,19 +744,9 @@
 		<div class="sidebar-zone-top">
 			<div class="title-row">
 				<div class="app-title">tasksync</div>
-				<button
-					class={`pin ${navPinned ? 'active' : ''}`}
-					type="button"
-					data-testid="nav-pin"
-					aria-pressed={navPinned}
-					on:click={togglePin}
-					title={navPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
-				>
-					{navPinned ? 'Unpin' : 'Pin'}
-				</button>
 			</div>
 
-			<div class="section-label">Today</div>
+			<div class="section-label">Lists</div>
 			<label class="list-sort">
 				Sort lists
 				<select bind:value={listSortMode} aria-label="Sort lists">
@@ -1452,10 +1436,6 @@
 	}
 
 	.title-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
 		margin-bottom: 4px;
 	}
 
@@ -1474,22 +1454,6 @@
 			'Helvetica Neue',
 			Arial,
 			sans-serif;
-	}
-
-	.pin {
-		background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
-		border: 1px solid var(--border-1);
-		color: #cbd5e1;
-		border-radius: 999px;
-		padding: 4px 10px;
-		font-size: 11px;
-		cursor: pointer;
-	}
-
-	.pin.active {
-		border-color: #16a34a;
-		background: #0b3a2a;
-		color: #d1fae5;
 	}
 
 	.section-label {

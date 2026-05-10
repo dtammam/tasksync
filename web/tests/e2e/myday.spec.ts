@@ -1002,33 +1002,6 @@ test.describe('Navigation', () => {
 			.toBe('0px');
 	});
 
-	test('keeps mobile sidebar open when pinned', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 });
-		const drawer = page.getByTestId('sidebar-drawer');
-		await expect(drawer).not.toHaveClass(/open/);
-
-		await page.getByRole('button', { name: 'Toggle navigation' }).click();
-		await expect(drawer).toHaveClass(/open/);
-
-		const navPin = page.getByTestId('nav-pin');
-		await navPin.scrollIntoViewIfNeeded();
-		await navPin.click();
-		await page.getByRole('link', { name: /Goal Management/ }).click();
-		await expect(page).toHaveURL(/\/list\/goal-management/);
-		await expect(drawer).toHaveClass(/open/);
-
-		await page.reload();
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-		await expect(drawer).toHaveClass(/open/);
-
-		const navPinAfterReload = page.getByTestId('nav-pin');
-		await navPinAfterReload.scrollIntoViewIfNeeded();
-		await navPinAfterReload.click();
-		await page.getByRole('link', { name: /My Day/ }).click();
-		await expect(page).toHaveURL('/');
-		await expect(drawer).not.toHaveClass(/open/);
-	});
-
 	test('shows planned-empty state when no tasks exist', async ({ page }) => {
 		await expect(page.getByTestId('planned-empty')).toBeVisible();
 		await expect(page.getByTestId('bliss-state')).not.toBeVisible();

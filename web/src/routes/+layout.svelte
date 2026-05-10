@@ -26,9 +26,7 @@
 	import { installKeyboardOffsetTracker } from '$lib/utils/keyboardOffset';
 	import { copyToClipboard } from '$lib/utils/shareText';
 
-	const NAV_PIN_KEY = 'tasksync:nav-pinned';
 	let navOpen = false;
-	let navPinned = false;
 	let settingsDialogOpen = false;
 	let appReady = false;
 	let syncInFlight: Promise<void> | null = null;
@@ -38,16 +36,11 @@
 	let lastFollowerReplayTs = 0;
 	let lastFollowerHydrateAt = 0;
 	const toggleNav = () => {
-		if (navPinned && navOpen) {
-			savePinned(false);
-			navOpen = false;
-			return;
-		}
 		navOpen = !navOpen;
 	};
 	const closeNav = () => {
 		if (settingsDialogOpen) return;
-		if (!navPinned) navOpen = false;
+		navOpen = false;
 	};
 
 	const handleSettingsOpenChange = (event: CustomEvent<{ open: boolean }>) => {
@@ -57,20 +50,8 @@
 		}
 	};
 
-	const savePinned = (pinned: boolean) => {
-		navPinned = pinned;
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem(NAV_PIN_KEY, pinned ? '1' : '0');
-		}
-		if (pinned) {
-			navOpen = true;
-		}
-	};
-
 	afterNavigate(() => {
-		if (!navPinned) {
-			navOpen = false;
-		}
+		navOpen = false;
 	});
 
 	const runSync = async () => {
@@ -269,10 +250,6 @@
 			}
 		});
 		syncStatusUnsub = syncStatus.subscribe(() => publishSyncStatus());
-		if (typeof localStorage !== 'undefined') {
-			navPinned = localStorage.getItem(NAV_PIN_KEY) === '1';
-			navOpen = navPinned;
-		}
 		await auth.hydrate();
 		syncCoordinator.setAuthenticated(auth.isAuthenticated());
 		await hydrateScopedStores();
@@ -403,19 +380,17 @@
 </svelte:head>
 
 <div
-	class={`app-shell ${navPinned && navOpen ? 'nav-split' : ''} ${settingsDialogOpen ? 'settings-open' : ''} ${navOpen && !navPinned ? 'nav-drawer-open' : ''}`}
+	class={`app-shell ${settingsDialogOpen ? 'settings-open' : ''}`}
 	data-testid="app-shell"
 	data-ready={appReady ? 'true' : 'false'}
 	data-settings-open={settingsDialogOpen ? 'true' : 'false'}
 >
 	<div class={`sidebar-drawer ${navOpen ? 'open' : ''} ${settingsDialogOpen ? 'settings-open' : ''}`} data-testid="sidebar-drawer">
 		<Sidebar
-			navPinned={navPinned}
-			on:togglePin={(e) => savePinned(e.detail.pinned)}
 			on:settingsOpenChange={handleSettingsOpenChange}
 		/>
 	</div>
-	{#if navOpen && !navPinned}
+	{#if navOpen}
 		<button class="drawer-backdrop" type="button" aria-label="Close navigation" on:click={closeNav}></button>
 	{/if}
 	{#if remoteTaskToast}
@@ -871,13 +846,10 @@
 			pointer-events: none;
 		}
 		.sidebar-drawer.open { transform: translateX(0); pointer-events: auto; }
-		.app-shell.nav-split { --sidebar-offset: min(208px, 58vw); grid-template-columns: min(208px, 58vw) 1fr; }
-		.app-shell.nav-split .sidebar-drawer { position: sticky; inset: auto; width: 100%; transform: none; transition: none; box-shadow: none; pointer-events: auto; }
-		.app-shell.nav-split main { padding: 16px 12px 24px; }
-		:global(.app-shell.nav-drawer-open .mobile-add) {
+		.sidebar-drawer.open ~ main :global(.mobile-add) {
 			display: none;
 		}
-		:global(.app-shell.nav-drawer-open .suggestions-toggle) {
+		.sidebar-drawer.open ~ main :global(.suggestions-toggle) {
 			display: none;
 		}
 		.app-shell.settings-open { --sidebar-offset: 0px; grid-template-columns: 1fr; }
