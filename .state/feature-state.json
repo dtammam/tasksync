@@ -1,28 +1,41 @@
 {
-  "feature_id": "sidebar-zones-desktop-myday-fix",
-  "feature_name": "Sidebar: move My Day to scrollable zone and apply three-zone layout on desktop",
-  "stage": "implementation",
-  "created_at": "2026-05-08",
-  "updated_at": "2026-05-08",
+  "feature_id": "hide-hamburger-on-desktop",
+  "feature_name": "Hide hamburger menu when sidebar is visible on desktop",
+  "stage": "done",
+  "created_at": "2026-05-10",
+  "updated_at": "2026-05-10",
   "tasks": [
     {
       "id": "T1",
-      "title": "Move My Day to scrollable zone and apply three-zone layout universally",
-      "description": "Two fixes in Sidebar.svelte: (1) Remove My Day from sidebar-zone-top and render all sidebarLists items in sidebar-zone-lists without filtering. (2) Move the three-zone flexbox layout from the mobile media query into base styles so it applies at all screen sizes.",
-      "files": ["web/src/lib/components/Sidebar.svelte"],
-      "done_when": "My Day appears in the scrollable middle zone on both mobile and desktop. The frozen top zone contains only the title row, section label, and sort controls. The three-zone flexbox layout is active at all viewport widths. All quality gates pass: lint, check, test, test:e2e:smoke.",
-      "status": "built"
+      "title": "Hide .nav-toggle on desktop via CSS + add E2E smoke coverage",
+      "description": "Add `display: none;` as the first declaration in the base `.nav-toggle` rule in `web/src/routes/+layout.svelte` (around line 726). The existing `@media (max-width: 900px)` block at ~line 867 already restores `display: inline-flex` for mobile, so no second edit is needed. Then add a new E2E spec at `web/tests/e2e/hamburger-desktop.spec.ts` tagged `@smoke` with two cases: (1) desktop viewport 1280x800 asserts `button[aria-label=\"Toggle navigation\"]` is not visible; (2) mobile viewport 390x844 asserts the button is visible, clicking it opens the sidebar drawer.",
+      "files": [
+        "web/src/routes/+layout.svelte",
+        "web/tests/e2e/hamburger-desktop.spec.ts"
+      ],
+      "done_when": "(a) `.nav-toggle` base rule contains `display: none;` and the markup at lines 411-413 is unchanged. (b) `web/tests/e2e/hamburger-desktop.spec.ts` exists with both viewport cases, tagged `@smoke`. (c) `cd web && npm run lint`, `cd web && npm run check`, `cd web && npm run test`, and `cd web && npm run test:e2e:smoke` all pass locally. (d) Diff is +1 line in `+layout.svelte` plus the new test file; no other files touched.",
+      "status": "done"
     }
   ],
-  "completed_tasks": [],
+  "completed_tasks": ["T1"],
   "artifacts": {
-    "requirements": null,
-    "design": null,
-    "exec_plan": null
+    "requirements": "docs/exec-plans/completed/2026-05-10-hide-hamburger-on-desktop.md",
+    "design": "docs/exec-plans/completed/2026-05-10-hide-hamburger-on-desktop.md",
+    "exec_plan": "docs/exec-plans/completed/2026-05-10-hide-hamburger-on-desktop.md"
   },
   "history": [
-    { "timestamp": "2026-05-08 22:00", "stage": "bootstrap", "note": "Patch task initialized for sidebar zone fixes" },
-    { "timestamp": "2026-05-08 22:00", "stage": "implementation", "note": "Routed T1 to SDE: My Day zone fix + desktop three-zone layout" },
-    { "timestamp": "2026-05-08 22:16", "stage": "implementation", "note": "T1 built: moved My Day from sidebar-zone-top into sidebar-zone-lists alongside all other lists; applied three-zone flexbox layout to base styles (not just mobile media query); .sidebar now overflow:hidden, .sidebar-main has height:100%, zones get flex layout universally. All quality gates pass." }
+    { "timestamp": "2026-05-10 00:00", "stage": "bootstrap", "note": "Feature initiated in worktree /home/coder/projects/tasksync-hamburger on branch feat/hide-hamburger-on-desktop. Goal: hide hamburger button when the sidebar is permanently visible (desktop), reclaim its space so the TaskSync logo shifts left. Mobile/narrow viewport unchanged. Polish-only scope; no header/sidebar-toggle refactor." },
+    { "timestamp": "2026-05-10 00:01", "stage": "discovery", "note": "Routed to PM. Three decisions are locked: (1) hide trigger = sidebar visibility (equivalent to desktop breakpoint), (2) reclaim space via {#if} or display:none, not visibility:hidden, (3) mobile/narrow viewport keeps hamburger. PM must not re-litigate these." },
+    { "timestamp": "2026-05-10 00:02", "stage": "discovery", "note": "PM discovery complete. Hamburger located in web/src/routes/+layout.svelte line 411 (button.nav-toggle). Sidebar-visibility signal is the existing @media (max-width: 900px) CSS breakpoint — no new store needed. Exec plan written to docs/exec-plans/active/2026-05-10-hide-hamburger-on-desktop.md." },
+    { "timestamp": "2026-05-10 00:03", "stage": "design", "note": "Routed to PE. Choice deferred from PM: CSS-only display:none at desktop breakpoint vs Svelte {#if} with matchMedia. Strong bias toward CSS-only (smaller diff, no JS, no SSR/hydration edge cases). PE to append Design section to existing exec plan." },
+    { "timestamp": "2026-05-10 00:04", "stage": "design", "note": "PE design complete. Chosen approach: CSS-only — add `display: none;` to the base `.nav-toggle` rule (~line 726). Existing @media (max-width: 900px) block at ~line 867 already restores `display: inline-flex`, so no second edit. Architecture impact: none. Expected diff: +1 line in +layout.svelte plus a new E2E spec." },
+    { "timestamp": "2026-05-10 00:05", "stage": "tasks", "note": "EM task breakdown: single combined task T1 — apply the +1 CSS line and add `web/tests/e2e/hamburger-desktop.spec.ts` with both viewport cases. Not over-decomposed because the CSS diff is trivial and the test directly validates it; splitting would just add ceremony." },
+    { "timestamp": "2026-05-10 00:06", "stage": "implementation", "note": "Routed T1 to SDE. Inbox written to .state/inbox/software-developer.md with exact CSS snippet from PE design, E2E test structure (Playwright @smoke, 1280x800 desktop hidden + 375x667 mobile visible), and quality gates to run. Reinforced: do not touch the existing @media (max-width: 900px) block — it already restores display: inline-flex via cascade." },
+    { "timestamp": "2026-05-10 00:07", "stage": "implementation", "note": "SDE shipped T1: +display:none; in .nav-toggle base rule of web/src/routes/+layout.svelte (line 727), plus new web/tests/e2e/hamburger-desktop.spec.ts with two @smoke cases (desktop 1280x800 hidden, mobile 390x844 visible+clickable). SDE ran lint/check/vitest/smoke locally — all pass. T1 marked done." },
+    { "timestamp": "2026-05-10 00:08", "stage": "verification", "note": "Routing to build-specialist for full quality gate sweep in worktree. Frontend-only change; cargo checks explicitly skipped." },
+    { "timestamp": "2026-05-10 00:09", "stage": "verification", "note": "Build-specialist results: lint pass, check pass, vitest 366/366 pass, Playwright @smoke 20/20 pass on Chromium (including the two new hamburger-desktop cases). All four frontend gates green. Cargo checks intentionally skipped — no Rust changes." },
+    { "timestamp": "2026-05-10 00:10", "stage": "acceptance", "note": "Routing to PM for acceptance validation against the four criteria in the exec plan. PM inspects diff conceptually (CSS cascade trace) and confirms pass/fail per criterion." },
+    { "timestamp": "2026-05-10 00:11", "stage": "acceptance", "note": "PM acceptance: 4/4 criteria PASS. Cascade trace confirmed (>900px: base rule display:none wins, no media-query override; ≤900px: media-query block restores display:inline-flex). Overall verdict: APPROVE." },
+    { "timestamp": "2026-05-10 00:12", "stage": "done", "note": "Exec plan archived to docs/exec-plans/completed/. CLAUDE.md completed-plans list updated. Ready to commit, push, and open PR." }
   ]
 }
