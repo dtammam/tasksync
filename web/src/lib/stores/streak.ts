@@ -1,10 +1,13 @@
 import { get, writable } from 'svelte/store';
-import { api } from '$lib/api/client';
 import { auth } from '$lib/stores/auth';
 import { uiPreferences } from '$lib/stores/preferences';
 import { playUrl } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
+import { streakQueue } from '$lib/data/streakQueue';
+import { streakDrain, setReconciler, setHydrator } from '$lib/sync/streakDrain';
+import * as streakOps from '$lib/service/streakOps';
 import type { StreakState } from '$shared/types/settings';
+import type { StreakOpResponse } from '$shared/types/streak';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -39,7 +42,7 @@ const defaultState = (): StreakState => ({
 	count: 0,
 	countedTaskIds: [],
 	lastResetDate: null,
-	dayCompleteDate: null
+	dayCompleteDate: null,
 });
 
 const stateStore = writable<StreakState>(defaultState());
@@ -50,7 +53,7 @@ const displayStore = writable<StreakDisplayState>({
 	breaking: false,
 	judgmentSrc: null,
 	isDayComplete: false,
-	isComboDropped: false
+	isComboDropped: false,
 });
 
 export const streakDisplay = { subscribe: displayStore.subscribe };
@@ -64,43 +67,19 @@ const DISPLAY_TIMEOUT_MS = 3000;
 
 const scheduleHide = () => {
 	if (fadeTimer) clearTimeout(fadeTimer);
-	fadeTimer = typeof window !== 'undefined'
-		? setTimeout(() => {
-				fadeTimer = null;
-				displayStore.update((d) => ({ ...d, visible: false, breaking: false, isDayComplete: false, isComboDropped: false }));
-			}, DISPLAY_TIMEOUT_MS)
-		: null;
-};
-
-// ---------------------------------------------------------------------------
-// Server sync (debounced)
-// ---------------------------------------------------------------------------
-
-let syncTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingSyncPayload: StreakState | null = null;
-
-const canSyncRemote = () => auth.get().status === 'authenticated' && !!auth.get().user;
-
-const pushStateRemote = async (state: StreakState) => {
-	if (!canSyncRemote()) return;
-	try {
-		await api.updateUiPreferences({ streakStateJson: JSON.stringify(state) });
-	} catch {
-		// best-effort; local state is source of truth
-	}
-};
-
-const queueStateSync = (state: StreakState) => {
-	if (typeof window === 'undefined') return;
-	pendingSyncPayload = state;
-	if (syncTimer) clearTimeout(syncTimer);
-	syncTimer = setTimeout(() => {
-		syncTimer = null;
-		const payload = pendingSyncPayload;
-		pendingSyncPayload = null;
-		if (!payload) return;
-		void pushStateRemote(payload);
-	}, 250);
+	fadeTimer =
+		typeof window !== 'undefined'
+			? setTimeout(() => {
+					fadeTimer = null;
+					displayStore.update((d) => ({
+						...d,
+						visible: false,
+						breaking: false,
+						isDayComplete: false,
+						isComboDropped: false,
+					}));
+				}, DISPLAY_TIMEOUT_MS)
+			: null;
 };
 
 // ---------------------------------------------------------------------------
@@ -131,17 +110,24 @@ const parseRawStreakState = (raw: Partial<StreakState>): StreakState => ({
 		? raw.countedTaskIds.filter((x): x is string => typeof x === 'string')
 		: [],
 	lastResetDate: typeof raw.lastResetDate === 'string' ? raw.lastResetDate : null,
-	dayCompleteDate: typeof raw.dayCompleteDate === 'string' ? raw.dayCompleteDate : null
+	dayCompleteDate: typeof raw.dayCompleteDate === 'string' ? raw.dayCompleteDate : null,
 });
 
-const readStreakStateFromPrefsBlob = (): StreakState | null => {
+const readStreakStateFromPrefsBlob = (): { state: StreakState; revision: number } | null => {
 	if (typeof localStorage === 'undefined') return null;
 	try {
 		const raw = localStorage.getItem(prefsKey());
 		if (raw) {
 			const blob = JSON.parse(raw) as Record<string, unknown>;
 			if (blob && typeof blob.streakState === 'object' && blob.streakState !== null) {
-				return parseRawStreakState(blob.streakState as Partial<StreakState>);
+				const state = parseRawStreakState(blob.streakState as Partial<StreakState>);
+				const revision =
+					typeof blob.streakRevision === 'number' &&
+					Number.isInteger(blob.streakRevision) &&
+					blob.streakRevision >= 0
+						? blob.streakRevision
+						: 0;
+				return { state, revision };
 			}
 		}
 		// Migration fallback: read old separate keys and remove them
@@ -153,16 +139,23 @@ const readStreakStateFromPrefsBlob = (): StreakState | null => {
 		localStorage.removeItem(oldDayCompleteKey);
 		if (!oldRaw) return null;
 		const oldParsed = JSON.parse(oldRaw) as Partial<StreakState>;
-		return {
+		const state = {
 			...parseRawStreakState(oldParsed),
-			dayCompleteDate: typeof oldDayCompleteRaw === 'string' && oldDayCompleteRaw.length > 0
-				? oldDayCompleteRaw
-				: null
+			dayCompleteDate:
+				typeof oldDayCompleteRaw === 'string' && oldDayCompleteRaw.length > 0
+					? oldDayCompleteRaw
+					: null,
 		};
-	} catch {
+		return { state, revision: 0 };
+	} catch (err) {
+		console.warn('[streak] failed to read legacy streakState from localStorage', err);
 		return null;
 	}
 };
+
+// Module-level monotonic revision cursor. Persisted alongside streak state so
+// the client can ignore stale server responses after a page reload.
+let lastSeenRevision = 0;
 
 const writeStreakStateToPrefsBlob = (state: StreakState) => {
 	if (typeof localStorage === 'undefined') return;
@@ -171,12 +164,17 @@ const writeStreakStateToPrefsBlob = (state: StreakState) => {
 		const existing = localStorage.getItem(key);
 		let blob: Record<string, unknown> = {};
 		if (existing) {
-			try { blob = JSON.parse(existing) as Record<string, unknown>; } catch { /* start fresh */ }
+			try {
+				blob = JSON.parse(existing) as Record<string, unknown>;
+			} catch {
+				/* start fresh */
+			}
 		}
 		blob.streakState = state;
+		blob.streakRevision = lastSeenRevision;
 		localStorage.setItem(key, JSON.stringify(blob));
-	} catch {
-		// storage quota exceeded — ignore
+	} catch (err) {
+		console.warn('[streak] failed to write streakState to localStorage (quota exceeded?)', err);
 	}
 };
 
@@ -184,14 +182,12 @@ const writeStreakStateToPrefsBlob = (state: StreakState) => {
 // Day-complete — once-per-day tracking (reads/writes stateStore in memory)
 // ---------------------------------------------------------------------------
 
-const hasFiredDayCompleteToday = (): boolean =>
-	get(stateStore).dayCompleteDate === todayIso();
+const hasFiredDayCompleteToday = (): boolean => get(stateStore).dayCompleteDate === todayIso();
 
 const markDayCompleteFired = (): void => {
 	stateStore.update((current) => {
 		const next: StreakState = { ...current, dayCompleteDate: todayIso() };
 		writeStreakStateToPrefsBlob(next);
-		queueStateSync(next);
 		return next;
 	});
 };
@@ -293,16 +289,17 @@ const loadManifest = async (theme: string): Promise<ThemeManifest> => {
 	try {
 		const res = await fetch(`/streak/${theme}/manifest.json`, { cache: 'no-store' });
 		if (!res.ok) throw new Error('manifest not found');
-		const data = await res.json() as ThemeManifest;
+		const data = (await res.json()) as ThemeManifest;
 		manifestCache[theme] = data;
 		return data;
-	} catch {
+	} catch (err) {
+		console.warn(`[streak] failed to fetch theme manifest for "${theme}", using fallback`, err);
 		// Fallback: empty lists, best-guess streak word path
 		const fallback: ThemeManifest = {
 			streakWord: `/streak/${theme}/streak/streak-word.png`,
 			announcer: [],
 			judgment: [],
-			drop: []
+			drop: [],
 		};
 		manifestCache[theme] = fallback;
 		return fallback;
@@ -337,6 +334,60 @@ export const streakWordUrl = { subscribe: streakWordUrlStore.subscribe };
 export const streakDigitsPaths = { subscribe: digitsPathStore.subscribe };
 
 // ---------------------------------------------------------------------------
+// Server-canonical reconciler — silent swap (no animation, no sound)
+// ---------------------------------------------------------------------------
+
+const applyServerCanonical = (canonical: StreakOpResponse): void => {
+	// Wire-format validation per project standard
+	if (!Number.isInteger(canonical.revision) || canonical.revision < 0) {
+		console.warn('[streak] dropping canonical with invalid revision', canonical);
+		return;
+	}
+	if (!Number.isInteger(canonical.count) || canonical.count < 0) {
+		console.warn('[streak] dropping canonical with invalid count', canonical);
+		return;
+	}
+	// Validate date strings: null is OK, otherwise must look like YYYY-MM-DD
+	const isIsoDateOrNull = (v: unknown): v is string | null =>
+		v === null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
+	if (!isIsoDateOrNull(canonical.lastResetDate)) {
+		console.warn('[streak] dropping canonical with invalid lastResetDate', canonical);
+		return;
+	}
+	if (!isIsoDateOrNull(canonical.dayCompleteDate)) {
+		console.warn('[streak] dropping canonical with invalid dayCompleteDate', canonical);
+		return;
+	}
+
+	// Revision gate: ignore stale or equal revisions silently
+	if (canonical.revision <= lastSeenRevision) return;
+	lastSeenRevision = canonical.revision;
+
+	stateStore.update((current) => {
+		const next: StreakState = {
+			count: canonical.count,
+			countedTaskIds: current.countedTaskIds, // local short-circuit set is owned by client
+			lastResetDate: canonical.lastResetDate,
+			dayCompleteDate: canonical.dayCompleteDate,
+		};
+		writeStreakStateToPrefsBlob(next); // also persists lastSeenRevision
+		return next;
+	});
+
+	// Reposition next-announcer threshold so we do not re-fire on a swap
+	if (canonical.count > 0) {
+		nextAnnouncerAt = canonical.count + randomInterval();
+	} else {
+		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
+	}
+
+	// Per design: silent swap. Do NOT touch displayStore.pulse / visible /
+	// judgmentSrc / breaking / isDayComplete / isComboDropped. The component
+	// re-renders the count number from $streakState reactively; the overlay
+	// (if visible) fades on its own timer.
+};
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -348,24 +399,31 @@ export const streak = {
 	 * returns false.
 	 */
 	increment(taskId: string): boolean {
+		const now = Date.now();
+		const dateIso = todayIso();
 		const prefs = uiPreferences.get();
 		if (!prefs.streakSettings.enabled) return false;
 
 		let newCount = 0;
+		let alreadyCounted = false;
 		stateStore.update((current) => {
-			if (current.countedTaskIds.includes(taskId)) return current; // already counted
+			if (current.countedTaskIds.includes(taskId)) {
+				alreadyCounted = true;
+				return current; // already counted
+			}
 			newCount = current.count + 1;
 			const next: StreakState = {
 				...current,
 				count: newCount,
 				countedTaskIds: [...current.countedTaskIds, taskId],
-				lastResetDate: todayIso()
+				lastResetDate: dateIso,
 			};
 			writeStreakStateToPrefsBlob(next);
-			queueStateSync(next);
 			return next;
 		});
 
+		// Special case 1: already counted — no enqueue, no drain, no display
+		if (alreadyCounted) return false;
 		if (newCount === 0) return false;
 
 		// Pick a fresh judgment image on every completion (not just when overlay first appears)
@@ -377,7 +435,7 @@ export const streak = {
 			breaking: false,
 			judgmentSrc,
 			isDayComplete: false,
-			isComboDropped: false
+			isComboDropped: false,
 		}));
 		scheduleHide();
 
@@ -385,21 +443,32 @@ export const streak = {
 		if (willAnnounce) {
 			playAnnouncer(prefs.streakSettings.theme);
 		}
+
+		const op = streakOps.buildIncrementOp(taskId, dateIso, now);
+		void streakQueue
+			.enqueue(op)
+			.catch((err) => console.error('[streak] enqueue failed', op.opKey, err));
+		void streakDrain.drain().catch((err) => console.error('[streak] drain failed', err));
+
 		return willAnnounce;
 	},
 
 	/**
 	 * Call when a task is un-completed (done → pending). Removes the task from
 	 * the counted set so a re-completion will count. Does NOT change the streak count.
+	 *
+	 * No op is enqueued: there is no "undo" op type on the server. The next
+	 * streak.increment(taskId) call will enqueue an op with the same opKey
+	 * (inc:<taskId>:<date>); server-side dedup will then correctly handle whether
+	 * the task was already counted for today.
 	 */
 	undoCompletion(taskId: string) {
 		stateStore.update((current) => {
 			const next: StreakState = {
 				...current,
-				countedTaskIds: current.countedTaskIds.filter((id) => id !== taskId)
+				countedTaskIds: current.countedTaskIds.filter((id) => id !== taskId),
 			};
 			writeStreakStateToPrefsBlob(next);
-			queueStateSync(next);
 			return next;
 		});
 	},
@@ -411,13 +480,18 @@ export const streak = {
 	 * theme's missed/ folder if available; no image if that folder is empty.
 	 */
 	break() {
+		const now = Date.now();
 		const current = get(stateStore);
 		const hadCount = current.count > 0;
 		// Preserve dayCompleteDate — a combo break does not reset the day-complete guard
-		const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: todayIso(), dayCompleteDate: current.dayCompleteDate ?? null };
+		const next: StreakState = {
+			count: 0,
+			countedTaskIds: [],
+			lastResetDate: todayIso(),
+			dayCompleteDate: current.dayCompleteDate ?? null,
+		};
 		stateStore.set(next);
 		writeStreakStateToPrefsBlob(next);
-		queueStateSync(next);
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 
 		if (hadCount) {
@@ -435,7 +509,15 @@ export const streak = {
 			// stays on screen with the break animation (DDR style: count freezes, then clears).
 			// This also ensures something is visible even when no missed image is configured.
 			const judgmentSrc = getRandomMissedImage(theme);
-			displayStore.update((d) => ({ ...d, count: current.count, visible: true, breaking: true, isDayComplete: false, isComboDropped: true, judgmentSrc }));
+			displayStore.update((d) => ({
+				...d,
+				count: current.count,
+				visible: true,
+				breaking: true,
+				isDayComplete: false,
+				isComboDropped: true,
+				judgmentSrc,
+			}));
 
 			// Remove the red CSS class after a short flash, but keep the overlay visible.
 			if (typeof window !== 'undefined') {
@@ -447,18 +529,44 @@ export const streak = {
 			// Hide after the same duration as a normal combo increment.
 			scheduleHide();
 		}
+
+		// TODO(streak-cause): pass the actual break cause from each caller instead of 'manual'
+		const op = streakOps.buildBreakOp('manual', now);
+		void streakQueue
+			.enqueue(op)
+			.catch((err) => console.error('[streak] enqueue failed', op.opKey, err));
+		void streakDrain.drain().catch((err) => console.error('[streak] drain failed', err));
 	},
 
 	/** Reset manually (from settings). Equivalent to break but without animation. */
 	reset() {
-		const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: todayIso(), dayCompleteDate: null };
+		const now = Date.now();
+		const next: StreakState = {
+			count: 0,
+			countedTaskIds: [],
+			lastResetDate: todayIso(),
+			dayCompleteDate: null,
+		};
 		stateStore.set(next);
 		writeStreakStateToPrefsBlob(next);
-		queueStateSync(next);
 		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 		deferredDailyReset = false;
 		lastMissedCheckDate = null;
-		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, isDayComplete: false, isComboDropped: false, judgmentSrc: null }));
+		displayStore.update((d) => ({
+			...d,
+			count: 0,
+			visible: false,
+			breaking: false,
+			isDayComplete: false,
+			isComboDropped: false,
+			judgmentSrc: null,
+		}));
+
+		const op = streakOps.buildResetOp(now);
+		void streakQueue
+			.enqueue(op)
+			.catch((err) => console.error('[streak] enqueue failed', op.opKey, err));
+		void streakDrain.drain().catch((err) => console.error('[streak] drain failed', err));
 	},
 
 	/**
@@ -485,14 +593,22 @@ export const streak = {
 			deferredDailyReset = false;
 			lastMissedCheckDate = today;
 			if (hasMissed && current.count > 0) {
-				// New day + missed tasks → animated break
+				// New day + missed tasks → animated break (streak.break() enqueues a break op)
 				streak.break();
 			} else {
-				// New day, no missed tasks → silent reset; preserve dayCompleteDate guard
-				const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: today, dayCompleteDate: current.dayCompleteDate ?? null };
+				// New day, no missed tasks → silent local state-cleanup; preserve dayCompleteDate guard.
+				// Do NOT enqueue a reset op: the server's daily reset is its own decision based on
+				// last_reset_date being older than today. The next inc:<taskId>:<today> op will arrive,
+				// the server will apply its own reset rule, and the canonical state will flow back via
+				// applyServerCanonical on the next drain.
+				const next: StreakState = {
+					count: 0,
+					countedTaskIds: [],
+					lastResetDate: today,
+					dayCompleteDate: current.dayCompleteDate ?? null,
+				};
 				stateStore.set(next);
 				writeStreakStateToPrefsBlob(next);
-				queueStateSync(next);
 				nextAnnouncerAt = FIRST_ANNOUNCER_AT;
 				displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
 			}
@@ -519,12 +635,19 @@ export const streak = {
 	hydrateFromLocal() {
 		const local = readStreakStateFromPrefsBlob();
 		if (!local) return;
-		const checked = applyResetRuleIfNeeded(local);
+
+		// Restore the persisted revision so we can correctly gate subsequent server responses
+		if (local.revision > lastSeenRevision) {
+			lastSeenRevision = local.revision;
+		}
+
+		const checked = applyResetRuleIfNeeded(local.state);
 		stateStore.set(checked);
-		if (checked.count !== local.count) {
-			// Reset fired — persist updated state
+		if (checked.count !== local.state.count) {
+			// Reset fired — persist updated state (lastSeenRevision unchanged)
 			writeStreakStateToPrefsBlob(checked);
-			queueStateSync(checked);
+			// Do NOT enqueue a reset op: the local hydrate is read-only from the server's
+			// perspective. The server's own daily reset rule fires on the next inc op.
 		}
 		// Position the next announcer trigger past the already-achieved count
 		// so we don't fire immediately on load.
@@ -537,23 +660,34 @@ export const streak = {
 
 	/**
 	 * Hydrate from server response. Called after preferences are fetched.
-	 * Server value wins if it differs from local (cross-device sync).
+	 * Funnels through applyServerCanonical for revision-gated silent swap.
+	 * Server value wins if the revision is strictly higher than lastSeenRevision.
 	 */
-	hydrateFromServer(streakStateJson: string | undefined | null) {
-		if (!streakStateJson) return;
+	hydrateFromServer(streakStateJson: string | undefined | null, streakRevision?: number) {
+		if (!streakStateJson) {
+			if (streakRevision !== undefined && streakRevision > 0) {
+				console.warn('[streak] server sent a revision but no streakStateJson', streakRevision);
+			}
+			return;
+		}
 		try {
 			const parsed = JSON.parse(streakStateJson) as Partial<StreakState>;
 			const remote: StreakState = parseRawStreakState(parsed);
+			// Run the daily-reset deferral check before handing to the reconciler
 			const checked = applyResetRuleIfNeeded(remote);
-			stateStore.set(checked);
-			writeStreakStateToPrefsBlob(checked);
-			if (checked.count > 0) {
-				nextAnnouncerAt = checked.count + randomInterval();
-			} else {
-				nextAnnouncerAt = FIRST_ANNOUNCER_AT;
-			}
-		} catch {
-			// malformed — keep local state
+			// Synthesize a StreakOpResponse-shaped object so that applyServerCanonical
+			// handles all revision-gating and wire-format validation in one place.
+			const canonical: StreakOpResponse = {
+				revision: streakRevision ?? 0,
+				count: checked.count,
+				lastResetDate: checked.lastResetDate ?? new Date().toISOString().slice(0, 10),
+				dayCompleteDate: checked.dayCompleteDate ?? null,
+				appliedThisCall: true,
+				dayCompleteFiredThisCall: false,
+			};
+			applyServerCanonical(canonical);
+		} catch (err) {
+			console.warn('[streak] malformed streakStateJson from server, keeping local state', err);
 		}
 	},
 
@@ -565,6 +699,8 @@ export const streak = {
 	 * Safe to call when streak is disabled — will return false immediately.
 	 */
 	triggerDayComplete(): boolean {
+		const now = Date.now();
+		const dateIso = todayIso();
 		const prefs = uiPreferences.get();
 		if (!prefs.streakSettings.enabled) return false;
 		if (hasFiredDayCompleteToday()) return false;
@@ -575,9 +711,7 @@ export const streak = {
 		const images = dayCompleteImageLists[theme] ?? [];
 		const sounds = dayCompleteSoundLists[theme] ?? [];
 
-		const imageSrc = images.length
-			? images[Math.floor(Math.random() * images.length)]
-			: null;
+		const imageSrc = images.length ? images[Math.floor(Math.random() * images.length)] : null;
 
 		// Override the current display with the day-complete state.
 		displayStore.update((d) => ({
@@ -586,13 +720,19 @@ export const streak = {
 			isDayComplete: true,
 			// Use day-complete image if available; keep the existing judgment image otherwise
 			// so a normal combo image is still shown when no day-complete imagery is configured.
-			judgmentSrc: imageSrc ?? d.judgmentSrc
+			judgmentSrc: imageSrc ?? d.judgmentSrc,
 		}));
 		scheduleHide();
 
 		if (soundSettings.get().enabled && sounds.length) {
 			void playUrl(sounds[Math.floor(Math.random() * sounds.length)], soundSettings.get().volume);
 		}
+
+		const op = streakOps.buildDayCompleteOp(dateIso, now);
+		void streakQueue
+			.enqueue(op)
+			.catch((err) => console.error('[streak] enqueue failed', op.opKey, err));
+		void streakDrain.drain().catch((err) => console.error('[streak] drain failed', err));
 
 		return true;
 	},
@@ -617,14 +757,26 @@ export const streak = {
 		digitsPathStore.update((rec) => ({ ...rec, [theme]: dp }));
 
 		// Preload images into browser cache so the first streak renders instantly.
-		const preload = (src: string) => { new Image().src = src; };
+		const preload = (src: string) => {
+			new Image().src = src;
+		};
 		for (let d = 0; d <= 9; d++) preload(`/streak/${theme}/${encodeSpaces(dp)}/${d}.png`);
 		if (wordUrl) preload(wordUrl);
 		for (const src of judgmentFileLists[theme]) preload(src);
 		for (const src of (manifest.missed ?? []).map(encodeSpaces)) preload(src);
 		for (const src of (manifest.dayCompleteImages ?? []).map(encodeSpaces)) preload(src);
-	}
+	},
 };
 
 // Re-export state for reactivity (read-only count)
 export const streakState = { subscribe: stateStore.subscribe };
+
+// ---------------------------------------------------------------------------
+// Module-init: wire reconciler + hydrator into streakDrain
+// ---------------------------------------------------------------------------
+
+setReconciler(applyServerCanonical);
+setHydrator(async () => {
+	const wire = await uiPreferences.hydrateFromServer();
+	if (wire) streak.hydrateFromServer(wire.streakStateJson, wire.streakRevision);
+});

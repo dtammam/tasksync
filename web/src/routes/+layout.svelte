@@ -18,6 +18,7 @@
 	import { auth } from '$lib/stores/auth';
 	import { markHydrated } from '$lib/stores/hydration';
 	import { pushPendingToServer, resetSyncCursor, syncFromServer } from '$lib/sync/sync';
+	import { streakDrain } from '$lib/sync/streakDrain';
 	import { syncStatus } from '$lib/sync/status';
 	import { createSyncCoordinator } from '$lib/sync/coordinator';
 	import type { SyncCoordinator } from '$lib/sync/coordinator';
@@ -110,8 +111,6 @@
 		return runSync();
 	};
 
-
-
 	const setCopyLabel = (label: string) => {
 		copyLabel = label;
 		if (copyResetTimer) {
@@ -145,7 +144,6 @@
 		setCopyLabel(ok ? 'Copied' : 'Copy failed');
 	};
 
-
 	const publishSyncStatus = () => {
 		if (!syncCoordinator || !syncLeader || !auth.isAuthenticated()) return;
 		syncCoordinator.publishStatus(get(syncStatus));
@@ -154,6 +152,7 @@
 	let retryTimer: ReturnType<typeof setTimeout> | null = null;
 	let prefsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	let visibilityListener: (() => void) | null = null;
+	let onlineListener: (() => void) | null = null;
 	let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 	let keyboardOffsetCleanup: (() => void) | null = null;
 	let copyLabel = 'Copy';
@@ -165,7 +164,7 @@
 		if (remoteTaskToastTimer) clearTimeout(remoteTaskToastTimer);
 		remoteTaskToast = {
 			count: newTasks.length,
-			titles: newTasks.slice(0, 2).map((t) => t.title)
+			titles: newTasks.slice(0, 2).map((t) => t.title),
 		};
 		remoteTaskToastTimer = setTimeout(() => {
 			remoteTaskToast = null;
@@ -193,7 +192,7 @@
 			lists.hydrateFromDb(),
 			tasks.hydrateFromDb(),
 			soundSettings.hydrateFromDb(),
-			uiPreferences.hydrateFromLocal()
+			uiPreferences.hydrateFromLocal(),
 		]);
 		streak.hydrateFromLocal();
 		// Load theme assets then check missed tasks — checkMissedTasksAndApplyDailyReset must run
@@ -247,7 +246,7 @@
 						void hydrateScopedStores();
 					}
 				}
-			}
+			},
 		});
 		syncStatusUnsub = syncStatus.subscribe(() => publishSyncStatus());
 		await auth.hydrate();
@@ -260,8 +259,9 @@
 		// Do not block first paint on best-effort remote preference/member refresh.
 		void (async () => {
 			await soundSettings.hydrateFromServer();
+			void streakDrain.drain().catch((err) => console.error('[streak] startup drain failed', err));
 			const wire = await uiPreferences.hydrateFromServer();
-			streak.hydrateFromServer(wire?.streakStateJson);
+			streak.hydrateFromServer(wire?.streakStateJson, wire?.streakRevision);
 			const serverPrefs = uiPreferences.get();
 			if (serverPrefs.streakSettings.enabled) {
 				void streak.loadThemeAssets(serverPrefs.streakSettings.theme).then(() => {
@@ -286,24 +286,36 @@
 		// Periodic full refresh every 5 minutes so a perpetually-open desktop PWA
 		// stays current even when visibilitychange never fires. Covers tasks (sync),
 		// preferences, and streak state.
-		prefsRefreshTimer = setInterval(() => {
-			if (!auth.isAuthenticated() || document.visibilityState !== 'visible') return;
-			requestSync('poll');
-			void (async () => {
-				const wire = await uiPreferences.hydrateFromServer();
-				streak.hydrateFromServer(wire?.streakStateJson);
-			})();
-		}, 5 * 60 * 1000);
+		prefsRefreshTimer = setInterval(
+			() => {
+				if (!auth.isAuthenticated() || document.visibilityState !== 'visible') return;
+				requestSync('poll');
+				void streakDrain.drain().catch((err) => console.error('[streak] poll drain failed', err));
+				void (async () => {
+					const wire = await uiPreferences.hydrateFromServer();
+					streak.hydrateFromServer(wire?.streakStateJson, wire?.streakRevision);
+				})();
+			},
+			5 * 60 * 1000
+		);
 		visibilityListener = () => {
 			if (document.visibilityState === 'visible' && auth.isAuthenticated()) {
 				requestSync('focus');
+				void streakDrain
+					.drain()
+					.catch((err) => console.error('[streak] visibility drain failed', err));
 				void (async () => {
 					const wire = await uiPreferences.hydrateFromServer();
-					streak.hydrateFromServer(wire?.streakStateJson);
+					streak.hydrateFromServer(wire?.streakStateJson, wire?.streakRevision);
 				})();
 			}
 		};
 		document.addEventListener('visibilitychange', visibilityListener);
+		onlineListener = () => {
+			if (!auth.isAuthenticated()) return;
+			void streakDrain.drain().catch((err) => console.error('[streak] online drain failed', err));
+		};
+		window.addEventListener('online', onlineListener);
 	});
 
 	onDestroy(() => {
@@ -313,6 +325,9 @@
 		if (remoteTaskToastTimer) clearTimeout(remoteTaskToastTimer);
 		if (visibilityListener) {
 			document.removeEventListener('visibilitychange', visibilityListener);
+		}
+		if (onlineListener) {
+			window.removeEventListener('online', onlineListener);
 		}
 		if (syncStatusUnsub) syncStatusUnsub();
 		if (syncCoordinator) syncCoordinator.destroy();
@@ -330,7 +345,7 @@
 			void (async () => {
 				await soundSettings.hydrateFromServer();
 				const wire = await uiPreferences.hydrateFromServer();
-				streak.hydrateFromServer(wire?.streakStateJson);
+				streak.hydrateFromServer(wire?.streakStateJson, wire?.streakRevision);
 				const scopePrefs = uiPreferences.get();
 				if (scopePrefs.streakSettings.enabled) {
 					void streak.loadThemeAssets(scopePrefs.streakSettings.theme).then(() => {
@@ -375,7 +390,10 @@
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 	<meta name="apple-mobile-web-app-title" content="tasksync" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+	<meta
+		name="viewport"
+		content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+	/>
 	<title>tasksync</title>
 </svelte:head>
 
@@ -385,13 +403,15 @@
 	data-ready={appReady ? 'true' : 'false'}
 	data-settings-open={settingsDialogOpen ? 'true' : 'false'}
 >
-	<div class={`sidebar-drawer ${navOpen ? 'open' : ''} ${settingsDialogOpen ? 'settings-open' : ''}`} data-testid="sidebar-drawer">
-		<Sidebar
-			on:settingsOpenChange={handleSettingsOpenChange}
-		/>
+	<div
+		class={`sidebar-drawer ${navOpen ? 'open' : ''} ${settingsDialogOpen ? 'settings-open' : ''}`}
+		data-testid="sidebar-drawer"
+	>
+		<Sidebar on:settingsOpenChange={handleSettingsOpenChange} />
 	</div>
 	{#if navOpen}
-		<button class="drawer-backdrop" type="button" aria-label="Close navigation" on:click={closeNav}></button>
+		<button class="drawer-backdrop" type="button" aria-label="Close navigation" on:click={closeNav}
+		></button>
 	{/if}
 	{#if remoteTaskToast}
 		<div class="remote-task-toast" role="status" data-testid="remote-task-toast">
@@ -400,7 +420,12 @@
 					? `New task added: "${remoteTaskToast.titles[0]}"`
 					: `${remoteTaskToast.count} new tasks added by a team member`}
 			</span>
-			<button type="button" class="toast-dismiss" aria-label="Dismiss" on:click={dismissRemoteTaskToast}>×</button>
+			<button
+				type="button"
+				class="toast-dismiss"
+				aria-label="Dismiss"
+				on:click={dismissRemoteTaskToast}>×</button
+			>
 		</div>
 	{/if}
 	<StreakDisplay />
@@ -408,18 +433,20 @@
 	<main>
 		<header class="app-header">
 			<div class="brand">
-				<button class="nav-toggle" aria-label="Toggle navigation" on:click={toggleNav}>
-					☰
-				</button>
-				<button class="logo-easter-egg" aria-label={$page.url.pathname === '/' ? 'Play sound' : 'Go to My Day'} on:click={() => {
-					if ($page.url.pathname === '/') {
-						playCompletion(soundSettings.get());
-					} else {
-						goto('/').then(() => {
-							document.querySelector('main')?.scrollTo(0, 0);
-						});
-					}
-				}}>
+				<button class="nav-toggle" aria-label="Toggle navigation" on:click={toggleNav}> ☰ </button>
+				<button
+					class="logo-easter-egg"
+					aria-label={$page.url.pathname === '/' ? 'Play sound' : 'Go to My Day'}
+					on:click={() => {
+						if ($page.url.pathname === '/') {
+							playCompletion(soundSettings.get());
+						} else {
+							goto('/').then(() => {
+								document.querySelector('main')?.scrollTo(0, 0);
+							});
+						}
+					}}
+				>
 					<img src={favicon} alt="logo" />
 				</button>
 				<span class="brand-name">tasksync</span>
@@ -522,46 +549,248 @@
 		--focus: #1d4ed8;
 	}
 
-	:global(html[data-ui-theme='shades-of-coffee']) { --app-bg:#e2d8cf; --app-bg-mobile:#e2d8cf; --app-text:#1a0c00; --app-muted:#604b39; --surface-1:#f5f2ef; --surface-2:#e2d8cf; --surface-3:#c29670; --surface-accent:#cfb3ff; --border-1:#c29670; --border-2:#604b39; }
-	:global(html[data-ui-theme='miami-beach']) { --app-bg:#d095ca; --app-bg-mobile:#d095ca; --app-text:#5e2a91; --app-muted:#1e9484; --surface-1:#f9deb8; --surface-2:#c5ece4; --surface-3:#24b2a0; --surface-accent:#5e2a91; --border-1:#24b2a0; --border-2:#1e9484; }
-	:global(html[data-ui-theme='simple-dark']) { --app-bg:#222222; --app-bg-mobile:#222222; --app-text:#d9e2ec; --app-muted:#edbe5e; --surface-1:#063446; --surface-2:#222222; --surface-3:#434343; --surface-accent:#14aeeb; --border-1:#434343; --border-2:#14aeeb; }
-	:global(html[data-ui-theme='matrix']) { --app-bg:#000000; --app-bg-mobile:#000000; --app-text:#39ff14; --app-muted:#00ff00; --surface-1:#001a00; --surface-2:#000000; --surface-3:#004400; --surface-accent:#00ff41; --border-1:#004400; --border-2:#00ff00; }
-	:global(html[data-ui-theme='black-gold']) { --app-bg:#141520; --app-bg-mobile:#141520; --app-text:#E8ECF0; --app-muted:#FFD700; --surface-1:#242733; --surface-2:#141520; --surface-3:#373B4A; --surface-accent:#FFD700; --border-1:#373B4A; --border-2:#8F7A20; }
-	:global(html[data-ui-theme='okabe-ito']) { --app-bg:#222222; --app-bg-mobile:#222222; --app-text:#e69f00; --app-muted:#56b4e9; --surface-1:#141520; --surface-2:#222222; --surface-3:#00304d; --surface-accent:#b88115; --border-1:#00304d; --border-2:#56b4e9; }
-	:global(html[data-ui-theme='theme-from-1970']) { --app-bg:#f2f2f2; --app-bg-mobile:#f2f2f2; --app-text:#4d2d19; --app-muted:#61591f; --surface-1:#f4ebe7; --surface-2:#f2f2f2; --surface-3:#dad18b; --surface-accent:#a92da3; --border-1:#dad18b; --border-2:#61591f; }
-	:global(html[data-ui-theme='shades-of-gray-light']) { --app-bg:hsl(0, 0%, 90%); --app-bg-mobile:hsl(0, 0%, 90%); --app-text:hsl(0, 0%, 20%); --app-muted:hsl(0, 0%, 35%); --surface-1:#fff; --surface-2:hsl(0, 0%, 90%); --surface-3:hsl(0, 0%, 80%); --surface-accent:#99ffff; --border-1:hsl(0, 0%, 80%); --border-2:hsl(0, 0%, 35%); }
-	:global(html[data-ui-theme='catppuccin-latte']) { --app-bg:#eff1f5; --app-bg-mobile:#eff1f5; --app-text:#4c4f69; --app-muted:#8839ef; --surface-1:#dce0e8; --surface-2:#eff1f5; --surface-3:#ccd0da; --surface-accent:#1e66f5; --border-1:#ccd0da; --border-2:#8839ef; }
-	:global(html[data-ui-theme='catppuccin-frappe']) { --app-bg:#303446; --app-bg-mobile:#303446; --app-text:#c6d0f5; --app-muted:#ca9ee6; --surface-1:#232634; --surface-2:#303446; --surface-3:#414559; --surface-accent:#8caaee; --border-1:#414559; --border-2:#ca9ee6; }
-	:global(html[data-ui-theme='catppuccin-macchiato']) { --app-bg:#24273a; --app-bg-mobile:#24273a; --app-text:#cad3f5; --app-muted:#c6a0f6; --surface-1:#181926; --surface-2:#24273a; --surface-3:#363a4f; --surface-accent:#8aadf4; --border-1:#363a4f; --border-2:#c6a0f6; }
-	:global(html[data-ui-theme='catppuccin-mocha']) { --app-bg:#1e1e2e; --app-bg-mobile:#1e1e2e; --app-text:#cdd6f4; --app-muted:#cba6f7; --surface-1:#11111b; --surface-2:#1e1e2e; --surface-3:#313244; --surface-accent:#89b4fa; --border-1:#313244; --border-2:#cba6f7; }
-	:global(html[data-ui-theme='you-need-a-dark-mode']) { --app-bg:#121212; --app-bg-mobile:#121212; --app-text:#D4D4D4; --app-muted:#00B3C4; --surface-1:#1E1E1E; --surface-2:#121212; --surface-3:#333333; --surface-accent:#00B3C4; --border-1:#333333; --border-2:#006A84; }
-	:global(html[data-ui-theme='butterfly']) { --app-bg:#12110F; --app-bg-mobile:#12110F; --app-text:#E5E7EB; --app-muted:#F35B16; --surface-1:#22201D; --surface-2:#12110F; --surface-3:#3D261C; --surface-accent:#1B8366; --border-1:#3D261C; --border-2:#F35B16; }
+	:global(html[data-ui-theme='shades-of-coffee']) {
+		--app-bg: #e2d8cf;
+		--app-bg-mobile: #e2d8cf;
+		--app-text: #1a0c00;
+		--app-muted: #604b39;
+		--surface-1: #f5f2ef;
+		--surface-2: #e2d8cf;
+		--surface-3: #c29670;
+		--surface-accent: #cfb3ff;
+		--border-1: #c29670;
+		--border-2: #604b39;
+	}
+	:global(html[data-ui-theme='miami-beach']) {
+		--app-bg: #d095ca;
+		--app-bg-mobile: #d095ca;
+		--app-text: #5e2a91;
+		--app-muted: #1e9484;
+		--surface-1: #f9deb8;
+		--surface-2: #c5ece4;
+		--surface-3: #24b2a0;
+		--surface-accent: #5e2a91;
+		--border-1: #24b2a0;
+		--border-2: #1e9484;
+	}
+	:global(html[data-ui-theme='simple-dark']) {
+		--app-bg: #222222;
+		--app-bg-mobile: #222222;
+		--app-text: #d9e2ec;
+		--app-muted: #edbe5e;
+		--surface-1: #063446;
+		--surface-2: #222222;
+		--surface-3: #434343;
+		--surface-accent: #14aeeb;
+		--border-1: #434343;
+		--border-2: #14aeeb;
+	}
+	:global(html[data-ui-theme='matrix']) {
+		--app-bg: #000000;
+		--app-bg-mobile: #000000;
+		--app-text: #39ff14;
+		--app-muted: #00ff00;
+		--surface-1: #001a00;
+		--surface-2: #000000;
+		--surface-3: #004400;
+		--surface-accent: #00ff41;
+		--border-1: #004400;
+		--border-2: #00ff00;
+	}
+	:global(html[data-ui-theme='black-gold']) {
+		--app-bg: #141520;
+		--app-bg-mobile: #141520;
+		--app-text: #e8ecf0;
+		--app-muted: #ffd700;
+		--surface-1: #242733;
+		--surface-2: #141520;
+		--surface-3: #373b4a;
+		--surface-accent: #ffd700;
+		--border-1: #373b4a;
+		--border-2: #8f7a20;
+	}
+	:global(html[data-ui-theme='okabe-ito']) {
+		--app-bg: #222222;
+		--app-bg-mobile: #222222;
+		--app-text: #e69f00;
+		--app-muted: #56b4e9;
+		--surface-1: #141520;
+		--surface-2: #222222;
+		--surface-3: #00304d;
+		--surface-accent: #b88115;
+		--border-1: #00304d;
+		--border-2: #56b4e9;
+	}
+	:global(html[data-ui-theme='theme-from-1970']) {
+		--app-bg: #f2f2f2;
+		--app-bg-mobile: #f2f2f2;
+		--app-text: #4d2d19;
+		--app-muted: #61591f;
+		--surface-1: #f4ebe7;
+		--surface-2: #f2f2f2;
+		--surface-3: #dad18b;
+		--surface-accent: #a92da3;
+		--border-1: #dad18b;
+		--border-2: #61591f;
+	}
+	:global(html[data-ui-theme='shades-of-gray-light']) {
+		--app-bg: hsl(0, 0%, 90%);
+		--app-bg-mobile: hsl(0, 0%, 90%);
+		--app-text: hsl(0, 0%, 20%);
+		--app-muted: hsl(0, 0%, 35%);
+		--surface-1: #fff;
+		--surface-2: hsl(0, 0%, 90%);
+		--surface-3: hsl(0, 0%, 80%);
+		--surface-accent: #99ffff;
+		--border-1: hsl(0, 0%, 80%);
+		--border-2: hsl(0, 0%, 35%);
+	}
+	:global(html[data-ui-theme='catppuccin-latte']) {
+		--app-bg: #eff1f5;
+		--app-bg-mobile: #eff1f5;
+		--app-text: #4c4f69;
+		--app-muted: #8839ef;
+		--surface-1: #dce0e8;
+		--surface-2: #eff1f5;
+		--surface-3: #ccd0da;
+		--surface-accent: #1e66f5;
+		--border-1: #ccd0da;
+		--border-2: #8839ef;
+	}
+	:global(html[data-ui-theme='catppuccin-frappe']) {
+		--app-bg: #303446;
+		--app-bg-mobile: #303446;
+		--app-text: #c6d0f5;
+		--app-muted: #ca9ee6;
+		--surface-1: #232634;
+		--surface-2: #303446;
+		--surface-3: #414559;
+		--surface-accent: #8caaee;
+		--border-1: #414559;
+		--border-2: #ca9ee6;
+	}
+	:global(html[data-ui-theme='catppuccin-macchiato']) {
+		--app-bg: #24273a;
+		--app-bg-mobile: #24273a;
+		--app-text: #cad3f5;
+		--app-muted: #c6a0f6;
+		--surface-1: #181926;
+		--surface-2: #24273a;
+		--surface-3: #363a4f;
+		--surface-accent: #8aadf4;
+		--border-1: #363a4f;
+		--border-2: #c6a0f6;
+	}
+	:global(html[data-ui-theme='catppuccin-mocha']) {
+		--app-bg: #1e1e2e;
+		--app-bg-mobile: #1e1e2e;
+		--app-text: #cdd6f4;
+		--app-muted: #cba6f7;
+		--surface-1: #11111b;
+		--surface-2: #1e1e2e;
+		--surface-3: #313244;
+		--surface-accent: #89b4fa;
+		--border-1: #313244;
+		--border-2: #cba6f7;
+	}
+	:global(html[data-ui-theme='you-need-a-dark-mode']) {
+		--app-bg: #121212;
+		--app-bg-mobile: #121212;
+		--app-text: #d4d4d4;
+		--app-muted: #00b3c4;
+		--surface-1: #1e1e1e;
+		--surface-2: #121212;
+		--surface-3: #333333;
+		--surface-accent: #00b3c4;
+		--border-1: #333333;
+		--border-2: #006a84;
+	}
+	:global(html[data-ui-theme='butterfly']) {
+		--app-bg: #12110f;
+		--app-bg-mobile: #12110f;
+		--app-text: #e5e7eb;
+		--app-muted: #f35b16;
+		--surface-1: #22201d;
+		--surface-2: #12110f;
+		--surface-3: #3d261c;
+		--surface-accent: #1b8366;
+		--border-1: #3d261c;
+		--border-2: #f35b16;
+	}
 
 	/* Font mappings — driven by data-ui-font on <html> set by preferences store */
-	:global(:root) { --ui-font: 'Sora', system-ui, sans-serif; }
-	:global(html[data-ui-font='sora'])                    { --ui-font: 'Sora', system-ui, sans-serif; }
-	:global(html[data-ui-font='sono'])                    { --ui-font: 'Sono', system-ui, sans-serif; }
-	:global(html[data-ui-font='inter'])                   { --ui-font: 'Inter', system-ui, sans-serif; }
-	:global(html[data-ui-font='inter-tight'])             { --ui-font: 'Inter Tight', system-ui, sans-serif; }
-	:global(html[data-ui-font='jetbrains-mono'])          { --ui-font: 'JetBrains Mono', monospace; }
-	:global(html[data-ui-font='atkinson-hyperlegible'])   { --ui-font: 'Atkinson Hyperlegible', system-ui, sans-serif; }
-	:global(html[data-ui-font='atkinson-hyperlegible-next']) { --ui-font: 'Atkinson Hyperlegible Next', system-ui, sans-serif; }
-	:global(html[data-ui-font='ibm-plex-sans'])           { --ui-font: 'IBM Plex Sans', system-ui, sans-serif; }
-	:global(html[data-ui-font='ibm-plex-mono'])           { --ui-font: 'IBM Plex Mono', monospace; }
-	:global(html[data-ui-font='ibm-plex-serif'])          { --ui-font: 'IBM Plex Serif', Georgia, serif; }
-	:global(html[data-ui-font='roboto'])                  { --ui-font: 'Roboto', system-ui, sans-serif; }
-	:global(html[data-ui-font='roboto-slab'])             { --ui-font: 'Roboto Slab', Georgia, serif; }
-	:global(html[data-ui-font='roboto-mono'])             { --ui-font: 'Roboto Mono', monospace; }
-	:global(html[data-ui-font='dm-mono'])                 { --ui-font: 'DM Mono', monospace; }
-	:global(html[data-ui-font='comfortaa'])               { --ui-font: 'Comfortaa', system-ui, sans-serif; }
-	:global(html[data-ui-font='poppins'])                 { --ui-font: 'Poppins', system-ui, sans-serif; }
-	:global(html[data-ui-font='victor-mono'])             { --ui-font: 'Victor Mono', monospace; }
-	:global(html[data-ui-font='pt-sans'])                 { --ui-font: 'PT Sans', system-ui, sans-serif; }
-	:global(html[data-ui-font='pt-serif'])                { --ui-font: 'PT Serif', Georgia, serif; }
-	:global(html[data-ui-font='pt-mono'])                 { --ui-font: 'PT Mono', monospace; }
-	:global(html[data-ui-font='georgia'])                 { --ui-font: Georgia, 'Times New Roman', serif; }
-	:global(html[data-ui-font='sf-pro'])                  { --ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
-	:global(html[data-ui-font='system'])                  { --ui-font: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+	:global(:root) {
+		--ui-font: 'Sora', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='sora']) {
+		--ui-font: 'Sora', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='sono']) {
+		--ui-font: 'Sono', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='inter']) {
+		--ui-font: 'Inter', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='inter-tight']) {
+		--ui-font: 'Inter Tight', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='jetbrains-mono']) {
+		--ui-font: 'JetBrains Mono', monospace;
+	}
+	:global(html[data-ui-font='atkinson-hyperlegible']) {
+		--ui-font: 'Atkinson Hyperlegible', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='atkinson-hyperlegible-next']) {
+		--ui-font: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='ibm-plex-sans']) {
+		--ui-font: 'IBM Plex Sans', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='ibm-plex-mono']) {
+		--ui-font: 'IBM Plex Mono', monospace;
+	}
+	:global(html[data-ui-font='ibm-plex-serif']) {
+		--ui-font: 'IBM Plex Serif', Georgia, serif;
+	}
+	:global(html[data-ui-font='roboto']) {
+		--ui-font: 'Roboto', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='roboto-slab']) {
+		--ui-font: 'Roboto Slab', Georgia, serif;
+	}
+	:global(html[data-ui-font='roboto-mono']) {
+		--ui-font: 'Roboto Mono', monospace;
+	}
+	:global(html[data-ui-font='dm-mono']) {
+		--ui-font: 'DM Mono', monospace;
+	}
+	:global(html[data-ui-font='comfortaa']) {
+		--ui-font: 'Comfortaa', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='poppins']) {
+		--ui-font: 'Poppins', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='victor-mono']) {
+		--ui-font: 'Victor Mono', monospace;
+	}
+	:global(html[data-ui-font='pt-sans']) {
+		--ui-font: 'PT Sans', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='pt-serif']) {
+		--ui-font: 'PT Serif', Georgia, serif;
+	}
+	:global(html[data-ui-font='pt-mono']) {
+		--ui-font: 'PT Mono', monospace;
+	}
+	:global(html[data-ui-font='georgia']) {
+		--ui-font: Georgia, 'Times New Roman', serif;
+	}
+	:global(html[data-ui-font='sf-pro']) {
+		--ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+	}
+	:global(html[data-ui-font='system']) {
+		--ui-font: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+	}
 
 	:global(body) {
 		margin: 0;
@@ -707,19 +936,24 @@
 		letter-spacing: 0.01em;
 	}
 
-	.brand img { width: 28px; height: 28px; }
-	.logo-easter-egg { background: none; border: none; padding: 0; cursor: pointer; transition: transform 0.15s ease; }
-	.logo-easter-egg:active { transform: scale(0.88); }
+	.brand img {
+		width: 28px;
+		height: 28px;
+	}
+	.logo-easter-egg {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		transition: transform 0.15s ease;
+	}
+	.logo-easter-egg:active {
+		transform: scale(0.88);
+	}
 
 	.brand-name {
 		font-family:
-			-apple-system,
-			BlinkMacSystemFont,
-			'SF Pro Text',
-			'Segoe UI',
-			Roboto,
-			'Helvetica Neue',
-			Arial,
+			-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
 			sans-serif;
 	}
 
@@ -834,8 +1068,13 @@
 	}
 
 	@media (max-width: 900px) {
-		:global(body) { background: var(--app-bg-mobile); }
-		.app-shell { --sidebar-offset: 0px; grid-template-columns: 1fr; }
+		:global(body) {
+			background: var(--app-bg-mobile);
+		}
+		.app-shell {
+			--sidebar-offset: 0px;
+			grid-template-columns: 1fr;
+		}
 		.sidebar-drawer {
 			position: fixed;
 			inset: 0 auto 0 0;
@@ -846,14 +1085,20 @@
 			z-index: 12;
 			pointer-events: none;
 		}
-		.sidebar-drawer.open { transform: translateX(0); pointer-events: auto; }
+		.sidebar-drawer.open {
+			transform: translateX(0);
+			pointer-events: auto;
+		}
 		.sidebar-drawer.open ~ main :global(.mobile-add) {
 			display: none;
 		}
 		.sidebar-drawer.open ~ main :global(.suggestions-toggle) {
 			display: none;
 		}
-		.app-shell.settings-open { --sidebar-offset: 0px; grid-template-columns: 1fr; }
+		.app-shell.settings-open {
+			--sidebar-offset: 0px;
+			grid-template-columns: 1fr;
+		}
 		.app-shell.settings-open .sidebar-drawer {
 			position: fixed;
 			inset: 0;
@@ -863,9 +1108,24 @@
 			box-shadow: none;
 			pointer-events: auto;
 		}
-		main { padding: 18px 16px 28px; }
-		.app-header { margin-bottom: 12px; background: var(--app-bg-mobile); padding: 18px 0 8px; margin-top: -18px; top: -18px; }
-		.nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
-		.badge { font-size: 11px; padding: 6px 8px; }
+		main {
+			padding: 18px 16px 28px;
+		}
+		.app-header {
+			margin-bottom: 12px;
+			background: var(--app-bg-mobile);
+			padding: 18px 0 8px;
+			margin-top: -18px;
+			top: -18px;
+		}
+		.nav-toggle {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.badge {
+			font-size: 11px;
+			padding: 6px 8px;
+		}
 	}
 </style>

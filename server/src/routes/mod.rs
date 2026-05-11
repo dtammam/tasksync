@@ -1,5 +1,6 @@
 mod auth;
 mod lists;
+mod streak;
 mod sync;
 mod tasks;
 pub(super) mod types;
@@ -26,6 +27,7 @@ mod tests {
         SetMemberPasswordBody, UpdateProfileBody, UpdateSoundSettingsBody, UpdateUiPreferencesBody,
     };
     use super::lists::{create_list, delete_list, get_lists, update_list, CreateList, UpdateList};
+    use super::streak::{auth_apply_streak_op, StreakOpRequestBody};
     use super::sync::{sync_pull, sync_push, SyncPullBody, SyncPushBody, SyncPushChange};
     use super::tasks::{
         create_task, delete_task, get_tasks, update_task_meta, update_task_status, CreateTask,
@@ -111,9 +113,12 @@ mod tests {
                 continue;
             }
 
-            if let Some(start) = trimmed.find('\'') {
+            // Accept both single-quoted ('value') and double-quoted ("value") string
+            // literals so the parser works regardless of which quote style the TS file uses.
+            let quote_char = if trimmed.contains('\'') { '\'' } else { '"' };
+            if let Some(start) = trimmed.find(quote_char) {
                 let rest = &trimmed[start + 1..];
-                if let Some(end) = rest.find('\'') {
+                if let Some(end) = rest.find(quote_char) {
                     themes.push(rest[..end].to_string());
                 }
             }
@@ -462,9 +467,12 @@ mod tests {
                 continue;
             }
 
-            if let Some(start) = trimmed.find('\'') {
+            // Accept both single-quoted ('value') and double-quoted ("value") string
+            // literals so the parser works regardless of which quote style the TS file uses.
+            let quote_char = if trimmed.contains('\'') { '\'' } else { '"' };
+            if let Some(start) = trimmed.find(quote_char) {
                 let rest = &trimmed[start + 1..];
-                if let Some(end) = rest.find('\'') {
+                if let Some(end) = rest.find(quote_char) {
                     fonts.push(rest[..end].to_string());
                 }
             }
@@ -1570,5 +1578,590 @@ mod tests {
             .expect("delete list should succeed");
 
         assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+    }
+
+    // -----------------------------------------------------------------------
+    // Streak op helpers
+    // -----------------------------------------------------------------------
+
+    fn streak_headers_admin() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        headers
+    }
+
+    /// Build a streak op request body. `cause` is None for non-break ops.
+    fn streak_body(op_key: &str, kind: &str, cause: Option<&str>) -> StreakOpRequestBody {
+        StreakOpRequestBody {
+            op_key: op_key.to_string(),
+            kind: kind.to_string(),
+            occurred_at: 0,
+            cause: cause.map(|c| c.to_string()),
+        }
+    }
+
+    /// Read the count of dedup rows in user_streak_op for a given user.
+    async fn streak_op_row_count(pool: &SqlitePool, user_id: &str) -> i64 {
+        sqlx::query_scalar::<_, i64>("select count(*) from user_streak_op where user_id = ?1")
+            .bind(user_id)
+            .fetch_one(pool)
+            .await
+            .expect("count user_streak_op rows")
+    }
+
+    // -----------------------------------------------------------------------
+    // Streak op contract tests (T4) — one test per row of the design table
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn streak_op_two_devices_two_different_tasks_both_count() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let resp1 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("first op should succeed")
+        .0;
+
+        assert_eq!(resp1.count, 1);
+        assert!(resp1.applied_this_call);
+
+        let resp2 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T2:{today}"), "increment", None)),
+        )
+        .await
+        .expect("second op should succeed")
+        .0;
+
+        assert_eq!(resp2.count, 2);
+        assert!(resp2.applied_this_call);
+        assert!(resp2.revision > resp1.revision, "revision must be monotonically increasing");
+
+        let row_count = streak_op_row_count(&pool, "u-admin").await;
+        assert_eq!(row_count, 2);
+    }
+
+    #[tokio::test]
+    async fn streak_op_two_devices_same_task_dedups_to_one() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let op_key = format!("inc:T1:{today}");
+
+        let resp1 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&op_key, "increment", None)),
+        )
+        .await
+        .expect("first op should succeed")
+        .0;
+
+        assert_eq!(resp1.count, 1);
+        assert!(resp1.applied_this_call);
+
+        // Device B sends the same opKey (deterministic from taskId + date).
+        let resp2 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&op_key, "increment", None)),
+        )
+        .await
+        .expect("replay op should succeed")
+        .0;
+
+        assert_eq!(resp2.count, 1, "count must not change on replay");
+        assert!(!resp2.applied_this_call, "replay must not apply again");
+        assert_eq!(resp2.revision, resp1.revision, "revision must not bump on replay");
+
+        let row_count = streak_op_row_count(&pool, "u-admin").await;
+        assert_eq!(row_count, 1);
+    }
+
+    #[tokio::test]
+    async fn streak_op_offline_accrual_then_drain_no_double_count() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        // First drain pass: 3 distinct ops.
+        for task in &["T1", "T2", "T3"] {
+            let _ = auth_apply_streak_op(
+                State(state.clone()),
+                headers.clone(),
+                Json(streak_body(&format!("inc:{task}:{today}"), "increment", None)),
+            )
+            .await
+            .expect("drain op should succeed");
+        }
+
+        let resp_after_drain = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T3:{today}"), "increment", None)),
+        )
+        .await
+        .expect("last drain op peek should succeed")
+        .0;
+        assert_eq!(resp_after_drain.count, 3);
+
+        let row_count = streak_op_row_count(&pool, "u-admin").await;
+        assert_eq!(row_count, 3);
+
+        // Second drain pass: re-send all three (redundant retry).
+        for task in &["T1", "T2", "T3"] {
+            let resp = auth_apply_streak_op(
+                State(state.clone()),
+                headers.clone(),
+                Json(streak_body(&format!("inc:{task}:{today}"), "increment", None)),
+            )
+            .await
+            .expect("retry drain op should succeed")
+            .0;
+            assert!(!resp.applied_this_call, "re-drain op must be a no-op");
+            assert_eq!(resp.count, 3, "count must remain 3 on re-drain");
+        }
+
+        let row_count_after_retry = streak_op_row_count(&pool, "u-admin").await;
+        assert_eq!(row_count_after_retry, 3);
+    }
+
+    #[tokio::test]
+    async fn streak_op_break_then_increment_count_one() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        // Pre-seed: one increment so we have a non-zero state.
+        let _ = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T0:{today}"), "increment", None)),
+        )
+        .await
+        .expect("pre-seed increment should succeed");
+
+        // Break arrives first.
+        let brk_resp = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("brk:punt:t0", "break", Some("punt"))),
+        )
+        .await
+        .expect("break op should succeed")
+        .0;
+        assert_eq!(brk_resp.count, 0, "break must zero the count");
+        assert!(brk_resp.applied_this_call);
+
+        // Then increment arrives.
+        let inc_resp = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("increment after break should succeed")
+        .0;
+        assert_eq!(inc_resp.count, 1, "increment after break must start from 1");
+        assert!(inc_resp.applied_this_call);
+    }
+
+    #[tokio::test]
+    async fn streak_op_increment_then_break_count_zero() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let inc_resp = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("increment should succeed")
+        .0;
+        assert_eq!(inc_resp.count, 1);
+        assert!(inc_resp.applied_this_call);
+
+        let brk_resp = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("brk:punt:t1", "break", Some("punt"))),
+        )
+        .await
+        .expect("break should succeed")
+        .0;
+        assert_eq!(brk_resp.count, 0, "break must unconditionally zero the count");
+        assert!(brk_resp.applied_this_call);
+    }
+
+    #[tokio::test]
+    async fn streak_op_reset_then_increment_count_one() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        // Pre-seed: increment once (count=1).
+        let _ = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("pre-seed increment should succeed");
+
+        // Reset: prunes today's dedup rows and zeroes count.
+        let rst_resp = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("rst:t0", "reset", None)),
+        )
+        .await
+        .expect("reset should succeed")
+        .0;
+        assert_eq!(rst_resp.count, 0, "reset must zero the count");
+        assert_eq!(rst_resp.day_complete_date, None, "reset must clear day_complete_date");
+        assert!(rst_resp.applied_this_call);
+
+        // Re-apply the same increment opKey — the reset pruned it, so it MUST count.
+        let re_inc_resp = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("re-increment after reset should succeed")
+        .0;
+        assert_eq!(re_inc_resp.count, 1, "re-increment after reset must count from 1");
+        assert!(re_inc_resp.applied_this_call, "re-increment must not be treated as replay");
+
+        // Dedup rows: rst:t0 + re-applied inc:T1:<today> (original was pruned).
+        let row_count = streak_op_row_count(&pool, "u-admin").await;
+        assert_eq!(row_count, 2);
+    }
+
+    #[tokio::test]
+    async fn streak_op_reset_twice_same_op_key_dedups() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        // Pre-seed: one increment.
+        let _ = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("pre-seed increment should succeed");
+
+        // First reset.
+        let rst1 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("rst:t0", "reset", None)),
+        )
+        .await
+        .expect("first reset should succeed")
+        .0;
+        assert_eq!(rst1.count, 0);
+        assert!(rst1.applied_this_call);
+
+        // Network retry: same opKey.
+        let rst2 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("rst:t0", "reset", None)),
+        )
+        .await
+        .expect("reset retry should succeed")
+        .0;
+        assert_eq!(rst2.count, 0, "count must remain 0 on reset replay");
+        assert!(!rst2.applied_this_call, "reset retry must be a no-op");
+
+        // Only rst:t0 dedup row; original inc:T1:<today> was pruned by the first reset.
+        let row_count = streak_op_row_count(&pool, "u-admin").await;
+        assert_eq!(row_count, 1);
+    }
+
+    #[tokio::test]
+    async fn streak_op_day_complete_first_to_server_wins() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        // Pre-seed: one increment to mirror real-world flow.
+        let _ = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("pre-seed increment should succeed");
+
+        // Device A fires day_complete.
+        let dc_resp1 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("dc:{today}"), "day_complete", None)),
+        )
+        .await
+        .expect("first day_complete should succeed")
+        .0;
+        assert!(dc_resp1.day_complete_fired_this_call, "first device must fire day_complete");
+        assert_eq!(dc_resp1.day_complete_date, Some(today.clone()));
+        assert!(dc_resp1.applied_this_call);
+
+        // Device B sends the same dc:<today> opKey (deterministic formula).
+        let dc_resp2 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("dc:{today}"), "day_complete", None)),
+        )
+        .await
+        .expect("second day_complete should succeed")
+        .0;
+        assert!(!dc_resp2.day_complete_fired_this_call, "second device must not re-fire");
+        assert!(!dc_resp2.applied_this_call, "second device op must be a no-op replay");
+        assert_eq!(
+            dc_resp2.day_complete_date,
+            Some(today.clone()),
+            "day_complete_date must be preserved"
+        );
+        assert_eq!(dc_resp2.count, dc_resp1.count, "count must be unchanged on replay");
+    }
+
+    #[tokio::test]
+    async fn streak_op_revision_monotonically_increases() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let r1 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("first op should succeed")
+        .0
+        .revision;
+
+        let r2 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T2:{today}"), "increment", None)),
+        )
+        .await
+        .expect("second op should succeed")
+        .0
+        .revision;
+
+        let r3 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("brk:punt:t0", "break", Some("punt"))),
+        )
+        .await
+        .expect("break op should succeed")
+        .0
+        .revision;
+
+        assert!(r1 < r2, "revision must increase: r1={r1} r2={r2}");
+        assert!(r2 < r3, "revision must increase: r2={r2} r3={r3}");
+
+        // Replay of an earlier op must NOT bump revision.
+        let r_replay = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body(&format!("inc:T1:{today}"), "increment", None)),
+        )
+        .await
+        .expect("replay op should succeed")
+        .0
+        .revision;
+
+        assert_eq!(
+            r_replay, r3,
+            "revision must not change on replay: expected {r3}, got {r_replay}"
+        );
+    }
+
+    #[tokio::test]
+    async fn streak_op_increment_idempotent_across_days() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+
+        // Use literal date strings to make cross-day intent explicit in source.
+        let resp1 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("inc:T1:2026-05-10", "increment", None)),
+        )
+        .await
+        .expect("first day op should succeed")
+        .0;
+        assert_eq!(resp1.count, 1);
+        assert!(resp1.applied_this_call);
+
+        let resp2 = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("inc:T1:2026-05-11", "increment", None)),
+        )
+        .await
+        .expect("next day op should succeed")
+        .0;
+        assert_eq!(resp2.count, 2, "same task on a different day must count again");
+        assert!(resp2.applied_this_call);
+
+        let row_count = streak_op_row_count(&pool, "u-admin").await;
+        assert_eq!(row_count, 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // T5 tests: GET /auth/preferences returns canonical streak blob + revision;
+    //           PATCH /auth/preferences silently ignores inbound streakStateJson
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn prefs_get_returns_canonical_streak_blob_and_revision() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+
+        // Write a stale value into the legacy user.streak_state_json column so we can
+        // confirm the GET does NOT echo it back.
+        sqlx::query("update user set streak_state_json = '{\"count\":999,\"lastResetDate\":\"1999-01-01\",\"dayCompleteDate\":null}' where id = 'u-admin'")
+            .execute(&pool)
+            .await
+            .expect("seed legacy streak_state_json");
+
+        // Seed user_streak via the T3 handler (count -> 1, revision -> 1).
+        let _ = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("inc:T1:2026-05-10", "increment", None)),
+        )
+        .await
+        .expect("streak op should succeed");
+
+        let prefs = auth_get_preferences(State(state.clone()), headers.clone())
+            .await
+            .expect("get preferences should succeed")
+            .0;
+
+        // revision must reflect user_streak.revision (= 1).
+        assert_eq!(prefs.streak_revision, Some(1));
+
+        // streak_state_json must be the canonical blob from user_streak, NOT the legacy
+        // value we planted above.
+        let blob: serde_json::Value = serde_json::from_str(
+            prefs.streak_state_json.as_deref().expect("streak_state_json must be Some"),
+        )
+        .expect("streak_state_json must be valid JSON");
+
+        assert_eq!(blob["count"], 1, "count must come from user_streak, not legacy column");
+        assert_ne!(
+            blob["lastResetDate"].as_str().unwrap_or(""),
+            "1999-01-01",
+            "lastResetDate must come from user_streak, not the stale legacy blob"
+        );
+
+        // Canonical blob contains exactly the three documented fields.
+        assert!(blob.get("count").is_some());
+        assert!(blob.get("lastResetDate").is_some());
+        assert!(blob.get("dayCompleteDate").is_some());
+        assert_eq!(blob["dayCompleteDate"], serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn prefs_patch_silently_ignores_inbound_streak_state_json() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = streak_headers_admin();
+
+        // Seed canonical state: count -> 1, revision -> 1.
+        let _ = auth_apply_streak_op(
+            State(state.clone()),
+            headers.clone(),
+            Json(streak_body("inc:T1:2026-05-10", "increment", None)),
+        )
+        .await
+        .expect("streak op should succeed");
+
+        // PATCH with an attacker-supplied streakStateJson that tries to set count = 999.
+        let _ = auth_update_preferences(
+            State(state.clone()),
+            headers.clone(),
+            Json(UpdateUiPreferencesBody {
+                theme: None,
+                font: None,
+                completion_quotes_json: None,
+                sidebar_panels_json: None,
+                list_sort_json: None,
+                streak_settings_json: None,
+                streak_state_json: Some(
+                    "{\"count\":999,\"lastResetDate\":\"1999-01-01\",\"dayCompleteDate\":null}"
+                        .to_string(),
+                ),
+            }),
+        )
+        .await
+        .expect("PATCH preferences should succeed (not reject inbound streak_state_json)");
+
+        // GET must still return revision 1 and count 1 — the inbound blob was silently dropped.
+        let prefs = auth_get_preferences(State(state.clone()), headers.clone())
+            .await
+            .expect("get preferences after patch should succeed")
+            .0;
+
+        assert_eq!(prefs.streak_revision, Some(1), "revision must be unchanged");
+
+        let blob: serde_json::Value = serde_json::from_str(
+            prefs.streak_state_json.as_deref().expect("streak_state_json must be Some"),
+        )
+        .expect("streak_state_json must be valid JSON");
+        assert_eq!(blob["count"], 1, "canonical count must not have been clobbered to 999");
+
+        // Verify user_streak row directly.
+        let (db_count, db_revision): (i64, i64) = sqlx::query_as(
+            "select count, revision from user_streak where user_id = 'u-admin' limit 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("user_streak row must exist");
+        assert_eq!(db_count, 1, "user_streak.count must be unchanged");
+        assert_eq!(db_revision, 1, "user_streak.revision must be unchanged");
+
+        // Confirm legacy column was NOT written by PATCH (should still be NULL since the
+        // migration seeds NULL for a fresh in-memory user with no streak JSON).
+        let legacy: Option<String> =
+            sqlx::query_scalar("select streak_state_json from user where id = 'u-admin' limit 1")
+                .fetch_one(&pool)
+                .await
+                .expect("load legacy column");
+        assert!(
+            legacy.is_none(),
+            "legacy user.streak_state_json must not have been written by PATCH"
+        );
     }
 }

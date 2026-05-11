@@ -1,12 +1,12 @@
 export type SoundTheme =
-	| 'chime_soft'
-	| 'click_pop'
-	| 'sparkle_short'
-	| 'wood_tick'
-	| 'bell_crisp'
-	| 'marimba_blip'
-	| 'pulse_soft'
-	| 'custom_file';
+	| "chime_soft"
+	| "click_pop"
+	| "sparkle_short"
+	| "wood_tick"
+	| "bell_crisp"
+	| "marimba_blip"
+	| "pulse_soft"
+	| "custom_file";
 
 export interface SoundSettings {
 	enabled: boolean;
@@ -20,50 +20,50 @@ export interface SoundSettings {
 }
 
 export type UiFont =
-	| 'sora'
-	| 'sono'
-	| 'inter'
-	| 'inter-tight'
-	| 'jetbrains-mono'
-	| 'atkinson-hyperlegible'
-	| 'atkinson-hyperlegible-next'
-	| 'ibm-plex-sans'
-	| 'ibm-plex-mono'
-	| 'ibm-plex-serif'
-	| 'roboto'
-	| 'roboto-slab'
-	| 'roboto-mono'
-	| 'dm-mono'
-	| 'comfortaa'
-	| 'poppins'
-	| 'victor-mono'
-	| 'pt-sans'
-	| 'pt-serif'
-	| 'pt-mono'
-	| 'georgia'
-	| 'sf-pro'
-	| 'system';
+	| "sora"
+	| "sono"
+	| "inter"
+	| "inter-tight"
+	| "jetbrains-mono"
+	| "atkinson-hyperlegible"
+	| "atkinson-hyperlegible-next"
+	| "ibm-plex-sans"
+	| "ibm-plex-mono"
+	| "ibm-plex-serif"
+	| "roboto"
+	| "roboto-slab"
+	| "roboto-mono"
+	| "dm-mono"
+	| "comfortaa"
+	| "poppins"
+	| "victor-mono"
+	| "pt-sans"
+	| "pt-serif"
+	| "pt-mono"
+	| "georgia"
+	| "sf-pro"
+	| "system";
 
 export type UiTheme =
-	| 'default'
-	| 'dark'
-	| 'light'
-	| 'shades-of-coffee'
-	| 'miami-beach'
-	| 'simple-dark'
-	| 'matrix'
-	| 'black-gold'
-	| 'okabe-ito'
-	| 'theme-from-1970'
-	| 'shades-of-gray-light'
-	| 'catppuccin-latte'
-	| 'catppuccin-frappe'
-	| 'catppuccin-macchiato'
-	| 'catppuccin-mocha'
-	| 'you-need-a-dark-mode'
-	| 'butterfly';
-export type ListSortMode = 'created' | 'alpha' | 'due_date';
-export type ListSortDirection = 'asc' | 'desc';
+	| "default"
+	| "dark"
+	| "light"
+	| "shades-of-coffee"
+	| "miami-beach"
+	| "simple-dark"
+	| "matrix"
+	| "black-gold"
+	| "okabe-ito"
+	| "theme-from-1970"
+	| "shades-of-gray-light"
+	| "catppuccin-latte"
+	| "catppuccin-frappe"
+	| "catppuccin-macchiato"
+	| "catppuccin-mocha"
+	| "you-need-a-dark-mode"
+	| "butterfly";
+export type ListSortMode = "created" | "alpha" | "due_date";
+export type ListSortDirection = "asc" | "desc";
 
 export interface ListSortPreference {
 	mode: ListSortMode;
@@ -88,9 +88,9 @@ export interface UiPreferences {
 	showCompleted: boolean;
 }
 
-export type StreakTheme = 'ddr' | 'thps';
+export type StreakTheme = "ddr" | "thps";
 
-export type StreakResetMode = 'daily' | 'endless';
+export type StreakResetMode = "daily" | "endless";
 
 export interface StreakSettings {
 	enabled: boolean;
@@ -113,5 +113,7 @@ export interface UiPreferencesWire {
 	listSortJson?: string;
 	streakSettingsJson?: string;
 	streakStateJson?: string;
+	/** Server-authoritative monotonic revision cursor for user_streak. Absent on legacy responses. */
+	streakRevision?: number;
 	showCompleted?: boolean;
 }

@@ -1,41 +1,77 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import type { StreakOp } from '$lib/data/streakQueue';
 
 const mocks = vi.hoisted(() => ({
 	api: {
-		updateUiPreferences: vi.fn().mockResolvedValue({})
+		updateUiPreferences: vi.fn().mockResolvedValue({}),
+		applyStreakOp: vi.fn().mockResolvedValue({
+			revision: 1,
+			count: 1,
+			lastResetDate: new Date().toISOString().slice(0, 10),
+			dayCompleteDate: null,
+			appliedThisCall: true,
+			dayCompleteFiredThisCall: false,
+		}),
 	},
 	auth: {
-		get: vi.fn()
+		get: vi.fn(),
 	},
 	uiPreferences: {
-		get: vi.fn()
+		get: vi.fn(),
+		hydrateFromServer: vi.fn().mockResolvedValue(null),
 	},
 	soundSettings: {
-		get: vi.fn()
+		get: vi.fn(),
 	},
-	playUrl: vi.fn().mockResolvedValue(undefined)
+	playUrl: vi.fn().mockResolvedValue(undefined),
+	streakQueue: {
+		enqueue: vi.fn().mockResolvedValue(undefined),
+		peekAll: vi.fn().mockResolvedValue([]),
+		remove: vi.fn().mockResolvedValue(undefined),
+		count: vi.fn().mockResolvedValue(0),
+	},
+	streakDrain: {
+		drain: vi.fn().mockResolvedValue(undefined),
+		__resetForTests: vi.fn(),
+	},
+	setReconciler: vi.fn(),
+	setHydrator: vi.fn(),
 }));
 
-vi.mock('$lib/api/client', () => ({ api: mocks.api }));
+vi.mock('$lib/api/client', () => ({
+	api: mocks.api,
+	ApiError: class extends Error {
+		status = 500;
+		constructor(msg: string) {
+			super(msg);
+		}
+	},
+}));
 vi.mock('$lib/stores/auth', () => ({ auth: mocks.auth }));
 vi.mock('$lib/stores/preferences', () => ({ uiPreferences: mocks.uiPreferences }));
 vi.mock('$lib/stores/settings', () => ({ soundSettings: mocks.soundSettings }));
 vi.mock('$lib/sound/sound', () => ({ playUrl: mocks.playUrl }));
+vi.mock('$lib/data/streakQueue', () => ({ streakQueue: mocks.streakQueue }));
+vi.mock('$lib/sync/streakDrain', () => ({
+	streakDrain: mocks.streakDrain,
+	setReconciler: mocks.setReconciler,
+	setHydrator: mocks.setHydrator,
+}));
 
 import { streak, streakDisplay, streakState } from './streak';
 
 const enabledPrefs = (resetMode = 'daily') => ({
-	streakSettings: { enabled: true, theme: 'ddr', resetMode }
+	streakSettings: { enabled: true, theme: 'ddr', resetMode },
 });
 
 const disabledPrefs = () => ({
-	streakSettings: { enabled: false, theme: 'ddr', resetMode: 'daily' }
+	streakSettings: { enabled: false, theme: 'ddr', resetMode: 'daily' },
 });
 
 const defaultAuth = () => ({
 	status: 'authenticated',
-	user: { space_id: 's1', user_id: 'u1' }
+	user: { space_id: 's1', user_id: 'u1' },
 });
 
 // Helpers for the new prefs-blob storage format
@@ -49,6 +85,13 @@ const getPrefsBlob = (): Record<string, unknown> => {
 	const raw = localStorage.getItem(PREFS_KEY);
 	return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
 };
+
+// Monotonically increasing revision counter across all tests.
+// lastSeenRevision is module-level in streak.ts and never resets between tests,
+// so every hydrateFromServer call that should actually apply state must use a
+// strictly-increasing revision number.
+let globalRevCounter = 0;
+const nextRev = () => ++globalRevCounter;
 
 describe('streak store — increment', () => {
 	beforeEach(() => {
@@ -94,7 +137,15 @@ describe('streak store — increment', () => {
 
 	it('increment preserves dayCompleteDate already set', () => {
 		const today = new Date().toISOString().slice(0, 10);
-		streak.hydrateFromServer(JSON.stringify({ count: 0, countedTaskIds: [], lastResetDate: today, dayCompleteDate: today }));
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 0,
+				countedTaskIds: [],
+				lastResetDate: today,
+				dayCompleteDate: today,
+			}),
+			nextRev()
+		);
 		streak.increment('task-1');
 		expect(get(streakState).dayCompleteDate).toBe(today);
 	});
@@ -170,7 +221,15 @@ describe('streak store — break', () => {
 
 	it('break preserves dayCompleteDate', () => {
 		const today = new Date().toISOString().slice(0, 10);
-		streak.hydrateFromServer(JSON.stringify({ count: 3, countedTaskIds: ['t1'], lastResetDate: today, dayCompleteDate: today }));
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 3,
+				countedTaskIds: ['t1'],
+				lastResetDate: today,
+				dayCompleteDate: today,
+			}),
+			nextRev()
+		);
 		streak.break();
 		expect(get(streakState).dayCompleteDate).toBe(today);
 	});
@@ -189,7 +248,9 @@ describe('streak store — DDR daily reset', () => {
 	it('silently resets count after hydrateFromLocal + checkMissedTasksAndApplyDailyReset(0) on a new day', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		setPrefsBlob({ streakState: { count: 42, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
+		setPrefsBlob({
+			streakState: { count: 42, countedTaskIds: ['task-1'], lastResetDate: yesterday },
+		});
 
 		streak.hydrateFromLocal();
 		// Count is deferred until checkMissedTasksAndApplyDailyReset resolves the pending break
@@ -212,7 +273,9 @@ describe('streak store — DDR daily reset', () => {
 	it('preserves count across days in endless mode', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		setPrefsBlob({ streakState: { count: 99, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
+		setPrefsBlob({
+			streakState: { count: 99, countedTaskIds: ['task-1'], lastResetDate: yesterday },
+		});
 
 		streak.hydrateFromLocal();
 
@@ -276,7 +339,9 @@ describe('streak store — checkMissedTasksAndApplyDailyReset', () => {
 	it('in DDR mode new day: breaks with animation when there are missed tasks', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		setPrefsBlob({ streakState: { count: 10, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
+		setPrefsBlob({
+			streakState: { count: 10, countedTaskIds: ['task-1'], lastResetDate: yesterday },
+		});
 
 		streak.hydrateFromLocal(); // sets pendingDailyBreak
 		streak.checkMissedTasksAndApplyDailyReset(2); // new day + missed → animated break
@@ -287,7 +352,9 @@ describe('streak store — checkMissedTasksAndApplyDailyReset', () => {
 	it('in DDR mode new day: silently zeros when no missed tasks', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		setPrefsBlob({ streakState: { count: 7, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
+		setPrefsBlob({
+			streakState: { count: 7, countedTaskIds: ['task-1'], lastResetDate: yesterday },
+		});
 
 		streak.hydrateFromLocal();
 		streak.checkMissedTasksAndApplyDailyReset(0); // new day, no missed → silent zero
@@ -311,7 +378,8 @@ describe('streak store — announcer trigger', () => {
 		let announced = false;
 		for (let i = 0; i < 5; i++) {
 			const result = streak.increment(`task-${i}`);
-			if (i === 4) announced = result; // 5th completion = count 5
+			if (i === 4)
+				announced = result; // 5th completion = count 5
 			else expect(result).toBe(false);
 		}
 		expect(announced).toBe(true);
@@ -383,8 +451,12 @@ describe('streak store — server hydration', () => {
 	});
 
 	it('applies server state from valid streakStateJson', () => {
-		const serverState = JSON.stringify({ count: 55, countedTaskIds: ['a', 'b'], lastResetDate: new Date().toISOString().slice(0, 10) });
-		streak.hydrateFromServer(serverState);
+		const serverState = JSON.stringify({
+			count: 55,
+			countedTaskIds: ['a', 'b'],
+			lastResetDate: new Date().toISOString().slice(0, 10),
+		});
+		streak.hydrateFromServer(serverState, nextRev());
 		expect(get(streakState).count).toBe(55);
 	});
 
@@ -404,13 +476,29 @@ describe('streak store — server hydration', () => {
 
 	it('hydrateFromServer populates dayCompleteDate from server blob', () => {
 		const today = new Date().toISOString().slice(0, 10);
-		streak.hydrateFromServer(JSON.stringify({ count: 5, countedTaskIds: [], lastResetDate: today, dayCompleteDate: today }));
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 5,
+				countedTaskIds: [],
+				lastResetDate: today,
+				dayCompleteDate: today,
+			}),
+			nextRev()
+		);
 		expect(get(streakState).dayCompleteDate).toBe(today);
 	});
 
 	it('hydrateFromServer with yesterday dayCompleteDate leaves guard inactive', () => {
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		streak.hydrateFromServer(JSON.stringify({ count: 3, countedTaskIds: [], lastResetDate: yesterday, dayCompleteDate: yesterday }));
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 3,
+				countedTaskIds: [],
+				lastResetDate: yesterday,
+				dayCompleteDate: yesterday,
+			}),
+			nextRev()
+		);
 		// Guard should be inactive — yesterday is not today
 		const today = new Date().toISOString().slice(0, 10);
 		expect(get(streakState).dayCompleteDate).toBe(yesterday);
@@ -419,7 +507,15 @@ describe('streak store — server hydration', () => {
 
 	it('hydrateFromServer writes streak state into prefs blob', () => {
 		const today = new Date().toISOString().slice(0, 10);
-		streak.hydrateFromServer(JSON.stringify({ count: 7, countedTaskIds: ['x'], lastResetDate: today, dayCompleteDate: today }));
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 7,
+				countedTaskIds: ['x'],
+				lastResetDate: today,
+				dayCompleteDate: today,
+			}),
+			nextRev()
+		);
 		const blob = getPrefsBlob();
 		expect(blob.streakState).toBeDefined();
 		expect((blob.streakState as { count: number }).count).toBe(7);
@@ -502,7 +598,15 @@ describe('streak store — day complete', () => {
 
 		// Simulate next day: hydrate with yesterday's dayCompleteDate
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-		streak.hydrateFromServer(JSON.stringify({ count: 0, countedTaskIds: [], lastResetDate: yesterday, dayCompleteDate: yesterday }));
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 0,
+				countedTaskIds: [],
+				lastResetDate: yesterday,
+				dayCompleteDate: yesterday,
+			}),
+			nextRev()
+		);
 
 		expect(streak.triggerDayComplete()).toBe(true); // new day → fires again
 	});
@@ -522,17 +626,16 @@ describe('streak store — day complete', () => {
 
 	it('hydrating with today dayCompleteDate prevents triggerDayComplete from firing', () => {
 		const today = new Date().toISOString().slice(0, 10);
-		streak.hydrateFromServer(JSON.stringify({ count: 3, countedTaskIds: [], lastResetDate: today, dayCompleteDate: today }));
-		expect(streak.triggerDayComplete()).toBe(false);
-	});
-
-	it('triggerDayComplete queues a server sync', () => {
-		vi.clearAllMocks();
-		streak.triggerDayComplete();
-		vi.runAllTimers(); // flush debounce
-		expect(mocks.api.updateUiPreferences).toHaveBeenCalledWith(
-			expect.objectContaining({ streakStateJson: expect.stringContaining('dayCompleteDate') })
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 3,
+				countedTaskIds: [],
+				lastResetDate: today,
+				dayCompleteDate: today,
+			}),
+			nextRev()
 		);
+		expect(streak.triggerDayComplete()).toBe(false);
 	});
 });
 
@@ -568,7 +671,10 @@ describe('streak store — localStorage collapse (prefs blob)', () => {
 		const today = new Date().toISOString().slice(0, 10);
 		// Simulate pre-migration boot: no streakState in prefs blob, only old separate key
 		localStorage.clear();
-		localStorage.setItem('tasksync:streak-state:s1:u1', JSON.stringify({ count: 8, countedTaskIds: ['old'], lastResetDate: today }));
+		localStorage.setItem(
+			'tasksync:streak-state:s1:u1',
+			JSON.stringify({ count: 8, countedTaskIds: ['old'], lastResetDate: today })
+		);
 
 		streak.hydrateFromLocal();
 
@@ -582,12 +688,126 @@ describe('streak store — localStorage collapse (prefs blob)', () => {
 		const today = new Date().toISOString().slice(0, 10);
 		// Simulate pre-migration boot: no streakState in prefs blob, both old keys present
 		localStorage.clear();
-		localStorage.setItem('tasksync:streak-state:s1:u1', JSON.stringify({ count: 1, countedTaskIds: [], lastResetDate: today }));
+		localStorage.setItem(
+			'tasksync:streak-state:s1:u1',
+			JSON.stringify({ count: 1, countedTaskIds: [], lastResetDate: today })
+		);
 		localStorage.setItem('tasksync:streak-state:s1:u1:day-complete-date', today);
 
 		streak.hydrateFromLocal();
 
 		expect(get(streakState).dayCompleteDate).toBe(today);
 		expect(localStorage.getItem('tasksync:streak-state:s1:u1:day-complete-date')).toBeNull();
+	});
+});
+
+describe('streak store — enqueue + drain wiring', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		localStorage.clear();
+		vi.clearAllMocks();
+		mocks.auth.get.mockReturnValue(defaultAuth());
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs());
+		mocks.soundSettings.get.mockReturnValue({ enabled: false, volume: 60 });
+		mocks.streakQueue.enqueue.mockResolvedValue(undefined);
+		mocks.streakDrain.drain.mockResolvedValue(undefined);
+		streak.reset();
+		vi.clearAllMocks();
+	});
+
+	it('increment enqueues exactly one op with the expected key', () => {
+		const before = Date.now();
+		streak.increment('task-1');
+
+		// exactly one enqueue
+		expect(mocks.streakQueue.enqueue).toHaveBeenCalledTimes(1);
+		const op = mocks.streakQueue.enqueue.mock.calls[0][0] as StreakOp;
+		expect(op.kind).toBe('increment');
+		expect(op.taskId).toBe('task-1');
+
+		// opKey shape: inc:<taskId>:<YYYY-MM-DD>
+		const today = new Date().toISOString().slice(0, 10);
+		expect(op.opKey).toBe(`inc:task-1:${today}`);
+
+		// occurredAt is a sane recent timestamp
+		expect(op.occurredAt).toBeGreaterThanOrEqual(before);
+		expect(op.occurredAt).toBeLessThanOrEqual(Date.now());
+
+		// exactly one drain kick
+		expect(mocks.streakDrain.drain).toHaveBeenCalledTimes(1);
+	});
+
+	it('hydrate with higher revision silently swaps count', () => {
+		// arrange: local state at count 3 with persisted revision 5
+		setPrefsBlob({
+			streakState: {
+				count: 3,
+				countedTaskIds: [],
+				lastResetDate: '2026-05-11',
+				dayCompleteDate: null,
+			},
+			streakRevision: 5,
+		});
+		streak.hydrateFromLocal();
+		expect(get(streakState).count).toBe(3);
+
+		const pulseBefore = get(streakDisplay).pulse;
+		const visibleBefore = get(streakDisplay).visible;
+
+		// act: server hydrate with revision higher than current lastSeenRevision
+		const rev = nextRev();
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 7,
+				countedTaskIds: [],
+				lastResetDate: '2026-05-11',
+				dayCompleteDate: null,
+			}),
+			rev
+		);
+
+		// assert: count swapped silently — pulse and visible are unchanged (silent swap contract)
+		expect(get(streakState).count).toBe(7);
+		expect(get(streakDisplay).pulse).toBe(pulseBefore);
+		expect(get(streakDisplay).visible).toBe(visibleBefore);
+	});
+
+	it('hydrate with lower-or-equal revision is a no-op', () => {
+		// arrange: hydrate from server to establish a known lastSeenRevision
+		const establishedRev = nextRev();
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 3,
+				countedTaskIds: [],
+				lastResetDate: '2026-05-11',
+				dayCompleteDate: null,
+			}),
+			establishedRev
+		);
+		expect(get(streakState).count).toBe(3);
+
+		// act 1: server hydrate with EQUAL revision + different count (99)
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 99,
+				countedTaskIds: [],
+				lastResetDate: '2026-05-11',
+				dayCompleteDate: null,
+			}),
+			establishedRev
+		);
+		expect(get(streakState).count).toBe(3); // unchanged
+
+		// act 2: server hydrate with LOWER revision + different count (88)
+		streak.hydrateFromServer(
+			JSON.stringify({
+				count: 88,
+				countedTaskIds: [],
+				lastResetDate: '2026-05-11',
+				dayCompleteDate: null,
+			}),
+			establishedRev - 1
+		);
+		expect(get(streakState).count).toBe(3); // unchanged
 	});
 });

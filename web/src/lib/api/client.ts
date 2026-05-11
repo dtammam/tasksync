@@ -9,7 +9,7 @@ import type {
 	AuthUser,
 	ListGrant,
 	SetListGrantRequest,
-	SpaceMember
+	SpaceMember,
 } from '$shared/types/auth';
 import type {
 	SyncList,
@@ -17,10 +17,11 @@ import type {
 	SyncPullRequest,
 	SyncPullResponse,
 	SyncPushRequest,
-	SyncPushResponse
+	SyncPushResponse,
 } from '$shared/types/sync';
 import type { SoundSettings, UiPreferencesWire } from '$shared/types/settings';
 import type { SpaceBackupBundle, SpaceBackupRestoreResponse } from '$shared/types/backup';
+import type { StreakOpRequest, StreakOpResponse } from '$shared/types/streak';
 
 const defaultApiUrl = () => {
 	if (typeof window === 'undefined') return 'http://localhost:3000';
@@ -94,8 +95,8 @@ const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> =>
 		headers: {
 			'content-type': 'application/json',
 			...buildHeaders(),
-			...(opts.headers ?? {})
-		}
+			...(opts.headers ?? {}),
+		},
 	});
 	const raw = await res.text();
 	if (!res.ok) {
@@ -125,12 +126,20 @@ export const api = {
 	) => fetchJson<SoundSettings>('/auth/sound', { method: 'PATCH', body: JSON.stringify(body) }),
 	getUiPreferences: () => fetchJson<UiPreferencesWire>('/auth/preferences'),
 	updateUiPreferences: (body: Partial<UiPreferencesWire>) =>
-		fetchJson<UiPreferencesWire>('/auth/preferences', { method: 'PATCH', body: JSON.stringify(body) }),
+		fetchJson<UiPreferencesWire>('/auth/preferences', {
+			method: 'PATCH',
+			body: JSON.stringify(body),
+		}),
 	getSpaceBackup: () => fetchJson<SpaceBackupBundle>('/auth/backup'),
 	restoreSpaceBackup: (body: SpaceBackupBundle) =>
 		fetchJson<SpaceBackupRestoreResponse>('/auth/backup', {
 			method: 'POST',
-			body: JSON.stringify(body)
+			body: JSON.stringify(body),
+		}),
+	applyStreakOp: (body: StreakOpRequest) =>
+		fetchJson<StreakOpResponse>('/auth/streak/op', {
+			method: 'POST',
+			body: JSON.stringify(body),
 		}),
 	changePassword: (body: AuthChangePasswordRequest) =>
 		fetchJson<void>('/auth/password', { method: 'PATCH', body: JSON.stringify(body) }),
@@ -139,12 +148,12 @@ export const api = {
 		fetchJson<SpaceMember>('/auth/members', { method: 'POST', body: JSON.stringify(body) }),
 	deleteMember: (userId: string) =>
 		fetchJson<void>(`/auth/members/${userId}`, {
-			method: 'DELETE'
+			method: 'DELETE',
 		}),
 	setMemberPassword: (userId: string, body: AuthSetMemberPasswordRequest) =>
 		fetchJson<void>(`/auth/members/${userId}/password`, {
 			method: 'PATCH',
-			body: JSON.stringify(body)
+			body: JSON.stringify(body),
 		}),
 	getListGrants: () => fetchJson<ListGrant[]>('/auth/grants'),
 	setListGrant: (body: SetListGrantRequest) =>
@@ -152,22 +161,24 @@ export const api = {
 	getLists: () => fetchJson<SyncList[]>('/lists'),
 	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
 		fetchJson<SyncList>('/lists', { method: 'POST', body: JSON.stringify(body) }),
-	updateList: (id: string, body: { name?: string; icon?: string; color?: string; order?: string }) =>
-		fetchJson<SyncList>(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+	updateList: (
+		id: string,
+		body: { name?: string; icon?: string; color?: string; order?: string }
+	) => fetchJson<SyncList>(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 	deleteList: (id: string) =>
 		fetchJson<void>(`/lists/${id}`, {
-			method: 'DELETE'
+			method: 'DELETE',
 		}),
 	getTasks: () => fetchJson<SyncTask[]>('/tasks'),
 	syncPull: (body: SyncPullRequest = {}) =>
 		fetchJson<SyncPullResponse>('/sync/pull', {
 			method: 'POST',
-			body: JSON.stringify(body)
+			body: JSON.stringify(body),
 		}),
 	syncPush: (body: SyncPushRequest) =>
 		fetchJson<SyncPushResponse>('/sync/push', {
 			method: 'POST',
-			body: JSON.stringify(body)
+			body: JSON.stringify(body),
 		}),
 	createTask: (body: {
 		id?: string;
@@ -186,7 +197,7 @@ export const api = {
 	}) =>
 		fetchJson<SyncTask>('/tasks', {
 			method: 'POST',
-			body: JSON.stringify(body)
+			body: JSON.stringify(body),
 		}),
 	updateTaskMeta: (
 		id: string,
@@ -209,15 +220,15 @@ export const api = {
 	) =>
 		fetchJson<SyncTask>(`/tasks/${id}`, {
 			method: 'PATCH',
-			body: JSON.stringify(body)
+			body: JSON.stringify(body),
 		}),
 	deleteTask: (id: string) =>
 		fetchJson<void>(`/tasks/${id}`, {
-			method: 'DELETE'
+			method: 'DELETE',
 		}),
 	updateTaskStatus: (id: string, status: string) =>
 		fetchJson<SyncTask>(`/tasks/${id}/status`, {
 			method: 'POST',
-			body: JSON.stringify({ status })
-		})
+			body: JSON.stringify({ status }),
+		}),
 };

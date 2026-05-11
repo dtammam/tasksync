@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-	buildHeaders: vi.fn()
+	buildHeaders: vi.fn(),
 }));
 
 vi.mock('./headers', () => ({
-	buildHeaders: mocks.buildHeaders
+	buildHeaders: mocks.buildHeaders,
 }));
 
 const jsonResponse = (status: number, body = '{}', statusText?: string) => ({
@@ -13,7 +13,7 @@ const jsonResponse = (status: number, body = '{}', statusText?: string) => ({
 	status,
 	statusText:
 		statusText ?? (status === 500 ? 'Internal Server Error' : status === 204 ? 'No Content' : 'OK'),
-	text: vi.fn().mockResolvedValue(body)
+	text: vi.fn().mockResolvedValue(body),
 });
 
 const minimalBackup = () => ({
@@ -24,7 +24,7 @@ const minimalBackup = () => ({
 	memberships: [],
 	lists: [],
 	list_grants: [],
-	tasks: []
+	tasks: [],
 });
 
 describe('api client', () => {
@@ -54,8 +54,8 @@ describe('api client', () => {
 			expect.objectContaining({
 				headers: expect.objectContaining({
 					'content-type': 'application/json',
-					'x-test-auth': '1'
-				})
+					'x-test-auth': '1',
+				}),
 			})
 		);
 	});
@@ -123,9 +123,93 @@ describe('api client', () => {
 		);
 	});
 
+	describe('applyStreakOp', () => {
+		it('happy path — returns the parsed StreakOpResponse from the server', async () => {
+			const serverResponse = {
+				revision: 5,
+				count: 3,
+				lastResetDate: '2026-01-01',
+				dayCompleteDate: '2026-05-10',
+				appliedThisCall: false,
+				dayCompleteFiredThisCall: true,
+			};
+			(fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+				jsonResponse(200, JSON.stringify(serverResponse))
+			);
+			const { api } = await import('./client');
+
+			const result = await api.applyStreakOp({
+				opKey: 'inc:task-1:2026-05-10',
+				kind: 'increment',
+				occurredAt: 1715385600000,
+			});
+
+			expect(result).toEqual(serverResponse);
+		});
+
+		it('request shape — URL, method, body, and headers are correct', async () => {
+			(fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+				jsonResponse(
+					200,
+					JSON.stringify({
+						revision: 1,
+						count: 0,
+						lastResetDate: '2026-05-10',
+						dayCompleteDate: null,
+						appliedThisCall: true,
+						dayCompleteFiredThisCall: false,
+					})
+				)
+			);
+			const { api } = await import('./client');
+
+			const input = {
+				opKey: 'brk:manual:1715385600000',
+				kind: 'break' as const,
+				occurredAt: 1715385600000,
+				cause: 'manual' as const,
+			};
+			await api.applyStreakOp(input);
+
+			expect(fetch).toHaveBeenCalledWith(
+				'https://runtime.example/auth/streak/op',
+				expect.objectContaining({
+					method: 'POST',
+					body: JSON.stringify(input),
+					headers: expect.objectContaining({
+						'content-type': 'application/json',
+						'x-test-auth': '1',
+					}),
+				})
+			);
+		});
+
+		it('error path — 4xx response surfaces as ApiError with parsed detail', async () => {
+			(fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+				jsonResponse(400, '{"message":"Invalid op key"}', 'Bad Request')
+			);
+			const { api, ApiError } = await import('./client');
+
+			let caught: unknown;
+			try {
+				await api.applyStreakOp({
+					opKey: '',
+					kind: 'increment',
+					occurredAt: 1715385600000,
+				});
+			} catch (err) {
+				caught = err;
+			}
+
+			expect(caught).toBeInstanceOf(ApiError);
+			expect((caught as InstanceType<typeof ApiError>).status).toBe(400);
+			expect((caught as InstanceType<typeof ApiError>).detail).toBe('Invalid op key');
+		});
+	});
+
 	it('covers endpoint wrappers for auth, lists, tasks, sync, and backup', async () => {
-		(fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-			async () => jsonResponse(200, '{}')
+		(fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(async () =>
+			jsonResponse(200, '{}')
 		);
 		const { api } = await import('./client');
 
@@ -143,7 +227,7 @@ describe('api client', () => {
 			email: 'member@example.com',
 			display: 'Member',
 			role: 'contributor',
-			password: 'secure-pass'
+			password: 'secure-pass',
 		});
 		await api.deleteMember('u-member');
 		await api.setMemberPassword('u-member', { password: 'new-member-pass' });
@@ -193,7 +277,7 @@ describe('api client', () => {
 				'POST /tasks',
 				'PATCH /tasks/t-1',
 				'DELETE /tasks/t-1',
-				'POST /tasks/t-1/status'
+				'POST /tasks/t-1/status',
 			])
 		);
 	});

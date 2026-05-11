@@ -2,6 +2,17 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { List } from '$shared/types/list';
 import type { Task } from '$shared/types/task';
 import type { SoundSettings } from '$shared/types/settings';
+import type { StreakOpKind, StreakBreakCause } from '$shared/types/streak';
+
+/** Persisted record in the outbound streakOps queue. */
+interface StreakOp {
+	opKey: string; // primary key (matches StreakOpRequest.opKey)
+	kind: StreakOpKind; // imported from $shared/types/streak
+	occurredAt: number; // ms epoch (matches StreakOpRequest.occurredAt)
+	cause?: StreakBreakCause | null; // only when kind === 'break'
+	enqueuedAt: number; // ms epoch — drives by-enqueued FIFO order
+	taskId?: string; // present when kind === 'increment'; carried for diagnostics
+}
 
 interface TaskSyncDB extends DBSchema {
 	lists: {
@@ -16,6 +27,11 @@ interface TaskSyncDB extends DBSchema {
 	settings: {
 		key: string;
 		value: SoundSettings & { id: string };
+	};
+	streakOps: {
+		key: string; // opKey (string)
+		value: StreakOp;
+		indexes: { 'by-enqueued': number };
 	};
 }
 
@@ -47,7 +63,7 @@ export const getDb = () => {
 		return null;
 	}
 	if (!dbPromise) {
-		dbPromise = openDB<TaskSyncDB>(dbNameForScope(dbScope), 2, {
+		dbPromise = openDB<TaskSyncDB>(dbNameForScope(dbScope), 3, {
 			upgrade(db) {
 				if (!db.objectStoreNames.contains('lists')) {
 					db.createObjectStore('lists', { keyPath: 'id' });
@@ -58,6 +74,10 @@ export const getDb = () => {
 				}
 				if (!db.objectStoreNames.contains('settings')) {
 					db.createObjectStore('settings', { keyPath: 'id' });
+				}
+				if (!db.objectStoreNames.contains('streakOps')) {
+					const streakOps = db.createObjectStore('streakOps', { keyPath: 'opKey' });
+					streakOps.createIndex('by-enqueued', 'enqueuedAt');
 				}
 			}
 		});

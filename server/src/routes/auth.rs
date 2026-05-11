@@ -85,7 +85,7 @@ pub(super) struct SoundSettingsResponse {
     pub(super) profile_attachments_json: Option<String>,
 }
 
-#[derive(Serialize, FromRow)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct UiPreferencesResponse {
     pub(super) theme: String,
@@ -95,6 +95,7 @@ pub(super) struct UiPreferencesResponse {
     pub(super) list_sort_json: Option<String>,
     pub(super) streak_settings_json: Option<String>,
     pub(super) streak_state_json: Option<String>,
+    pub(super) streak_revision: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -507,14 +508,71 @@ pub(super) async fn load_ui_preferences_for_user(
     pool: &SqlitePool,
     user_id: &str,
 ) -> Result<UiPreferencesResponse, StatusCode> {
-    sqlx::query_as::<_, UiPreferencesResponse>(
-        "select coalesce(ui_theme, 'default') as theme, ui_font as font, ui_completion_quotes as completion_quotes_json, ui_sidebar_panels as sidebar_panels_json, ui_list_sort as list_sort_json, streak_settings_json, streak_state_json from user where id = ?1 limit 1",
+    let row = sqlx::query(
+        "select
+            coalesce(u.ui_theme, 'default') as theme,
+            u.ui_font as font,
+            u.ui_completion_quotes as completion_quotes_json,
+            u.ui_sidebar_panels as sidebar_panels_json,
+            u.ui_list_sort as list_sort_json,
+            u.streak_settings_json as streak_settings_json,
+            s.count as streak_count,
+            s.last_reset_date as streak_last_reset_date,
+            s.day_complete_date as streak_day_complete_date,
+            s.revision as streak_revision
+        from user as u
+        left join user_streak as s on s.user_id = u.id
+        where u.id = ?1
+        limit 1",
     )
     .bind(user_id)
     .fetch_optional(pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::UNAUTHORIZED)
+    .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    use sqlx::Row;
+    let theme: String = row.try_get("theme").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let font: Option<String> =
+        row.try_get("font").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let completion_quotes_json: Option<String> =
+        row.try_get("completion_quotes_json").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let sidebar_panels_json: Option<String> =
+        row.try_get("sidebar_panels_json").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let list_sort_json: Option<String> =
+        row.try_get("list_sort_json").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let streak_settings_json: Option<String> =
+        row.try_get("streak_settings_json").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let streak_count: Option<i64> =
+        row.try_get("streak_count").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let streak_last_reset_date: Option<String> =
+        row.try_get("streak_last_reset_date").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let streak_day_complete_date: Option<String> =
+        row.try_get("streak_day_complete_date").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let streak_revision: Option<i64> =
+        row.try_get("streak_revision").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Build canonical streak_state_json from user_streak table (NOT user.streak_state_json).
+    // If the LEFT JOIN row is missing (brand-new user before seed), set to None.
+    let streak_state_json = streak_count.map(|count| {
+        serde_json::json!({
+            "count": count,
+            "lastResetDate": streak_last_reset_date,
+            "dayCompleteDate": streak_day_complete_date,
+        })
+        .to_string()
+    });
+
+    Ok(UiPreferencesResponse {
+        theme,
+        font,
+        completion_quotes_json,
+        sidebar_panels_json,
+        list_sort_json,
+        streak_settings_json,
+        streak_state_json,
+        streak_revision,
+    })
 }
 
 pub(super) async fn auth_get_preferences(
@@ -556,14 +614,17 @@ pub(super) async fn auth_update_preferences(
     } else {
         current.streak_settings_json
     };
-    let next_streak_state_json = if body.streak_state_json.is_some() {
-        body.streak_state_json
-    } else {
-        current.streak_state_json
-    };
+    if body.streak_state_json.is_some() {
+        tracing::debug!(
+            user_id = %ctx.user_id,
+            "ignoring inbound streakStateJson on PATCH /auth/preferences (server-authoritative streak)"
+        );
+    }
+    // streak_state_json is owned by user_streak; the legacy column stays at whatever
+    // it was last written to (will be dropped in a follow-up migration).
 
     sqlx::query(
-        "update user set ui_theme = ?1, ui_sidebar_panels = ?2, ui_list_sort = ?3, ui_font = ?4, ui_completion_quotes = ?5, streak_settings_json = ?6, streak_state_json = ?7 where id = ?8",
+        "update user set ui_theme = ?1, ui_sidebar_panels = ?2, ui_list_sort = ?3, ui_font = ?4, ui_completion_quotes = ?5, streak_settings_json = ?6 where id = ?7",
     )
     .bind(&next_theme)
     .bind(&next_sidebar_panels_json)
@@ -571,7 +632,6 @@ pub(super) async fn auth_update_preferences(
     .bind(&next_font)
     .bind(&next_completion_quotes_json)
     .bind(&next_streak_settings_json)
-    .bind(&next_streak_state_json)
     .bind(&ctx.user_id)
     .execute(&state.pool)
     .await
@@ -1197,6 +1257,7 @@ pub fn auth_routes(pool: &sqlx::SqlitePool) -> Router {
         .route("/me", get(auth_me).patch(auth_update_me))
         .route("/sound", get(auth_get_sound).patch(auth_update_sound))
         .route("/preferences", get(auth_get_preferences).patch(auth_update_preferences))
+        .route("/streak/op", post(super::streak::auth_apply_streak_op))
         .route("/backup", get(auth_export_backup).post(auth_restore_backup))
         .route("/password", patch(auth_change_password))
         .route("/members", get(auth_members).post(auth_create_member))
