@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use super::types::{
     app_state, ctx_from_headers, is_unique_violation, is_valid_task_status,
-    normalize_task_priority, AppState, Role,
+    normalize_task_priority, AppState, RequestCtx, Role,
 };
 
 #[derive(Serialize, FromRow)]
@@ -89,6 +89,14 @@ pub(super) async fn get_tasks(
     headers: HeaderMap,
 ) -> Result<Json<Vec<TaskRow>>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
+    let rows = get_tasks_for_ctx(&state, &ctx).await?;
+    Ok(Json(rows))
+}
+
+pub(super) async fn get_tasks_for_ctx(
+    state: &AppState,
+    ctx: &RequestCtx,
+) -> Result<Vec<TaskRow>, StatusCode> {
     let rows = if ctx.role == Role::Admin {
         sqlx::query_as::<_, TaskRow>(
             "select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
@@ -107,7 +115,7 @@ pub(super) async fn get_tasks(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     };
-    Ok(Json(rows))
+    Ok(rows)
 }
 
 pub(super) async fn create_task(
@@ -116,7 +124,15 @@ pub(super) async fn create_task(
     Json(body): Json<CreateTask>,
 ) -> Result<(StatusCode, Json<TaskRow>), StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
+    let (status, rec) = create_task_for_ctx(&state, &ctx, body).await?;
+    Ok((status, Json(rec)))
+}
 
+pub(super) async fn create_task_for_ctx(
+    state: &AppState,
+    ctx: &RequestCtx,
+    body: CreateTask,
+) -> Result<(StatusCode, TaskRow), StatusCode> {
     // ensure list belongs to space
     let list_exists: Option<i64> =
         sqlx::query_scalar("select 1 from list where id = ?1 and space_id = ?2")
@@ -213,7 +229,7 @@ pub(super) async fn create_task(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok((status, Json(rec)))
+    Ok((status, rec))
 }
 
 pub(super) async fn update_task_status(
@@ -223,6 +239,16 @@ pub(super) async fn update_task_status(
     Json(body): Json<UpdateTaskStatus>,
 ) -> Result<Json<TaskRow>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
+    let rec = update_task_status_for_ctx(&state, &ctx, id, body).await?;
+    Ok(Json(rec))
+}
+
+pub(super) async fn update_task_status_for_ctx(
+    state: &AppState,
+    ctx: &RequestCtx,
+    id: String,
+    body: UpdateTaskStatus,
+) -> Result<TaskRow, StatusCode> {
     if !is_valid_task_status(&body.status) {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -256,7 +282,7 @@ pub(super) async fn update_task_status(
 	.await
 	.map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(Json(rec))
+    Ok(rec)
 }
 
 pub(super) async fn delete_task(
@@ -317,6 +343,16 @@ pub(super) async fn update_task_meta(
     Json(body): Json<UpdateTaskMeta>,
 ) -> Result<Json<TaskRow>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
+    let rec = update_task_meta_for_ctx(&state, &ctx, id, body).await?;
+    Ok(Json(rec))
+}
+
+pub(super) async fn update_task_meta_for_ctx(
+    state: &AppState,
+    ctx: &RequestCtx,
+    id: String,
+    body: UpdateTaskMeta,
+) -> Result<TaskRow, StatusCode> {
     if let Some(status) = body.status.as_deref() {
         if !is_valid_task_status(status) {
             return Err(StatusCode::BAD_REQUEST);
@@ -426,7 +462,7 @@ pub(super) async fn update_task_meta(
     .await
     .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(Json(rec))
+    Ok(rec)
 }
 
 pub fn task_routes(pool: &sqlx::SqlitePool) -> Router {

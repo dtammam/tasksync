@@ -16,7 +16,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { api } from '$lib/api/client';
-import { getAuthMode, getAuthToken } from '$lib/api/headers';
+import { getAuthToken } from '$lib/api/headers';
 import { auth } from './auth';
 
 const mockedApi = vi.mocked(api);
@@ -35,18 +35,19 @@ describe('auth store', () => {
 		vi.clearAllMocks();
 	});
 
-	it('hydrates via legacy mode by calling /auth/me', async () => {
+	it('resolves anonymous and clears a stale legacy auth-mode key on hydrate', async () => {
+		// Device upgraded from the retired legacy header-auth mode: stale key, no token.
 		localStorage.setItem('tasksync:auth-mode', 'legacy');
-		mockedApi.me.mockResolvedValue(meUser);
 
 		await auth.hydrate();
 
-		expect(auth.get().status).toBe('authenticated');
-		expect(auth.get().source).toBe('legacy');
-		expect(auth.get().user?.email).toBe('admin@example.com');
+		expect(auth.get().status).toBe('anonymous');
+		expect(auth.get().error).toBeNull();
+		expect(localStorage.getItem('tasksync:auth-mode')).toBeNull();
+		expect(mockedApi.me).not.toHaveBeenCalled();
 	});
 
-	it('switches to token mode and stores token on login', async () => {
+	it('stores token on login', async () => {
 		mockedApi.login.mockResolvedValue({
 			token: 'jwt-token',
 			...meUser
@@ -54,23 +55,20 @@ describe('auth store', () => {
 
 		await auth.login('admin@example.com', 'tasksync', 's1');
 
-		expect(getAuthMode()).toBe('token');
 		expect(getAuthToken()).toBe('jwt-token');
 		expect(auth.get().status).toBe('authenticated');
 		expect(auth.get().source).toBe('token');
 	});
 
-	it('becomes anonymous without calling /auth/me when mode has no token', async () => {
+	it('becomes anonymous without calling /auth/me when there is no token', async () => {
 
 		await auth.hydrate();
 
 		expect(auth.get().status).toBe('anonymous');
-		expect(auth.get().mode).toBe('token');
 		expect(mockedApi.me).not.toHaveBeenCalled();
 	});
 
 	it('keeps token auth session when /auth/me fails due to network', async () => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.setItem('tasksync:auth-token', 'jwt-token');
 		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
 		mockedApi.me.mockRejectedValue(new Error('TypeError: Failed to fetch'));
@@ -87,7 +85,6 @@ describe('auth store', () => {
 	});
 
 	it('clears token auth session when /auth/me returns unauthorized', async () => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.setItem('tasksync:auth-token', 'jwt-token');
 		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
 		mockedApi.me.mockRejectedValue(new Error('API 401 Unauthorized'));
@@ -129,7 +126,6 @@ describe('auth store', () => {
 
 		auth.logout();
 
-		expect(getAuthMode()).toBe('token');
 		expect(getAuthToken()).toBeNull();
 		expect(auth.get().status).toBe('anonymous');
 	});

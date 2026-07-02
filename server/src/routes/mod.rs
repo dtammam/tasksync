@@ -8,6 +8,7 @@ pub use auth::auth_routes;
 pub use lists::list_routes;
 pub use sync::sync_routes;
 pub use tasks::task_routes;
+pub use types::validate_boot_secrets;
 
 #[cfg(test)]
 mod tests {
@@ -32,7 +33,8 @@ mod tests {
         UpdateTaskMeta, UpdateTaskStatus,
     };
     use super::types::{
-        ctx_from_headers, hash_password, AppState, Role, BACKUP_SCHEMA_V1, UI_FONTS, UI_THEMES,
+        ctx_from_headers, hash_password, issue_token, AppState, AuthClaims, Role, BACKUP_SCHEMA_V1,
+        UI_FONTS, UI_THEMES,
     };
 
     async fn setup_pool() -> SqlitePool {
@@ -92,6 +94,19 @@ mod tests {
             jwt_secret: "test-secret".to_string(),
             login_password: "test-pass".to_string(),
         }
+    }
+
+    /// Mints a GENUINE signed JWT via the production `issue_token` path and
+    /// returns headers carrying it, so every test request flows through the
+    /// real `ctx_from_headers` -> JWT decode -> `role_from_membership` chain.
+    /// This is deliberately NOT a `RequestCtx` shortcut: there is no way to
+    /// obtain a `RequestCtx` in tests other than verified-token decoding.
+    fn auth_headers(state: &AppState, user_id: &str, space_id: &str) -> HeaderMap {
+        let token =
+            issue_token(user_id, space_id, &state.jwt_secret).expect("issue real test token");
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, format!("Bearer {token}").parse().expect("auth header"));
+        headers
     }
 
     fn shared_ui_themes_from_contract() -> Vec<String> {
@@ -207,9 +222,7 @@ mod tests {
     async fn update_profile_sets_avatar_icon() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let updated = auth_update_me(
             State(state),
@@ -231,9 +244,7 @@ mod tests {
     async fn user_can_update_and_clear_sound_settings() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let defaults = auth_get_sound(State(state.clone()), headers.clone())
             .await
@@ -306,9 +317,7 @@ mod tests {
     async fn user_can_update_ui_preferences() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let defaults = auth_get_preferences(State(state.clone()), headers.clone())
             .await
@@ -353,9 +362,7 @@ mod tests {
     async fn user_preferences_reject_unknown_ui_theme() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let result = auth_update_preferences(
             State(state),
@@ -379,9 +386,7 @@ mod tests {
     async fn user_can_update_font_and_completion_quotes() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let updated = auth_update_preferences(
             State(state),
@@ -410,9 +415,7 @@ mod tests {
     async fn user_preferences_reject_unknown_ui_font() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let result = auth_update_preferences(
             State(state),
@@ -494,9 +497,7 @@ mod tests {
     async fn admin_can_export_space_backup_snapshot() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         sqlx::query(
             "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, created_by_user_id, assignee_user_id) values ('t-backup', 's1', 'Backup seed task', 'pending', 'goal-management', 0, 'a', 1, 1, 'u-admin', 'u-admin')",
@@ -520,9 +521,7 @@ mod tests {
     async fn admin_can_restore_space_backup_snapshot() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         sqlx::query(
             "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, created_by_user_id, assignee_user_id) values ('t-restore', 's1', 'Restore seed task', 'pending', 'goal-management', 0, 'a', 1, 1, 'u-admin', 'u-admin')",
@@ -582,9 +581,7 @@ mod tests {
     async fn user_can_change_password_and_login_with_new_password() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let status = auth_change_password(
             State(state.clone()),
@@ -627,9 +624,7 @@ mod tests {
     async fn change_password_rejects_wrong_current_password() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let result = auth_change_password(
             State(state),
@@ -647,9 +642,7 @@ mod tests {
     async fn admin_can_create_member_and_manage_grants() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let created = auth_create_member(
             State(state.clone()),
@@ -694,9 +687,7 @@ mod tests {
     async fn created_member_can_login_with_member_password() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let created = auth_create_member(
             State(state.clone()),
@@ -732,9 +723,7 @@ mod tests {
     async fn admin_create_member_rejects_short_password() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let result = auth_create_member(
             State(state),
@@ -755,9 +744,7 @@ mod tests {
     async fn admin_can_reset_member_password() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut admin_headers = HeaderMap::new();
-        admin_headers.insert("x-space-id", "s1".parse().expect("space"));
-        admin_headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let admin_headers = auth_headers(&state, "u-admin", "s1");
 
         let status = auth_set_member_password(
             State(state.clone()),
@@ -798,9 +785,7 @@ mod tests {
     async fn admin_can_delete_member() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let status =
             auth_delete_member(State(state.clone()), headers, Path("u-contrib".to_string()))
@@ -821,9 +806,7 @@ mod tests {
     async fn admin_cannot_delete_self() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let result = auth_delete_member(State(state), headers, Path("u-admin".to_string())).await;
         assert_eq!(result.err(), Some(axum::http::StatusCode::BAD_REQUEST));
@@ -833,9 +816,7 @@ mod tests {
     async fn contributor_cannot_manage_members_or_grants() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let create_result = auth_create_member(
             State(state.clone()),
@@ -882,9 +863,7 @@ mod tests {
     async fn contributor_task_creation_assigns_creator_even_if_other_assignee_requested() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let created = create_task(
             State(state),
@@ -919,9 +898,7 @@ mod tests {
     async fn create_task_is_idempotent_when_client_retries_same_id() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
         let retried_id = uuid::Uuid::new_v4().to_string();
 
         let first = create_task(
@@ -992,9 +969,7 @@ mod tests {
         .await
         .expect("insert task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let status = delete_task(State(state), headers, Path("t-delete".to_string()))
             .await
@@ -1019,9 +994,7 @@ mod tests {
         .await
         .expect("insert task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let status = delete_task(State(state), headers, Path("t-admin-owned".to_string())).await;
         assert_eq!(status.err(), Some(axum::http::StatusCode::FORBIDDEN));
@@ -1038,9 +1011,7 @@ mod tests {
         .await
         .expect("insert task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let updated = update_task_meta(
             State(state),
@@ -1080,9 +1051,7 @@ mod tests {
         .await
         .expect("insert recurring task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
         let completed_ts = chrono::Utc::now().timestamp_millis();
 
         let updated = update_task_meta(
@@ -1127,9 +1096,7 @@ mod tests {
         .await
         .expect("insert task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let result = update_task_meta(
             State(state),
@@ -1167,9 +1134,7 @@ mod tests {
         .await
         .expect("insert owned task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let updated = update_task_meta(
             State(state.clone()),
@@ -1222,9 +1187,7 @@ mod tests {
         .await
         .expect("insert owned task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let result = update_task_meta(
             State(state),
@@ -1274,9 +1237,7 @@ mod tests {
         .await
         .expect("insert hidden task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let visible_lists =
             get_lists(State(state.clone()), headers.clone()).await.expect("lists should load").0;
@@ -1318,9 +1279,7 @@ mod tests {
         .await
         .expect("insert hidden task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let response = sync_pull(State(state), headers, Json(SyncPullBody { since_ts: Some(150) }))
             .await
@@ -1347,9 +1306,7 @@ mod tests {
         .await
         .expect("insert task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let status =
             delete_task(State(state.clone()), headers.clone(), Path("t-deleted".to_string()))
@@ -1373,9 +1330,7 @@ mod tests {
     async fn sync_push_applies_create_then_status_update_for_admin() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let response = sync_push(
             State(state),
@@ -1437,9 +1392,7 @@ mod tests {
         .await
         .expect("insert locked task");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-contrib".parse().expect("user"));
+        let headers = auth_headers(&state, "u-contrib", "s1");
 
         let response = sync_push(
             State(state),
@@ -1466,9 +1419,7 @@ mod tests {
     async fn admin_can_create_list() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let (status, Json(created)) = create_list(
             State(state),
@@ -1496,9 +1447,7 @@ mod tests {
     async fn admin_can_get_all_lists() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let Json(lists) = get_lists(State(state), headers).await.expect("get lists should succeed");
 
@@ -1512,9 +1461,7 @@ mod tests {
     async fn admin_can_update_list_name_icon_color() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let Json(updated) = update_list(
             State(state),
@@ -1542,12 +1489,7 @@ mod tests {
         let state = test_state(&pool);
 
         // Create a fresh list to delete (goal-management may have tasks in other tests)
-        let create_headers = {
-            let mut h = HeaderMap::new();
-            h.insert("x-space-id", "s1".parse().expect("space"));
-            h.insert("x-user-id", "u-admin".parse().expect("user"));
-            h
-        };
+        let create_headers = auth_headers(&state, "u-admin", "s1");
         let (_, Json(new_list)) = create_list(
             State(state.clone()),
             create_headers,
@@ -1561,14 +1503,86 @@ mod tests {
         .await
         .expect("create temp list");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("x-space-id", "s1".parse().expect("space"));
-        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+        let headers = auth_headers(&state, "u-admin", "s1");
 
         let status = delete_list(State(state), headers, Path(new_list.id))
             .await
             .expect("delete list should succeed");
 
         assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn request_with_only_legacy_identity_headers_is_unauthorized() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-space-id", "s1".parse().expect("space"));
+        headers.insert("x-user-id", "u-admin".parse().expect("user"));
+
+        let ctx = ctx_from_headers(&headers, &state).await;
+        assert_eq!(ctx.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        let tasks = get_tasks(State(state.clone()), headers.clone()).await;
+        assert_eq!(tasks.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        let pull = sync_pull(State(state), headers, Json(SyncPullBody { since_ts: None })).await;
+        assert_eq!(pull.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn request_with_garbage_or_non_bearer_token_is_unauthorized() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+
+        let mut garbage_headers = HeaderMap::new();
+        garbage_headers
+            .insert(AUTHORIZATION, "Bearer not-a-real-token".parse().expect("auth header"));
+        let garbage = get_tasks(State(state.clone()), garbage_headers).await;
+        assert_eq!(garbage.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        let token = issue_token("u-admin", "s1", &state.jwt_secret).expect("issue token");
+        let mut non_bearer_headers = HeaderMap::new();
+        non_bearer_headers
+            .insert(AUTHORIZATION, format!("Token {token}").parse().expect("auth header"));
+        let non_bearer = get_tasks(State(state), non_bearer_headers).await;
+        assert_eq!(non_bearer.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn request_with_expired_token_is_unauthorized() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        // Expired well beyond jsonwebtoken's default validation leeway (60s),
+        // signed with the genuine test secret so only expiry can fail it.
+        let expired_claims =
+            AuthClaims { sub: "u-admin".to_string(), space_id: "s1".to_string(), exp: 1 };
+        let token = jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            &expired_claims,
+            &jsonwebtoken::EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+        )
+        .expect("encode expired token");
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, format!("Bearer {token}").parse().expect("auth header"));
+
+        let result = get_tasks(State(state), headers).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn valid_token_for_user_without_membership_is_unauthorized() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into user (id, email, display) values ('u-ghost', 'ghost@example.com', 'Ghost')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert user without membership");
+
+        let headers = auth_headers(&state, "u-ghost", "s1");
+        let result = get_tasks(State(state), headers).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
     }
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildHeaders, getAuthToken, setAuthMode, setAuthToken } from './headers';
+import { buildHeaders, getAuthToken, setAuthToken } from './headers';
 
 describe('auth headers', () => {
 	afterEach(() => {
@@ -12,17 +12,21 @@ describe('auth headers', () => {
 		expect(buildHeaders()).toEqual({ authorization: 'Bearer abc123' });
 	});
 
-	it('falls back to legacy headers when token is missing', () => {
-		setAuthMode('legacy');
-		setAuthToken(null);
-		const headers = buildHeaders();
-		expect(headers['x-space-id']).toBeTruthy();
-		expect(headers['x-user-id']).toBeTruthy();
-	});
-
-	it('returns empty headers in token mode without token', () => {
-		setAuthMode('token');
+	it('returns empty headers without a token', () => {
 		setAuthToken(null);
 		expect(buildHeaders()).toEqual({});
+	});
+
+	it('treats a whitespace-only stored token as absent', () => {
+		localStorage.setItem('tasksync:auth-token', '   ');
+		expect(getAuthToken()).toBeNull();
+		expect(buildHeaders()).toEqual({});
+	});
+
+	it('setAuthToken(null) removes the stored token', () => {
+		setAuthToken('abc123');
+		setAuthToken(null);
+		expect(localStorage.getItem('tasksync:auth-token')).toBeNull();
+		expect(getAuthToken()).toBeNull();
 	});
 });

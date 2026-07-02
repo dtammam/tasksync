@@ -13,8 +13,8 @@
 ## High‑level Design
 - **Client:** SvelteKit PWA (TypeScript) using IndexedDB + OPFS; WebAudio for completion sound.
 - **Server:** Rust (Axum + SQLx), single static binary; SQLite (WAL).
-- **Sync:** Append‑only changesets + per‑entity version vector; WS live sync, HTTP fallback.
-- **Conflicts:** Per‑field LWW + deterministic tiebreak; sets=union+tombstones; ordering via fractional indexes.
+- **Sync:** HTTP only — `POST /sync/pull` + `POST /sync/push` (protocol `delta-v1`); whole list/task rows scoped by role and list grants; incremental pull via a `since_ts` cursor (`cursor_ts` in responses). No WebSocket.
+- **Conflicts:** Arrival‑order, whole‑row overwrite — the last write to reach the server wins for the fields it carries; deletes converge via tombstones; ordering via fractional order keys.
 
 ### Component Diagram (PlantUML)
 ```plantuml
@@ -24,14 +24,14 @@ package "tasksync Client (PWA)" {
   [UI (SvelteKit)] --> [Local Stores]
   [Local Stores] --> [IndexedDB]
   [Service Worker] --> [Sync Engine]
-  [Sync Engine] --> [WebSocket/HTTP]
+  [Sync Engine] --> [HTTP]
 }
 package "tasksync Server" {
-  [HTTP+WS API]
+  [HTTP API]
   [Sync Coordinator]
   [SQLite]
 }
-[WebSocket/HTTP] <--> [HTTP+WS API]
+[HTTP] <--> [HTTP API]
 [Sync Coordinator] --> [SQLite]
 @enduml
 ```
@@ -99,7 +99,6 @@ Area { id, name, order }
 Tag { id, name, color? }
 RecurrenceRule { id, rrule, timezone, skip_dates:[date] }
 RecurrenceState { last_instance_dt?, last_gen_dt }
-Change { id, entity, entity_id, field_deltas:json, vv:json, client_id, ts, actor_user_id }
 User { id, email, display, password_hash }
 Space { id, name }
 Membership { id, space_id, user_id, role:('admin'|'contributor') }
@@ -122,30 +121,19 @@ create table if not exists list_grant (
   list_id text not null,
   user_id text not null
 );
-create table if not exists change (
-  id text primary key,
-  space_id text not null,
-  entity text not null,
-  entity_id text not null,
-  field_deltas text not null,
-  vv text not null,
-  client_id text not null,
-  ts integer not null,
-  actor_user_id text not null
-);
 ```
 
-## Sync Protocol (concise)
-- **Hello:** client→server `client_id`, `since`, `known_server_vv`.
-- **Delta:** server→client `{changes[], server_vv}` (scoped by role and grants).
-- **Push:** client→server `{changes[]}` (server validates role; contributors may only create tasks in granted lists).
-- **Live:** WebSocket for streaming updates; HTTP polling fallback.
+## Sync Protocol (current implementation: `delta-v1`)
+- **Transport:** HTTP only — `POST /sync/pull` and `POST /sync/push`, both authenticated like every other endpoint. There is no WebSocket; remote updates arrive on the next pull.
+- **Pull:** request `{ since_ts? }` → response `{ protocol: "delta-v1", cursor_ts, lists[], tasks[], deleted_tasks[] }`. Rows are whole `ListRow`/`TaskRow` records scoped by role and list grants (admins see the whole space; contributors see granted lists). Lists are always a full snapshot; when `since_ts` is supplied, tasks are filtered to `updated_ts >= since_ts` and deletions to tombstones with `deleted_ts >= since_ts`. `cursor_ts` = max(task `updated_ts`, tombstone `deleted_ts`) within the caller's scope; the client sends it back as the next `since_ts`.
+- **Push:** request `{ changes[] }` — up to 500 changes per request (larger batches are rejected with `400`). Each change is `create_task` / `update_task` / `update_task_status` carrying a client‑generated `op_id`, applied sequentially through the same code paths (and role/grant checks) as the REST endpoints. Response `{ protocol, cursor_ts, applied[], rejected[] }`: per‑op failures are reported in `rejected[]` keyed by `op_id`; `applied[]` is a positional list of resulting task rows, **not** keyed by `op_id` (known limitation, deferred to a future sync‑contract revision).
+- **Idempotency:** client‑supplied task ids make re‑pushed creates converge (unique violation → the existing row is returned, `200` instead of `201`); updates are absolute‑value writes, so replays are no‑ops; re‑pulls are pure reads.
+- **Client cursor:** the client sync coordinator (`web/src/lib/sync/sync.ts`) keeps its pull cursor in memory only — it resets on every app launch, so a cold start performs a full pull.
 
-### Conflict Rules
-- **Per‑field LWW** using `{logical_ts, client_id}`; tie by `client_id` lexicographically.
+### Conflict Rules (current implementation)
+- **Arrival‑order, whole‑row overwrite:** the last write to **reach the server** wins for the fields it carries. `update_task_meta` applies `coalesce(?, column)` per column, so omitted optional fields are preserved and provided fields overwrite unconditionally. (Exceptions: the punt fields `punted_from_due_date`/`punted_on_date` are written unconditionally, and status transitions manage `completed_ts`.) There is no comparison of client vs server timestamps, no version vectors, no per‑field LWW by logical clock, and no tiebreak rule.
+- **Deletes:** converge via `task_tombstone` rows; a create for a tombstoned id clears the tombstone (deliberate resurrect‑on‑create).
 - **Order:** fractional order keys (`b`, `bm`, `bmx`, …) for stable concurrent inserts.
-- **Sets:** union with tombstones for removals.
-- **Notes:** full‑field replace in MVP; consider CRDT in V1 if collaboration needed.
 
 ## Recurrence (RRULE subset)
 - Support: `FREQ`, `BYDAY`, `BYMONTHDAY`, `BYSETPOS`, `INTERVAL`, `UNTIL`, `COUNT` + helpers (nth weekday, last weekday, business days).
@@ -183,3 +171,33 @@ create table if not exists change (
 - **MVP**: PWA shell, local stores + IndexedDB/OPFS, CRUD, recurrence, My Day, single‑binary server, sync, role model (admin/contributor create‑only), completion sounds.
 - **V1**: Multi‑user spaces, invites, E2EE (optional), SQLite WASM + FTS5, natural‑language add.
 - **V2**: Plugin API, collaborative notes, optional native wrappers, push/background sync.
+
+### Future sync protocol (aspirational — not implemented)
+
+The following design is preserved from the original architecture sketch. None of it exists in the current implementation — there is no `change` table in any migration, no WebSocket endpoint, and no version‑vector bookkeeping. The protocol actually in use is described in "Sync Protocol" above.
+
+- **Changesets:** append‑only changesets + per‑entity version vector.
+- **Hello:** client→server `client_id`, `since`, `known_server_vv`.
+- **Delta:** server→client `{changes[], server_vv}` (scoped by role and grants).
+- **Push:** client→server `{changes[]}` (server validates role; contributors may only create tasks in granted lists).
+- **Live:** WebSocket for streaming updates; HTTP polling fallback.
+- **Conflict rules:** per‑field LWW using `{logical_ts, client_id}`, tie by `client_id` lexicographically; sets = union with tombstones for removals; notes full‑field replace initially, consider CRDT later if collaboration needed.
+- **Change entity:**
+
+```
+Change { id, entity, entity_id, field_deltas:json, vv:json, client_id, ts, actor_user_id }
+```
+
+```sql
+create table if not exists change (
+  id text primary key,
+  space_id text not null,
+  entity text not null,
+  entity_id text not null,
+  field_deltas text not null,
+  vv text not null,
+  client_id text not null,
+  ts integer not null,
+  actor_user_id text not null
+);
+```

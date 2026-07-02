@@ -183,7 +183,7 @@
 		if (state.status === 'authenticated' && state.user) {
 			return `space:${state.user.space_id}:user:${state.user.user_id}`;
 		}
-		return state.mode === 'token' ? 'token-anonymous' : 'legacy-default';
+		return 'token-anonymous';
 	};
 
 	const hydrateScopedStores = async () => {

@@ -35,11 +35,62 @@ pub(super) struct RequestCtx {
     pub(super) role: Role,
 }
 
+pub(super) const JWT_SECRET_DENYLIST: [&str; 2] = ["tasksync-dev-secret", "change-me"];
+pub(super) const DEV_LOGIN_PASSWORD_DENYLIST: [&str; 1] = ["tasksync"];
+
+/// Validates a single secret value against the fail-closed boot policy.
+///
+/// Pure (no env access) so the full matrix is unit-testable without env-var
+/// mutation. Fails on unset, empty/whitespace-only, or an exact match against
+/// the known-default denylist; the error names the variable, the reason, and
+/// the fix.
+fn validate_secret(name: &str, value: Option<String>, denylist: &[&str]) -> Result<String, String> {
+    match value {
+        None => Err(format!("{name} is unset — set it in .env (see .env.example)")),
+        Some(v) if v.trim().is_empty() => {
+            Err(format!("{name} is empty — set it in .env (see .env.example)"))
+        }
+        Some(v) if denylist.contains(&v.as_str()) => Err(format!(
+            "{name} is a known default (\"{v}\") — set a real value in .env (see .env.example)"
+        )),
+        Some(v) => Ok(v),
+    }
+}
+
+/// Boot preflight: refuses default/placeholder secrets in every run mode.
+///
+/// Reads `JWT_SECRET` and `DEV_LOGIN_PASSWORD` from the environment and
+/// aggregates ALL failures into one actionable message so operators fix
+/// everything in a single pass. Called from `main()` before the database
+/// connect; `app_state()` relies on this having passed.
+pub fn validate_boot_secrets() -> Result<(), String> {
+    let mut failures: Vec<String> = Vec::new();
+    if let Err(message) =
+        validate_secret("JWT_SECRET", env::var("JWT_SECRET").ok(), &JWT_SECRET_DENYLIST)
+    {
+        failures.push(message);
+    }
+    if let Err(message) = validate_secret(
+        "DEV_LOGIN_PASSWORD",
+        env::var("DEV_LOGIN_PASSWORD").ok(),
+        &DEV_LOGIN_PASSWORD_DENYLIST,
+    ) {
+        failures.push(message);
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
+}
+
 pub(super) fn app_state(pool: &SqlitePool) -> AppState {
     AppState {
         pool: pool.clone(),
-        jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| "tasksync-dev-secret".to_string()),
-        login_password: env::var("DEV_LOGIN_PASSWORD").unwrap_or_else(|_| "tasksync".to_string()),
+        jwt_secret: env::var("JWT_SECRET")
+            .expect("JWT_SECRET validated by validate_boot_secrets at boot"),
+        login_password: env::var("DEV_LOGIN_PASSWORD")
+            .expect("DEV_LOGIN_PASSWORD validated by validate_boot_secrets at boot"),
     }
 }
 
@@ -117,20 +168,7 @@ pub(super) async fn ctx_from_headers(
         }
     }
 
-    let space_id = headers
-        .get("x-space-id")
-        .and_then(|v| v.to_str().ok())
-        .ok_or(StatusCode::UNAUTHORIZED)?
-        .to_string();
-    let user_id = headers
-        .get("x-user-id")
-        .and_then(|v| v.to_str().ok())
-        .ok_or(StatusCode::UNAUTHORIZED)?
-        .to_string();
-
-    let role = role_from_membership(&state.pool, &space_id, &user_id).await?;
-
-    Ok(RequestCtx { space_id, user_id, role })
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 pub(super) fn normalize_avatar_icon(raw: Option<String>) -> Option<String> {
@@ -467,4 +505,80 @@ pub(super) fn normalize_task_priority(raw: Option<i64>) -> Result<Option<i64>, S
         return Ok(Some(priority));
     }
     Err(StatusCode::BAD_REQUEST)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_secret, DEV_LOGIN_PASSWORD_DENYLIST, JWT_SECRET_DENYLIST};
+
+    // The full fail-closed matrix is tested through the PURE `validate_secret`
+    // by passing `Option<String>` values directly — no env-var mutation, which
+    // would be racy under parallel test execution.
+
+    #[test]
+    fn validate_secret_rejects_unset_value_naming_variable_and_fix() {
+        let err = validate_secret("JWT_SECRET", None, &JWT_SECRET_DENYLIST).unwrap_err();
+        assert!(err.contains("JWT_SECRET"), "error should name the variable: {err}");
+        assert!(err.contains("unset"), "error should state the reason: {err}");
+        assert!(err.contains(".env.example"), "error should point at the fix: {err}");
+    }
+
+    #[test]
+    fn validate_secret_rejects_empty_value() {
+        let err =
+            validate_secret("JWT_SECRET", Some(String::new()), &JWT_SECRET_DENYLIST).unwrap_err();
+        assert!(err.contains("JWT_SECRET"), "error should name the variable: {err}");
+        assert!(err.contains("empty"), "error should state the reason: {err}");
+    }
+
+    #[test]
+    fn validate_secret_rejects_whitespace_only_value() {
+        let err = validate_secret("JWT_SECRET", Some("   ".to_string()), &JWT_SECRET_DENYLIST)
+            .unwrap_err();
+        assert!(err.contains("empty"), "whitespace-only should count as empty: {err}");
+    }
+
+    #[test]
+    fn validate_secret_rejects_every_denylisted_jwt_secret_literal() {
+        for literal in JWT_SECRET_DENYLIST {
+            let err =
+                validate_secret("JWT_SECRET", Some(literal.to_string()), &JWT_SECRET_DENYLIST)
+                    .unwrap_err();
+            assert!(err.contains("known default"), "should reject {literal:?}: {err}");
+            assert!(err.contains(literal), "error should show the rejected value: {err}");
+        }
+    }
+
+    #[test]
+    fn validate_secret_rejects_denylisted_dev_login_password_literal() {
+        let err = validate_secret(
+            "DEV_LOGIN_PASSWORD",
+            Some("tasksync".to_string()),
+            &DEV_LOGIN_PASSWORD_DENYLIST,
+        )
+        .unwrap_err();
+        assert!(err.contains("DEV_LOGIN_PASSWORD"), "error should name the variable: {err}");
+        assert!(err.contains("known default"), "error should state the reason: {err}");
+    }
+
+    #[test]
+    fn validate_secret_accepts_a_real_value_and_returns_it_unchanged() {
+        let value = validate_secret(
+            "JWT_SECRET",
+            Some("a-genuinely-random-32-byte-secret".to_string()),
+            &JWT_SECRET_DENYLIST,
+        )
+        .expect("real value should validate");
+        assert_eq!(value, "a-genuinely-random-32-byte-secret");
+    }
+
+    #[test]
+    fn validate_secret_applies_denylists_per_variable_not_globally() {
+        // "tasksync" is denylisted for DEV_LOGIN_PASSWORD but not for
+        // JWT_SECRET; each variable is checked only against its own denylist.
+        let value =
+            validate_secret("JWT_SECRET", Some("tasksync".to_string()), &JWT_SECRET_DENYLIST)
+                .expect("value outside this variable's denylist should validate");
+        assert_eq!(value, "tasksync");
+    }
 }

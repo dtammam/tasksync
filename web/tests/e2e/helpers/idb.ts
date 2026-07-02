@@ -6,9 +6,8 @@ export const waitForTaskInIdb = async (page: Page, title: string) => {
 		.poll(async () =>
 			page.evaluate(async (taskTitle) => {
 				const resolveScopedDbName = () => {
-					const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
 					const rawUser = localStorage.getItem('tasksync:auth-user');
-					let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
+					let scope = 'token-anonymous';
 					if (rawUser) {
 						try {
 							const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
@@ -63,9 +62,8 @@ export const waitForTaskInIdb = async (page: Page, title: string) => {
 export const readTaskFromIdb = async (page: Page, title: string) =>
 	page.evaluate(async (taskTitle) => {
 		const resolveScopedDbName = () => {
-			const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
 			const rawUser = localStorage.getItem('tasksync:auth-user');
-			let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
+			let scope = 'token-anonymous';
 			if (rawUser) {
 				try {
 					const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
@@ -140,9 +138,8 @@ export const updateTaskInIdb = async (
 			taskPatch: Record<string, unknown>;
 		}) => {
 			const resolveScopedDbName = () => {
-				const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
 				const rawUser = localStorage.getItem('tasksync:auth-user');
-				let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
+				let scope = 'token-anonymous';
 				if (rawUser) {
 					try {
 						const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };
@@ -215,9 +212,8 @@ export const updateTaskInIdb = async (
 export const readTasksFromIdbByTitle = async (page: Page, title: string) =>
 	page.evaluate(async (taskTitle) => {
 		const resolveScopedDbName = () => {
-			const authMode = localStorage.getItem('tasksync:auth-mode') ?? 'legacy';
 			const rawUser = localStorage.getItem('tasksync:auth-user');
-			let scope = authMode === 'token' ? 'token-anonymous' : 'legacy-default';
+			let scope = 'token-anonymous';
 			if (rawUser) {
 				try {
 					const parsed = JSON.parse(rawUser) as { user_id?: string; space_id?: string };

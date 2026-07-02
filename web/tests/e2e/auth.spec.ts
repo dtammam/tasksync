@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForTaskInIdb } from './helpers/idb';
 
 const ensureAccountPanelOpen = async (page: Page, options?: { requireEmail?: boolean }) => {
 	const authEmail = page.getByTestId('auth-email');
@@ -101,7 +102,6 @@ test('@smoke can sign in with token mode and restore session after reload', asyn
 	await page.addInitScript(() => {
 		if (sessionStorage.getItem('pw-auth-init') === '1') return;
 		sessionStorage.setItem('pw-auth-init', '1');
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.removeItem('tasksync:auth-token');
 		localStorage.removeItem('tasksync:auth-user');
 	});
@@ -188,7 +188,6 @@ test('@smoke can sign in with token mode and restore session after reload', asyn
 
 test('can change password from account panel', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.removeItem('tasksync:auth-token');
 		localStorage.removeItem('tasksync:auth-user');
 	});
@@ -270,7 +269,6 @@ test('can change password from account panel', async ({ page }) => {
 
 test('shows clear sign-in guidance when login endpoint returns 404', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.removeItem('tasksync:auth-token');
 		localStorage.removeItem('tasksync:auth-user');
 	});
@@ -289,4 +287,101 @@ test('shows clear sign-in guidance when login endpoint returns 404', async ({ pa
 	await expect(
 		page.getByText('Sign in endpoint was not found (404). Check the API URL and server version.')
 	).toBeVisible();
+});
+
+test('stale legacy-mode device resolves to anonymous and orphans legacy-default data', async ({
+	page
+}) => {
+	// Blank same-origin page so the marker database can be seeded before the app runs.
+	await page.route('**/e2e-blank', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'text/html',
+			body: '<!doctype html><title>blank</title>'
+		})
+	);
+	await page.addInitScript(() => {
+		// Seed the pre-upgrade state exactly once; later navigations must not
+		// re-create the stale key after the app has cleaned it up.
+		if (sessionStorage.getItem('pw-stale-legacy-init') === '1') return;
+		sessionStorage.setItem('pw-stale-legacy-init', '1');
+		localStorage.setItem('tasksync:auth-mode', 'legacy');
+		localStorage.removeItem('tasksync:auth-token');
+		localStorage.removeItem('tasksync:auth-user');
+	});
+
+	// Pre-seed a marker task in the retired legacy-default database.
+	await page.goto('/e2e-blank');
+	await page.evaluate(async () => {
+		await new Promise<void>((resolve, reject) => {
+			const req = indexedDB.open('tasksync_legacy-default', 1);
+			req.onupgradeneeded = () => {
+				if (!req.result.objectStoreNames.contains('tasks')) {
+					req.result.createObjectStore('tasks', { keyPath: 'id' });
+				}
+			};
+			req.onsuccess = () => {
+				const db = req.result;
+				const tx = db.transaction('tasks', 'readwrite');
+				tx.objectStore('tasks').put({ id: 'legacy-marker', title: 'Legacy marker task' });
+				tx.oncomplete = () => {
+					db.close();
+					resolve();
+				};
+				tx.onerror = () => {
+					db.close();
+					reject(tx.error);
+				};
+			};
+			req.onerror = () => reject(req.error);
+		});
+	});
+
+	// (a) The app loads to the normal anonymous state with sign-in available —
+	// no error loop, no blank screen.
+	await page.goto('/');
+	await ensureAccountPanelOpen(page, { requireEmail: true });
+
+	// (b) hydrate() removed the stale legacy mode key.
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem('tasksync:auth-mode')))
+		.toBe(null);
+
+	// (c) A task created while signed out lands in the anonymous token scope
+	// (waitForTaskInIdb resolves tasksync_token-anonymous for a user-less device).
+	await page.goto('/');
+	const title = `Stale legacy anon ${Math.random().toString(36).slice(2, 8)}`;
+	await page.getByTestId('new-task-input').fill(title);
+	await page.getByTestId('new-task-submit').click();
+	await waitForTaskInIdb(page, title);
+
+	// (d) The legacy-default database is orphaned: still present, marker untouched.
+	const marker = await page.evaluate(async () => {
+		const databases = await indexedDB.databases();
+		if (!databases.some((db) => db.name === 'tasksync_legacy-default')) return null;
+		return new Promise<{ id?: string; title?: string } | null>((resolve) => {
+			const req = indexedDB.open('tasksync_legacy-default');
+			req.onsuccess = () => {
+				const db = req.result;
+				if (!Array.from(db.objectStoreNames).includes('tasks')) {
+					db.close();
+					resolve(null);
+					return;
+				}
+				const tx = db.transaction('tasks', 'readonly');
+				const getReq = tx.objectStore('tasks').get('legacy-marker');
+				getReq.onsuccess = () => {
+					const value = getReq.result as { id?: string; title?: string } | undefined;
+					db.close();
+					resolve(value ?? null);
+				};
+				getReq.onerror = () => {
+					db.close();
+					resolve(null);
+				};
+			};
+			req.onerror = () => resolve(null);
+		});
+	});
+	expect(marker).toEqual({ id: 'legacy-marker', title: 'Legacy marker task' });
 });
