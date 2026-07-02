@@ -223,6 +223,7 @@ Active plans currently in progress:
 (none)
 
 Completed plans:
+- `docs/exec-plans/completed/2026-07-01-auth-hardening.md` — Auth hardening: header-auth bypass removal (Bearer-only `ctx_from_headers`, sync passes `RequestCtx` directly, real-JWT test migration), fail-closed boot preflight on unset/default `JWT_SECRET`/`DEV_LOGIN_PASSWORD` (+dotenvy local dev), additive `CORS_ALLOWED_ORIGINS` allow-list, ARCHITECTURE.md sync-doc reconciliation; branch 1 of 3 in the remediation arc; #047 `DEV_LOGIN_PASSWORD` shared-fallback-login flagged High for branch 2 (complete 2026-07-02)
 - `docs/exec-plans/completed/2026-05-10-hide-hamburger-on-desktop.md` — Hide hamburger nav-toggle on desktop via single CSS `display:none` in +layout.svelte base rule; existing 900px media query restores `inline-flex` on mobile; E2E smoke covering both viewports (complete 2026-05-10)
 - `docs/exec-plans/completed/2026-05-10-rename-today-to-lists.md` — Rename sidebar top-zone section label from "Today" to "Lists" in Sidebar.svelte (line 749), single-string copy change bundled on feat/remove-sidebar-pin branch (complete 2026-05-10)
 - `docs/exec-plans/completed/2026-05-09-sidebar-fixed-zones.md` — Sidebar fixed zones on mobile: three-zone flexbox layout (frozen top, scrollable middle, frozen bottom) in Sidebar.svelte with display:contents desktop passthrough, E2E test (complete 2026-05-09)
