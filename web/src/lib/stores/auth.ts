@@ -1,16 +1,16 @@
 import { get, writable } from 'svelte/store';
 import { api, apiErrorStatus } from '$lib/api/client';
-import { getAuthMode, getAuthToken, setAuthMode, setAuthToken, type AuthMode } from '$lib/api/headers';
+import { getAuthToken, setAuthToken } from '$lib/api/headers';
 import type { AuthUpdateProfileRequest, AuthUser } from '$shared/types/auth';
 
 const authUserKey = 'tasksync:auth-user';
+const staleAuthModeKey = 'tasksync:auth-mode';
 
 type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
-type AuthOrigin = 'token' | 'legacy' | null;
+type AuthOrigin = 'token' | null;
 
 export interface AuthState {
 	status: AuthStatus;
-	mode: AuthMode;
 	source: AuthOrigin;
 	user: AuthUser | null;
 	error: string | null;
@@ -18,7 +18,6 @@ export interface AuthState {
 
 const initialState: AuthState = {
 	status: 'loading',
-	mode: 'token',
 	source: null,
 	user: null,
 	error: null
@@ -122,21 +121,23 @@ export const auth = {
 		return get(authStore).status === 'authenticated';
 	},
 	async hydrate() {
-		const mode = getAuthMode();
+		// One-time cleanup: retire the pre-token-auth legacy mode flag. A stale
+		// legacy device resolves anonymous below with no network call (offline-first).
+		if (typeof localStorage !== 'undefined') {
+			localStorage.removeItem(staleAuthModeKey);
+		}
 		const token = getAuthToken();
 		const cachedUser = readStoredUser();
 		authStore.set({
 			status: 'loading',
-			mode,
-			source: token ? 'token' : mode === 'legacy' ? 'legacy' : null,
+			source: token ? 'token' : null,
 			user: cachedUser,
 			error: null
 		});
 
-		if (mode === 'token' && !token) {
+		if (!token) {
 			authStore.set({
 				status: 'anonymous',
-				mode,
 				source: null,
 				user: null,
 				error: null
@@ -149,20 +150,16 @@ export const auth = {
 			persistUser(me);
 			authStore.set({
 				status: 'authenticated',
-				mode,
-				source: token ? 'token' : 'legacy',
+				source: 'token',
 				user: me,
 				error: null
 			});
 		} catch (err) {
 			if (isAuthFailure(err)) {
-				if (token) {
-					setAuthToken(null);
-				}
+				setAuthToken(null);
 				persistUser(null);
 				authStore.set({
 					status: 'anonymous',
-					mode,
 					source: null,
 					user: null,
 					error: formatHydrateError(err)
@@ -170,10 +167,9 @@ export const auth = {
 				return;
 			}
 
-			if (mode === 'token' && token && cachedUser) {
+			if (cachedUser) {
 				authStore.set({
 					status: 'authenticated',
-					mode,
 					source: 'token',
 					user: cachedUser,
 					error: formatHydrateError(err)
@@ -181,13 +177,9 @@ export const auth = {
 				return;
 			}
 
-			if (token && mode !== 'token') {
-				setAuthToken(null);
-			}
 			persistUser(null);
 			authStore.set({
 				status: 'anonymous',
-				mode,
 				source: null,
 				user: null,
 				error: formatHydrateError(err)
@@ -198,7 +190,6 @@ export const auth = {
 		authStore.update((current) => ({
 			...current,
 			status: 'loading',
-			mode: 'token',
 			error: null
 		}));
 		try {
@@ -215,12 +206,10 @@ export const auth = {
 				space_id: response.space_id,
 				role: response.role
 			};
-			setAuthMode('token');
 			setAuthToken(response.token);
 			persistUser(user);
 			authStore.set({
 				status: 'authenticated',
-				mode: 'token',
 				source: 'token',
 				user,
 				error: null
@@ -229,7 +218,6 @@ export const auth = {
 		} catch (err) {
 			authStore.set({
 				status: 'anonymous',
-				mode: 'token',
 				source: null,
 				user: null,
 				error: formatLoginError(err)
@@ -252,12 +240,10 @@ export const auth = {
 		return updated;
 	},
 	logout() {
-		setAuthMode('token');
 		setAuthToken(null);
 		persistUser(null);
 		authStore.set({
 			status: 'anonymous',
-			mode: 'token',
 			source: null,
 			user: null,
 			error: null

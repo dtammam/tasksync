@@ -106,7 +106,6 @@ describe('tasks store helpers', () => {
 			role: 'admin'
 		});
 		localStorage.setItem('tasksync:auth-token', 'test-token');
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		await auth.hydrate();
 		meSpy.mockRestore();
 

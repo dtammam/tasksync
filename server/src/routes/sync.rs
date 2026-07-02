@@ -1,15 +1,15 @@
 use axum::{
     extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, StatusCode},
     routing::post,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
-use super::lists::{get_lists, ListRow};
+use super::lists::{get_lists_for_ctx, ListRow};
 use super::tasks::{
-    create_task, update_task_meta, update_task_status, CreateTask, DeletedTaskRow, TaskRow,
-    UpdateTaskMeta, UpdateTaskStatus,
+    create_task_for_ctx, get_tasks_for_ctx, update_task_meta_for_ctx, update_task_status_for_ctx,
+    CreateTask, DeletedTaskRow, TaskRow, UpdateTaskMeta, UpdateTaskStatus,
 };
 use super::types::{app_state, ctx_from_headers, AppState, Role};
 
@@ -53,19 +53,6 @@ pub(super) struct SyncPushResponse {
     pub(super) cursor_ts: i64,
     pub(super) applied: Vec<TaskRow>,
     pub(super) rejected: Vec<SyncPushRejected>,
-}
-
-fn headers_for_ctx(ctx: &super::types::RequestCtx) -> Result<HeaderMap, StatusCode> {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "x-space-id",
-        HeaderValue::from_str(&ctx.space_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-    );
-    headers.insert(
-        "x-user-id",
-        HeaderValue::from_str(&ctx.user_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-    );
-    Ok(headers)
 }
 
 async fn sync_cursor_for_ctx(
@@ -138,10 +125,9 @@ pub(super) async fn sync_pull(
     Json(body): Json<SyncPullBody>,
 ) -> Result<Json<SyncPullResponse>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
-    let scoped_headers = headers_for_ctx(&ctx)?;
 
-    let lists = get_lists(State(state.clone()), scoped_headers.clone()).await?.0;
-    let mut tasks = super::tasks::get_tasks(State(state.clone()), scoped_headers).await?.0;
+    let lists = get_lists_for_ctx(&state, &ctx).await?;
+    let mut tasks = get_tasks_for_ctx(&state, &ctx).await?;
     let mut deleted_tasks = deleted_tasks_for_ctx(&state, &ctx).await?;
     if let Some(since_ts) = body.since_ts {
         tasks.retain(|task| task.updated_ts >= since_ts);
@@ -162,15 +148,14 @@ pub(super) async fn sync_push(
     }
 
     let ctx = ctx_from_headers(&headers, &state).await?;
-    let scoped_headers = headers_for_ctx(&ctx)?;
     let mut applied = Vec::new();
     let mut rejected = Vec::new();
 
     for change in body.changes {
         match change {
             SyncPushChange::CreateTask { op_id, body } => {
-                match create_task(State(state.clone()), scoped_headers.clone(), Json(body)).await {
-                    Ok((_status, Json(task))) => applied.push(task),
+                match create_task_for_ctx(&state, &ctx, body).await {
+                    Ok((_status, task)) => applied.push(task),
                     Err(status) => rejected.push(SyncPushRejected {
                         op_id,
                         status: status.as_u16(),
@@ -179,15 +164,8 @@ pub(super) async fn sync_push(
                 }
             }
             SyncPushChange::UpdateTask { op_id, task_id, body } => {
-                match update_task_meta(
-                    State(state.clone()),
-                    scoped_headers.clone(),
-                    axum::extract::Path(task_id),
-                    Json(body),
-                )
-                .await
-                {
-                    Ok(Json(task)) => applied.push(task),
+                match update_task_meta_for_ctx(&state, &ctx, task_id, body).await {
+                    Ok(task) => applied.push(task),
                     Err(status) => rejected.push(SyncPushRejected {
                         op_id,
                         status: status.as_u16(),
@@ -196,15 +174,15 @@ pub(super) async fn sync_push(
                 }
             }
             SyncPushChange::UpdateTaskStatus { op_id, task_id, status: next_status } => {
-                match update_task_status(
-                    State(state.clone()),
-                    scoped_headers.clone(),
-                    axum::extract::Path(task_id),
-                    Json(UpdateTaskStatus { status: next_status }),
+                match update_task_status_for_ctx(
+                    &state,
+                    &ctx,
+                    task_id,
+                    UpdateTaskStatus { status: next_status },
                 )
                 .await
                 {
-                    Ok(Json(task)) => applied.push(task),
+                    Ok(task) => applied.push(task),
                     Err(status) => rejected.push(SyncPushRejected {
                         op_id,
                         status: status.as_u16(),

@@ -101,7 +101,7 @@ docker compose down
 ## Operating Notes
 
 - Your database is stored in a Docker volume (`tasksync_data` by default). Your data persists across restarts and updates.
-- **Reverse proxy:** if you're putting tasksync behind nginx or Caddy, set `VITE_API_URL` (often `/api`) and `VITE_ALLOWED_HOSTS` in `.env`.
+- **Reverse proxy:** if you're putting tasksync behind nginx or Caddy, set `VITE_API_URL` (often `/api`) and `VITE_ALLOWED_HOSTS` in `.env`. If the app is served from a different origin than the server API, also add that origin to `CORS_ALLOWED_ORIGINS` (comma-separated exact origins, e.g. `https://tasks.example.com`) — the local dev, Playwright, and Capacitor iOS origins are always allowed and never need listing.
 - **Multiple environments:** to run separate prod/beta stacks, use different values for `TASKSYNC_DATA_SOURCE`, `SERVER_HOST_PORT`, and `WEB_HOST_PORT`.
 - **Image channels:** the `main` branch publishes Docker images as `latest`; other branches publish as `beta`. Set `TASKSYNC_IMAGE_TAG` in `.env` to choose.
 
@@ -120,6 +120,16 @@ cd web && npx playwright install --with-deps chromium
 ```
 
 ### Running from source
+
+The server requires `JWT_SECRET` and `DEV_LOGIN_PASSWORD` to be set to real
+values — it refuses to boot if either is unset, empty, or a known default.
+For source builds it loads them from the repo-root `.env` file (via dotenvy;
+real environment variables take precedence). Create it once:
+
+```bash
+cp .env.example .env
+# then edit .env and set real values for JWT_SECRET and DEV_LOGIN_PASSWORD
+```
 
 Start the server:
 

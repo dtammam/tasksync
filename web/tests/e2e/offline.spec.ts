@@ -32,7 +32,6 @@ interface SeedTask {
 const resetClientState = async (page: Page) => {
 	await page.addInitScript(() => {
 		// Keep e2e deterministic and local-first: signed-out token mode disables live server sync.
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.removeItem('tasksync:auth-token');
 		localStorage.removeItem('tasksync:auth-user');
 	});
@@ -40,7 +39,6 @@ const resetClientState = async (page: Page) => {
 
 const setAuthenticatedClientState = async (page: Page, user: TestUser) => {
 	await page.addInitScript((initialUser) => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.setItem('tasksync:auth-token', 'test-token');
 		localStorage.setItem(
 			'tasksync:auth-user',
@@ -781,7 +779,6 @@ test.describe('Offline continuity', () => {
 		// Register as addInitScript so auth persists through the offline reload
 		// (resetClientState's addInitScript clears on every navigation; this overwrites it).
 		await page.addInitScript((nextUser) => {
-			localStorage.setItem('tasksync:auth-mode', 'token');
 			localStorage.setItem('tasksync:auth-token', 'test-token');
 			localStorage.setItem(
 				'tasksync:auth-user',
@@ -793,7 +790,6 @@ test.describe('Offline continuity', () => {
 		}, user);
 		// Also set for the current page context.
 		await page.evaluate((nextUser) => {
-			localStorage.setItem('tasksync:auth-mode', 'token');
 			localStorage.setItem('tasksync:auth-token', 'test-token');
 			localStorage.setItem(
 				'tasksync:auth-user',

@@ -12,7 +12,6 @@ import { expect, test } from '@playwright/test';
 
 const resetClientState = async (page: import('@playwright/test').Page) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.removeItem('tasksync:auth-token');
 		localStorage.removeItem('tasksync:auth-user');
 	});

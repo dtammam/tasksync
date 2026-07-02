@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-use super::types::{app_state, ctx_from_headers, AppState, Role};
+use super::types::{app_state, ctx_from_headers, AppState, RequestCtx, Role};
 
 #[derive(Serialize, FromRow)]
 pub(super) struct ListRow {
@@ -41,6 +41,14 @@ pub(super) async fn get_lists(
     headers: HeaderMap,
 ) -> Result<Json<Vec<ListRow>>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
+    let lists = get_lists_for_ctx(&state, &ctx).await?;
+    Ok(Json(lists))
+}
+
+pub(super) async fn get_lists_for_ctx(
+    state: &AppState,
+    ctx: &RequestCtx,
+) -> Result<Vec<ListRow>, StatusCode> {
     let lists = if ctx.role == Role::Admin {
         sqlx::query_as::<_, ListRow>(
             "select id, space_id, name, icon, color, list_order as \"order\" from list where space_id = ?1 order by list_order asc",
@@ -59,7 +67,7 @@ pub(super) async fn get_lists(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     };
-    Ok(Json(lists))
+    Ok(lists)
 }
 
 pub(super) async fn create_list(

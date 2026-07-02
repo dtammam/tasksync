@@ -21,7 +21,6 @@ const mockLists = [
 
 const setupAdminSession = async (page: Page) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.setItem('tasksync:auth-token', 'test-token');
 		localStorage.setItem(
 			'tasksync:auth-user',

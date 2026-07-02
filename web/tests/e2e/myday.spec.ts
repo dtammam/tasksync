@@ -44,7 +44,6 @@ const ensureSoundPanelOpen = async (page: Page) => {
 const resetClientState = async (page: Page) => {
 	await page.addInitScript(() => {
 		// Keep e2e deterministic: signed-out token mode disables live server sync for this suite.
-		localStorage.setItem('tasksync:auth-mode', 'token');
 		localStorage.removeItem('tasksync:auth-token');
 		localStorage.removeItem('tasksync:auth-user');
 	});
