@@ -23,7 +23,7 @@ Rules:
 
 | ID | Area | Closed on | Summary | Link |
 |---:|------|-----------|---------|------|
-| 047 | Security/Auth | 2026-07-18 | Removed the `DEV_LOGIN_PASSWORD` shared-fallback login for hash-less accounts (auth is now hash-only; a missing hash fails authentication). `POST /auth/setup` first-run admin provisioning replaces it as the sole owner-provisioning path; the boot preflight no longer mandates `DEV_LOGIN_PASSWORD` but still fails closed on an unset `JWT_SECRET` | feat/gated-login-wall-and-task-api |
+| 047 | Security/Auth | 2026-07-18 | Removed the `DEV_LOGIN_PASSWORD` shared-fallback login for hash-less accounts (auth is now hash-only; a missing hash fails authentication). `POST /auth/setup` first-run admin provisioning replaces it as the sole owner-provisioning path; the boot preflight no longer mandates `DEV_LOGIN_PASSWORD` but still fails closed on an unset `JWT_SECRET` | [#136](https://github.com/dtammam/tasksync/pull/136) |
 | 040 | UI | 2026-03-13 | Fix streak text positioning on first render — flexbox centering + image preload | feat/ui-polish-batch-1 |
 | 039 | Tooling | 2026-03-12 | Create `/review` skill with coding standards checklist | feat/ui-polish-batch-1 |
 | 038 | UI | 2026-03-12 | Show scheduled date chip for non-recurring tasks in task rows | feat/ui-polish-batch-1 |
