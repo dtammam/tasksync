@@ -33,6 +33,7 @@ pub(super) struct LoginUserRow {
     pub(super) avatar_icon: Option<String>,
     pub(super) password_hash: Option<String>,
     pub(super) role: String,
+    pub(super) token_version: i64,
 }
 
 #[derive(Serialize)]
@@ -44,6 +45,33 @@ pub(super) struct LoginResponse {
     pub(super) avatar_icon: Option<String>,
     pub(super) space_id: String,
     pub(super) role: String,
+}
+
+/// Shared response shape for endpoints that re-issue a fresh session token
+/// for the acting device (revoke-sessions, self change-password).
+#[derive(Serialize)]
+pub(super) struct TokenResponse {
+    pub(super) token: String,
+}
+
+/// Response for the unauthenticated first-run status check
+/// (`GET /auth/status`): `true` iff an `admin` membership already exists
+/// anywhere in the deployment, which is what the client uses to decide
+/// between rendering first-run setup vs. the login screen.
+#[derive(Serialize)]
+pub(super) struct AuthStatusResponse {
+    pub(super) owner_exists: bool,
+}
+
+/// Request body for the unauthenticated, self-guarded first-run owner
+/// provisioning endpoint (`POST /auth/setup`).
+#[derive(Deserialize)]
+pub(super) struct AuthSetupBody {
+    pub(super) email: String,
+    pub(super) display: String,
+    pub(super) password: String,
+    pub(super) avatar_icon: Option<String>,
+    pub(super) space_id: Option<String>,
 }
 
 #[derive(Serialize, FromRow)]
@@ -277,7 +305,11 @@ pub(super) async fn password_matches_for_user(
             return verify_password(candidate_password, hash_value);
         }
     }
-    Ok(candidate_password == state.login_password.trim())
+    // Hash-only auth (#047): a missing/blank hash has NO valid login path.
+    // There is deliberately no shared-fallback comparison here anymore —
+    // first-run setup (`auth_setup`) and the admin `auth_set_member_password`
+    // flow are the only ways a user ever gets a usable password.
+    Ok(false)
 }
 
 pub(super) async fn login(
@@ -294,7 +326,7 @@ pub(super) async fn login(
     }
     let space_id = body.space_id.unwrap_or_else(|| "s1".to_string());
     let user = sqlx::query_as::<_, LoginUserRow>(
-        "select u.id as user_id, u.email, u.display, u.avatar_icon, u.password_hash, m.role from user u join membership m on m.user_id = u.id where lower(u.email) = lower(?1) and m.space_id = ?2 limit 1",
+        "select u.id as user_id, u.email, u.display, u.avatar_icon, u.password_hash, m.role, u.token_version from user u join membership m on m.user_id = u.id where lower(u.email) = lower(?1) and m.space_id = ?2 limit 1",
     )
     .bind(email)
     .bind(&space_id)
@@ -303,27 +335,13 @@ pub(super) async fn login(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let has_password_hash =
-        user.password_hash.as_ref().map(|value| !value.trim().is_empty()).unwrap_or(false);
-    // Keep a legacy fallback so existing rows without hashes can still sign in once and auto-upgrade.
     let password_ok = password_matches_for_user(&state, &user.user_id, password).await?;
     if !password_ok {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    if !has_password_hash {
-        let upgraded_hash = hash_password(password)?;
-        sqlx::query(
-            "update user set password_hash = ?1 where id = ?2 and (password_hash is null or trim(password_hash) = '')",
-        )
-        .bind(upgraded_hash)
-        .bind(&user.user_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-
-    let token = super::types::issue_token(&user.user_id, &space_id, &state.jwt_secret)?;
+    let token =
+        super::types::issue_token(&user.user_id, &space_id, user.token_version, &state.jwt_secret)?;
     Ok(Json(LoginResponse {
         token,
         user_id: user.user_id,
@@ -333,6 +351,122 @@ pub(super) async fn login(
         space_id,
         role: user.role,
     }))
+}
+
+/// Unauthenticated first-run status check. Deliberately does NOT call
+/// `ctx_from_headers` — that absence is what keeps this route reachable
+/// pre-auth (there is no separate middleware allowlist; each pre-auth route
+/// is simply a handler that never funnels through the auth boundary).
+pub(super) async fn auth_status(
+    State(state): State<AppState>,
+) -> Result<Json<AuthStatusResponse>, StatusCode> {
+    let owner_exists: bool =
+        sqlx::query_scalar("select exists(select 1 from membership where role = 'admin')")
+            .fetch_one(&state.pool)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(AuthStatusResponse { owner_exists }))
+}
+
+/// Unauthenticated, self-guarded first-run owner provisioning. Deliberately
+/// does NOT call `ctx_from_headers` (see `auth_status`).
+///
+/// Concurrency-safe by construction: the password is hashed BEFORE opening
+/// the transaction (bcrypt is expensive; doing it first keeps the guarded
+/// critical section short and guarantees a hashing failure never leaves a
+/// half-created owner), then a single transaction re-runs the admin-exists
+/// guard and performs the space/user/membership inserts. Re-checking the
+/// guard *inside* the same transaction that does the inserts is what
+/// prevents two concurrent `/setup` calls from both winning the race — the
+/// loser's transaction rolls back (on `Err` the `Transaction` is dropped
+/// without `commit()`, which issues a `ROLLBACK`) and observes `409`.
+pub(super) async fn auth_setup(
+    State(state): State<AppState>,
+    Json(body): Json<AuthSetupBody>,
+) -> Result<(StatusCode, Json<LoginResponse>), StatusCode> {
+    let email = body.email.trim().to_lowercase();
+    let display = body.display.trim().to_string();
+    let password = body.password.trim();
+    if email.is_empty() || display.is_empty() || !password_meets_policy(password) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let space_id = match body.space_id {
+        Some(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            trimmed.to_string()
+        }
+        None => "s1".to_string(),
+    };
+    let avatar_icon = normalize_avatar_icon(body.avatar_icon);
+
+    let password_hash = hash_password(password)?;
+
+    let mut tx = state.pool.begin().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let owner_exists: bool =
+        sqlx::query_scalar("select exists(select 1 from membership where role = 'admin')")
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if owner_exists {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    sqlx::query("insert into space (id, name) values (?1, ?2) on conflict(id) do nothing")
+        .bind(&space_id)
+        .bind("Default")
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let user_id = format!("u-{}", Uuid::new_v4());
+    let insert_user_res = sqlx::query(
+        "insert into user (id, email, display, avatar_icon, password_hash) values (?1, ?2, ?3, ?4, ?5)",
+    )
+    .bind(&user_id)
+    .bind(&email)
+    .bind(&display)
+    .bind(&avatar_icon)
+    .bind(&password_hash)
+    .execute(&mut *tx)
+    .await;
+    if let Err(err) = insert_user_res {
+        if is_unique_violation(&err) {
+            return Err(StatusCode::CONFLICT);
+        }
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    let membership_id = format!("m-{}", Uuid::new_v4());
+    sqlx::query(
+        "insert into membership (id, space_id, user_id, role) values (?1, ?2, ?3, 'admin')",
+    )
+    .bind(membership_id)
+    .bind(&space_id)
+    .bind(&user_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    tx.commit().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // token_version starts at the `user.token_version` column default (0).
+    let token = super::types::issue_token(&user_id, &space_id, 0, &state.jwt_secret)?;
+    Ok((
+        StatusCode::CREATED,
+        Json(LoginResponse {
+            token,
+            user_id,
+            email,
+            display,
+            avatar_icon,
+            space_id,
+            role: "admin".to_string(),
+        }),
+    ))
 }
 
 pub(super) async fn auth_me(
@@ -903,7 +1037,7 @@ pub(super) async fn auth_change_password(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<ChangePasswordBody>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<Json<TokenResponse>, StatusCode> {
     let ctx = ctx_from_headers(&headers, &state).await?;
     let current_password = body.current_password.trim();
     let new_password = body.new_password.trim();
@@ -917,13 +1051,55 @@ pub(super) async fn auth_change_password(
     }
 
     let new_password_hash = hash_password(new_password)?;
-    sqlx::query("update user set password_hash = ?1 where id = ?2")
-        .bind(new_password_hash)
-        .bind(&ctx.user_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
+    // Write the new hash and bump the caller's own token_version in one
+    // statement so both changes are atomic — a partial write can never
+    // leave a fresh hash paired with a stale, still-valid token_version.
+    // Bumping revokes every OTHER previously-issued session for this user;
+    // the acting device stays logged in via the freshly re-issued token
+    // below (returning token_version avoids a second round-trip).
+    let new_token_version: i64 = sqlx::query_scalar(
+        "update user set password_hash = ?1, token_version = token_version + 1 where id = ?2 returning token_version",
+    )
+    .bind(new_password_hash)
+    .bind(&ctx.user_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let token = super::types::issue_token(
+        &ctx.user_id,
+        &ctx.space_id,
+        new_token_version,
+        &state.jwt_secret,
+    )?;
+    Ok(Json(TokenResponse { token }))
+}
+
+/// Self-service "sign out everywhere": bumps the caller's own token_version,
+/// which revokes every previously-issued session for this user on their next
+/// server contact (per the `ctx_from_headers` tv-vs-token_version check). The
+/// acting device stays logged in via a freshly re-issued token in the
+/// response so it does not immediately lock itself out.
+pub(super) async fn auth_revoke_sessions(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<TokenResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    let new_token_version: i64 = sqlx::query_scalar(
+        "update user set token_version = token_version + 1 where id = ?1 returning token_version",
+    )
+    .bind(&ctx.user_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let token = super::types::issue_token(
+        &ctx.user_id,
+        &ctx.space_id,
+        new_token_version,
+        &state.jwt_secret,
+    )?;
+    Ok(Json(TokenResponse { token }))
 }
 
 pub(super) async fn auth_members(
@@ -1109,12 +1285,18 @@ pub(super) async fn auth_set_member_password(
     }
 
     let password_hash = hash_password(password)?;
-    sqlx::query("update user set password_hash = ?1 where id = ?2")
-        .bind(password_hash)
-        .bind(&user_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Write the target's new hash and bump the TARGET's token_version in one
+    // statement — atomic, and keyed on the path `user_id`, NOT `ctx.user_id`,
+    // so the acting admin's own session (and token_version) is left
+    // untouched while every other session the target held is revoked.
+    sqlx::query(
+        "update user set password_hash = ?1, token_version = token_version + 1 where id = ?2",
+    )
+    .bind(password_hash)
+    .bind(&user_id)
+    .execute(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1194,11 +1376,14 @@ pub fn auth_routes(pool: &sqlx::SqlitePool) -> Router {
     let state = app_state(pool);
     Router::new()
         .route("/login", post(login))
+        .route("/status", get(auth_status))
+        .route("/setup", post(auth_setup))
         .route("/me", get(auth_me).patch(auth_update_me))
         .route("/sound", get(auth_get_sound).patch(auth_update_sound))
         .route("/preferences", get(auth_get_preferences).patch(auth_update_preferences))
         .route("/backup", get(auth_export_backup).post(auth_restore_backup))
         .route("/password", patch(auth_change_password))
+        .route("/revoke-sessions", post(auth_revoke_sessions))
         .route("/members", get(auth_members).post(auth_create_member))
         .route("/members/:user_id", delete(auth_delete_member))
         .route("/members/:user_id/password", patch(auth_set_member_password))

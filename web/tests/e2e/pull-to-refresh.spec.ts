@@ -1,4 +1,5 @@
 import { type CDPSession, devices, expect, type Page, test } from '@playwright/test';
+import { setAuthenticatedClientState } from './helpers/auth';
 
 /**
  * Wait for the PullToRefresh component's onMount to register event listeners.
@@ -38,6 +39,7 @@ test.describe('PTR touch gesture', () => {
 
 	test('pull-to-refresh gesture triggers sync @smoke', async ({ page, browserName }) => {
 		test.skip(browserName !== 'chromium', 'CDP required for raw touch simulation');
+		await setAuthenticatedClientState(page);
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 
@@ -119,6 +121,7 @@ test.describe('PTR desktop pointer gesture', () => {
 	// No device override — uses default desktop viewport
 
 	test('pull-to-refresh mouse drag triggers sync @smoke', async ({ page, browserName }) => {
+		await setAuthenticatedClientState(page);
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 
@@ -176,6 +179,7 @@ test.describe('PTR wheel gesture', () => {
 	// No device override — uses default desktop viewport
 
 	test('wheel gesture triggers sync @smoke', async ({ page, browserName }) => {
+		await setAuthenticatedClientState(page);
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 

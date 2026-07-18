@@ -35,10 +35,9 @@
 	let listSortLoaded = false;
 	const LIST_SORT_KEY = 'tasksync:sort:sidebar-lists';
 
-	let authBusy = false;
-	let loginEmail = 'admin@example.com';
-	let loginPassword = '';
-	let loginSpaceId = 's1';
+	let revokeAllBusy = false;
+	let revokeAllMessage = '';
+	let revokeAllError = '';
 	let showProfileEditor = false;
 	let profileBusy = false;
 	let profileDisplay = '';
@@ -444,25 +443,8 @@
 		}
 	};
 
-	const signIn = async () => {
-		const email = loginEmail.trim();
-		const password = loginPassword.trim();
-		const spaceId = loginSpaceId.trim();
-		if (!email || !password) return;
-		authBusy = true;
-		try {
-			await auth.login(email, password, spaceId || undefined);
-			loginPassword = '';
-		} catch {
-			// Error messaging comes from the auth store.
-		} finally {
-			authBusy = false;
-		}
-	};
-
 	const signOut = () => {
 		auth.logout();
-		loginPassword = '';
 		showProfileEditor = false;
 		showPasswordEditor = false;
 		profileMessage = '';
@@ -472,6 +454,27 @@
 		currentPasswordDraft = '';
 		newPasswordDraft = '';
 		confirmPasswordDraft = '';
+		revokeAllMessage = '';
+		revokeAllError = '';
+	};
+
+	// Revokes every OTHER session for this user (server bumps token_version and
+	// returns a fresh token for THIS device, so this device stays signed in).
+	// Distinct from the local-only signOut above.
+	const revokeAllSessions = async () => {
+		if (revokeAllBusy) return;
+		revokeAllBusy = true;
+		revokeAllError = '';
+		revokeAllMessage = '';
+		try {
+			await auth.revokeAllSessions();
+			revokeAllMessage = 'Signed out of all other sessions. This device stays signed in.';
+		} catch (err) {
+			console.error('Failed to sign out other devices', err);
+			revokeAllError = 'Could not sign out other devices. Please try again.';
+		} finally {
+			revokeAllBusy = false;
+		}
 	};
 
 	const saveProfile = async () => {
@@ -519,7 +522,7 @@
 		passwordError = '';
 		passwordMessage = '';
 		try {
-			await api.changePassword({
+			await auth.changePassword({
 				current_password: currentPassword,
 				new_password: newPassword,
 			});
@@ -1251,7 +1254,22 @@
 									>
 										Sign out
 									</button>
+									<button
+										type="button"
+										class="ghost"
+										data-testid="auth-revoke-all"
+										disabled={revokeAllBusy}
+										on:click={revokeAllSessions}
+									>
+										{revokeAllBusy ? 'Signing out other devices...' : 'Sign out everywhere else'}
+									</button>
 								</div>
+								{#if revokeAllMessage}
+									<p class="ok">{revokeAllMessage}</p>
+								{/if}
+								{#if revokeAllError}
+									<p class="error">{revokeAllError}</p>
+								{/if}
 								{#if showProfileEditor}
 									<div class="profile-editor">
 										<label>
@@ -1328,49 +1346,6 @@
 											<p class="error">{passwordError}</p>
 										{/if}
 									</div>
-								{/if}
-							{:else}
-								<label>
-									Email
-									<input
-										type="email"
-										placeholder="you@example.com"
-										autocomplete="username"
-										data-testid="auth-email"
-										bind:value={loginEmail}
-									/>
-								</label>
-								<label>
-									Password
-									<input
-										type="password"
-										placeholder="password"
-										autocomplete="current-password"
-										data-testid="auth-password"
-										bind:value={loginPassword}
-										on:keydown={(e) => e.key === 'Enter' && signIn()}
-									/>
-								</label>
-								<label>
-									Space
-									<input
-										type="text"
-										placeholder="s1"
-										data-testid="auth-space"
-										bind:value={loginSpaceId}
-									/>
-								</label>
-								<button
-									type="button"
-									class="primary"
-									data-testid="auth-signin"
-									disabled={authBusy || !loginEmail.trim() || !loginPassword.trim()}
-									on:click={signIn}
-								>
-									{authBusy ? 'Signing in...' : 'Sign in'}
-								</button>
-								{#if $auth.error}
-									<p class="error">{$auth.error}</p>
 								{/if}
 							{/if}
 						</div>

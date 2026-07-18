@@ -1,10 +1,12 @@
 mod auth;
+mod integrations;
 mod lists;
 mod sync;
 mod tasks;
 pub(super) mod types;
 
 pub use auth::auth_routes;
+pub use integrations::integration_routes;
 pub use lists::list_routes;
 pub use sync::sync_routes;
 pub use tasks::task_routes;
@@ -21,11 +23,14 @@ mod tests {
 
     use super::auth::{
         auth_change_password, auth_create_member, auth_delete_member, auth_export_backup,
-        auth_get_preferences, auth_get_sound, auth_grants, auth_restore_backup, auth_set_grant,
-        auth_set_member_password, auth_update_me, auth_update_preferences, auth_update_sound,
-        login, ChangePasswordBody, CreateMemberBody, LoginBody, SetListGrantBody,
-        SetMemberPasswordBody, UpdateProfileBody, UpdateSoundSettingsBody, UpdateUiPreferencesBody,
+        auth_get_preferences, auth_get_sound, auth_grants, auth_members, auth_restore_backup,
+        auth_revoke_sessions, auth_set_grant, auth_set_member_password, auth_setup, auth_status,
+        auth_update_me, auth_update_preferences, auth_update_sound, login,
+        password_matches_for_user, AuthSetupBody, ChangePasswordBody, CreateMemberBody, LoginBody,
+        SetListGrantBody, SetMemberPasswordBody, UpdateProfileBody, UpdateSoundSettingsBody,
+        UpdateUiPreferencesBody,
     };
+    use super::integrations::create_task_via_api_token;
     use super::lists::{create_list, delete_list, get_lists, update_list, CreateList, UpdateList};
     use super::sync::{sync_pull, sync_push, SyncPullBody, SyncPushBody, SyncPushChange};
     use super::tasks::{
@@ -33,8 +38,8 @@ mod tests {
         UpdateTaskMeta, UpdateTaskStatus,
     };
     use super::types::{
-        ctx_from_headers, hash_password, issue_token, AppState, AuthClaims, Role, BACKUP_SCHEMA_V1,
-        UI_FONTS, UI_THEMES,
+        ctx_from_api_token, ctx_from_headers, hash_password, issue_token, unix_now_secs, AppState,
+        AuthClaims, AuthScope, Role, API_TOKEN_HEADER, BACKUP_SCHEMA_V1, UI_FONTS, UI_THEMES,
     };
 
     async fn setup_pool() -> SqlitePool {
@@ -88,22 +93,42 @@ mod tests {
         pool
     }
 
+    /// A freshly migrated pool with NO seeded space/user/membership — models
+    /// a genuinely fresh deployment for the first-run status/setup tests
+    /// (`setup_pool` above always seeds an admin, which would make
+    /// `owner_exists` trivially true).
+    async fn bare_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
+        sqlx::migrate!("./migrations").run(&pool).await.expect("migrations");
+        pool
+    }
+
     fn test_state(pool: &SqlitePool) -> AppState {
+        AppState { pool: pool.clone(), jwt_secret: "test-secret".to_string(), api_token: None }
+    }
+
+    /// A state carrying a configured `TASK_API_TOKEN` (F-B enabled). Kept
+    /// separate from `test_state` (which hardcodes `api_token: None` and is
+    /// shared by ~40 tests exercising the feature-off default) rather than
+    /// widening that shared helper's signature.
+    fn test_state_with_api_token(pool: &SqlitePool, token: &str) -> AppState {
         AppState {
             pool: pool.clone(),
             jwt_secret: "test-secret".to_string(),
-            login_password: "test-pass".to_string(),
+            api_token: Some(token.to_string()),
         }
     }
 
     /// Mints a GENUINE signed JWT via the production `issue_token` path and
     /// returns headers carrying it, so every test request flows through the
-    /// real `ctx_from_headers` -> JWT decode -> `role_from_membership` chain.
+    /// real `ctx_from_headers` -> JWT decode -> `resolve_identity` chain.
     /// This is deliberately NOT a `RequestCtx` shortcut: there is no way to
     /// obtain a `RequestCtx` in tests other than verified-token decoding.
     fn auth_headers(state: &AppState, user_id: &str, space_id: &str) -> HeaderMap {
+        // `setup_pool` seeds every user with the column default `token_version
+        // = 0`, so tokens minted here always carry `tv: 0` to match.
         let token =
-            issue_token(user_id, space_id, &state.jwt_secret).expect("issue real test token");
+            issue_token(user_id, space_id, 0, &state.jwt_secret).expect("issue real test token");
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, format!("Bearer {token}").parse().expect("auth header"));
         headers
@@ -188,8 +213,15 @@ mod tests {
         assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
     }
 
+    // #047 closure: the shared `DEV_LOGIN_PASSWORD` fallback (and the
+    // hash-less auto-upgrade it enabled) has been removed outright. Auth is
+    // now hash-only — a hash-less account has NO valid login path, whether
+    // it presents the former shared-fallback value or anything else. This
+    // replaces the old `login_supports_legacy_password_and_upgrades_hash`
+    // test, which asserted the now-deleted behavior.
+
     #[tokio::test]
-    async fn login_supports_legacy_password_and_upgrades_hash() {
+    async fn password_matches_for_user_returns_false_for_hash_less_account() {
         let pool = setup_pool().await;
         sqlx::query("update user set password_hash = null where id = 'u-admin'")
             .execute(&pool)
@@ -197,7 +229,29 @@ mod tests {
             .expect("clear password hash");
         let state = test_state(&pool);
 
-        let response = login(
+        let matches = password_matches_for_user(&state, "u-admin", "anything-at-all")
+            .await
+            .expect("should not error");
+        assert!(!matches, "a hash-less account must never match any candidate password");
+    }
+
+    #[tokio::test]
+    async fn login_rejects_hash_less_account_presenting_former_shared_fallback_value() {
+        let pool = setup_pool().await;
+        // `setup_pool` seeds a real owner admin (`u-admin`), satisfying "after
+        // owner setup exists". Clear the hash to simulate a hash-less account
+        // (e.g. one whose password was never set via the admin/first-run flow).
+        sqlx::query("update user set password_hash = null where id = 'u-admin'")
+            .execute(&pool)
+            .await
+            .expect("clear password hash");
+        let state = test_state(&pool);
+
+        // "test-pass" is the value the removed `DEV_LOGIN_PASSWORD` shared
+        // fallback used to accept for ANY hash-less account (see the retired
+        // `test_state.login_password` field). #047 closure means it no longer
+        // authenticates anyone.
+        let result = login(
             State(state),
             Json(LoginBody {
                 email: "admin@example.com".to_string(),
@@ -205,17 +259,57 @@ mod tests {
                 space_id: Some("s1".to_string()),
             }),
         )
-        .await
-        .expect("login should succeed")
-        .0;
-        assert!(!response.token.is_empty());
+        .await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
 
-        let upgraded_hash: Option<String> =
-            sqlx::query_scalar("select password_hash from user where id = 'u-admin'")
-                .fetch_optional(&pool)
-                .await
-                .expect("load upgraded hash");
-        assert!(upgraded_hash.as_deref().map(|value| value.starts_with("$2")).unwrap_or(false));
+    #[tokio::test]
+    async fn backup_restored_hash_less_user_has_no_login_path_once_owner_exists() {
+        let pool = bare_pool().await;
+        let state = test_state(&pool);
+
+        // First-run setup (T4) is the only owner-provisioning path — it seeds
+        // the 's1' space and a real bcrypt-hashed admin.
+        let (_setup_status, _setup_response) = auth_setup(
+            State(state.clone()),
+            Json(AuthSetupBody {
+                email: "owner@example.com".to_string(),
+                display: "Owner".to_string(),
+                password: "owner-password-123".to_string(),
+                avatar_icon: None,
+                space_id: None,
+            }),
+        )
+        .await
+        .expect("first-run setup should succeed");
+
+        // Simulate a backup-restored hash-less account — `BackupUserRow.
+        // password_hash` is `Option<String>`, so a restored row can
+        // legitimately carry `None`. This is the grounded #047 resurrection
+        // path: a restore must not re-arm a shared-fallback login.
+        sqlx::query(
+            "insert into user (id, email, display, password_hash) values ('u-restored', 'restored@example.com', 'Restored', null)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert hash-less restored user");
+        sqlx::query(
+            "insert into membership (id, space_id, user_id, role) values ('m-restored', 's1', 'u-restored', 'contributor')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert restored membership");
+
+        let result = login(
+            State(state),
+            Json(LoginBody {
+                email: "restored@example.com".to_string(),
+                password: "test-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
     }
 
     #[tokio::test]
@@ -578,22 +672,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn revoke_sessions_invalidates_other_sessions_but_keeps_acting_device_logged_in() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let old_headers = auth_headers(&state, "u-admin", "s1");
+
+        let response = auth_revoke_sessions(State(state.clone()), old_headers.clone())
+            .await
+            .expect("revoke sessions should work")
+            .0;
+        assert!(!response.token.is_empty());
+
+        // The session token used to CALL revoke-sessions is itself now stale
+        // (it carried the pre-bump tv) and is rejected on its next use.
+        let stale_result = ctx_from_headers(&old_headers, &state).await;
+        assert_eq!(stale_result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        // The freshly re-issued token in the response authenticates, so the
+        // acting device stays logged in.
+        let mut fresh_headers = HeaderMap::new();
+        fresh_headers.insert(
+            AUTHORIZATION,
+            format!("Bearer {}", response.token).parse().expect("auth header"),
+        );
+        let fresh_ctx = ctx_from_headers(&fresh_headers, &state)
+            .await
+            .expect("freshly re-issued token should authenticate");
+        assert_eq!(fresh_ctx.user_id, "u-admin");
+
+        // A fresh login with valid credentials still succeeds afterward.
+        let login_response = login(
+            State(state),
+            Json(LoginBody {
+                email: "admin@example.com".to_string(),
+                password: "test-pass".to_string(),
+                space_id: Some("s1".to_string()),
+            }),
+        )
+        .await
+        .expect("fresh login should still succeed after a revoke-sessions bump")
+        .0;
+        assert_eq!(login_response.user_id, "u-admin");
+    }
+
+    #[tokio::test]
     async fn user_can_change_password_and_login_with_new_password() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
-        let headers = auth_headers(&state, "u-admin", "s1");
+        let old_headers = auth_headers(&state, "u-admin", "s1");
 
-        let status = auth_change_password(
+        let response = auth_change_password(
             State(state.clone()),
-            headers,
+            old_headers.clone(),
             Json(ChangePasswordBody {
                 current_password: "test-pass".to_string(),
                 new_password: "new-test-pass".to_string(),
             }),
         )
         .await
-        .expect("change password should work");
-        assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+        .expect("change password should work")
+        .0;
+        assert!(!response.token.is_empty());
+
+        // The session token used to change the password now carries a stale
+        // tv (the bump revoked it, matching every OTHER previously-issued
+        // session for this user).
+        let stale_result = ctx_from_headers(&old_headers, &state).await;
+        assert_eq!(stale_result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        // The token returned in the response authenticates, so the acting
+        // device stays logged in.
+        let mut fresh_headers = HeaderMap::new();
+        fresh_headers.insert(
+            AUTHORIZATION,
+            format!("Bearer {}", response.token).parse().expect("auth header"),
+        );
+        let fresh_ctx = ctx_from_headers(&fresh_headers, &state)
+            .await
+            .expect("re-issued token should authenticate");
+        assert_eq!(fresh_ctx.user_id, "u-admin");
 
         let old_login = login(
             State(state.clone()),
@@ -745,16 +902,29 @@ mod tests {
         let pool = setup_pool().await;
         let state = test_state(&pool);
         let admin_headers = auth_headers(&state, "u-admin", "s1");
+        let contrib_headers = auth_headers(&state, "u-contrib", "s1");
 
         let status = auth_set_member_password(
             State(state.clone()),
-            admin_headers,
+            admin_headers.clone(),
             Path("u-contrib".to_string()),
             Json(SetMemberPasswordBody { password: "contrib-reset-pass".to_string() }),
         )
         .await
         .expect("admin reset should work");
         assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+
+        // The CONTRIBUTOR's previously-issued session is now rejected (their
+        // token_version was bumped by the reset).
+        let stale_contrib = ctx_from_headers(&contrib_headers, &state).await;
+        assert_eq!(stale_contrib.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        // The ADMIN's own previously-issued session is untouched — only the
+        // TARGET's token_version was bumped, not the acting admin's.
+        let admin_ctx = ctx_from_headers(&admin_headers, &state)
+            .await
+            .expect("admin's own session should remain valid after resetting a member's password");
+        assert_eq!(admin_ctx.user_id, "u-admin");
 
         let old_login = login(
             State(state.clone()),
@@ -1541,7 +1711,7 @@ mod tests {
         let garbage = get_tasks(State(state.clone()), garbage_headers).await;
         assert_eq!(garbage.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
 
-        let token = issue_token("u-admin", "s1", &state.jwt_secret).expect("issue token");
+        let token = issue_token("u-admin", "s1", 0, &state.jwt_secret).expect("issue token");
         let mut non_bearer_headers = HeaderMap::new();
         non_bearer_headers
             .insert(AUTHORIZATION, format!("Token {token}").parse().expect("auth header"));
@@ -1556,7 +1726,7 @@ mod tests {
         // Expired well beyond jsonwebtoken's default validation leeway (60s),
         // signed with the genuine test secret so only expiry can fail it.
         let expired_claims =
-            AuthClaims { sub: "u-admin".to_string(), space_id: "s1".to_string(), exp: 1 };
+            AuthClaims { sub: "u-admin".to_string(), space_id: "s1".to_string(), exp: 1, tv: 0 };
         let token = jsonwebtoken::encode(
             &jsonwebtoken::Header::default(),
             &expired_claims,
@@ -1584,5 +1754,579 @@ mod tests {
         let headers = auth_headers(&state, "u-ghost", "s1");
         let result = get_tasks(State(state), headers).await;
         assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn ctx_from_headers_rejects_session_after_token_version_bump() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        // Control case: a freshly issued token (tv=0, matching the seeded
+        // default-0 column) authenticates normally.
+        let ctx = ctx_from_headers(&headers, &state)
+            .await
+            .expect("freshly issued token should authenticate");
+        assert_eq!(ctx.user_id, "u-admin");
+
+        sqlx::query("update user set token_version = token_version + 1 where id = 'u-admin'")
+            .execute(&pool)
+            .await
+            .expect("bump token_version");
+
+        // The old token still carries tv=0, which no longer matches the
+        // bumped stored token_version (1) -> rejected.
+        let stale_result = ctx_from_headers(&headers, &state).await;
+        assert_eq!(stale_result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        // A newly issued token carrying the current tv (1) authenticates.
+        let fresh_token =
+            issue_token("u-admin", "s1", 1, &state.jwt_secret).expect("issue post-bump token");
+        let mut fresh_headers = HeaderMap::new();
+        fresh_headers
+            .insert(AUTHORIZATION, format!("Bearer {fresh_token}").parse().expect("auth header"));
+        let fresh_ctx = ctx_from_headers(&fresh_headers, &state)
+            .await
+            .expect("token carrying the current token_version should authenticate");
+        assert_eq!(fresh_ctx.user_id, "u-admin");
+    }
+
+    #[tokio::test]
+    async fn ctx_from_headers_accepts_legacy_token_with_no_tv_claim() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+
+        // A "legacy" claims shape minted before the `tv` claim existed —
+        // no `tv` field at all, not even a null. Encoded by hand (rather
+        // than via `AuthClaims`/`issue_token`) so the resulting JWT payload
+        // genuinely lacks the claim.
+        #[derive(serde::Serialize)]
+        struct LegacyAuthClaims {
+            sub: String,
+            space_id: String,
+            exp: usize,
+        }
+        let legacy_claims = LegacyAuthClaims {
+            sub: "u-admin".to_string(),
+            space_id: "s1".to_string(),
+            exp: unix_now_secs() + 3600,
+        };
+        let token = jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            &legacy_claims,
+            &jsonwebtoken::EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+        )
+        .expect("encode legacy token without a tv claim");
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, format!("Bearer {token}").parse().expect("auth header"));
+
+        // `#[serde(default)]` reads the missing claim as tv=0, matching the
+        // seeded user's default-0 `token_version` column -> still authenticates.
+        let ctx = ctx_from_headers(&headers, &state)
+            .await
+            .expect("token with no tv claim should read as tv=0 and still authenticate");
+        assert_eq!(ctx.user_id, "u-admin");
+        assert_eq!(ctx.space_id, "s1");
+    }
+
+    #[tokio::test]
+    async fn first_run_setup_on_empty_db_creates_a_working_owner_session() {
+        let pool = bare_pool().await;
+        let state = test_state(&pool);
+
+        // `auth_status` and `auth_setup` take only `State`/`State` + `Json` —
+        // never a `HeaderMap` — so this structurally proves both routes are
+        // reachable with no auth headers supplied at all (the pre-auth
+        // allowlist is enforced by the ABSENCE of a `ctx_from_headers` call,
+        // not a separate middleware list).
+        let status = auth_status(State(state.clone())).await.expect("status should succeed").0;
+        assert!(!status.owner_exists, "fresh DB should report no owner yet");
+
+        let (status_code, setup_response) = auth_setup(
+            State(state.clone()),
+            Json(AuthSetupBody {
+                email: "Owner@Example.com".to_string(),
+                display: "Owner".to_string(),
+                password: "correct-horse-battery".to_string(),
+                avatar_icon: None,
+                space_id: None,
+            }),
+        )
+        .await
+        .expect("first-run setup on an empty DB should succeed");
+        let setup_response = setup_response.0;
+        assert_eq!(status_code, axum::http::StatusCode::CREATED);
+        assert!(!setup_response.token.is_empty(), "setup should return a usable token");
+        assert_eq!(setup_response.email, "owner@example.com", "email should be lowercased");
+        assert_eq!(setup_response.role, "admin");
+        assert_eq!(setup_response.space_id, "s1", "space_id should default to s1");
+
+        // The issued token must actually authenticate as an admin — feed it
+        // through the real `ctx_from_headers` boundary via a Bearer header.
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            format!("Bearer {}", setup_response.token).parse().expect("auth header"),
+        );
+        let ctx = ctx_from_headers(&headers, &state)
+            .await
+            .expect("token issued by first-run setup should authenticate");
+        assert_eq!(ctx.user_id, setup_response.user_id);
+        assert_eq!(ctx.role, Role::Admin);
+
+        // Once the owner exists, status must flip to true on the same pool.
+        let status_after =
+            auth_status(State(state)).await.expect("status should succeed after setup").0;
+        assert!(status_after.owner_exists, "owner_exists should be true after first-run setup");
+    }
+
+    #[tokio::test]
+    async fn second_first_run_setup_after_owner_exists_is_rejected() {
+        let pool = bare_pool().await;
+        let state = test_state(&pool);
+
+        let (first_status, _first_response) = auth_setup(
+            State(state.clone()),
+            Json(AuthSetupBody {
+                email: "owner@example.com".to_string(),
+                display: "Owner".to_string(),
+                password: "correct-horse-battery".to_string(),
+                avatar_icon: None,
+                space_id: None,
+            }),
+        )
+        .await
+        .expect("first setup should succeed");
+        assert_eq!(first_status, axum::http::StatusCode::CREATED);
+
+        // A second attempt — even with different credentials — must be
+        // rejected: the count-guard runs INSIDE the transaction that would
+        // otherwise perform the inserts, which is what makes this safe under
+        // concurrent callers, not just sequential ones.
+        let second = auth_setup(
+            State(state.clone()),
+            Json(AuthSetupBody {
+                email: "someone-else@example.com".to_string(),
+                display: "Someone Else".to_string(),
+                password: "another-strong-password".to_string(),
+                avatar_icon: None,
+                space_id: None,
+            }),
+        )
+        .await;
+        assert_eq!(second.err(), Some(axum::http::StatusCode::CONFLICT));
+
+        // No second admin/user should have been created by the rolled-back
+        // transaction.
+        let admin_count: i64 =
+            sqlx::query_scalar("select count(1) from membership where role = 'admin'")
+                .fetch_one(&pool)
+                .await
+                .expect("count admins");
+        assert_eq!(admin_count, 1, "rejected setup must not leave a partially-created owner");
+
+        let status = auth_status(State(state)).await.expect("status should succeed").0;
+        assert!(status.owner_exists);
+    }
+
+    #[tokio::test]
+    async fn auth_setup_rejects_password_below_policy_minimum() {
+        let pool = bare_pool().await;
+        let state = test_state(&pool);
+
+        let result = auth_setup(
+            State(state),
+            Json(AuthSetupBody {
+                email: "owner@example.com".to_string(),
+                display: "Owner".to_string(),
+                password: "short".to_string(),
+                avatar_icon: None,
+                space_id: None,
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::BAD_REQUEST));
+    }
+
+    #[tokio::test]
+    async fn auth_setup_rejects_empty_or_whitespace_space_id() {
+        let pool = bare_pool().await;
+        let state = test_state(&pool);
+
+        let empty_result = auth_setup(
+            State(state.clone()),
+            Json(AuthSetupBody {
+                email: "owner@example.com".to_string(),
+                display: "Owner".to_string(),
+                password: "correct-horse-battery".to_string(),
+                avatar_icon: None,
+                space_id: Some("".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(empty_result.err(), Some(axum::http::StatusCode::BAD_REQUEST));
+
+        let whitespace_result = auth_setup(
+            State(state.clone()),
+            Json(AuthSetupBody {
+                email: "owner@example.com".to_string(),
+                display: "Owner".to_string(),
+                password: "correct-horse-battery".to_string(),
+                avatar_icon: None,
+                space_id: Some("   ".to_string()),
+            }),
+        )
+        .await;
+        assert_eq!(whitespace_result.err(), Some(axum::http::StatusCode::BAD_REQUEST));
+
+        // Neither rejected call should have left behind a partially-created
+        // owner — the space_id validation runs before hash_password and the
+        // transaction opens.
+        let admin_count: i64 =
+            sqlx::query_scalar("select count(1) from membership where role = 'admin'")
+                .fetch_one(&pool)
+                .await
+                .expect("count admins");
+        assert_eq!(admin_count, 0, "rejected setup must not leave a partially-created owner");
+
+        // A valid explicit space_id is trimmed before use.
+        let (status_code, setup_response) = auth_setup(
+            State(state),
+            Json(AuthSetupBody {
+                email: "owner@example.com".to_string(),
+                display: "Owner".to_string(),
+                password: "correct-horse-battery".to_string(),
+                avatar_icon: None,
+                space_id: Some("  s2  ".to_string()),
+            }),
+        )
+        .await
+        .expect("setup with a valid whitespace-padded space_id should succeed");
+        assert_eq!(status_code, axum::http::StatusCode::CREATED);
+        assert_eq!(setup_response.0.space_id, "s2", "space_id should be trimmed");
+    }
+
+    fn api_token_headers(token: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(API_TOKEN_HEADER, token.parse().expect("api token header"));
+        headers
+    }
+
+    #[tokio::test]
+    async fn ctx_from_api_token_accepts_matching_token_and_resolves_owner_scope() {
+        let pool = setup_pool().await;
+        let mut state = test_state(&pool);
+        state.api_token = Some("a-genuinely-random-32-char-token".to_string());
+        let headers = api_token_headers("a-genuinely-random-32-char-token");
+
+        let ctx = ctx_from_api_token(&headers, &state)
+            .await
+            .expect("matching configured token should resolve a ctx");
+
+        // The header caller never supplies a uid/space_id — the identity is
+        // resolved server-side from the seeded owner (`u-admin`/`s1`).
+        assert_eq!(ctx.user_id, "u-admin");
+        assert_eq!(ctx.space_id, "s1");
+        assert_eq!(ctx.role, Role::Admin);
+        assert_eq!(ctx.scope, AuthScope::ApiTaskCreate);
+    }
+
+    #[tokio::test]
+    async fn ctx_from_api_token_rejects_wrong_token_value() {
+        let pool = setup_pool().await;
+        let mut state = test_state(&pool);
+        state.api_token = Some("a-genuinely-random-32-char-token".to_string());
+        let headers = api_token_headers("a-completely-different-token-value");
+
+        let result = ctx_from_api_token(&headers, &state).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn ctx_from_api_token_rejects_missing_header() {
+        let pool = setup_pool().await;
+        let mut state = test_state(&pool);
+        state.api_token = Some("a-genuinely-random-32-char-token".to_string());
+        let headers = HeaderMap::new();
+
+        let result = ctx_from_api_token(&headers, &state).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn ctx_from_api_token_rejects_any_token_when_feature_disabled() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool); // api_token: None (feature off)
+        let headers = api_token_headers("literally-any-value-at-all-here");
+
+        let result = ctx_from_api_token(&headers, &state).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn ctx_from_api_token_rejects_when_no_owner_membership_exists() {
+        // A bare pool has no admin membership at all — the verifier must not
+        // fabricate an identity even with a perfectly matching token.
+        let pool = bare_pool().await;
+        let mut state = test_state(&pool);
+        state.api_token = Some("a-genuinely-random-32-char-token".to_string());
+        let headers = api_token_headers("a-genuinely-random-32-char-token");
+
+        let result = ctx_from_api_token(&headers, &state).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn ctx_from_api_token_does_not_accept_a_bearer_jwt() {
+        // The two auth paths are disjoint: a valid session JWT presented on
+        // the API-token header must not authenticate the API-token path.
+        let pool = setup_pool().await;
+        let mut state = test_state(&pool);
+        state.api_token = Some("a-genuinely-random-32-char-token".to_string());
+        let session_token =
+            issue_token("u-admin", "s1", 0, &state.jwt_secret).expect("issue a real session token");
+        let headers = api_token_headers(&session_token);
+
+        let result = ctx_from_api_token(&headers, &state).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    // T7: POST /api/tasks ingest route (create_task_via_api_token). The
+    // handler is called directly, mirroring how every other route in this
+    // module is exercised.
+
+    const TEST_API_TOKEN: &str = "a-genuinely-random-32-char-token";
+
+    #[tokio::test]
+    async fn create_task_via_api_token_creates_task_owned_by_the_admin() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+        let headers = api_token_headers(TEST_API_TOKEN);
+
+        let (status, Json(created)) = create_task_via_api_token(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Created via API token".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                // Server-authoritative: the caller cannot pick who the task
+                // is attributed to — this must be ignored in favor of the
+                // owner identity `ctx_from_api_token` resolved.
+                assignee_user_id: Some("u-contrib".to_string()),
+            }),
+        )
+        .await
+        .expect("valid token should create a task");
+
+        assert_eq!(status, axum::http::StatusCode::CREATED);
+        assert_eq!(created.title, "Created via API token");
+        assert_eq!(created.list_id, "goal-management");
+        assert_eq!(created.assignee_user_id.as_deref(), Some("u-admin"));
+        assert_eq!(created.created_by_user_id.as_deref(), Some("u-admin"));
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_rejects_missing_header() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+        let headers = HeaderMap::new();
+
+        let result = create_task_via_api_token(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Should not be created".to_string(),
+                list_id: "goal-management".to_string(),
+                order: None,
+                my_day: None,
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_rejects_wrong_token_value() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+        let headers = api_token_headers("a-completely-different-token-value-here");
+
+        let result = create_task_via_api_token(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Should not be created".to_string(),
+                list_id: "goal-management".to_string(),
+                order: None,
+                my_day: None,
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_is_idempotent_when_client_retries_same_id() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+        let retried_id = uuid::Uuid::new_v4().to_string();
+
+        let build_body = || CreateTask {
+            id: Some(retried_id.clone()),
+            title: "Idempotent API create".to_string(),
+            list_id: "goal-management".to_string(),
+            order: Some("z".to_string()),
+            my_day: Some(false),
+            priority: None,
+            url: None,
+            recur_rule: None,
+            due_date: None,
+            punted_from_due_date: None,
+            punted_on_date: None,
+            notes: None,
+            assignee_user_id: None,
+        };
+
+        let first = create_task_via_api_token(
+            State(state.clone()),
+            api_token_headers(TEST_API_TOKEN),
+            Json(build_body()),
+        )
+        .await
+        .expect("first create should succeed");
+        assert_eq!(first.0, axum::http::StatusCode::CREATED);
+        assert_eq!(first.1 .0.id, retried_id);
+
+        let second = create_task_via_api_token(
+            State(state),
+            api_token_headers(TEST_API_TOKEN),
+            Json(build_body()),
+        )
+        .await
+        .expect("retried create should succeed");
+        assert_eq!(second.0, axum::http::StatusCode::OK);
+        assert_eq!(second.1 .0.id, retried_id);
+
+        let count: i64 = sqlx::query_scalar("select count(1) from task where id = ?1")
+            .bind(&retried_id)
+            .fetch_one(&pool)
+            .await
+            .expect("count task rows");
+        assert_eq!(count, 1, "a retried create must not duplicate the task");
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_task_reappears_on_subsequent_sync_pull() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+
+        let created = create_task_via_api_token(
+            State(state.clone()),
+            api_token_headers(TEST_API_TOKEN),
+            Json(CreateTask {
+                id: None,
+                title: "Should reappear on pull".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await
+        .expect("valid token should create a task")
+        .1
+         .0;
+
+        let pull_headers = auth_headers(&state, "u-admin", "s1");
+        let pulled = sync_pull(State(state), pull_headers, Json(SyncPullBody { since_ts: None }))
+            .await
+            .expect("sync pull should work")
+            .0;
+
+        assert!(
+            pulled.tasks.iter().any(|task| task.id == created.id),
+            "API-created task should reappear on the next sync/pull"
+        );
+    }
+
+    #[tokio::test]
+    async fn api_token_is_rejected_on_read_endpoint_and_on_auth_members() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+        let headers = api_token_headers(TEST_API_TOKEN);
+
+        // `get_tasks` consults only `ctx_from_headers`/`Authorization` — the
+        // API-token header is never inspected there.
+        let tasks_result = get_tasks(State(state.clone()), headers.clone()).await;
+        assert_eq!(tasks_result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+
+        // `auth_members` is admin-facing member management — the API token
+        // must not reach it either, even though it resolves to `Role::Admin`.
+        let members_result = auth_members(State(state), headers).await;
+        assert_eq!(members_result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_returns_not_found_when_feature_disabled() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool); // api_token: None (feature off)
+        let headers = api_token_headers("literally-any-value-at-all-here");
+
+        let result = create_task_via_api_token(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Should never be reachable".to_string(),
+                list_id: "goal-management".to_string(),
+                order: None,
+                my_day: None,
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::NOT_FOUND));
     }
 }

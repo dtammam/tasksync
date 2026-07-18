@@ -4,14 +4,14 @@ $dataDir   = Join-Path $repo "data"
 $dbFile    = Join-Path $dataDir "tasksync.db"
 $envFile   = Join-Path $repo ".env"
 
-# The server fails closed at boot unless JWT_SECRET and DEV_LOGIN_PASSWORD are
-# set to real values. It loads them (via dotenvy) from the repo-root .env,
-# which cargo finds one directory above server/. Check early with a friendly
-# message instead of letting the boot preflight fail.
+# The server fails closed at boot unless JWT_SECRET is set to a real value.
+# It loads it (via dotenvy) from the repo-root .env, which cargo finds one
+# directory above server/. Check early with a friendly message instead of
+# letting the boot preflight fail.
 if (-not (Test-Path $envFile)) {
     Write-Host "No .env found at $envFile" -ForegroundColor Yellow
-    Write-Host "The server refuses to boot without JWT_SECRET and DEV_LOGIN_PASSWORD set."
-    Write-Host "Create it first:  cp .env.example .env  (then set real values for both)."
+    Write-Host "The server refuses to boot without JWT_SECRET set."
+    Write-Host "Create it first:  cp .env.example .env  (then set a real JWT_SECRET)."
     exit 1
 }
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
+	import LoginWall from '$lib/components/LoginWall.svelte';
 	import PullToRefresh from '$lib/components/PullToRefresh.svelte';
 	import ServerUrlPrompt from '$lib/components/ServerUrlPrompt.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
@@ -355,9 +356,11 @@
 		resetSyncCursor();
 		syncStatus.setSnapshot({ pull: 'idle', push: 'idle' });
 	}
+	// This badge only renders inside the authenticated app-shell (the outer
+	// auth gate in the markup below withholds the shell entirely while
+	// $auth.status is 'loading' or 'anonymous'), so it reflects sync activity
+	// only — auth status is no longer a factor here.
 	$: showSyncBadge =
-		$auth.status === 'loading' ||
-		$auth.status !== 'authenticated' ||
 		$syncStatus.pull === 'running' ||
 		$syncStatus.push === 'running' ||
 		$syncStatus.pull === 'error' ||
@@ -379,6 +382,20 @@
 	<title>tasksync</title>
 </svelte:head>
 
+{#if $auth.status === 'loading'}
+	<!--
+		Minimal splash while the cached session resolves. Deliberately NOT
+		<LoginWall/> here — showing the wall during 'loading' would flash the
+		login screen for an already-authenticated device on every boot. This
+		state resolves purely from local cache (auth.hydrate()); it never waits
+		on a live server round-trip (see docs/RELIABILITY.md offline-first).
+	-->
+	<div class="boot-splash" data-testid="boot-splash"></div>
+{:else if $auth.status === 'anonymous'}
+	<!-- Auth gate: unauthenticated visitors see only the login wall — no
+	     app-shell, no Sidebar, no routed content. -->
+	<LoginWall />
+{:else}
 <div
 	class={`app-shell ${settingsDialogOpen ? 'settings-open' : ''}`}
 	data-testid="app-shell"
@@ -435,11 +452,7 @@
 									: ''
 						}`}
 					>
-						{#if $auth.status === 'loading'}
-							Checking auth…
-						{:else if $auth.status !== 'authenticated'}
-							Offline
-						{:else if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
+						{#if $syncStatus.pull === 'error' || $syncStatus.push === 'error'}
 							Sync issue
 						{:else}
 							Syncing…
@@ -459,6 +472,7 @@
 		</PullToRefresh>
 	</main>
 </div>
+{/if}
 
 <style>
 	:global(:root) {
@@ -647,6 +661,12 @@
 
 	:global(.app-shell.settings-open .suggestions-toggle) {
 		display: none;
+	}
+
+	.boot-splash {
+		height: 100vh;
+		width: 100%;
+		background: var(--app-bg);
 	}
 
 	.app-shell {

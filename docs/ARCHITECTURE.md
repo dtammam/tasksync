@@ -83,7 +83,10 @@ package "tasksync Server" {
 ## Server Architecture
 - **Axum** web server; **SQLx** to SQLite (WAL). Pragmas: `journal_mode=WAL`, `synchronous=NORMAL`.
 - **Files:** No general task file object store in MVP; server persists task metadata and user sound/profile metadata.
-- **Auth:** JWT (HS256) per user; device `client_id` per installation; all endpoints behind TLS.
+- **Auth:** JWT (HS256) per user; device `client_id` per installation; all endpoints behind TLS. Sessions carry a `tv` (token_version) claim (`#[serde(default)]`, so legacy tokens without the claim read `tv=0`); the existing per-request identity lookup (`membership JOIN user`, no additional round-trip) compares the claim against the stored `user.token_version` and returns `401` on mismatch. Revocation therefore lands on the **next server contact**; an already-authenticated device stays usable offline in between, so the Performance Budgets below are unaffected.
+- **Login wall / first-run setup:** `GET /auth/status` (unauthenticated) returns `{ owner_exists: bool }`; `POST /auth/setup` (unauthenticated, self-guarded) provisions the first admin/owner — space, user, and admin membership — when none exists, returning `201 CREATED` with a login-shaped body (`{ token, user_id, email, display, avatar_icon, space_id, role }`), or `409` once an admin already exists. The client renders a full-screen `LoginWall` (first-run setup form when `owner_exists=false`, otherwise a login form) before any app shell, Sidebar, or task content paints, replacing the previous menu-first/Sidebar-embedded login flow; the gate keys off `$auth.status`, which resolves to `authenticated` from a cached token+user on a network (non-401) failure, so offline cold boot for an already-authenticated device is unaffected. `DEV_LOGIN_PASSWORD` (the previous shared-fallback login for hash-less accounts) has been removed — auth is hash-only (a missing hash fails authentication) and `POST /auth/setup` is now the sole owner-provisioning path; the boot preflight no longer mandates `DEV_LOGIN_PASSWORD` but still fails closed on an unset `JWT_SECRET`.
+- **Session revocation:** `POST /auth/revoke-sessions` (authenticated) bumps the caller's own `token_version` and re-issues a fresh token for the *acting* device, returning `200 { token }` — contract is **swap-and-stay**: the calling device remains signed in on the new token, while the caller's *other* sessions are invalidated on their next server contact. `PATCH /auth/password` returns `200 { token }` (previously `204`): a self password change bumps the caller's `token_version` and the response token keeps the acting device signed in; the admin-only `auth_set_member_password` bumps the *target* user's `token_version` only, leaving the admin's own session untouched.
+- **Programmatic task-creation API:** `POST /api/tasks` authenticates via the `X-TaskSync-Api-Token` request header checked against the optional `TASK_API_TOKEN` env var (min length 24 chars, validated fail-closed at boot when set); when `TASK_API_TOKEN` is unset the route returns `404` (feature off). A valid token resolves the single owner/admin identity server-side (the caller cannot choose a `uid`) with a create-task-only scope (`ApiTaskCreate`) that is rejected on read/admin endpoints (`/auth/members`, task reads). Created tasks flow through the same shared, idempotent create path the browser uses — a client-supplied stable id makes retries idempotent, and created tasks reappear on `/sync/pull` — so no new branching sync behavior is introduced.
 - **User media/settings:** `/auth/sound` persists per-user sound + profile media metadata server-side for cross-device consistency.
 - **User UI preferences:** `/auth/preferences` persists per-user app theme and sidebar panel-collapse state for cross-device consistency.
 - **Backup/restore:** admin-only `/auth/backup` export/import provides versioned space snapshots (space, users, memberships, lists, grants, tasks) for disaster recovery.
@@ -99,13 +102,15 @@ Area { id, name, order }
 Tag { id, name, color? }
 RecurrenceRule { id, rrule, timezone, skip_dates:[date] }
 RecurrenceState { last_instance_dt?, last_gen_dt }
-User { id, email, display, password_hash }
+User { id, email, display, password_hash, token_version }
 Space { id, name }
 Membership { id, space_id, user_id, role:('admin'|'contributor') }
 ListGrant { id, space_id, list_id, user_id }
 UserSettings { user_id PK, sound_enabled bool, sound_volume 0..100, sound_theme, custom_sound_file_id?, custom_sound_file_name?, custom_sound_data_url?, profile_attachments_json? }
 UserPreferences { user_id PK, ui_theme, ui_font?, ui_sidebar_panels?, ui_list_sort?, ui_completion_quotes?, streak_settings_json?, streak_state_json? }
 ```
+
+`User.token_version` (migration `0017_user_token_version.sql`, `integer not null default 0`) backs the session-revocation model described under Server Architecture above — it is bumped on a self password change and on `/auth/revoke-sessions`, and compared against each session JWT's `tv` claim on every request.
 
 ### Key Tables (SQL snippets)
 ```sql

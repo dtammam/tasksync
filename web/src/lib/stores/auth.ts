@@ -1,7 +1,12 @@
 import { get, writable } from 'svelte/store';
 import { api, apiErrorStatus } from '$lib/api/client';
 import { getAuthToken, setAuthToken } from '$lib/api/headers';
-import type { AuthUpdateProfileRequest, AuthUser } from '$shared/types/auth';
+import type {
+	AuthChangePasswordRequest,
+	AuthSetupRequest,
+	AuthUpdateProfileRequest,
+	AuthUser
+} from '$shared/types/auth';
 
 const authUserKey = 'tasksync:auth-user';
 const staleAuthModeKey = 'tasksync:auth-mode';
@@ -105,6 +110,26 @@ const formatLoginError = (err: unknown): string => {
 		return 'Cannot reach the server. Check your connection and API URL.';
 	}
 	return `Sign in failed: ${authError(err)}`;
+};
+
+const formatSetupError = (err: unknown): string => {
+	const code = apiErrorStatus(err);
+	if (code === 400) {
+		return 'Owner setup request is invalid. Check email, display name, and password.';
+	}
+	if (code === 409) {
+		return 'An owner account already exists. Please sign in instead.';
+	}
+	if (code === 404) {
+		return 'Setup endpoint was not found (404). Check the API URL and server version.';
+	}
+	if (code && code >= 500) {
+		return `Owner setup is temporarily unavailable (${code}). Please try again shortly.`;
+	}
+	if (isLikelyNetworkError(err)) {
+		return 'Cannot reach the server. Check your connection and API URL.';
+	}
+	return `Owner setup failed: ${authError(err)}`;
 };
 
 const isAuthFailure = (err: unknown) => {
@@ -224,6 +249,57 @@ export const auth = {
 			});
 			throw err;
 		}
+	},
+	async setupOwner(body: AuthSetupRequest) {
+		authStore.update((current) => ({
+			...current,
+			status: 'loading',
+			error: null
+		}));
+		try {
+			const response = await api.setupOwner(body);
+			const user: AuthUser = {
+				user_id: response.user_id,
+				email: response.email,
+				display: response.display,
+				avatar_icon: response.avatar_icon,
+				space_id: response.space_id,
+				role: response.role
+			};
+			setAuthToken(response.token);
+			persistUser(user);
+			authStore.set({
+				status: 'authenticated',
+				source: 'token',
+				user,
+				error: null
+			});
+			return user;
+		} catch (err) {
+			authStore.set({
+				status: 'anonymous',
+				source: null,
+				user: null,
+				error: formatSetupError(err)
+			});
+			throw err;
+		}
+	},
+	async fetchOwnerStatus(): Promise<boolean> {
+		const response = await api.authStatus();
+		return response.owner_exists;
+	},
+	async revokeAllSessions(): Promise<void> {
+		const current = get(authStore);
+		if (current.status !== 'authenticated') {
+			throw new Error('Not authenticated');
+		}
+		const response = await api.revokeSessions();
+		setAuthToken(response.token);
+	},
+	async changePassword(body: AuthChangePasswordRequest): Promise<void> {
+		const response = await api.changePassword(body);
+		setAuthToken(response.token);
 	},
 	async updateProfile(body: AuthUpdateProfileRequest) {
 		const current = get(authStore);

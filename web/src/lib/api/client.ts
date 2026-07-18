@@ -5,6 +5,9 @@ import type {
 	AuthLoginRequest,
 	AuthLoginResponse,
 	AuthSetMemberPasswordRequest,
+	AuthSetupRequest,
+	AuthStatusResponse,
+	AuthTokenResponse,
 	AuthUpdateProfileRequest,
 	AuthUser,
 	ListGrant,
@@ -114,6 +117,10 @@ const fetchJson = async <T>(path: string, opts: RequestInit = {}): Promise<T> =>
 export const api = {
 	login: (body: AuthLoginRequest) =>
 		fetchJson<AuthLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+	authStatus: () => fetchJson<AuthStatusResponse>('/auth/status'),
+	setupOwner: (body: AuthSetupRequest) =>
+		fetchJson<AuthLoginResponse>('/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
+	revokeSessions: () => fetchJson<AuthTokenResponse>('/auth/revoke-sessions', { method: 'POST' }),
 	me: () => fetchJson<AuthUser>('/auth/me'),
 	updateMe: (body: AuthUpdateProfileRequest) =>
 		fetchJson<AuthUser>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
@@ -133,7 +140,7 @@ export const api = {
 			body: JSON.stringify(body)
 		}),
 	changePassword: (body: AuthChangePasswordRequest) =>
-		fetchJson<void>('/auth/password', { method: 'PATCH', body: JSON.stringify(body) }),
+		fetchJson<AuthTokenResponse>('/auth/password', { method: 'PATCH', body: JSON.stringify(body) }),
 	getMembers: () => fetchJson<SpaceMember[]>('/auth/members'),
 	createMember: (body: AuthCreateMemberRequest) =>
 		fetchJson<SpaceMember>('/auth/members', { method: 'POST', body: JSON.stringify(body) }),

@@ -121,14 +121,14 @@ cd web && npx playwright install --with-deps chromium
 
 ### Running from source
 
-The server requires `JWT_SECRET` and `DEV_LOGIN_PASSWORD` to be set to real
-values — it refuses to boot if either is unset, empty, or a known default.
-For source builds it loads them from the repo-root `.env` file (via dotenvy;
-real environment variables take precedence). Create it once:
+The server requires `JWT_SECRET` to be set to a real value — it refuses to
+boot if it is unset, empty, or a known default. For source builds it loads it
+from the repo-root `.env` file (via dotenvy; real environment variables take
+precedence). Create it once:
 
 ```bash
 cp .env.example .env
-# then edit .env and set real values for JWT_SECRET and DEV_LOGIN_PASSWORD
+# then edit .env and set a real value for JWT_SECRET
 ```
 
 Start the server:

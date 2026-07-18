@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { setAuthenticatedClientState } from './helpers/auth';
 
 test('@smoke homepage loads', async ({ page }) => {
+	await setAuthenticatedClientState(page);
 	await page.goto('/');
 	await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 });
@@ -11,6 +13,7 @@ test('@smoke runtime config asset is served', async ({ page }) => {
 });
 
 test('@smoke Star action closes the quick shelf', async ({ page }) => {
+	await setAuthenticatedClientState(page);
 	await page.goto('/');
 	await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');

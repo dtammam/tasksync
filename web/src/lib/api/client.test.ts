@@ -130,6 +130,13 @@ describe('api client', () => {
 		const { api } = await import('./client');
 
 		await api.login({ email: 'admin@example.com', password: 'test-pass' });
+		await api.authStatus();
+		await api.setupOwner({
+			email: 'owner@example.com',
+			display: 'Owner',
+			password: 'owner-pass'
+		});
+		await api.revokeSessions();
 		await api.updateMe({ display: 'Admin' });
 		await api.getSoundSettings();
 		await api.updateSoundSettings({ enabled: false });
@@ -169,6 +176,9 @@ describe('api client', () => {
 		expect(calls).toEqual(
 			expect.arrayContaining([
 				'POST /auth/login',
+				'GET /auth/status',
+				'POST /auth/setup',
+				'POST /auth/revoke-sessions',
 				'PATCH /auth/me',
 				'GET /auth/sound',
 				'PATCH /auth/sound',

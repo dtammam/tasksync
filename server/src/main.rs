@@ -3,12 +3,14 @@ mod routes;
 use axum::{
     http::{
         header::{AUTHORIZATION, CONTENT_TYPE},
-        HeaderValue,
+        HeaderName, HeaderValue,
     },
     routing::get,
     Router,
 };
-use routes::{auth_routes, list_routes, sync_routes, task_routes, validate_boot_secrets};
+use routes::{
+    auth_routes, integration_routes, list_routes, sync_routes, task_routes, validate_boot_secrets,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -127,6 +129,11 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!().run(&pool).await?;
 
+    // Mirrors `routes::types::API_TOKEN_HEADER` (not re-exported across the
+    // module boundary) — the programmatic task-creation API's request
+    // header, allow-listed here so a browser/preflight caller can send it.
+    let api_token_header = HeaderName::from_static("x-tasksync-api-token");
+
     let app = Router::new()
         .route("/", get(|| async { "tasksync server ready" }))
         .route("/health", get(|| async { "ok" }))
@@ -134,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/lists", list_routes(&pool))
         .nest("/tasks", task_routes(&pool))
         .nest("/sync", sync_routes(&pool))
+        .nest("/api", integration_routes(&pool))
         .layer(
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(cors_origins))
@@ -145,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
                     axum::http::Method::DELETE,
                     axum::http::Method::OPTIONS,
                 ])
-                .allow_headers([AUTHORIZATION, CONTENT_TYPE]),
+                .allow_headers([AUTHORIZATION, CONTENT_TYPE, api_token_header]),
         );
 
     let addr: SocketAddr = SocketAddr::from(([0, 0, 0, 0], 3000));
