@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth';
+	import favicon from '$lib/assets/favicon.svg';
 	import type { AuthSetupRequest } from '$shared/types/auth';
 
 	type WallMode = 'loading' | 'setup' | 'login';
@@ -79,7 +80,10 @@
 		</div>
 	{:else if mode === 'setup'}
 		<div class="card" data-testid="loginwall-setup">
-			<h1>Welcome to TaskSync</h1>
+			<div class="heading-row">
+				<img src={favicon} alt="TaskSync logo" class="wall-logo" data-testid="loginwall-logo" />
+				<h1>Welcome to TaskSync</h1>
+			</div>
 			<p class="description">Create the owner account to get started.</p>
 			<label>
 				Email
@@ -131,7 +135,10 @@
 		</div>
 	{:else}
 		<div class="card" data-testid="loginwall-login">
-			<h1>Sign in</h1>
+			<div class="heading-row">
+				<img src={favicon} alt="TaskSync logo" class="wall-logo" data-testid="loginwall-logo" />
+				<h1>Sign in</h1>
+			</div>
 			<p class="description">Sign in to your TaskSync account.</p>
 			<label>
 				Email
@@ -203,6 +210,18 @@
 		margin: 0;
 		font-size: var(--text-lg, 20px);
 		color: var(--app-text, #e2e8f0);
+	}
+
+	.heading-row {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-2, 8px);
+	}
+
+	.wall-logo {
+		width: 24px;
+		height: 24px;
+		flex-shrink: 0;
 	}
 
 	.description {

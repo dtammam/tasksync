@@ -54,6 +54,7 @@ describe('LoginWall', () => {
 		expect(getByTestId('setup-display')).toBeTruthy();
 		expect(getByTestId('setup-password')).toBeTruthy();
 		expect(getByTestId('setup-submit')).toBeTruthy();
+		expect(getByTestId('loginwall-logo')).toBeTruthy();
 		expect(queryByTestId('loginwall-login')).toBeNull();
 	});
 
@@ -69,6 +70,7 @@ describe('LoginWall', () => {
 		expect(getByTestId('auth-password')).toBeTruthy();
 		expect(getByTestId('auth-space')).toBeTruthy();
 		expect(getByTestId('auth-signin')).toBeTruthy();
+		expect(getByTestId('loginwall-logo')).toBeTruthy();
 		expect(queryByTestId('loginwall-setup')).toBeNull();
 	});
 
