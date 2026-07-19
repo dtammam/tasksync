@@ -4,7 +4,11 @@ vi.mock('$lib/api/client', () => ({
 	api: {
 		login: vi.fn(),
 		me: vi.fn(),
-		updateMe: vi.fn()
+		updateMe: vi.fn(),
+		setupOwner: vi.fn(),
+		authStatus: vi.fn(),
+		revokeSessions: vi.fn(),
+		changePassword: vi.fn()
 	},
 	apiErrorStatus: (err: unknown) => {
 		const message = err instanceof Error ? err.message : String(err);
@@ -159,5 +163,80 @@ describe('auth store', () => {
 	it('updateProfile throws when not authenticated', async () => {
 		auth.logout();
 		await expect(auth.updateProfile({ display: 'anything' })).rejects.toThrow('Not authenticated');
+	});
+
+	it('setupOwner persists the token and user, and sets status authenticated', async () => {
+		mockedApi.setupOwner.mockResolvedValue({
+			token: 'setup-jwt-token',
+			...meUser
+		});
+
+		const result = await auth.setupOwner({
+			email: 'admin@example.com',
+			display: 'Admin',
+			password: 'tasksync-owner-pass'
+		});
+
+		expect(getAuthToken()).toBe('setup-jwt-token');
+		expect(auth.get().status).toBe('authenticated');
+		expect(auth.get().source).toBe('token');
+		expect(auth.get().user?.user_id).toBe('admin');
+		expect(result.user_id).toBe('admin');
+	});
+
+	it('setupOwner becomes anonymous with a formatted error when an owner already exists', async () => {
+		mockedApi.setupOwner.mockRejectedValue(new Error('API 409 Conflict'));
+
+		await expect(
+			auth.setupOwner({
+				email: 'admin@example.com',
+				display: 'Admin',
+				password: 'tasksync-owner-pass'
+			})
+		).rejects.toThrow();
+
+		expect(auth.get().status).toBe('anonymous');
+		expect(auth.get().error).toBe('An owner account already exists. Please sign in instead.');
+	});
+
+	it('fetchOwnerStatus returns the owner_exists flag from the status endpoint', async () => {
+		mockedApi.authStatus.mockResolvedValue({ owner_exists: false });
+
+		await expect(auth.fetchOwnerStatus()).resolves.toBe(false);
+		expect(mockedApi.authStatus).toHaveBeenCalled();
+	});
+
+	it('revokeAllSessions swaps the stored token and stays authenticated', async () => {
+		mockedApi.login.mockResolvedValue({ token: 'jwt-token', ...meUser });
+		await auth.login('admin@example.com', 'tasksync', 's1');
+
+		mockedApi.revokeSessions.mockResolvedValue({ token: 'fresh-jwt-token' });
+
+		await auth.revokeAllSessions();
+
+		expect(getAuthToken()).toBe('fresh-jwt-token');
+		expect(auth.get().status).toBe('authenticated');
+		expect(auth.get().user?.user_id).toBe('admin');
+	});
+
+	it('revokeAllSessions throws when not authenticated', async () => {
+		auth.logout();
+		await expect(auth.revokeAllSessions()).rejects.toThrow('Not authenticated');
+		expect(mockedApi.revokeSessions).not.toHaveBeenCalled();
+	});
+
+	it('changePassword swaps the stored token to the value returned by the API', async () => {
+		mockedApi.login.mockResolvedValue({ token: 'jwt-token', ...meUser });
+		await auth.login('admin@example.com', 'tasksync', 's1');
+
+		mockedApi.changePassword.mockResolvedValue({ token: 'rotated-jwt-token' });
+
+		await auth.changePassword({ current_password: 'old-pass', new_password: 'new-pass' });
+
+		expect(getAuthToken()).toBe('rotated-jwt-token');
+		expect(mockedApi.changePassword).toHaveBeenCalledWith({
+			current_password: 'old-pass',
+			new_password: 'new-pass'
+		});
 	});
 });

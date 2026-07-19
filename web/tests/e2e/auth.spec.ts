@@ -1,41 +1,39 @@
 import { expect, test, type Page } from '@playwright/test';
-import { waitForTaskInIdb } from './helpers/idb';
 
+/**
+ * `requireEmail: true` waits for the anonymous LoginWall's login form (shown
+ * directly at boot — it replaced the login form formerly embedded in the
+ * Sidebar's account section). Without it, waits for the authenticated
+ * app-shell and opens Settings -> Account so the authenticated account panel
+ * (identity, change-password, sign-out) is visible.
+ */
 const ensureAccountPanelOpen = async (page: Page, options?: { requireEmail?: boolean }) => {
-	const authEmail = page.getByTestId('auth-email');
 	if (options?.requireEmail) {
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
-			timeout: 30_000
-		});
+		await expect(page.getByTestId('login-wall')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('loginwall-login')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('auth-email')).toBeVisible();
+		return;
 	}
-	if ((await authEmail.count()) && options?.requireEmail) {
-		await expect(authEmail).toBeVisible();
+	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
+		timeout: 30_000
+	});
+	const authUser = page.getByTestId('auth-user');
+	if (await authUser.count()) {
 		return;
 	}
 	const openSettings = page.getByTestId('settings-open');
-	await expect
-		.poll(
-			async () =>
-				(await openSettings.count()) + (await authEmail.count()) + (await page.getByTestId('auth-user').count()),
-			{ timeout: 10_000 }
-		)
-		.toBeGreaterThan(0);
 	const settingsWindow = page.getByTestId('settings-window');
 	if (!(await settingsWindow.count())) {
 		await expect(openSettings).toBeVisible();
 		await openSettings.click();
 	}
-	await expect
-		.poll(async () => (await settingsWindow.count()) + (await authEmail.count()), { timeout: 10_000 })
-		.toBeGreaterThan(0);
-	if (!(await authEmail.count())) {
+	await expect(settingsWindow).toBeVisible();
+	if (!(await authUser.count())) {
 		const accountSection = page.locator('[data-testid="settings-section-account"]:visible').first();
 		await expect(accountSection).toBeVisible();
 		await accountSection.click();
 	}
-	if (options?.requireEmail) {
-		await expect(authEmail).toBeVisible();
-	}
+	await expect(authUser).toBeVisible();
 };
 
 const mockAuthenticatedBootstrap = async (page: Page) => {
@@ -149,6 +147,14 @@ test('@smoke can sign in with token mode and restore session after reload', asyn
 		});
 	});
 
+	await page.route('**/auth/status', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ owner_exists: true })
+		});
+	});
+
 	await page.route('**/lists', (route) =>
 		route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
 	);
@@ -163,6 +169,8 @@ test('@smoke can sign in with token mode and restore session after reload', asyn
 	await page.getByTestId('auth-password').fill('tasksync');
 	await page.getByTestId('auth-space').fill('s1');
 	await page.getByTestId('auth-signin').click();
+	await expect(page.getByTestId('login-wall')).toHaveCount(0);
+	await ensureAccountPanelOpen(page);
 	await expect(page.getByTestId('auth-user')).toContainText('admin@example.com');
 	await expect(page.getByTestId('settings-section-members').first()).toBeVisible();
 
@@ -237,7 +245,21 @@ test('can change password from account panel', async ({ page }) => {
 			current_password?: string;
 			new_password?: string;
 		};
-		await route.fulfill({ status: 204, body: '' });
+		// PATCH /auth/password returns 200 { token } (T3/T8) — the client swaps
+		// the stored token to the freshly re-issued one.
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ token: 'test-token-after-password-change' })
+		});
+	});
+
+	await page.route('**/auth/status', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ owner_exists: true })
+		});
 	});
 
 	await page.route('**/lists', (route) =>
@@ -253,9 +275,10 @@ test('can change password from account panel', async ({ page }) => {
 	await page.getByTestId('auth-email').fill('admin@example.com');
 	await page.getByTestId('auth-password').fill('tasksync');
 	await page.getByTestId('auth-signin').click();
+	await expect(page.getByTestId('login-wall')).toHaveCount(0);
+	await ensureAccountPanelOpen(page);
 	await expect(page.getByTestId('auth-user')).toContainText('admin@example.com');
 
-	await ensureAccountPanelOpen(page);
 	await page.getByRole('button', { name: 'Change password' }).click();
 	await page.getByLabel('Current password').fill('tasksync');
 	await page.getByPlaceholder('min 8 chars').fill('tasksync-new');
@@ -337,25 +360,23 @@ test('stale legacy-mode device resolves to anonymous and orphans legacy-default 
 		});
 	});
 
-	// (a) The app loads to the normal anonymous state with sign-in available —
-	// no error loop, no blank screen.
+	// (a) The app loads to the normal anonymous state with sign-in available via
+	// the login wall — no error loop, no blank screen, and (per the gated login
+	// wall feature) no app-shell/task/list content reaches an anonymous visitor.
 	await page.goto('/');
 	await ensureAccountPanelOpen(page, { requireEmail: true });
+	await expect(page.getByTestId('app-shell')).toHaveCount(0);
 
 	// (b) hydrate() removed the stale legacy mode key.
 	await expect
 		.poll(() => page.evaluate(() => localStorage.getItem('tasksync:auth-mode')))
 		.toBe(null);
 
-	// (c) A task created while signed out lands in the anonymous token scope
-	// (waitForTaskInIdb resolves tasksync_token-anonymous for a user-less device).
-	await page.goto('/');
-	const title = `Stale legacy anon ${Math.random().toString(36).slice(2, 8)}`;
-	await page.getByTestId('new-task-input').fill(title);
-	await page.getByTestId('new-task-submit').click();
-	await waitForTaskInIdb(page, title);
-
-	// (d) The legacy-default database is orphaned: still present, marker untouched.
+	// (c) The legacy-default database is orphaned: still present, marker untouched.
+	// (Anonymous visitors can no longer create tasks at all now that the login
+	// wall gates every app-content route — see the auth-gate @smoke specs in
+	// smoke.spec.ts for that coverage. This test's remaining concern is purely
+	// the legacy-mode-key cleanup + orphaned-database behavior above.)
 	const marker = await page.evaluate(async () => {
 		const databases = await indexedDB.databases();
 		if (!databases.some((db) => db.name === 'tasksync_legacy-default')) return null;

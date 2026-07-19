@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { setAuthenticatedClientState } from './helpers/auth';
 
 /**
  * Sidebar fixed-zones E2E tests.
@@ -15,6 +16,7 @@ test.use({
 test('@smoke settings button is visible in viewport on mobile without scrolling', async ({
 	page,
 }) => {
+	await setAuthenticatedClientState(page);
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
 		timeout: 30_000,

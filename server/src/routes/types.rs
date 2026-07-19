@@ -1,18 +1,33 @@
-use axum::http::{header::AUTHORIZATION, HeaderMap, StatusCode};
+use axum::http::{header::AUTHORIZATION, HeaderMap, HeaderName, StatusCode};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 use std::{
     env,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+/// Request header carrying the programmatic API token (F-B). Read by
+/// `ctx_from_api_token` only — `ctx_from_headers` never inspects it, and the
+/// verifier never inspects `Authorization`. The two auth paths are disjoint
+/// by construction.
+pub(super) const API_TOKEN_HEADER: HeaderName = HeaderName::from_static("x-tasksync-api-token");
+
+/// Fail-closed minimum length for an operator-configured `TASK_API_TOKEN`.
+/// Enforced at boot (`validate_boot_secrets`) when the variable is present;
+/// absent is fine (the programmatic API is simply disabled).
+pub(super) const API_TOKEN_MIN_LEN: usize = 24;
+
 #[derive(Clone)]
 pub(super) struct AppState {
     pub(super) pool: SqlitePool,
     pub(super) jwt_secret: String,
-    pub(super) login_password: String,
+    /// Optional static token for the programmatic task-creation API (F-B).
+    /// `None` when `TASK_API_TOKEN` is unset — the feature is off and
+    /// `ctx_from_api_token` rejects every request regardless of header.
+    pub(super) api_token: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -20,6 +35,14 @@ pub(super) struct AuthClaims {
     pub(super) sub: String,
     pub(super) space_id: String,
     pub(super) exp: usize,
+    /// Session token_version, re-checked against the user's stored value on
+    /// every request (see `ctx_from_headers`). `#[serde(default)]` on an
+    /// `i64` deserializes a missing claim as `0`, matching the `user.
+    /// token_version` column's `default 0` — pre-existing tokens minted
+    /// before this claim existed keep authenticating until a deliberate
+    /// bump.
+    #[serde(default)]
+    pub(super) tv: i64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,15 +51,27 @@ pub(super) enum Role {
     Contributor,
 }
 
+/// What kind of caller resolved this `RequestCtx`. Carried as
+/// defense-in-depth alongside `role`: a session login and the programmatic
+/// API token both resolve to `Role::Admin` for the owner, but `scope`
+/// distinguishes "a real session" from "the create-task-only API token" so
+/// `create_task_via_api_token` can assert the narrower scope even though the
+/// two paths already resolve disjoint identities.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AuthScope {
+    Session,
+    ApiTaskCreate,
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct RequestCtx {
     pub(super) space_id: String,
     pub(super) user_id: String,
     pub(super) role: Role,
+    pub(super) scope: AuthScope,
 }
 
 pub(super) const JWT_SECRET_DENYLIST: [&str; 2] = ["tasksync-dev-secret", "change-me"];
-pub(super) const DEV_LOGIN_PASSWORD_DENYLIST: [&str; 1] = ["tasksync"];
 
 /// Validates a single secret value against the fail-closed boot policy.
 ///
@@ -57,12 +92,36 @@ fn validate_secret(name: &str, value: Option<String>, denylist: &[&str]) -> Resu
     }
 }
 
+/// Validates an optional `TASK_API_TOKEN` against the fail-closed minimum
+/// length. Pure (no env access) so it is unit-testable without env-var
+/// mutation, mirroring `validate_secret`. Absent is not an error — the
+/// programmatic API is simply disabled; only a *present but too-short* value
+/// fails closed.
+fn validate_api_token_length(value: Option<&str>) -> Result<(), String> {
+    match value {
+        None => Ok(()),
+        Some(v) if v.trim().chars().count() < API_TOKEN_MIN_LEN => Err(format!(
+            "TASK_API_TOKEN is shorter than {API_TOKEN_MIN_LEN} characters — set a longer value in .env (see .env.example) or unset it to disable the programmatic task API"
+        )),
+        Some(_) => Ok(()),
+    }
+}
+
 /// Boot preflight: refuses default/placeholder secrets in every run mode.
 ///
-/// Reads `JWT_SECRET` and `DEV_LOGIN_PASSWORD` from the environment and
-/// aggregates ALL failures into one actionable message so operators fix
-/// everything in a single pass. Called from `main()` before the database
-/// connect; `app_state()` relies on this having passed.
+/// Reads `JWT_SECRET` from the environment. Called from `main()` before the
+/// database connect; `app_state()` relies on this having passed.
+///
+/// `DEV_LOGIN_PASSWORD` is deliberately NOT validated here (#047 closure):
+/// the shared-fallback login it used to gate no longer exists (auth is
+/// hash-only — see `password_matches_for_user`), so mandating it at boot
+/// would only block operators over a variable that gates nothing. A stale
+/// `DEV_LOGIN_PASSWORD` left in `.env` is simply ignored.
+///
+/// `TASK_API_TOKEN` (F-B, programmatic task-creation API) is optional — its
+/// absence is not a failure, the feature is simply off — but when present it
+/// must meet the fail-closed minimum length so a short/guessable value can
+/// never reach production.
 pub fn validate_boot_secrets() -> Result<(), String> {
     let mut failures: Vec<String> = Vec::new();
     if let Err(message) =
@@ -70,11 +129,7 @@ pub fn validate_boot_secrets() -> Result<(), String> {
     {
         failures.push(message);
     }
-    if let Err(message) = validate_secret(
-        "DEV_LOGIN_PASSWORD",
-        env::var("DEV_LOGIN_PASSWORD").ok(),
-        &DEV_LOGIN_PASSWORD_DENYLIST,
-    ) {
+    if let Err(message) = validate_api_token_length(env::var("TASK_API_TOKEN").ok().as_deref()) {
         failures.push(message);
     }
     if failures.is_empty() {
@@ -85,12 +140,16 @@ pub fn validate_boot_secrets() -> Result<(), String> {
 }
 
 pub(super) fn app_state(pool: &SqlitePool) -> AppState {
+    let api_token =
+        env::var("TASK_API_TOKEN").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    if api_token.is_some() {
+        tracing::info!("programmatic task-creation API enabled (TASK_API_TOKEN configured)");
+    }
     AppState {
         pool: pool.clone(),
         jwt_secret: env::var("JWT_SECRET")
             .expect("JWT_SECRET validated by validate_boot_secrets at boot"),
-        login_password: env::var("DEV_LOGIN_PASSWORD")
-            .expect("DEV_LOGIN_PASSWORD validated by validate_boot_secrets at boot"),
+        api_token,
     }
 }
 
@@ -101,12 +160,14 @@ pub(super) fn unix_now_secs() -> usize {
 pub(super) fn issue_token(
     user_id: &str,
     space_id: &str,
+    token_version: i64,
     secret: &str,
 ) -> Result<String, StatusCode> {
     let claims = AuthClaims {
         sub: user_id.to_string(),
         space_id: space_id.to_string(),
         exp: unix_now_secs() + (60 * 60 * 24 * 30),
+        tv: token_version,
     };
     encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
@@ -124,13 +185,17 @@ pub(super) fn password_meets_policy(password: &str) -> bool {
     password.trim().chars().count() >= 8
 }
 
-pub(super) async fn role_from_membership(
+/// Resolves the caller's role AND current server-side `token_version` in a
+/// single joined query (membership JOIN user) — this is the one per-request
+/// DB round-trip `ctx_from_headers` performs; the `token_version` revocation
+/// check is folded into it rather than adding a second query.
+pub(super) async fn resolve_identity(
     pool: &SqlitePool,
     space_id: &str,
     user_id: &str,
-) -> Result<Role, StatusCode> {
-    let role_str: Option<String> = sqlx::query_scalar(
-        "select role from membership where space_id = ?1 and user_id = ?2 limit 1",
+) -> Result<(Role, i64), StatusCode> {
+    let row: Option<(String, i64)> = sqlx::query_as(
+        "select m.role, u.token_version from membership m join user u on u.id = m.user_id where m.space_id = ?1 and m.user_id = ?2 limit 1",
     )
     .bind(space_id)
     .bind(user_id)
@@ -138,10 +203,13 @@ pub(super) async fn role_from_membership(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    match role_str.as_deref() {
-        Some("admin") => Ok(Role::Admin),
-        Some("contributor") => Ok(Role::Contributor),
-        _ => Err(StatusCode::UNAUTHORIZED),
+    match row {
+        Some((role_str, token_version)) => match role_str.as_str() {
+            "admin" => Ok((Role::Admin, token_version)),
+            "contributor" => Ok((Role::Contributor, token_version)),
+            _ => Err(StatusCode::UNAUTHORIZED),
+        },
+        None => Err(StatusCode::UNAUTHORIZED),
     }
 }
 
@@ -157,18 +225,76 @@ pub(super) async fn ctx_from_headers(
                 &Validation::default(),
             )
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
-            let role =
-                role_from_membership(&state.pool, &decoded.claims.space_id, &decoded.claims.sub)
+            let (role, token_version) =
+                resolve_identity(&state.pool, &decoded.claims.space_id, &decoded.claims.sub)
                     .await?;
+            if decoded.claims.tv != token_version {
+                return Err(StatusCode::UNAUTHORIZED);
+            }
             return Ok(RequestCtx {
                 space_id: decoded.claims.space_id,
                 user_id: decoded.claims.sub,
                 role,
+                scope: AuthScope::Session,
             });
         }
     }
 
     Err(StatusCode::UNAUTHORIZED)
+}
+
+/// Length-independent equality check for secret comparison.
+///
+/// Both inputs are first hashed with SHA-256 to fixed-length 32-byte
+/// digests, then compared. This means the comparison NEVER short-circuits
+/// or panics on a raw length mismatch between the caller-supplied value and
+/// the configured secret (a naive `a == b` or `a.as_bytes() == b.as_bytes()`
+/// on `&str`/`&[u8]` returns `false` fast for differing lengths, which is a
+/// timing side-channel); comparing two same-length digests instead removes
+/// that early exit. The final digest-to-digest comparison via `==` is safe
+/// precisely because both operands are fixed-length hashes of the secrets,
+/// not the variable-length secrets themselves.
+pub(super) fn constant_time_eq(a: &str, b: &str) -> bool {
+    let digest_a = Sha256::digest(a.as_bytes());
+    let digest_b = Sha256::digest(b.as_bytes());
+    digest_a == digest_b
+}
+
+/// Resolves a `RequestCtx` for the programmatic task-creation API (F-B).
+///
+/// Disjoint from `ctx_from_headers`: this verifier reads ONLY the
+/// `X-TaskSync-Api-Token` header and never inspects `Authorization`;
+/// `ctx_from_headers` never inspects the API-token header. A caller
+/// presenting a valid token does NOT get to pick an arbitrary `uid`/
+/// `space_id` — the identity is resolved server-side from the single owner
+/// admin membership, exactly like `auth_status`/`auth_setup` resolve
+/// "the owner" without trusting client input.
+///
+/// Consumed by `create_task_via_api_token` (`POST /api/tasks`,
+/// `integrations.rs`).
+pub(super) async fn ctx_from_api_token(
+    headers: &HeaderMap,
+    state: &AppState,
+) -> Result<RequestCtx, StatusCode> {
+    let Some(configured) = state.api_token.as_deref() else {
+        return Err(StatusCode::UNAUTHORIZED);
+    };
+    let Some(provided) = headers.get(API_TOKEN_HEADER).and_then(|v| v.to_str().ok()) else {
+        return Err(StatusCode::UNAUTHORIZED);
+    };
+    if !constant_time_eq(provided, configured) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let owner: Option<(String, String)> = sqlx::query_as(
+        "select m.space_id, m.user_id from membership m where m.role = 'admin' limit 1",
+    )
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let (space_id, user_id) = owner.ok_or(StatusCode::UNAUTHORIZED)?;
+    Ok(RequestCtx { space_id, user_id, role: Role::Admin, scope: AuthScope::ApiTaskCreate })
 }
 
 pub(super) fn normalize_avatar_icon(raw: Option<String>) -> Option<String> {
@@ -509,7 +635,9 @@ pub(super) fn normalize_task_priority(raw: Option<i64>) -> Result<Option<i64>, S
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_secret, DEV_LOGIN_PASSWORD_DENYLIST, JWT_SECRET_DENYLIST};
+    use super::{
+        constant_time_eq, validate_api_token_length, validate_secret, JWT_SECRET_DENYLIST,
+    };
 
     // The full fail-closed matrix is tested through the PURE `validate_secret`
     // by passing `Option<String>` values directly — no env-var mutation, which
@@ -550,18 +678,6 @@ mod tests {
     }
 
     #[test]
-    fn validate_secret_rejects_denylisted_dev_login_password_literal() {
-        let err = validate_secret(
-            "DEV_LOGIN_PASSWORD",
-            Some("tasksync".to_string()),
-            &DEV_LOGIN_PASSWORD_DENYLIST,
-        )
-        .unwrap_err();
-        assert!(err.contains("DEV_LOGIN_PASSWORD"), "error should name the variable: {err}");
-        assert!(err.contains("known default"), "error should state the reason: {err}");
-    }
-
-    #[test]
     fn validate_secret_accepts_a_real_value_and_returns_it_unchanged() {
         let value = validate_secret(
             "JWT_SECRET",
@@ -574,11 +690,59 @@ mod tests {
 
     #[test]
     fn validate_secret_applies_denylists_per_variable_not_globally() {
-        // "tasksync" is denylisted for DEV_LOGIN_PASSWORD but not for
-        // JWT_SECRET; each variable is checked only against its own denylist.
+        // "tasksync" is not in JWT_SECRET_DENYLIST (it was only ever
+        // denylisted for the now-removed DEV_LOGIN_PASSWORD variable), so it
+        // validates fine here — `validate_secret` checks only the denylist it
+        // is given, never a global list.
         let value =
             validate_secret("JWT_SECRET", Some("tasksync".to_string()), &JWT_SECRET_DENYLIST)
                 .expect("value outside this variable's denylist should validate");
         assert_eq!(value, "tasksync");
+    }
+
+    #[test]
+    fn constant_time_eq_returns_true_for_equal_inputs() {
+        assert!(constant_time_eq("a-secret-value", "a-secret-value"));
+    }
+
+    #[test]
+    fn constant_time_eq_returns_false_for_unequal_same_length_inputs() {
+        assert!(!constant_time_eq("a-secret-value1", "a-secret-value2"));
+    }
+
+    #[test]
+    fn constant_time_eq_returns_false_without_panicking_for_differing_lengths() {
+        // The whole point of hashing both sides first: a raw byte-slice `==`
+        // would short-circuit false immediately on length mismatch (a timing
+        // signal) or, with a naive fixed-window compare, could panic/index
+        // out of bounds. Hashing first means both sides are always 32 bytes.
+        assert!(!constant_time_eq("short", "a-much-longer-secret-value"));
+        assert!(!constant_time_eq("a-much-longer-secret-value", "short"));
+        assert!(!constant_time_eq("", "a-much-longer-secret-value"));
+        assert!(!constant_time_eq("a-much-longer-secret-value", ""));
+    }
+
+    #[test]
+    fn constant_time_eq_treats_empty_strings_as_equal_to_each_other() {
+        assert!(constant_time_eq("", ""));
+    }
+
+    #[test]
+    fn validate_api_token_length_accepts_absent_value() {
+        validate_api_token_length(None).expect("absent TASK_API_TOKEN should not fail closed");
+    }
+
+    #[test]
+    fn validate_api_token_length_accepts_value_at_minimum_length() {
+        let value = "a".repeat(super::API_TOKEN_MIN_LEN);
+        validate_api_token_length(Some(&value)).expect(">= minimum length should validate");
+    }
+
+    #[test]
+    fn validate_api_token_length_rejects_value_shorter_than_minimum() {
+        let value = "a".repeat(super::API_TOKEN_MIN_LEN - 1);
+        let err = validate_api_token_length(Some(&value)).unwrap_err();
+        assert!(err.contains("TASK_API_TOKEN"), "error should name the variable: {err}");
+        assert!(err.contains("24"), "error should state the minimum length: {err}");
     }
 }

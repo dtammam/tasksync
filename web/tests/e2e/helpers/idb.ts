@@ -121,6 +121,7 @@ export const readTaskFromIdb = async (page: Page, title: string) =>
 			punted_on_date?: string;
 			occurrences_completed?: number;
 			status?: string;
+			priority?: number;
 		};
 	}, title);
 

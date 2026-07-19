@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readTasksFromIdbByTitle } from './helpers/idb';
+import { setAuthenticatedClientState, type TestUser } from './helpers/auth';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 const todayIso = () => {
@@ -14,12 +15,6 @@ const seededLists = [
 	{ id: 'health', name: 'Health', icon: '💪', order: 'e' },
 	{ id: 'tech', name: 'Tech Ideas', icon: '💻', order: 'f' }
 ];
-interface TestUser {
-	user_id: string;
-	email: string;
-	display: string;
-	space_id: string;
-}
 
 interface SeedTask {
 	title: string;
@@ -28,27 +23,6 @@ interface SeedTask {
 	due_date?: string;
 	status?: 'pending' | 'done';
 }
-
-const resetClientState = async (page: Page) => {
-	await page.addInitScript(() => {
-		// Keep e2e deterministic and local-first: signed-out token mode disables live server sync.
-		localStorage.removeItem('tasksync:auth-token');
-		localStorage.removeItem('tasksync:auth-user');
-	});
-};
-
-const setAuthenticatedClientState = async (page: Page, user: TestUser) => {
-	await page.addInitScript((initialUser) => {
-		localStorage.setItem('tasksync:auth-token', 'test-token');
-		localStorage.setItem(
-			'tasksync:auth-user',
-			JSON.stringify({
-				...initialUser,
-				role: 'admin'
-			})
-		);
-	}, user);
-};
 
 const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnregistered?: boolean }) => {
 	let registrationReady = true;
@@ -467,7 +441,19 @@ test.describe('Offline continuity', () => {
 	test.skip(({ browserName }) => browserName === 'webkit');
 
 	test('@smoke hard reload offline keeps cached shell and local data', async ({ page, context }) => {
-		await resetClientState(page);
+		// The gated login wall blocks anonymous app access, so this offline-
+		// continuity test seeds a cached authenticated session (mirrors an
+		// already-logged-in device) rather than loading anonymously. There is no
+		// live backend in this test environment, so auth.hydrate()'s api.me()
+		// call fails with a network error (not 401) and resolves 'authenticated'
+		// from the cached token+user — offline-first, no live round-trip.
+		const user = {
+			user_id: 'admin',
+			email: 'admin@example.com',
+			display: 'Admin',
+			space_id: 's1'
+		};
+		await setAuthenticatedClientState(page, user);
 		await page.goto('/');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 
@@ -752,7 +738,17 @@ test.describe('Offline continuity', () => {
 	});
 
 	test('offline boot keeps cached authenticated scope instead of anonymous fallback', async ({ page, context }) => {
-		await resetClientState(page);
+		// The gated login wall blocks anonymous app access, so this test seeds a
+		// cached authenticated session up front (setAuthenticatedClientState uses
+		// addInitScript, so it persists across the later reload) instead of
+		// starting anonymous and authenticating mid-test.
+		const user = {
+			user_id: 'admin',
+			email: 'admin@example.com',
+			display: 'Admin',
+			space_id: 's1'
+		};
+		await setAuthenticatedClientState(page, user);
 		await page.goto('/');
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
@@ -762,12 +758,6 @@ test.describe('Offline continuity', () => {
 			return;
 		}
 
-		const user = {
-			user_id: 'admin',
-			email: 'admin@example.com',
-			display: 'Admin',
-			space_id: 's1'
-		};
 		const scopedTaskTitle = makeTitle('Scoped offline');
 		await seedScopedTaskForUser(page, {
 			user,
@@ -775,30 +765,6 @@ test.describe('Offline continuity', () => {
 			listId: 'goal-management',
 			myDay: true
 		});
-
-		// Register as addInitScript so auth persists through the offline reload
-		// (resetClientState's addInitScript clears on every navigation; this overwrites it).
-		await page.addInitScript((nextUser) => {
-			localStorage.setItem('tasksync:auth-token', 'test-token');
-			localStorage.setItem(
-				'tasksync:auth-user',
-				JSON.stringify({
-					...nextUser,
-					role: 'admin'
-				})
-			);
-		}, user);
-		// Also set for the current page context.
-		await page.evaluate((nextUser) => {
-			localStorage.setItem('tasksync:auth-token', 'test-token');
-			localStorage.setItem(
-				'tasksync:auth-user',
-				JSON.stringify({
-					...nextUser,
-					role: 'admin'
-				})
-			);
-		}, user);
 
 		await context.setOffline(true);
 		await page.reload({ waitUntil: 'domcontentloaded' });

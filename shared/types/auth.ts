@@ -29,6 +29,22 @@ export interface AuthChangePasswordRequest {
 	new_password: string;
 }
 
+export interface AuthStatusResponse {
+	owner_exists: boolean;
+}
+
+export interface AuthSetupRequest {
+	email: string;
+	display: string;
+	password: string;
+	avatar_icon?: string;
+	space_id?: string;
+}
+
+export interface AuthTokenResponse {
+	token: string;
+}
+
 export interface AuthCreateMemberRequest {
 	email: string;
 	display: string;

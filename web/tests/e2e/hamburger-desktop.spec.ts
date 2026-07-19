@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { setAuthenticatedClientState } from './helpers/auth';
 
 /**
  * Hamburger button visibility E2E tests.
@@ -9,6 +10,7 @@ import { expect, test } from '@playwright/test';
  */
 
 test('@smoke hamburger is hidden on desktop viewport', async ({ page }) => {
+	await setAuthenticatedClientState(page);
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
@@ -27,6 +29,7 @@ test('@smoke hamburger is hidden on desktop viewport', async ({ page }) => {
 });
 
 test('@smoke hamburger is visible on mobile viewport', async ({ page }) => {
+	await setAuthenticatedClientState(page);
 	await page.setViewportSize({ width: 375, height: 667 });
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {

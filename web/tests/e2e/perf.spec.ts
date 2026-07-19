@@ -9,12 +9,13 @@
  */
 
 import { expect, test } from '@playwright/test';
+import { setAuthenticatedClientState } from './helpers/auth';
 
 const resetClientState = async (page: import('@playwright/test').Page) => {
-	await page.addInitScript(() => {
-		localStorage.removeItem('tasksync:auth-token');
-		localStorage.removeItem('tasksync:auth-user');
-	});
+	// The gated login wall blocks anonymous app access, so this seeds a cached
+	// authenticated session (no live backend in this test environment, so
+	// auth.hydrate() resolves 'authenticated' from cache — offline-first).
+	await setAuthenticatedClientState(page);
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 };

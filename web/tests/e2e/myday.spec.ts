@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { waitForTaskInIdb, readTaskFromIdb, updateTaskInIdb } from './helpers/idb';
+import { setAuthenticatedClientState } from './helpers/auth';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 const toLocalIsoDate = (date: Date) =>
@@ -42,11 +43,10 @@ const ensureSoundPanelOpen = async (page: Page) => {
 };
 
 const resetClientState = async (page: Page) => {
-	await page.addInitScript(() => {
-		// Keep e2e deterministic: signed-out token mode disables live server sync for this suite.
-		localStorage.removeItem('tasksync:auth-token');
-		localStorage.removeItem('tasksync:auth-user');
-	});
+	// The gated login wall blocks anonymous app access, so this suite seeds a
+	// cached authenticated session (no live backend in this test environment,
+	// so auth.hydrate() resolves 'authenticated' from cache — offline-first).
+	await setAuthenticatedClientState(page);
 
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
@@ -65,6 +65,15 @@ const seedSuggestions = async (page: Page) => {
 	await row.getByRole('button', { name: '⋯' }).click();
 	await page.getByRole('button', { name: 'Star' }).click();
 	// Star now auto-closes the shelf; no manual Close click needed.
+
+	// The star write persists to IDB asynchronously (repo.saveTasks is
+	// fire-and-forget). page.goto('/') below is a full page navigation (not a
+	// SvelteKit client-side route change), which tears down the JS context —
+	// wait for the priority write to land in IDB first so it survives the
+	// reload instead of racing it.
+	await expect
+		.poll(async () => (await readTaskFromIdb(page, title))?.priority ?? 0)
+		.toBeGreaterThan(0);
 
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
@@ -384,10 +393,12 @@ test.describe('My Day', () => {
 	test('completing last pending My Day non-recurring task triggers day-complete', async ({
 		page
 	}) => {
-		// Enable streak before page load so hydrateFromLocal picks it up
+		// Enable streak before page load so hydrateFromLocal picks it up. This
+		// suite runs authenticated (see resetClientState/setAuthenticatedClientState),
+		// so preferences are scoped by space/user, not the anonymous key.
 		await page.addInitScript(() => {
 			localStorage.setItem(
-				'tasksync:ui-preferences:anon',
+				'tasksync:ui-preferences:s1:admin',
 				JSON.stringify({
 					theme: 'default',
 					font: 'sora',
@@ -424,7 +435,7 @@ test.describe('My Day', () => {
 		await expect
 			.poll(() =>
 				page.evaluate(() => {
-					const raw = localStorage.getItem('tasksync:ui-preferences:anon');
+					const raw = localStorage.getItem('tasksync:ui-preferences:s1:admin');
 					if (!raw) return null;
 					try {
 						const blob = JSON.parse(raw) as {
