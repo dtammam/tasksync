@@ -14,9 +14,11 @@ pub use types::validate_boot_secrets;
 
 #[cfg(test)]
 mod tests {
+    use axum::body::to_bytes;
     use axum::extract::{Path, State};
-    use axum::http::header::AUTHORIZATION;
+    use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
     use axum::http::HeaderMap;
+    use axum::response::IntoResponse;
     use axum::Json;
     use sqlx::SqlitePool;
     use std::collections::BTreeSet;
@@ -30,7 +32,9 @@ mod tests {
         SetListGrantBody, SetMemberPasswordBody, UpdateProfileBody, UpdateSoundSettingsBody,
         UpdateUiPreferencesBody,
     };
-    use super::integrations::create_task_via_api_token;
+    use super::integrations::{
+        create_task_via_api_token, reject_log_message, unknown_list_log_message, ApiTaskError,
+    };
     use super::lists::{create_list, delete_list, get_lists, update_list, CreateList, UpdateList};
     use super::sync::{sync_pull, sync_push, SyncPullBody, SyncPushBody, SyncPushChange};
     use super::tasks::{
@@ -1128,6 +1132,42 @@ mod tests {
         assert_eq!(count, 1);
     }
 
+    // AC10: the browser `POST /tasks` route keeps its pre-existing bare
+    // `StatusCode` error contract even though `create_task_for_ctx` now
+    // renders a JSON error body for the same failure mode on the
+    // API-token route (`POST /api/tasks`). This test is unrelated to the
+    // API-token feature itself — it exists solely to prove the shared
+    // function's contract for the browser route did not drift.
+    #[tokio::test]
+    async fn create_task_returns_bare_not_found_for_unknown_list_id() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let result = create_task(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Should not be created".to_string(),
+                list_id: "does-not-exist".to_string(),
+                order: None,
+                my_day: None,
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await;
+
+        assert_eq!(result.err(), Some(axum::http::StatusCode::NOT_FOUND));
+    }
+
     #[tokio::test]
     async fn admin_can_delete_task() {
         let pool = setup_pool().await;
@@ -2097,6 +2137,33 @@ mod tests {
 
     const TEST_API_TOKEN: &str = "a-genuinely-random-32-char-token";
 
+    /// Renders an `ApiTaskError`, asserts it carries `expected_status` and a
+    /// non-empty JSON body of shape `{"error":{"code": ...}}` matching
+    /// `expected_code`, and returns the parsed body for further assertions.
+    async fn assert_coded_error_response(
+        err: ApiTaskError,
+        expected_status: axum::http::StatusCode,
+        expected_code: &str,
+    ) -> serde_json::Value {
+        let response = err.into_response();
+        assert_eq!(response.status(), expected_status);
+        assert_eq!(
+            response.headers().get(CONTENT_TYPE).and_then(|v| v.to_str().ok()),
+            Some("application/json"),
+            "coded error response should carry a JSON Content-Type (code={expected_code})"
+        );
+        let body = to_bytes(response.into_body(), usize::MAX).await.expect("read coded error body");
+        assert!(!body.is_empty(), "coded error body must not be empty (code={expected_code})");
+        let json: serde_json::Value = serde_json::from_slice(&body)
+            .unwrap_or_else(|err| panic!("coded error body should be JSON: {err}"));
+        assert_eq!(json["error"]["code"], expected_code);
+        assert!(
+            json["error"]["message"].is_string(),
+            "coded error body should carry a string error.message"
+        );
+        json
+    }
+
     #[tokio::test]
     async fn create_task_via_api_token_creates_task_owned_by_the_admin() {
         let pool = setup_pool().await;
@@ -2161,7 +2228,9 @@ mod tests {
             }),
         )
         .await;
-        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+        let Err(err) = result else { panic!("missing token header should be rejected") };
+        assert_coded_error_response(err, axum::http::StatusCode::UNAUTHORIZED, "unauthorized")
+            .await;
     }
 
     #[tokio::test]
@@ -2190,7 +2259,150 @@ mod tests {
             }),
         )
         .await;
-        assert_eq!(result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
+        let Err(err) = result else { panic!("wrong token value should be rejected") };
+        assert_coded_error_response(err, axum::http::StatusCode::UNAUTHORIZED, "unauthorized")
+            .await;
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_returns_coded_404_for_unknown_list_id() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+        let headers = api_token_headers(TEST_API_TOKEN);
+
+        let result = create_task_via_api_token(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Should not be created".to_string(),
+                list_id: "does-not-exist".to_string(),
+                order: None,
+                my_day: None,
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await;
+
+        let Err(err) = result else { panic!("unknown list_id should be rejected") };
+        assert_coded_error_response(err, axum::http::StatusCode::NOT_FOUND, "unknown_list").await;
+
+        // The two `404`s (this one and the feature-off gate) must be
+        // distinguishable by body content alone — this is exactly the
+        // ambiguity that made the 2026-07-19 debugging session slow.
+        let feature_off_body =
+            to_bytes(ApiTaskError::Concealed.into_response().into_body(), usize::MAX)
+                .await
+                .expect("read feature-off body");
+        assert!(
+            feature_off_body.is_empty(),
+            "feature-off 404 must stay empty-bodied so it remains distinguishable from unknown_list"
+        );
+    }
+
+    #[tokio::test]
+    async fn api_task_error_forbidden_scope_renders_403_with_coded_body() {
+        // `ctx_from_api_token` always resolves `AuthScope::ApiTaskCreate`,
+        // so gate 3 (the defense-in-depth scope assertion) cannot be driven
+        // to a mismatch through a full handler call on this route. Exercise
+        // the constructor the handler calls at that gate directly.
+        let err = ApiTaskError::forbidden_scope();
+        assert_coded_error_response(err, axum::http::StatusCode::FORBIDDEN, "forbidden_scope")
+            .await;
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_returns_coded_400_for_invalid_priority() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+        let headers = api_token_headers(TEST_API_TOKEN);
+
+        let result = create_task_via_api_token(
+            State(state),
+            headers,
+            Json(CreateTask {
+                id: None,
+                title: "Should not be created".to_string(),
+                list_id: "goal-management".to_string(),
+                order: None,
+                my_day: None,
+                priority: Some(99), // out of the valid 0..=3 range
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await;
+
+        let Err(err) = result else { panic!("out-of-range priority should be rejected") };
+        assert_coded_error_response(err, axum::http::StatusCode::BAD_REQUEST, "invalid_request")
+            .await;
+    }
+
+    #[tokio::test]
+    async fn create_task_via_api_token_returns_coded_409_for_idempotent_create_conflict() {
+        let pool = setup_pool().await;
+        let state = test_state_with_api_token(&pool, TEST_API_TOKEN);
+
+        // `task.id` is a global primary key (not scoped by space). Seed a
+        // SECOND space with a task using the id the API-token caller will
+        // then try to (re)use in space `s1`: the insert hits the unique
+        // constraint, and the follow-up lookup (scoped by `ctx.space_id ==
+        // "s1"`) can never find that row — the real `CONFLICT` branch this
+        // route can reach.
+        let colliding_id = uuid::Uuid::new_v4().to_string();
+        sqlx::query("insert into space (id, name) values ('s2', 'Other Space')")
+            .execute(&pool)
+            .await
+            .expect("insert second space");
+        sqlx::query(
+            "insert into list (id, space_id, name, list_order) values ('l-other', 's2', 'Other List', 'a')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert second-space list");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values (?1, 's2', 'Other space task', 'pending', 'l-other', 0, 0, 'a', 0, 0)",
+        )
+        .bind(&colliding_id)
+        .execute(&pool)
+        .await
+        .expect("insert colliding task in other space");
+
+        let result = create_task_via_api_token(
+            State(state),
+            api_token_headers(TEST_API_TOKEN),
+            Json(CreateTask {
+                id: Some(colliding_id),
+                title: "Should hit the CONFLICT branch".to_string(),
+                list_id: "goal-management".to_string(),
+                order: Some("z".to_string()),
+                my_day: Some(false),
+                priority: None,
+                url: None,
+                recur_rule: None,
+                due_date: None,
+                punted_from_due_date: None,
+                punted_on_date: None,
+                notes: None,
+                assignee_user_id: None,
+            }),
+        )
+        .await;
+
+        let Err(err) = result else { panic!("cross-space id collision should be rejected") };
+        assert_coded_error_response(err, axum::http::StatusCode::CONFLICT, "conflict").await;
     }
 
     #[tokio::test]
@@ -2301,8 +2513,14 @@ mod tests {
         assert_eq!(members_result.err(), Some(axum::http::StatusCode::UNAUTHORIZED));
     }
 
+    // AC1: feature-off byte-for-byte concealment regression. Calls the real
+    // handler (rather than constructing `ApiTaskError::Concealed` directly)
+    // so the regression is caught even if a future edit swaps gate 1's
+    // `Err(...)` for something else, and compares the FULL rendered
+    // response — status, header set, and body bytes — against a baseline
+    // `StatusCode::NOT_FOUND` response, not just the status code.
     #[tokio::test]
-    async fn create_task_via_api_token_returns_not_found_when_feature_disabled() {
+    async fn create_task_via_api_token_returns_concealed_404_when_feature_disabled() {
         let pool = setup_pool().await;
         let state = test_state(&pool); // api_token: None (feature off)
         let headers = api_token_headers("literally-any-value-at-all-here");
@@ -2327,6 +2545,149 @@ mod tests {
             }),
         )
         .await;
-        assert_eq!(result.err(), Some(axum::http::StatusCode::NOT_FOUND));
+
+        let Err(err) = result else { panic!("feature-off gate should reject the request") };
+        let response = err.into_response();
+        let baseline = axum::http::StatusCode::NOT_FOUND.into_response();
+
+        assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers(),
+            baseline.headers(),
+            "feature-off response must not add or change any header vs. the NOT_FOUND baseline"
+        );
+        assert!(
+            !response.headers().contains_key(CONTENT_TYPE),
+            "feature-off response must not carry a Content-Type header"
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.expect("read response body");
+        let baseline_body =
+            to_bytes(baseline.into_body(), usize::MAX).await.expect("read baseline body");
+        assert!(body.is_empty(), "feature-off body must be empty");
+        assert_eq!(
+            body, baseline_body,
+            "feature-off response must match the NOT_FOUND baseline byte-for-byte"
+        );
+    }
+
+    // AC9: across the full named failure-mode set, the feature-off gate must
+    // be the ONLY empty-body response — every other rejection carries a
+    // non-empty JSON body with a `code`.
+    #[tokio::test]
+    async fn feature_off_is_the_only_empty_body_response_across_the_failure_matrix() {
+        let cases: Vec<(&str, ApiTaskError)> = vec![
+            ("feature_off", ApiTaskError::Concealed),
+            ("unauthorized", ApiTaskError::from_auth(axum::http::StatusCode::UNAUTHORIZED)),
+            (
+                "auth_internal_error",
+                ApiTaskError::from_auth(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+            ),
+            ("forbidden_scope", ApiTaskError::forbidden_scope()),
+            ("unknown_list", ApiTaskError::from_create(axum::http::StatusCode::NOT_FOUND)),
+            ("invalid_request", ApiTaskError::from_create(axum::http::StatusCode::BAD_REQUEST)),
+            ("conflict", ApiTaskError::from_create(axum::http::StatusCode::CONFLICT)),
+            ("forbidden", ApiTaskError::from_create(axum::http::StatusCode::FORBIDDEN)),
+            (
+                "create_internal_error",
+                ApiTaskError::from_create(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+            ),
+        ];
+
+        let mut empty_body_cases: Vec<&str> = Vec::new();
+        for (name, err) in cases {
+            let response = err.into_response();
+            let body = to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap_or_else(|err| panic!("failed to read body for {name}: {err}"));
+            if body.is_empty() {
+                empty_body_cases.push(name);
+            } else {
+                let json: serde_json::Value = serde_json::from_slice(&body)
+                    .unwrap_or_else(|err| panic!("{name} body should be JSON: {err}"));
+                assert!(
+                    json["error"]["code"].is_string(),
+                    "{name} body should carry a string error.code, got {json:?}"
+                );
+            }
+        }
+
+        assert_eq!(
+            empty_body_cases,
+            vec!["feature_off"],
+            "feature-off must be the ONLY empty-body response on this route"
+        );
+    }
+
+    /// Asserts a JSON error body carries no dynamic/internal/DB text (SQL,
+    /// driver messages, stack traces) — the `internal_error` body must stay
+    /// generic: a stable code + a static message, nothing request- or
+    /// database-derived.
+    fn assert_no_leaked_internal_text(json: &serde_json::Value) {
+        let rendered = json.to_string().to_lowercase();
+        for banned in ["sql", "sqlx", "database", "panic", "stack", "traceback", "driver"] {
+            assert!(
+                !rendered.contains(banned),
+                "internal_error body should not leak internal/DB text (found {banned:?} in {rendered})"
+            );
+        }
+    }
+
+    // AC7: 500 maps to a generic, stable `internal_error` code via BOTH
+    // `from_auth`'s and `from_create`'s catch-all arms, and the rendered
+    // body carries no dynamic/internal/DB text. No live DB fault is needed:
+    // the mappers are pure functions of `StatusCode`, exercised directly.
+    #[tokio::test]
+    async fn internal_error_maps_from_both_call_sites_with_no_leaked_internal_text() {
+        let via_auth = ApiTaskError::from_auth(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        let json = assert_coded_error_response(
+            via_auth,
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+        )
+        .await;
+        assert_no_leaked_internal_text(&json);
+
+        let via_create = ApiTaskError::from_create(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        let json = assert_coded_error_response(
+            via_create,
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+        )
+        .await;
+        assert_no_leaked_internal_text(&json);
+    }
+
+    // AC8: the pure `reject_log_message` helper returns the correct category
+    // string for every code, deterministically substituting for
+    // subscriber-capture of the actual `tracing` output.
+    #[test]
+    fn reject_log_message_returns_expected_text_per_category() {
+        assert_eq!(
+            reject_log_message("unauthorized"),
+            "rejected: unauthorized (missing/invalid token or owner unresolved)"
+        );
+        assert_eq!(reject_log_message("forbidden_scope"), "rejected: scope mismatch");
+        assert_eq!(reject_log_message("unknown_list"), "rejected: unknown list_id");
+        assert_eq!(reject_log_message("invalid_request"), "rejected: invalid request body");
+        assert_eq!(reject_log_message("conflict"), "rejected: idempotent-create conflict");
+        assert_eq!(reject_log_message("forbidden"), "rejected: forbidden");
+        assert_eq!(reject_log_message("internal_error"), "failed: internal error");
+    }
+
+    // AC8: the unknown-list formatter names the caller-supplied `list_id` —
+    // this is the value that would have collapsed the 2026-07-19 debugging
+    // session from many round trips to one glance at the log.
+    #[test]
+    fn unknown_list_log_message_names_the_caller_supplied_list_id() {
+        let message = unknown_list_log_message("does-not-exist");
+        assert!(
+            message.contains("does-not-exist"),
+            "unknown-list log message should name the caller-supplied list_id, got: {message}"
+        );
+        assert!(
+            message.contains(reject_log_message("unknown_list")),
+            "unknown-list log message should still carry the base category text, got: {message}"
+        );
     }
 }
