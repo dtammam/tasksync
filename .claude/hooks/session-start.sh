@@ -1,65 +1,30 @@
 #!/usr/bin/env bash
-# SessionStart hook — injects repo context at the start of every conversation.
-# Keep this fast (<500ms). No network calls.
+# SessionStart hook — inject only git-derived and marker-derived facts, never
+# stored state. Anything that can silently rot does not belong here.
+set -uo pipefail
 
-set -euo pipefail
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$root" || exit 0
 
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+branch="$(git branch --show-current 2>/dev/null || true)"
+echo "Branch: ${branch:-(detached)}"
 
-# Branch and working tree state
-BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'detached')"
-DIRTY="$(git status --short 2>/dev/null | wc -l | tr -d ' ' || echo '0')"
-
-# Active execution plans
-ACTIVE_DIR="$ROOT/docs/exec-plans/active"
-PLANS=""
-if [ -d "$ACTIVE_DIR" ]; then
-  PLANS="$(find "$ACTIVE_DIR" -maxdepth 1 -name '*.md' -not -name 'README.md' -not -name '.*' -exec basename {} \; 2>/dev/null | sort)"
-fi
-PLAN_COUNT="$(echo "$PLANS" | grep -c . || true)"
-
-# Tech debt active count
-DEBT_FILE="$ROOT/docs/exec-plans/tech-debt-tracker.md"
-DEBT_COUNT=0
-if [ -f "$DEBT_FILE" ]; then
-  DEBT_COUNT="$(awk '/^## Active/,/^## Closed/' "$DEBT_FILE" | grep -cE '^\| *[0-9]' || true)"
-fi
-
-# Feature state
-STATE_FILE="$ROOT/.state/feature-state.json"
-FEATURE_STAGE="none"
-FEATURE_NAME=""
-if [ -f "$STATE_FILE" ] && [ -s "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" != "{}" ]; then
-  FEATURE_NAME="$(grep -o '"feature_name"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | head -1 | sed 's/.*: *"//;s/"//')"
-  FEATURE_STAGE="$(grep -o '"stage"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | head -1 | sed 's/.*: *"//;s/"//')"
+# Active plan(s) and their real status, read from the doc markers themselves.
+shopt -s nullglob 2>/dev/null || true
+plans=()
+for f in docs/exec-plans/active/*.md; do
+  [ "$(basename "$f")" = "README.md" ] && continue
+  plans+=("$f")
+done
+if [ "${#plans[@]}" -gt 0 ]; then
+  echo "Active plans (${#plans[@]}):"
+  for p in "${plans[@]}"; do
+    status="$(grep -m1 '^status:' "$p" 2>/dev/null | sed 's/^status:[[:space:]]*//')"
+    echo "  - $(basename "$p"): ${status:-no status marker}"
+  done
 fi
 
-# Pending inbox files
-INBOX_DIR="$ROOT/.state/inbox"
-PENDING_INBOX=""
-if [ -d "$INBOX_DIR" ]; then
-  PENDING_INBOX="$(find "$INBOX_DIR" -maxdepth 1 -name '*.md' -not -empty -exec basename {} .md \; 2>/dev/null | sort)"
+# Marker health — report, never block. Stale markers surface here first.
+if [ -x .harness/lib/check-markers.sh ]; then
+  .harness/lib/check-markers.sh docs/exec-plans 2>&1 | sed 's/^/  /' || true
 fi
-
-# Output
-echo "=== Session Context ==="
-echo "Branch: $BRANCH ($DIRTY uncommitted changes)"
-echo "Active plans: $PLAN_COUNT"
-if [ -n "$PLANS" ]; then
-  echo "$PLANS" | sed 's/^/  - /'
-fi
-echo "Tech debt items: $DEBT_COUNT"
-if [ -n "$FEATURE_NAME" ]; then
-  echo "Active feature: $FEATURE_NAME (stage: $FEATURE_STAGE)"
-fi
-if [ -n "$PENDING_INBOX" ]; then
-  echo "Pending inbox:"
-  echo "$PENDING_INBOX" | sed 's/^/  - /'
-fi
-# Unfilled placeholder detection
-CLAUDE_MD="$ROOT/CLAUDE.md"
-if [ -f "$CLAUDE_MD" ] && grep -q '{{' "$CLAUDE_MD" 2>/dev/null; then
-  echo "Unfilled placeholders detected in CLAUDE.md."
-  echo "Run /seed to auto-configure your project."
-fi
-echo "======================"

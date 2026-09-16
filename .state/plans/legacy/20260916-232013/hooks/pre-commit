@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Pre-commit hook — runs fast checks before every commit.
+set -euo pipefail
+
+# Source profile for tool paths (nvm, cargo, etc.)
+[ -f "$HOME/.profile" ] && source "$HOME/.profile" 2>/dev/null || true
+
+echo "Running pre-commit checks..."
+
+# --- Web (Node/TypeScript) ---
+cd web
+npm run lint
+npm run check
+npm run test
+cd ..
+
+# --- Server (Rust) ---
+cargo fmt -- --check
+cargo clippy -- -D warnings
+
+echo "Pre-commit checks passed."

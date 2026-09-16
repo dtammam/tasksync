@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Pre-push hook — runs full checks before pushing.
+set -euo pipefail
+
+# Source profile for tool paths (nvm, cargo, etc.)
+[ -f "$HOME/.profile" ] && source "$HOME/.profile" 2>/dev/null || true
+
+echo "Running pre-push checks..."
+
+# --- Web (Node/TypeScript) ---
+cd web
+npm run test
+
+# E2E smoke (Chromium-only); set SKIP_PLAYWRIGHT=1 to skip
+if [ "${SKIP_PLAYWRIGHT:-0}" != "1" ]; then
+  npm run test:e2e:smoke
+fi
+cd ..
+
+# --- Server (Rust) ---
+cargo test
+
+echo "Pre-push checks passed."
