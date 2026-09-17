@@ -20,15 +20,17 @@ higher-cost model; execution of pieces 2–4 is intended for Opus sessions.
 
 | # | Piece | Branch / plan slug | State |
 |---|-------|--------------------|-------|
-| 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | gated (`APPROVED r2`), ready to commit + PR |
-| 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | not started |
-| 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | not started |
+| 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | **Shipped** — PR #138 (+ #139 cleanup), merged 2026-09-17 |
+| 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Parked** — intake done (root cause confirmed, approach ready), no code yet; see its own plan doc |
+| 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | up next |
 | 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | `feat/bulk-task-ops` | not started |
 
-Order: **2 → 4 → 3**, confirmed by the owner 2026-09-16. 2 is the daily-friction
-bug and is smallest. 4 is UI + store work on an unchanged data model. 3 changes
-the data model, the wire format, IDB, SQLite, and exports — highest blast
-radius, do it last with the most context.
+Order: **3 → 2 → 4**, reprioritized by the owner 2026-09-17 (originally
+2 → 4 → 3, confirmed 2026-09-16). Piece 2's intake is complete and parked,
+not abandoned — cheap to resume later. Rationale for the original order (2
+smallest/highest-friction, 4 unchanged data model, 3 highest blast radius)
+still holds as *relative* difficulty; the owner chose to take the highest-value
+piece first regardless of blast radius.
 
 ## Anchor recommendations (project default: `outcome`)
 
