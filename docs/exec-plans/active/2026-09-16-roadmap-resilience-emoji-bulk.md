@@ -335,3 +335,40 @@ Gate: APPROVED r2 @f8a429badb6f9ddd1a039f58d7fdba3d311c7578-staged — adversary
 - 2026-09-16 — roadmap drafted; piece 1 installed locally; pieces 2–4 scoped
   with inferred acceptance and blind-spot lists. Order and emoji sort semantics
   still need owner confirmation.
+
+## Piece: post-migration-cleanup
+
+### Gate — adversary (r1)
+
+Attack surface per brief: confirm no tracked file has a *live* dependency on
+`HANDOFF.md` existing.
+
+- `git diff --cached --stat` / `git status --porcelain`: staged change is
+  exactly `D  HANDOFF.md` — a single-file deletion, nothing else riding along.
+- `git grep -ln "HANDOFF" -- . ':!HANDOFF.md'` plus a whole-tree
+  case-insensitive `grep -rn "HANDOFF"` (including untracked files, `.git`
+  excluded): only hits are three lines in this same roadmap doc
+  (`docs/exec-plans/active/2026-09-16-roadmap-resilience-emoji-bulk.md:218,
+  265, 305`), all inside the prior migration piece's r1/r2 gate-verdict prose
+  — describing what `HANDOFF.md`'s text said/omitted at review time. No
+  `[text](HANDOFF.md)` markdown link anywhere (`git grep -n "](HANDOFF"`
+  empty), no `.yml`/`.yaml` CI workflow references it, no hook/script under
+  `.claude/`, `.harness/`, or `scripts/` reads or mentions it. These are
+  genuinely historical/descriptive references, not something that breaks.
+- Read `HANDOFF.md` at `HEAD` directly (not the brief's summary): its own
+  first-section text reads "Delete this file once the migration is merged —
+  it is a one-shot handoff, not a doc," matching the brief's characterization
+  verbatim.
+- Confirmed the stated precondition is actually true, not just asserted: `git
+  log --oneline -5` shows `54dfde5 Merge pull request #138 from
+  dtammam/chore/harness-v2-migration` at the tip of the base — the migration
+  this handoff was written for is merged.
+- No dead-code guard, no script, no other tracked file's present-tense prose
+  (`AGENTS.md`, `docs/index.md`, `.claude/settings.json`,
+  `.claude/hooks/session-start.sh`) names or requires `HANDOFF.md`.
+
+No findings. Tree left byte-identical to the pre-review staged state apart
+from this appended section (verified via `git status --porcelain` /
+`git diff --cached` showing only the pre-existing `D  HANDOFF.md`).
+
+Gate: APPROVED r1 @54dfde5fbde9c510ece96e89033e12572c69d533-staged — adversary
