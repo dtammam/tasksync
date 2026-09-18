@@ -20,15 +20,17 @@ higher-cost model; execution of pieces 2–4 is intended for Opus sessions.
 
 | # | Piece | Branch / plan slug | State |
 |---|-------|--------------------|-------|
-| 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | gated (`APPROVED r2`), ready to commit + PR |
-| 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | not started |
-| 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | not started |
+| 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | **Shipped** — PR #138 (+ #139 cleanup), merged 2026-09-17 |
+| 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Parked** — intake done (root cause confirmed, approach ready), no code yet; see its own plan doc |
+| 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | up next |
 | 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | `feat/bulk-task-ops` | not started |
 
-Order: **2 → 4 → 3**, confirmed by the owner 2026-09-16. 2 is the daily-friction
-bug and is smallest. 4 is UI + store work on an unchanged data model. 3 changes
-the data model, the wire format, IDB, SQLite, and exports — highest blast
-radius, do it last with the most context.
+Order: **3 → 2 → 4**, reprioritized by the owner 2026-09-17 (originally
+2 → 4 → 3, confirmed 2026-09-16). Piece 2's intake is complete and parked,
+not abandoned — cheap to resume later. Rationale for the original order (2
+smallest/highest-friction, 4 unchanged data model, 3 highest blast radius)
+still holds as *relative* difficulty; the owner chose to take the highest-value
+piece first regardless of blast radius.
 
 ## Anchor recommendations (project default: `outcome`)
 
@@ -372,3 +374,108 @@ from this appended section (verified via `git status --porcelain` /
 `git diff --cached` showing only the pre-existing `D  HANDOFF.md`).
 
 Gate: APPROVED r1 @54dfde5fbde9c510ece96e89033e12572c69d533-staged — adversary
+
+## Piece: park-add-task-resilience-intake
+
+### Gate — adversary (r1)
+
+Reviewed the staged diff (`docs/exec-plans/active/2026-09-17-fix-add-task-details-reload.md`
+new, this doc's own table/order-note edit) against the current tree at
+`HEAD` (no staged code changes ride along).
+
+**Attack surface 2 — no code changed.** `git diff --cached --name-only`
+returns exactly the two doc paths named in the brief. `git diff --cached
+--stat` shows 157 insertions / 7 deletions across those two files only.
+The new plan doc's own "Progress log — No code has been written yet" is
+true as stated; nothing under `web/` or `server/` is touched.
+
+**Attack surface 1 — root-cause claims, verified against source, not
+prose.** Read every cited file:line directly:
+- `makeLocalTask` mints `` `local-${crypto.randomUUID()}` `` at
+  `web/src/lib/stores/tasks.ts:49` exactly as claimed; called from
+  `createLocalWithOptions` (`tasks.ts:194`) and `importBatch` (`tasks.ts:246`,
+  confirmed markdown-sourced via `ImportTasksModal.svelte:6,25`
+  `parseMarkdownTasks`).
+- `requestIdForLocalTask` (`sync.ts:14-22`) strips the `local-` prefix
+  before it's used as `create_task`'s `id` (`sync.ts:95`); confirmed the
+  server accepts a client-supplied id verbatim
+  (`server/src/routes/tasks.rs:165-171`, idempotency test at
+  `server/src/routes/mod.rs:1072`).
+- Ack path traced end to end: `sync.ts:310` calls
+  `tasks.replaceWithRemote(entry.op.localTaskId, mapApiTask(remoteTask), ...)`;
+  `mapApiTask` (`sync.ts:48-72`) sets `id: t.id` (the bare server UUID).
+  `replaceWithRemote` (`tasks.ts:664-679`) overwrites `id` with `remote.id`
+  in *both* branches (the spread-`remote` no-edits branch and the explicit
+  `id: remote.id` edited-since-create branch) — confirmed by reading both
+  branches, not just one.
+- Create-vs-update gating confirmed at `sync.ts:88-89`
+  (`` `${task.local ? 'create' : 'update'}-${index}` ``) — gated on the
+  `task.local` boolean, not id shape, as claimed.
+- Drawer-unmount mechanism confirmed exactly: `detailId`
+  (`+page.svelte:28`), reactive lookup (`+page.svelte:51`), set only by
+  `openDetail`/`closeDetail` (`+page.svelte:204,208`) — never resynced when
+  a task's `id` changes — feeding `open={!!detailTask}`
+  (`+page.svelte:352`) into `TaskDetailDrawer`'s `{#if open && task}`
+  (`TaskDetailDrawer.svelte:151`). Identical pattern independently confirmed
+  in `web/src/routes/list/[id]/+page.svelte:15,22,102,103`.
+  `{#each ... (task.id)}` keying confirmed at `+page.svelte:311,333` and
+  `list/[id]/+page.svelte:203,219`.
+- `grep -rn "{#key" web/src/` reproduces exactly the doc's claim: the only
+  hits are `StreakDisplay.svelte:31,46`, unrelated to this path.
+
+- WARNING (doc accuracy, not code-affecting since no code exists yet):
+  claim 5's own grep summary is imprecise. It states "confirmed via
+  `grep -rn "local-" web/src/lib/`: the only non-test reads are the two
+  `sync.ts` sites that add/strip it." Running that exact grep shows
+  **one** non-test hit in `sync.ts` (line 16, inside
+  `requestIdForLocalTask`, which strips the prefix) plus a coincidental,
+  unrelated match in `Sidebar.svelte:463` ("local-only signOut", a comment,
+  not the prefix). The site that *adds* the prefix is `tasks.ts:49-50`
+  (`makeLocalTask`'s `id` and `order`), not `sync.ts` — which the doc's own
+  claim 1, three paragraphs earlier, correctly attributes to `tasks.ts:49`.
+  So claim 5 contradicts claim 1 on which file mints the prefix. The
+  downstream conclusion ("nothing else branches on
+  `id.startsWith('local-')`") is still true — verified independently by
+  the same grep, which shows no third-party branch on the literal — so
+  this doesn't change the Approach's safety argument, but it's exactly the
+  kind of "confirmed by code" claim that wasn't, and should be corrected
+  before Build resumes so a future implementer isn't sent looking for a
+  second `sync.ts` site that doesn't exist. Safe to ship disclosed: the
+  plan is Parked with no code written, and the error doesn't survive
+  independent re-verification of the thing it's actually used to argue.
+
+**Attack surface 3 — consistency between the two doc edits.** The
+roadmap table's Piece 2 row ("Parked — intake done (root cause confirmed,
+approach ready), no code yet; see its own plan doc") and branch column
+(`fix/add-task-details-reload`) match the new plan doc's frontmatter
+(`status: Parked(revisit: owner reprioritized emoji piece first,
+2026-09-17)`) and its own progress log verbatim — same branch, same
+parked reason, same "no code yet." The reordered note ("3 → 2 → 4 …
+originally 2 → 4 → 3, confirmed 2026-09-16") is self-consistent with the
+original text it replaces (diffed via `git diff --cached`). No
+contradiction found.
+
+**Attack surface 4 — marker hygiene.** `.harness/lib/check-markers.sh
+docs/exec-plans` output, verbatim:
+```
+  ✗ docs/exec-plans/active/2026-09-16-roadmap-resilience-emoji-bulk.md: stale approval: 'f8a429badb6f9ddd1a039f58d7fdba3d311c7578' predates changes to this file — re-confirm
+  ✗ docs/exec-plans/active/2026-09-16-roadmap-resilience-emoji-bulk.md: stale approval: 'f8a429badb6f9ddd1a039f58d7fdba3d311c7578' predates changes to this file — re-confirm
+  ✗ docs/exec-plans/active/2026-09-16-roadmap-resilience-emoji-bulk.md: stale approval: '54dfde5fbde9c510ece96e89033e12572c69d533' predates changes to this file — re-confirm
+check-markers: 3 issue(s) found
+```
+All three are the previously-reported `-staged`-suffix limitation
+(documented in this same doc's Piece 1 r2 section and Piece
+post-migration-cleanup r1 section): the tool's bound-sha regex can't
+resolve the `-staged` suffix, and any further edit to this file re-trips
+the same three already-bound `Gate:` lines (Piece 1 r1, r2, and
+post-migration-cleanup r1). Not new, not re-litigated. The new plan doc
+(`2026-09-17-fix-add-task-details-reload.md`) has no bound `Gate:` line
+yet (`gate: pending`) and produced zero findings of its own.
+
+No CRITICAL findings. One WARNING (doc-accuracy, claim 5 vs. claim 1),
+argued safe to ship disclosed above. Tree confirmed left byte-identical
+to the pre-review staged state apart from this appended section
+(`git status --porcelain` / `git diff --cached` show only the two
+originally-staged files, this section included).
+
+Gate: APPROVED r1 @039a87fc283667e92820221e425e0c4258a5de6-staged — adversary
