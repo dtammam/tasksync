@@ -98,9 +98,13 @@ delete/emoji-change actions so it isn't a surprise.
 
 **D5 — Dedicated REST endpoints, not the sync delta protocol.** Palette edits
 are rare, single-admin, non-offline-critical actions — closer to
-`/auth/preferences` than to task/list sync. Add
-`GET /spaces/:id/tag-palette` and `PUT /spaces/:id/tag-palette` (whole-palette
-replace) as dedicated endpoints, not new sync change types.
+`/auth/preferences` than to task/list sync. This server has no `/spaces/:id`
+path convention anywhere — every resource is nested at a fixed path
+(`/auth`, `/lists`, `/tasks`) and the caller's space comes from
+`ctx_from_headers`, not a URL param (corrected after reading `lists.rs`; the
+plan originally proposed a `/spaces/:id/...` shape that doesn't match this
+codebase). Add a new fixed-path resource, `GET /tags` and `PUT /tags`
+(whole-palette replace), mounted the same way `list_routes`/`task_routes` are.
 
 **D6 — Client: a hydrated store replaces the static const.** New
 `web/src/lib/stores/tagPalette.ts` hydrates from the server on space load and
@@ -115,10 +119,16 @@ callers — need minimal changes as a result.
 section and section order use the same drag-to-reorder interaction already
 built for list ordering in `Sidebar.svelte`, not a new component.
 
-**D8 — Validation, client and server.** Reject on save: empty label, empty or
-multi-grapheme-cluster-invalid emoji, and duplicate emoji anywhere in the
-whole palette (`tagRank`/`tagLabel` assume emoji uniqueness; a duplicate makes
-`tagLabel` silently return whichever entry it finds first). No other floor is
+**D8 — Validation, client and server.** Reject on save: empty label, empty
+emoji, and duplicate emoji anywhere in the whole palette (`tagRank`/
+`tagLabel` assume emoji uniqueness; a duplicate makes `tagLabel` silently
+return whichever entry it finds first — this is the one real correctness
+invariant). Server-side emoji shape check is a plain non-empty + short
+max-length bound, not strict single-grapheme-cluster validation — the
+palette already contains a multi-codepoint ZWJ sequence (👨‍👩‍👧, "Family"),
+so "exactly one grapheme cluster" is actually wrong, and enforcing it
+server-side would need a new Rust dependency for no real safety gain; the
+client's native emoji picker keeps input sane in practice. No other floor is
 enforced — an empty section, or the whole palette emptied to zero sections, is
 allowed and rendered as a plain empty state, not a validation error (the app
 already has a working "untagged" bucket for zero tags; forcing a minimum would
@@ -126,11 +136,16 @@ only be friction, per owner).
 
 **D9 — Sections are first-class editable objects too, same as entries.**
 Sections can be added, renamed, reordered, and deleted — not just their
-entries. Deleting a section cascades to delete its entries with it, matching
-this codebase's existing cascade convention (deleting a list deletes its
-tasks); per D4 this is already safe for any already-tagged task regardless.
-The UI shows a confirm before a cascading delete ("Delete 'Grocery aisles' and
-its 6 tags?"), matching the existing delete-list confirmation pattern.
+entries. Deleting a section cascades to delete its entries with it.
+Correction: this does NOT match an existing cascade convention — `delete_list`
+actually does the opposite, returning `409 Conflict` and refusing to delete a
+non-empty list. The right reason for cascading here is the inverse of why
+lists block: deleting a list's tasks would be destructive and irreversible,
+so the app protects against it; deleting a palette entry is never destructive
+per D4 (an already-tagged task keeps its emoji regardless), so there's nothing
+to protect against and cascading is safe. The UI still shows a confirm before
+a cascading delete ("Delete 'Grocery aisles' and its 6 tags?") for the same
+reason list deletion confirms — clarity, not data safety.
 
 ## Design
 
@@ -146,16 +161,17 @@ Stored shape mirrors the current TS type exactly — a JSON array of
 serialization is a straight `JSON.stringify`/`JSON.parse` of the existing
 `TagPaletteSection[]` shape, no reshaping needed.
 
-**Server (`server/src/routes/`, new `tags.rs` or folded into `lists.rs`'s
-space-scoped routes).**
-- `GET /spaces/:id/tag-palette` — any member; returns the space's palette, or
-  the built-in default array if the column is null.
-- `PUT /spaces/:id/tag-palette` — admin only (403 for contributors); replaces
-  the whole array. Validates: every entry has a non-empty `label` and a
-  non-empty `emoji` that is exactly one grapheme cluster (`Intl.Segmenter`,
-  same primitive Piece 3 already uses client-side); no duplicate `emoji`
-  anywhere across the whole payload, regardless of section. Reject the whole
-  request (400) on any violation — no partial apply.
+**Server (`server/src/routes/tags.rs`, new — mirrors `lists.rs`'s shape,
+mounted at `/tags` in `main.rs` next to `/lists`/`/tasks`).**
+- `GET /` — any member (`ctx_from_headers`, no role check); returns the raw
+  stored value for `ctx.space_id` (`Option<Vec<TagPaletteSection>>`, `null`
+  when unset). The client, not the server, supplies the built-in default for
+  `null` (D6) — no duplicated palette content between Rust and TypeScript.
+- `PUT /` — admin only (403 for contributors, matching `create_list`/
+  `update_list`); replaces the whole array. Validates: every entry has a
+  non-empty `label` and non-empty (short max-length) `emoji`; no duplicate
+  `emoji` anywhere across the whole payload, regardless of section. Reject the
+  whole request (400) on any violation — no partial apply.
 
 **Client store (`web/src/lib/stores/tagPalette.ts`, new).** A writable store
 hydrated once on space load via the new `GET`. Exposes:
@@ -191,10 +207,10 @@ Two nested sortable lists, reusing `Sidebar.svelte`'s existing
 
 - **Step 1** — Migration `0019_space_tag_palette.sql`; add `tag_palette_json`
   to the relevant `space`-row structs.
-- **Step 2** — Server: `GET`/`PUT /spaces/:id/tag-palette` with validation
-  (grapheme-cluster emoji check, duplicate-emoji check, admin gate on `PUT`);
-  server tests for happy path, non-admin 403, duplicate-emoji 400,
-  empty-palette-allowed, null-column-serves-default.
+- **Step 2** — Server: new `tags.rs`, `GET`/`PUT /tags` with validation
+  (non-empty label/emoji, duplicate-emoji check, admin gate on `PUT`); mount
+  in `main.rs`; server tests for happy path, non-admin 403, duplicate-emoji
+  400, empty-palette-allowed, null-column-returned-as-is.
 - **Step 3** — Shared types: add the wire shape to `shared/types/` alongside
   existing space/settings types.
 - **Step 4** — Client: `stores/tagPalette.ts` (hydrate on space load, fallback
