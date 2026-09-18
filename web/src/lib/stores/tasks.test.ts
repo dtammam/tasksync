@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { repo } from '$lib/data/repo';
 import { auth } from '$lib/stores/auth';
 import { api } from '$lib/api/client';
+import { lists } from '$lib/stores/lists';
 
 vi.mock('$lib/sound/sound', () => ({
 	playCompletion: vi.fn()
@@ -1127,6 +1128,58 @@ describe('tasks store helpers', () => {
 		expect(updated?.status).toBe('pending');
 		expect(updated?.completed_ts).toBeUndefined();
 		expect(updated?.dirty).toBe(true);
+	});
+
+	it('applies a list default tag to a manually created task that did not specify one', () => {
+		const originalLists = get(lists);
+		lists.setAll(
+			originalLists.map((l) => (l.id === 'goal-management' ? { ...l, default_emoji: '🎯' } : l))
+		);
+		try {
+			const created = tasks.createLocalWithOptions('New goal', 'goal-management');
+			expect(created?.emoji).toBe('🎯');
+
+			const explicit = tasks.createLocalWithOptions('Tagged goal', 'goal-management', {
+				emoji: '⭐'
+			});
+			expect(explicit?.emoji).toBe('⭐');
+		} finally {
+			lists.setAll(originalLists);
+		}
+	});
+
+	it('applies a list default tag to freshly created tasks during import, not to reactivated ones', () => {
+		const originalLists = get(lists);
+		lists.setAll(
+			originalLists.map((l) => (l.id === 'goal-management' ? { ...l, default_emoji: '🥦' } : l))
+		);
+		try {
+			tasks.setAll([
+				baseTask({
+					id: 'existing-untagged',
+					title: 'Already here',
+					list_id: 'goal-management',
+					status: 'done'
+				})
+			]);
+
+			const result = tasks.importBatch(
+				[
+					{ title: 'Already here', status: 'pending', list_id: 'goal-management' },
+					{ title: 'Brand new item', status: 'pending', list_id: 'goal-management' }
+				],
+				'goal-management'
+			);
+
+			expect(result).toEqual({ created: 1, skipped: 1, reactivated: 1 });
+			const all = tasks.getAll();
+			expect(all.find((t) => t.title === 'Brand new item')?.emoji).toBe('🥦');
+			// A reactivated existing task keeps whatever tag it already had (none here) --
+			// the list default only seeds brand-new tasks, it never overwrites one in place.
+			expect(all.find((t) => t.title === 'Already here')?.emoji).toBeUndefined();
+		} finally {
+			lists.setAll(originalLists);
+		}
 	});
 
 	it('unchecks completed tasks in a list while leaving other lists untouched', () => {

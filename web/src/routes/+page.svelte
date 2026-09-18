@@ -11,6 +11,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import { uiPreferences, DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
 	import { hydrated } from '$lib/stores/hydration';
+	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
 	import type { Task } from '$shared/types/task';
 
 	// Hydration transition suppression: All fly/fade transitions use duration: $hydrated ? <ms> : 0
@@ -31,6 +32,11 @@
 	let isMobilePwaViewport = false;
 	const MY_DAY_SORT_KEY = 'tasksync:sort:myday';
 	const MY_DAY_SORT_DIRECTION_KEY = 'tasksync:sort:myday:direction';
+	// D9: off by default -- My Day is the primary, highest-frequency view and
+	// grouping-by-tag is an optional lens, not a default change to that flow.
+	let groupByTagEnabled = false;
+	let groupToggleLoaded = false;
+	const MY_DAY_GROUP_BY_TAG_KEY = 'tasksync:group-by-tag:myday';
 
 	const updateMobileViewport = () => {
 		if (typeof window === 'undefined') return;
@@ -170,6 +176,12 @@
 	$: sortedPending = sortTasks($myDayPending ?? [], sortMode, sortDirection);
 	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode, sortDirection);
 	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode, sortDirection);
+	$: pendingGroups = groupByTagEnabled
+		? groupTasksByTag(sortedPending)
+		: [{ key: '__all__', label: '', tasks: sortedPending }];
+	$: completedGroups = groupByTagEnabled
+		? groupTasksByTag(sortedCompleted)
+		: [{ key: '__all__', label: '', tasks: sortedCompleted }];
 	$: copyLines = [
 		...sortedMissed.map((task) => `- [ ] ${task.title}`),
 		...sortedPending.map((task) => `- [ ] ${task.title}`),
@@ -192,6 +204,15 @@
 	$: if (typeof window !== 'undefined' && sortLoaded) {
 		localStorage.setItem(MY_DAY_SORT_KEY, sortMode);
 		localStorage.setItem(MY_DAY_SORT_DIRECTION_KEY, sortDirection);
+	}
+
+	$: if (typeof window !== 'undefined' && !groupToggleLoaded) {
+		groupByTagEnabled = localStorage.getItem(MY_DAY_GROUP_BY_TAG_KEY) === '1';
+		groupToggleLoaded = true;
+	}
+
+	$: if (typeof window !== 'undefined' && groupToggleLoaded) {
+		localStorage.setItem(MY_DAY_GROUP_BY_TAG_KEY, groupByTagEnabled ? '1' : '0');
 	}
 
 	if (typeof window !== 'undefined') {
@@ -288,6 +309,16 @@
 		</div>
 		<div class="actions">
 			<SortControls mode={sortMode} direction={sortDirection} on:change={onSortChange} />
+			<button
+				type="button"
+				class="chip ghost"
+				class:active={groupByTagEnabled}
+				data-testid="myday-group-by-tag-toggle"
+				aria-pressed={groupByTagEnabled}
+				on:click={() => (groupByTagEnabled = !groupByTagEnabled)}
+			>
+				Group by tag
+			</button>
 		</div>
 	</header>
 
@@ -306,39 +337,55 @@
 
 	<section class="block">
 		<div class="section-title">Planned</div>
-		<div class="stack">
-				{#if sortedPending.length}
-				{#each sortedPending as task (task.id)}
-					<div in:fly={{ y: -6, duration: $hydrated ? 150 : 0 }} out:fade={{ duration: $hydrated ? 150 : 0 }}>
-						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
-					</div>
-				{/each}
-			{:else if $myDayCompleted?.length}
+		{#if sortedPending.length}
+			{#each pendingGroups as group (group.key)}
+				{#if group.label}
+					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+				{/if}
+				<div class="stack">
+					{#each group.tasks as task (task.id)}
+						<div in:fly={{ y: -6, duration: $hydrated ? 150 : 0 }} out:fade={{ duration: $hydrated ? 150 : 0 }}>
+							<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
+						</div>
+					{/each}
+				</div>
+			{/each}
+		{:else if $myDayCompleted?.length}
+			<div class="stack">
 				<div class="bliss" data-testid="bliss-state" in:fly={{ y: -4, duration: $hydrated ? 200 : 0 }} class:no-animate={!$hydrated}>
 					<span class="bliss-icon">✓</span>
 					<span class="bliss-headline">{blissMessage}</span>
 					<span class="bliss-sub">That's everything for today.</span>
 				</div>
-			{:else}
+			</div>
+		{:else}
+			<div class="stack">
 				<p class="empty" data-testid="planned-empty">Nothing scheduled. Add a task to My Day.</p>
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</section>
 
 	{#if $uiPreferences.showCompleted}
 	<section class="block">
 		<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
-		<div class="stack" data-testid="completed-section">
-				{#if sortedCompleted.length}
-				{#each sortedCompleted as task (task.id)}
-					<div transition:fade={{ duration: $hydrated ? 150 : 0 }}>
-						<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
-					</div>
-				{/each}
-			{:else}
+		{#if sortedCompleted.length}
+			{#each completedGroups as group (group.key)}
+				{#if group.label}
+					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+				{/if}
+				<div class="stack" data-testid="completed-section">
+					{#each group.tasks as task (task.id)}
+						<div transition:fade={{ duration: $hydrated ? 150 : 0 }}>
+							<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
+						</div>
+					{/each}
+				</div>
+			{/each}
+		{:else}
+			<div class="stack" data-testid="completed-section">
 				<p class="empty subtle">No completed tasks yet.</p>
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</section>
 	{/if}
 </div>
@@ -425,6 +472,33 @@
 	}
 
 	.actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }
+
+	.chip.ghost {
+		border-radius: 999px;
+		padding: 8px 12px;
+		font-size: 12px;
+		cursor: pointer;
+		background: var(--surface-1);
+		border: 1px solid var(--border-2);
+		color: var(--app-text);
+		box-shadow: var(--ring-shadow);
+	}
+
+	.chip.ghost.active {
+		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
+		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
+	}
+
+	.tag-group-title {
+		color: var(--app-muted);
+		font-size: 12px;
+		font-weight: 600;
+		margin: 0 0 6px;
+	}
+
+	.stack + .tag-group-title {
+		margin-top: 16px;
+	}
 
 	.block {
 		margin-top: 16px;

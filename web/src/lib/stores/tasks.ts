@@ -5,6 +5,7 @@ export { setDbScope } from '$lib/data/idb';
 import { playCompletion } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
 import { auth } from '$lib/stores/auth';
+import { lists } from '$lib/stores/lists';
 import { api } from '$lib/api/client';
 import { streak } from '$lib/stores/streak';
 import {
@@ -189,11 +190,17 @@ export const tasks = {
 			priority?: Task['priority'];
 			assignee_user_id?: string;
 			due_date?: string;
+			emoji?: string;
 		}
 	) {
 		const trimmed = title.trim();
 		if (!trimmed) return;
-		const task = makeLocalTask(trimmed, list_id, opts);
+		// A list's default tag (D10) only applies when the caller didn't already pick one.
+		const defaultEmoji = get(lists).find((l) => l.id === list_id)?.default_emoji;
+		const task = makeLocalTask(trimmed, list_id, {
+			...opts,
+			emoji: opts?.emoji ?? defaultEmoji
+		});
 		updateAndPersist((list) => [...list, task]);
 		return task;
 	},
@@ -211,6 +218,7 @@ export const tasks = {
 		let reactivated = 0;
 		const currentUserId = auth.get().user?.user_id;
 		const ownerUserId = opts?.ownerUserId;
+		const defaultEmojiByListId = new Map(get(lists).map((l) => [l.id, l.default_emoji]));
 
 		updateAndPersist((list) => {
 			const next = [...list];
@@ -247,7 +255,8 @@ export const tasks = {
 				}
 				const task = makeLocalTask(title, list_id, {
 					status: item.status === 'done' ? 'done' : 'pending',
-					my_day: !!item.my_day
+					my_day: !!item.my_day,
+					emoji: defaultEmojiByListId.get(list_id)
 				});
 				if (task.status === 'done') {
 					task.completed_ts = task.updated_ts;
@@ -497,6 +506,21 @@ export const tasks = {
 			)
 		);
 	},
+	setEmoji(id: string, emoji?: string) {
+		const now = Date.now();
+		updateAndPersist((list) =>
+			list.map((t) =>
+				t.id === id
+					? {
+							...t,
+							emoji,
+							dirty: true,
+							updated_ts: now
+						}
+					: t
+			)
+		);
+	},
 	setAssignee(id: string, assignee_user_id?: string) {
 		const now = Date.now();
 		updateAndPersist((list) =>
@@ -600,6 +624,7 @@ export const tasks = {
 			my_day: boolean;
 			list_id: string;
 			assignee_user_id?: string;
+			emoji?: string;
 		}
 	) {
 		const now = Date.now();
@@ -620,6 +645,7 @@ export const tasks = {
 					my_day: details.my_day,
 					list_id: details.list_id || t.list_id,
 					assignee_user_id: details.assignee_user_id,
+					emoji: details.emoji,
 					...(clearsPuntState
 						? { punted_from_due_date: undefined, punted_on_date: undefined }
 						: {}),

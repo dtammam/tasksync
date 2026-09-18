@@ -17,6 +17,7 @@ pub(super) struct ListRow {
     pub(super) name: String,
     pub(super) icon: Option<String>,
     pub(super) color: Option<String>,
+    pub(super) default_emoji: Option<String>,
     pub(super) order: String,
 }
 
@@ -25,6 +26,7 @@ pub(super) struct CreateList {
     pub(super) name: String,
     pub(super) icon: Option<String>,
     pub(super) color: Option<String>,
+    pub(super) default_emoji: Option<String>,
     pub(super) order: Option<String>,
 }
 
@@ -33,6 +35,7 @@ pub(super) struct UpdateList {
     pub(super) name: Option<String>,
     pub(super) icon: Option<String>,
     pub(super) color: Option<String>,
+    pub(super) default_emoji: Option<String>,
     pub(super) order: Option<String>,
 }
 
@@ -51,7 +54,7 @@ pub(super) async fn get_lists_for_ctx(
 ) -> Result<Vec<ListRow>, StatusCode> {
     let lists = if ctx.role == Role::Admin {
         sqlx::query_as::<_, ListRow>(
-            "select id, space_id, name, icon, color, list_order as \"order\" from list where space_id = ?1 order by list_order asc",
+            "select id, space_id, name, icon, color, default_emoji, list_order as \"order\" from list where space_id = ?1 order by list_order asc",
         )
         .bind(&ctx.space_id)
         .fetch_all(&state.pool)
@@ -59,7 +62,7 @@ pub(super) async fn get_lists_for_ctx(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
         sqlx::query_as::<_, ListRow>(
-            "select l.id, l.space_id, l.name, l.icon, l.color, l.list_order as \"order\" from list l join list_grant g on g.list_id = l.id and g.space_id = l.space_id where l.space_id = ?1 and g.user_id = ?2 order by l.list_order asc",
+            "select l.id, l.space_id, l.name, l.icon, l.color, l.default_emoji, l.list_order as \"order\" from list l join list_grant g on g.list_id = l.id and g.space_id = l.space_id where l.space_id = ?1 and g.user_id = ?2 order by l.list_order asc",
         )
         .bind(&ctx.space_id)
         .bind(&ctx.user_id)
@@ -82,13 +85,14 @@ pub(super) async fn create_list(
     let id = Uuid::new_v4().to_string();
     let order = body.order.unwrap_or_else(|| "z".into());
     let rec = sqlx::query_as::<_, ListRow>(
-		"insert into list (id, space_id, name, icon, color, list_order) values (?1, ?2, ?3, ?4, ?5, ?6) returning id, space_id, name, icon, color, list_order as \"order\"",
+		"insert into list (id, space_id, name, icon, color, default_emoji, list_order) values (?1, ?2, ?3, ?4, ?5, ?6, ?7) returning id, space_id, name, icon, color, default_emoji, list_order as \"order\"",
 	)
 	.bind(&id)
 	.bind(&ctx.space_id)
 	.bind(&body.name)
 	.bind(&body.icon)
 	.bind(&body.color)
+	.bind(&body.default_emoji)
 	.bind(&order)
 	.fetch_one(&state.pool)
 	.await
@@ -108,11 +112,12 @@ pub(super) async fn update_list(
         return Err(StatusCode::FORBIDDEN);
     }
     let rec = sqlx::query_as::<_, ListRow>(
-		"update list set name = coalesce(?1, name), icon = coalesce(?2, icon), color = coalesce(?3, color), list_order = coalesce(?4, list_order) where id = ?5 and space_id = ?6 returning id, space_id, name, icon, color, list_order as \"order\"",
+		"update list set name = coalesce(?1, name), icon = coalesce(?2, icon), color = coalesce(?3, color), default_emoji = coalesce(?4, default_emoji), list_order = coalesce(?5, list_order) where id = ?6 and space_id = ?7 returning id, space_id, name, icon, color, default_emoji, list_order as \"order\"",
 	)
 	.bind(&body.name)
 	.bind(&body.icon)
 	.bind(&body.color)
+	.bind(&body.default_emoji)
 	.bind(&body.order)
 	.bind(&id)
 	.bind(&ctx.space_id)

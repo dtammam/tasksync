@@ -207,6 +207,9 @@ $: isRecurringCompletedToday =
 	</div>
 	<div class="meta">
 		<div class="title">
+			{#if task.emoji}
+				<span class="emoji-indicator" data-testid="task-emoji-indicator" aria-label="Tag">{task.emoji}</span>
+			{/if}
 			{#if task.priority > 0}
 				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
 			{/if}
@@ -315,6 +318,15 @@ $: isRecurringCompletedToday =
 		flex: 0 0 auto;
 		font-size: 14px;
 		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
+	}
+	.emoji-indicator {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		flex: 0 0 auto;
+		font-size: 14px;
 	}
 	.punt-indicator {
 		display: inline-flex;

@@ -3,7 +3,7 @@ plan: feat-task-emoji
 harness: v2 · lean
 anchor: spec
 status: Building
-gate: pending
+gate: pending (full gate required — migration touches scrutiny.toml's data-loss row)
 ---
 
 # Feat — optional per-task emoji ("tag")
@@ -266,6 +266,42 @@ free-text tags) — that's a deliberate future decision, not a shortcut now.
   `hasChangesSinceCreate` fix). All gates green: `cargo fmt --check`,
   `cargo clippy -D warnings`, `cargo test` (94 passed), `npm run lint`,
   `npm run check`, `npm run test` (382 passed).
-  Remaining: Steps 5-10 (picker component + palette, task detail UI, list
-  grouping, My Day toggle, per-list default tag + settings UI, remaining
-  tests).
+- 2026-09-18 — Steps 5-10 complete: curated sectioned picker
+  (`EmojiPicker.svelte` + `tags/palette.ts`, mirrors `ColorSwatchPicker`'s
+  shape; clicking the active tag again clears it) wired into
+  `TaskDetailDrawer` (toggle-reveals-inline-picker, matching the drawer's
+  existing custom-picker convention) and `TaskRow` (small indicator next to
+  the star). List view and My Day both group into tag-headed sections via a
+  shared `tags/grouping.ts` utility (extracted rather than duplicated once
+  both pages needed the identical algorithm) — fixed palette order, untagged
+  last, existing sort preserved within each section; a list with no tags in
+  use renders identically to before. My Day's grouping sits behind an
+  explicit toggle, persisted the same way My Day's existing sort already is
+  (plain localStorage — matches this page's own established pattern rather
+  than expanding the synced `uiPreferences` surface for a one-off toggle).
+  `List.default_emoji` added end-to-end (type, migration, server CRUD,
+  backup, Sidebar settings UI) mirroring `List.icon`/`color` exactly,
+  including their coalesce (can't-clear-via-update) semantics — applied at
+  task-creation time (manual add and markdown import) via a lookup in
+  `createLocalWithOptions`/`importBatch`.
+  Considered and dropped: import-time leading-emoji text parsing (the
+  original motivating idea) — the owner walked it back after accounting for
+  the import path's existing duplicate-reactivation behavior, which already
+  covers most of the real-world case; `List.default_emoji` replaces it with
+  a simpler, more general mechanism.
+  Tests added: `tags/grouping.test.ts` (5 tests: single-group fallback,
+  palette-order over insertion-order, untagged-last, in-group order
+  preserved, unknown-emoji fallback ordering); `tasks.test.ts` (2 tests:
+  default tag applied on manual create vs. explicit override; default tag
+  applied only to freshly-created import rows, never to reactivated ones);
+  server `admin_can_set_and_change_list_default_emoji`; a new E2E spec
+  `task-tags.spec.ts` (2 tests: real-browser section ordering/content on the
+  list page; My Day toggle off-by-default and grouping-on-enable).
+  All gates green: `cargo fmt --check`, `cargo clippy -D warnings`,
+  `cargo test` (95 passed), `npm run lint`, `npm run check`, `npm run test`
+  (389 passed), full chromium Playwright suite incl. the two new specs
+  (60 passed, zero regressions).
+  All 10 build-plan steps done. Next: Phase 4 gate — this diff includes a
+  migration (`0018_task_and_list_emoji.sql`), so `scrutiny.toml`'s
+  `data-loss` row forces the full gate (adversary + qa + security-brief)
+  regardless of the additive-only nature of the change.

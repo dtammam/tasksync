@@ -196,6 +196,7 @@ pub(super) struct BackupListRow {
     pub(super) name: String,
     pub(super) icon: Option<String>,
     pub(super) color: Option<String>,
+    pub(super) default_emoji: Option<String>,
     pub(super) list_order: String,
 }
 
@@ -745,7 +746,7 @@ pub(super) async fn load_space_backup(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let lists = sqlx::query_as::<_, BackupListRow>(
-        "select id, space_id, name, icon, color, list_order from list where space_id = ?1 order by list_order asc",
+        "select id, space_id, name, icon, color, default_emoji, list_order from list where space_id = ?1 order by list_order asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -966,13 +967,14 @@ pub(super) async fn auth_restore_backup(
 
     for list in &body.lists {
         sqlx::query(
-            "insert into list (id, space_id, name, icon, color, list_order) values (?1, ?2, ?3, ?4, ?5, ?6)",
+            "insert into list (id, space_id, name, icon, color, default_emoji, list_order) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .bind(&list.id)
         .bind(&list.space_id)
         .bind(&list.name)
         .bind(&list.icon)
         .bind(&list.color)
+        .bind(&list.default_emoji)
         .bind(&list.list_order)
         .execute(&mut *tx)
         .await

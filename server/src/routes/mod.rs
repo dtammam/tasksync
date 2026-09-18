@@ -1713,6 +1713,7 @@ mod tests {
                 name: "New List".to_string(),
                 icon: Some("📋".to_string()),
                 color: Some("#ff0000".to_string()),
+                default_emoji: None,
                 order: Some("b".to_string()),
             }),
         )
@@ -1756,6 +1757,7 @@ mod tests {
                 name: Some("Goals".to_string()),
                 icon: Some("🎯".to_string()),
                 color: Some("#00ff00".to_string()),
+                default_emoji: None,
                 order: None,
             }),
         )
@@ -1766,6 +1768,44 @@ mod tests {
         assert_eq!(updated.name, "Goals");
         assert_eq!(updated.icon.as_deref(), Some("🎯"));
         assert_eq!(updated.color.as_deref(), Some("#00ff00"));
+    }
+
+    #[tokio::test]
+    async fn admin_can_set_and_change_list_default_emoji() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let (_, Json(created)) = create_list(
+            State(state.clone()),
+            headers.clone(),
+            Json(CreateList {
+                name: "Groceries".to_string(),
+                icon: None,
+                color: None,
+                default_emoji: Some("🥦".to_string()),
+                order: None,
+            }),
+        )
+        .await
+        .expect("create list should succeed");
+        assert_eq!(created.default_emoji.as_deref(), Some("🥦"));
+
+        let Json(updated) = update_list(
+            State(state),
+            headers,
+            Path(created.id),
+            Json(UpdateList {
+                name: None,
+                icon: None,
+                color: None,
+                default_emoji: Some("🧊".to_string()),
+                order: None,
+            }),
+        )
+        .await
+        .expect("update list should succeed");
+        assert_eq!(updated.default_emoji.as_deref(), Some("🧊"));
     }
 
     #[tokio::test]
@@ -1782,6 +1822,7 @@ mod tests {
                 name: "Temp List".to_string(),
                 icon: None,
                 color: None,
+                default_emoji: None,
                 order: None,
             }),
         )

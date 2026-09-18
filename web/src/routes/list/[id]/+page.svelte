@@ -9,6 +9,7 @@
 	import { tasks, tasksByList } from '$lib/stores/tasks';
 	import { lists } from '$lib/stores/lists';
 	import { uiPreferences } from '$lib/stores/preferences';
+	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
 	import type { Task } from '$shared/types/task';
 
 	let quickTitle = '';
@@ -80,6 +81,8 @@
 		$uiPreferences.listSort.mode,
 		$uiPreferences.listSort.direction
 	);
+	$: pendingGroups = groupTasksByTag(pendingTasks);
+	$: completedGroups = groupTasksByTag(completedTasks);
 
 	$: isContributor = $auth.user?.role === 'contributor';
 	$: contributorUserId = isContributor ? $auth.user?.user_id : undefined;
@@ -198,33 +201,47 @@
 
 	<section class="block">
 		<div class="section-title">Pending</div>
-		<div class="stack">
-			{#if pendingTasks.length}
-				{#each pendingTasks as task (task.id)}
-					<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
-						<TaskRow {task} on:openDetail={openDetail} />
-					</div>
-				{/each}
-			{:else}
+		{#if pendingTasks.length}
+			{#each pendingGroups as group (group.key)}
+				{#if group.label}
+					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+				{/if}
+				<div class="stack">
+					{#each group.tasks as task (task.id)}
+						<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
+							<TaskRow {task} on:openDetail={openDetail} />
+						</div>
+					{/each}
+				</div>
+			{/each}
+		{:else}
+			<div class="stack">
 				<p class="empty">No pending tasks.</p>
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</section>
 
 	{#if $uiPreferences.showCompleted}
 	<section class="block">
 		<div class="section-title">Completed</div>
-		<div class="stack" data-testid="completed-section">
-			{#if completedTasks.length}
-				{#each completedTasks as task (task.id)}
-					<div transition:fade={{ duration: 150 }}>
-						<TaskRow {task} on:openDetail={openDetail} />
-					</div>
-				{/each}
-			{:else}
+		{#if completedTasks.length}
+			{#each completedGroups as group (group.key)}
+				{#if group.label}
+					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+				{/if}
+				<div class="stack" data-testid="completed-section">
+					{#each group.tasks as task (task.id)}
+						<div transition:fade={{ duration: 150 }}>
+							<TaskRow {task} on:openDetail={openDetail} />
+						</div>
+					{/each}
+				</div>
+			{/each}
+		{:else}
+			<div class="stack" data-testid="completed-section">
 				<p class="empty subtle">No completed tasks yet.</p>
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</section>
 	{/if}
 
@@ -372,6 +389,17 @@
 	.stack {
 		display: grid;
 		gap: 12px;
+	}
+
+	.stack + .tag-group-title {
+		margin-top: 16px;
+	}
+
+	.tag-group-title {
+		color: var(--app-muted);
+		font-size: 12px;
+		font-weight: 600;
+		margin: 0 0 6px;
 	}
 
 	.empty {

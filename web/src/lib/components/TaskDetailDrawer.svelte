@@ -5,6 +5,7 @@ import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
 import { members } from '$lib/stores/members';
 import { recurrenceRuleLabels, recurrenceRules, toLocalIsoDate } from '$lib/tasks/recurrence';
+import EmojiPicker from './EmojiPicker.svelte';
 import type { Task } from '$shared/types/task';
 import type { SpaceMember } from '$shared/types/auth';
 
@@ -25,6 +26,8 @@ let statusValue = 'pending';
 let recurringCompletionAck = false;
 let puntedFromDrawer = false;
 let lastHydratedTaskId = '';
+let emoji: string | undefined = undefined;
+let showTagPicker = false;
 const recurrenceOptions = recurrenceRules.map((rule) => ({
 	value: rule,
 	label: recurrenceRuleLabels[rule]
@@ -39,6 +42,8 @@ function hydrate(t: Task) {
 	}
 	puntedFromDrawer = false;
 	lastHydratedTaskId = t.id;
+	showTagPicker = false;
+	emoji = t.emoji;
 	title = t.title ?? '';
 	due = t.due_date ?? '';
 	recur = t.recurrence_id ?? '';
@@ -102,7 +107,8 @@ const save = () => {
 		priority,
 		my_day: canEditMyDay ? false : (task.my_day ?? false),
 		list_id: listId,
-		assignee_user_id: canEditAssignee ? assigneeUserId || undefined : task.assignee_user_id
+		assignee_user_id: canEditAssignee ? assigneeUserId || undefined : task.assignee_user_id,
+		emoji
 	});
 	close();
 };
@@ -218,6 +224,18 @@ const memberAvatar = (member: SpaceMember): string => {
 						{priority > 0 ? 'Starred' : 'Star'}
 					</button>
 				</label>
+				<label>
+					Tag
+					<button
+						class={`ghost detail-toggle tag-toggle ${emoji ? 'active' : ''}`}
+						type="button"
+						data-testid="detail-tag-toggle"
+						on:click={() => { if (canEditTask) showTagPicker = !showTagPicker; }}
+						disabled={!canEditTask}
+					>
+						{emoji ?? '— Add tag'}
+					</button>
+				</label>
 				{#if canPunt || showPuntedBadge || puntedFromDrawer}
 					<label>
 						Punt
@@ -234,6 +252,18 @@ const memberAvatar = (member: SpaceMember): string => {
 					</label>
 				{/if}
 			</div>
+
+			{#if showTagPicker && canEditTask}
+				<div class="tag-picker-panel">
+					<EmojiPicker
+						value={emoji}
+						on:change={(e) => {
+							emoji = e.detail;
+							showTagPicker = false;
+						}}
+					/>
+				</div>
+			{/if}
 
 			<div class="row two">
 				<label>
@@ -365,9 +395,16 @@ const memberAvatar = (member: SpaceMember): string => {
 	.status-toggle.active,
 	button.ghost.star-toggle.active,
 	button.ghost.punt-toggle.active,
-	button.ghost.myday-toggle.active {
+	button.ghost.myday-toggle.active,
+	button.ghost.tag-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
+	}
+	.tag-picker-panel {
+		padding: 8px;
+		border: 1px solid var(--border-1);
+		border-radius: 9px;
+		background: var(--surface-1);
 	}
 	.action-size {
 		min-height: 40px;
