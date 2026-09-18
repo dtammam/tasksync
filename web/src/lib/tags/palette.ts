@@ -61,10 +61,19 @@ export const TAG_PALETTE: TagPaletteSection[] = [
 // Flat lookup order, used to sort/group tagged items by fixed palette order.
 export const TAG_ORDER: string[] = TAG_PALETTE.flatMap((s) => s.entries.map((e) => e.emoji));
 
+// Known tags rank by palette position; an emoji outside the palette (set via
+// direct IDB/API access, or one removed from a later palette edit while still
+// in use) gets its own single bucket rank, after every known tag but before
+// "untagged" -- distinct from any known tag's rank, so it never silently ties
+// with (and inherits order-dependent placement from) the last palette entry.
+// Untagged always ranks last. Note this returns a rank only -- when multiple
+// *different* unrecognized emoji are present, callers must break ties on the
+// emoji string itself (see groupTasksByTag) or their relative order is
+// undefined here.
 export const tagRank = (emoji: string | undefined | null): number => {
-	if (!emoji) return TAG_ORDER.length; // untagged sorts last
+	if (!emoji) return TAG_ORDER.length + 1;
 	const index = TAG_ORDER.indexOf(emoji);
-	return index === -1 ? TAG_ORDER.length - 1 : index; // unknown tag: sort with the last known group, not after "untagged"
+	return index === -1 ? TAG_ORDER.length : index;
 };
 
 export const tagLabel = (emoji: string | undefined | null): string | undefined => {

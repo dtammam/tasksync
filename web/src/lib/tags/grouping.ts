@@ -32,11 +32,17 @@ export const groupTasksByTag = <T extends { emoji?: string }>(items: T[]): TagGr
 			label: key === UNTAGGED_KEY ? 'Untagged' : (tagLabel(key) ?? key),
 			tasks
 		}))
-		.sort(
-			(a, b) =>
-				tagRank(a.key === UNTAGGED_KEY ? undefined : a.key) -
-				tagRank(b.key === UNTAGGED_KEY ? undefined : b.key)
-		);
+		.sort((a, b) => {
+			const rankA = tagRank(a.key === UNTAGGED_KEY ? undefined : a.key);
+			const rankB = tagRank(b.key === UNTAGGED_KEY ? undefined : b.key);
+			if (rankA !== rankB) return rankA - rankB;
+			// tagRank alone can't distinguish multiple different unrecognized
+			// emoji (they share one "unknown" bucket rank) -- break ties on the
+			// emoji string itself so their relative order is deterministic
+			// regardless of task array iteration order, not just "stable sort
+			// happens to preserve insertion order this time."
+			return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+		});
 };
 
 export const isUntaggedGroupKey = (key: string): boolean => key === UNTAGGED_KEY;

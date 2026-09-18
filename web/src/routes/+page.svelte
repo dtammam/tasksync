@@ -366,14 +366,14 @@
 	</section>
 
 	{#if $uiPreferences.showCompleted}
-	<section class="block">
+	<section class="block" data-testid="completed-section">
 		<div class="section-title">Completed ({$myDayCompleted?.length ?? 0})</div>
 		{#if sortedCompleted.length}
 			{#each completedGroups as group (group.key)}
 				{#if group.label}
 					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
 				{/if}
-				<div class="stack" data-testid="completed-section">
+				<div class="stack">
 					{#each group.tasks as task (task.id)}
 						<div transition:fade={{ duration: $hydrated ? 150 : 0 }}>
 							<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
@@ -382,7 +382,7 @@
 				</div>
 			{/each}
 		{:else}
-			<div class="stack" data-testid="completed-section">
+			<div class="stack">
 				<p class="empty subtle">No completed tasks yet.</p>
 			</div>
 		{/if}

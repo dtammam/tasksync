@@ -195,8 +195,12 @@ export const tasks = {
 	) {
 		const trimmed = title.trim();
 		if (!trimmed) return;
-		// A list's default tag (D10) only applies when the caller didn't already pick one.
-		const defaultEmoji = get(lists).find((l) => l.id === list_id)?.default_emoji;
+		// A list's default tag (D10) only applies when the caller didn't already
+		// pick one. `|| undefined` (not `??`) because clearing a list's default
+		// via the icon/color-style "send empty string" idiom (Sidebar.svelte)
+		// stores literal '' server-side, not null -- an empty string is never a
+		// valid tag (D2 requires at least one grapheme), so treat it as absent.
+		const defaultEmoji = get(lists).find((l) => l.id === list_id)?.default_emoji || undefined;
 		const task = makeLocalTask(trimmed, list_id, {
 			...opts,
 			emoji: opts?.emoji ?? defaultEmoji
@@ -218,7 +222,10 @@ export const tasks = {
 		let reactivated = 0;
 		const currentUserId = auth.get().user?.user_id;
 		const ownerUserId = opts?.ownerUserId;
-		const defaultEmojiByListId = new Map(get(lists).map((l) => [l.id, l.default_emoji]));
+		// See the comment in createLocalWithOptions -- '' (cleared via the
+		// icon/color idiom) must be treated the same as "no default", not as a
+		// literal empty tag.
+		const defaultEmojiByListId = new Map(get(lists).map((l) => [l.id, l.default_emoji || undefined]));
 
 		updateAndPersist((list) => {
 			const next = [...list];

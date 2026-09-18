@@ -37,8 +37,23 @@ describe('groupTasksByTag', () => {
 		expect(groups[0].tasks.map((t) => t.id)).toEqual(['c', 'a', 'b']);
 	});
 
-	it('sorts an unrecognized emoji with the last known palette group, ahead of untagged', () => {
+	it('sorts a single unrecognized emoji after every known palette group, ahead of untagged', () => {
 		const groups = groupTasksByTag([item('a'), item('b', '🛸')]);
 		expect(groups.map((g) => g.key)).toEqual(['🛸', '__untagged__']);
+	});
+
+	it('orders multiple unrecognized emoji deterministically, independent of input order', () => {
+		// Both 🛸 and 🦄 are off-palette, so they'd tie on tagRank alone -- the
+		// tie-break must produce the same order regardless of which appeared
+		// first in the source array (a plain stable sort would not).
+		const forward = groupTasksByTag([item('a', '🦄'), item('b', '🛸')]);
+		const reversed = groupTasksByTag([item('a', '🛸'), item('b', '🦄')]);
+		expect(forward.map((g) => g.key)).toEqual(reversed.map((g) => g.key));
+		expect(forward.map((g) => g.key)).toEqual(['🛸', '🦄']);
+	});
+
+	it('places unrecognized emoji after all known palette groups, still ahead of untagged', () => {
+		const groups = groupTasksByTag([item('a'), item('b', '🔁'), item('c', '🛸')]);
+		expect(groups.map((g) => g.key)).toEqual(['🔁', '🛸', '__untagged__']);
 	});
 });

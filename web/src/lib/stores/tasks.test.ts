@@ -1148,6 +1148,31 @@ describe('tasks store helpers', () => {
 		}
 	});
 
+	it('treats a list default_emoji of empty string (cleared via the icon/color idiom) as no default', () => {
+		// Sidebar clears icon/color/default_emoji by sending '' (to work around
+		// the server's coalesce semantics), so a cleared default persists as a
+		// literal '' server-side, not null/undefined. New tasks must not pick
+		// up '' as their tag -- an empty string is never a valid tag (D2).
+		const originalLists = get(lists);
+		lists.setAll(
+			originalLists.map((l) => (l.id === 'goal-management' ? { ...l, default_emoji: '' } : l))
+		);
+		try {
+			const created = tasks.createLocalWithOptions('No real default', 'goal-management');
+			expect(created?.emoji).toBeUndefined();
+
+			tasks.setAll([]);
+			const result = tasks.importBatch(
+				[{ title: 'Also no default', status: 'pending', list_id: 'goal-management' }],
+				'goal-management'
+			);
+			expect(result.created).toBe(1);
+			expect(tasks.getAll()[0]?.emoji).toBeUndefined();
+		} finally {
+			lists.setAll(originalLists);
+		}
+	});
+
 	it('applies a list default tag to freshly created tasks during import, not to reactivated ones', () => {
 		const originalLists = get(lists);
 		lists.setAll(
