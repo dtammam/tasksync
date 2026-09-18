@@ -15,6 +15,7 @@
 	import type { ListGrant, SpaceMember } from '$shared/types/auth';
 	import type { List } from '$shared/types/list';
 	import SoundSettingsPanel from '$lib/components/settings/SoundSettings.svelte';
+	import TagPaletteSettingsPanel from '$lib/components/settings/TagPaletteSettings.svelte';
 	import ServerSettings from '$lib/components/settings/ServerSettings.svelte';
 	import MemberList from '$lib/components/settings/MemberList.svelte';
 	import ColorSwatchPicker from '$lib/components/ColorSwatchPicker.svelte';
@@ -1134,6 +1135,8 @@
 								<p class="error">{teamError}</p>
 							{/if}
 						</div>
+					{:else if settingsActiveSection === 'tags' && adminMode}
+						<TagPaletteSettingsPanel />
 					{:else if settingsActiveSection === 'sound'}
 						<SoundSettingsPanel />
 					{:else if settingsActiveSection === 'streak'}

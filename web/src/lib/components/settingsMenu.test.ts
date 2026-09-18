@@ -21,6 +21,7 @@ describe('settings menu helpers', () => {
 			'sound',
 			'streak',
 			'lists',
+			'tags',
 			'members',
 			'backups',
 			'server',

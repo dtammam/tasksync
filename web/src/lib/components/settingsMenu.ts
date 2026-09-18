@@ -1,4 +1,14 @@
-export type SettingsSectionId = 'account' | 'appearance' | 'quotes' | 'sound' | 'streak' | 'lists' | 'members' | 'backups' | 'server';
+export type SettingsSectionId =
+	| 'account'
+	| 'appearance'
+	| 'quotes'
+	| 'sound'
+	| 'streak'
+	| 'lists'
+	| 'tags'
+	| 'members'
+	| 'backups'
+	| 'server';
 
 export interface SettingsSection {
 	id: SettingsSectionId;
@@ -42,6 +52,12 @@ const baseSections: SettingsSection[] = [
 		id: 'lists',
 		label: 'Lists',
 		description: 'Create, rename, reorder, and delete lists',
+		adminOnly: true,
+	},
+	{
+		id: 'tags',
+		label: 'Tags',
+		description: 'Add, edit, remove, and reorder the tag palette',
 		adminOnly: true,
 	},
 	{
