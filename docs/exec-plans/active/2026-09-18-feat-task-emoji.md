@@ -3,7 +3,7 @@ plan: feat-task-emoji
 harness: v2 · lean
 anchor: spec
 status: Building
-gate: pending (full gate required — migration touches scrutiny.toml's data-loss row)
+gate: APPROVED r2 @c816a220fbd3bd99d7fb50417a3672e7d11e170d — adversary, qa, security-brief
 ---
 
 # Feat — optional per-task emoji ("tag")
@@ -384,6 +384,24 @@ precedent in this codebase rather than introducing a new exposure class.
 
 Gate: APPROVED r1 @b7520cddbab676b67fabc296558392435a73192e — security-brief
 
+### r2 (delta re-confirmation)
+
+Note: same tool-gap as r1 — this instance was spawned before the
+Edit-tool fix to its own agent definition, so the Architect is again
+appending its verdict on its behalf; content below is the seat's own
+review, unedited.
+
+Delta re-review of the fix commit (tagRank/grouping tie-break determinism,
+empty-string default_emoji normalization, shared/types/backup.ts type
+completion, plus two qa test-id/doc cleanups): all changes confined to
+client-side grouping/store logic and a type-only declaration file. No
+change to server/src/routes/{tasks,lists,auth}.rs beyond r1; role/auth
+gates, SQL bind-parameter usage, and backup export/import access control
+re-confirmed unchanged. No `{@html}` introduced; XSS surface unchanged. No
+new CRITICAL/HIGH/MEDIUM/LOW findings within scope.
+
+Gate: APPROVED r2 @c816a220fbd3bd99d7fb50417a3672e7d11e170d — security-brief
+
 ## Gate — qa (r1)
 
 Scope: full gate (migration touches `scrutiny.toml`'s data-loss row).
@@ -661,3 +679,187 @@ reasoned-about), and none of the three has any test in this diff that
 would have caught it.
 
 Gate: CHANGES r1 @b7520cddbab676b67fabc296558392435a73192e — adversary
+
+### r2 — delta re-review @c816a220fbd3bd99d7fb50417a3672e7d11e170d
+
+Re-verified each r1 finding against the actual fix commit (`git show
+--stat c816a220` confirms it touches exactly: this plan doc,
+`shared/types/backup.ts`, `web/src/lib/stores/tasks.ts` +
+`tasks.test.ts`, `web/src/lib/tags/{grouping,palette}.ts` +
+`grouping.test.ts`, and `web/src/routes/+page.svelte` +
+`web/src/routes/list/[id]/+page.svelte` — no server-side files touched,
+consistent with the claim that these were client-only bugs).
+
+- **Finding 1 (group-order tie-break) — fixed as prescribed, re-broken by
+  mutation-testing my own r1 repro against the fix.** `tagRank` now gives
+  unrecognized emoji their own bucket (`TAG_ORDER.length`), strictly below
+  every known palette rank and strictly above untagged
+  (`TAG_ORDER.length + 1`), so "Recurring" (a real, last-defined palette
+  entry) can no longer tie with an unknown emoji. `groupTasksByTag` breaks
+  remaining ties among multiple unknown emoji on the raw emoji string
+  (`a.key < b.key`), which is a pure, order-independent function of the
+  tag itself. Re-ran my exact r1 repro (🛸/🦄/🔁, forward vs. reversed
+  input array) against the fixed source: now produces identical
+  `['🔁', '🛸', '🦄']` both directions (previously flipped to
+  `['🔁',...]` vs. `[...,'🔁']`). Also checked a three-way tie among only
+  unknown emoji (🛸/🦄/🐉, two different input orderings) — also now
+  identical. `grouping.test.ts` gained a directly-on-point test
+  (`'orders multiple unrecognized emoji deterministically, independent of
+  input order'`) plus one confirming "Recurring" ordering ahead of an
+  unknown emoji. **Resolved.**
+- **Finding 2 (`default_emoji: ''` leak) — fixed as prescribed, re-broken
+  by mutation-testing my own r1 repro against the fix.** Both
+  `createLocalWithOptions` and `importBatch` now read
+  `list.default_emoji || undefined` before using it as a task default (the
+  comments correctly explain why: `''` is a real, coalesce-persisted
+  server value from the icon/color-style clear idiom, not a valid tag).
+  Re-ran my exact r1 repro (list with `default_emoji: ''`, create a task
+  with no explicit tag) against the fixed source, both entry points: both
+  now produce `emoji: undefined`, not `emoji: ''`. `tasks.test.ts` gained
+  a directly-on-point test for both paths. **Resolved.**
+- **Finding 3 (stale `shared/types/backup.ts`) — fixed exactly as
+  prescribed.** `git diff 039a87f..c816a220 -- shared/types/backup.ts`
+  now shows `default_emoji?: string` added to `SpaceBackupList` and
+  `emoji?: string` added to `SpaceBackupTask` — the two fields I found
+  missing, nothing more, nothing less. The progress-log's earlier false
+  "done" claim is superseded by this commit's own log entry, which
+  correctly attributes the miss. **Resolved.**
+
+**Regression check:** `cd web && npm run test` → 392 passed, 0 failed (up
+3 from the 389 at r1, matching the 5 new tests this fix commit claims to
+add — 2 in `grouping.test.ts`, plus the ones in `tasks.test.ts`).
+`npm run check` / `npm run lint` clean. `npx playwright test
+tests/e2e/task-tags.spec.ts --project=chromium` → 2 passed. No server
+files touched by this commit, so the r1 server-side verification (95
+passed, bind-order audit, migration safety) still stands unchanged and
+was not re-run.
+
+**New-issue sweep:** read the full diff of the fix commit (not just the
+three touched call sites) for anything the fix itself might have broken —
+the `data-testid="completed-section"` move (a QA r1 item, not mine) and
+the `+page.svelte`/`list/[id]/+page.svelte` grouping-render restructuring
+were both exercised by the still-green Playwright spec and full vitest
+run; found nothing new to flag from the adversary seat's brief.
+
+Aside: HEAD's working tree also shows an unrelated uncommitted
+modification to `.claude/agents/security-brief.md` (adds `Edit` to that
+agent's tool list) — confirmed via `git show --stat` that this is not
+part of commit `c816a220` and predates this delta round; not mine, not
+touched, not in scope for this verdict.
+
+Gate: APPROVED r2 @c816a220fbd3bd99d7fb50417a3672e7d11e170d — adversary
+
+## Gate — qa (r2, delta re-confirmation)
+
+Re-reviewed at `c816a220fbd3bd99d7fb50417a3672e7d11e170d` (one commit on top
+of the r1 sha: "fix: address r1 gate findings on task emoji tag").
+`git diff b7520cd..c816a22` read in full; both my own r1 findings and the
+adversary's three r1 findings re-verified against the actual fix, not the
+commit message's description of it. All test suites re-run for real (not
+re-reported from the commit message).
+
+**Re-verified test runs:**
+- `npm run lint` — clean.
+- `npm run check` — `svelte-check found 0 errors and 0 warnings`.
+- `npm run test` — `Test Files 26 passed (26)` / `Tests 392 passed (392)`
+  (+3 over r1's 389: two new `grouping.test.ts` determinism cases, one new
+  `tasks.test.ts` empty-string-default case — matches the three new tests
+  the fix commit claims).
+- `cargo fmt --check` — clean.
+- `cargo clippy --all-targets -- -D warnings` — clean.
+- `cargo test` (server) — `test result: ok. 95 passed; 0 failed` (unchanged
+  from r1, correctly — none of the three adversary fixes touched server
+  code).
+- `npx playwright test --project=chromium --workers=2` — `60 passed`,
+  including both `task-tags.spec.ts` cases; zero regressions.
+
+**My own r1 findings:**
+
+1. Duplicate `data-testid="completed-section"` per tag group — **fixed as
+   prescribed**. `web/src/routes/+page.svelte` and
+   `web/src/routes/list/[id]/+page.svelte` both moved the testid from the
+   per-group `.stack` div onto the outer `<section class="block">` wrapper;
+   the per-group `.stack` divs are now unmarked. Confirmed by diff and by
+   re-reading the surrounding markup: there is exactly one
+   `data-testid="completed-section"` element per page regardless of how
+   many tag groups the completed tasks split into, restoring the
+   single-element contract the existing `myday.spec.ts` selectors
+   (`[data-testid="completed-section"] [data-testid="task-row"]`) rely on —
+   and since that's a CSS descendant combinator, it still matches task rows
+   correctly through the added grouping wrapper divs (re-ran the full
+   Playwright suite including every `myday.spec.ts` case that uses this
+   selector — all pass).
+2. D8 palette order undisclosed deviation — **fixed as prescribed**. The
+   plan doc's D8 listing (this doc, lines ~106-115) now lists Time/priority
+   first, matching `palette.ts`, with an explicit added note explaining why
+   ("the direct replacement for the owner's `0.`-prefix trick, which needs
+   to sort to the top") — the doc and the code now agree, and the
+   deviation is disclosed rather than silent. My r1 prescription (either
+   fix the doc or fix the code, and say why) was correctly satisfied by
+   fixing the doc.
+
+**Adversary's r1 findings (independent sanity-check, not just re-reading the fix):**
+
+1. `tagRank` tie-breaking non-determinism — **fixed at the root cause, not
+   papered over**. `palette.ts`'s `tagRank` now gives unrecognized emoji
+   their own bucket (`TAG_ORDER.length`), distinct from both every real
+   palette rank and untagged (`TAG_ORDER.length + 1`); `groupTasksByTag`
+   now breaks same-rank ties on the emoji string itself. I did not just
+   read this — I ran the new `grouping.test.ts` cases myself (they're part
+   of the `npm run test` run above, all passing), including the
+   forward-vs-reversed-input determinism case, which is the actual repro
+   shape the adversary used. I also manually re-derived the fix's
+   correctness: real palette ranks are `0..N-1`, the new unknown-bucket
+   rank is exactly `N`, so no real tag can ever collide with the unknown
+   bucket, and untagged at `N+1` can't collide with either — three
+   disjoint bands, ties only possible *within* the unknown band, which is
+   exactly where the new string tie-break applies. Holds.
+2. Empty-string `default_emoji` leaking as `Task.emoji: ''` — **fixed at
+   both call sites named in the finding**. `createLocalWithOptions` and
+   `importBatch`'s `defaultEmojiByListId` both changed from `??` to
+   `|| undefined` when reading `list.default_emoji`, exactly the fix the
+   adversary suggested. Ran the new `tasks.test.ts` case myself (in the
+   392-passing run above) covering both the manual-create and import
+   paths. Checked for the same bug pattern elsewhere in case the fix was
+   too narrow: `Sidebar.svelte`'s own `listTagDisplay` and picker-value
+   reads already used `||` (not `??`) before this fix, so they were never
+   affected; `normalizeListFromApi` in `lists.ts` still maps with `??`
+   (leaves `''` as `''` in the list store itself), but that's fine — the
+   fix correctly guards at the point of *use* (task creation), which is
+   the only place D1's absent-by-default contract actually mattered; the
+   list's own stored value being `''` vs `undefined` has no other
+   consumer that treats them differently. No gap found.
+3. `shared/types/backup.ts` missing `emoji`/`default_emoji` despite the r1
+   progress log claiming it was done — **fixed**. Both fields now present
+   on `SpaceBackupTask`/`SpaceBackupList`, matching the server's
+   `BackupTaskRow`/`BackupListRow`. Independently confirmed the adversary's
+   own characterization of this as a type/doc-accuracy bug rather than a
+   live data-loss bug: grepped for consumers of `SpaceBackupTask`/
+   `SpaceBackupList` directly (none — only the enclosing `SpaceBackupBundle`
+   is used, by `Sidebar.svelte`'s download/restore flow via
+   `api.getSpaceBackup()`/`restoreSpaceBackup()`, both of which pass the
+   JSON through opaquely without field-by-field reconstruction), so the
+   fix closes the stale-contract/future-footgun risk D7 exists to prevent,
+   without there having been an actual runtime backup data-loss bug in
+   this diff as shipped.
+
+**New issues introduced by the fix round:** none found. The fix commit
+touches `shared/types/backup.ts`, `web/src/lib/stores/tasks.ts` (+tests),
+`web/src/lib/tags/{palette,grouping}.ts` (+tests), the two page components
+(testid move only), and the plan doc; no new server-side changes, no new
+route/endpoint, no new dependency. Full suite re-run green across the
+board, counts match the fix commit's own claims exactly.
+
+**Note (out of scope for this verdict):** `git status` at review time also
+shows `.claude/agents/security-brief.md` modified in the working tree
+(granting that seat an `Edit` tool, scoped to appending its verdict line).
+This is a harness/tooling config change unrelated to the task-emoji
+feature diff under review here, was not made by me, and I have not
+evaluated it as part of this gate — noting it only so the clean-tree claim
+below is accurate about what's present, not silent about it.
+
+**Clean-tree check:** `git status` shows only my addition to this doc plus
+the pre-existing `.claude/agents/security-brief.md` working-tree edit
+(untouched by me, described above). No other untracked or modified files.
+
+Gate: APPROVED r2 @c816a220fbd3bd99d7fb50417a3672e7d11e170d — qa
