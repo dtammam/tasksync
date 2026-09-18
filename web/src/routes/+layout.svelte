@@ -11,6 +11,7 @@
 	import { page } from '$app/stores';
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
+	import { tagPalette } from '$lib/stores/tagPalette';
 	import { tasks, myDayMissed, setDbScope } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
 	import { playCompletion } from '$lib/sound/sound';
@@ -272,6 +273,7 @@
 				streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 			}
 			await members.hydrateFromServer();
+			await tagPalette.hydrateFromServer();
 		})();
 
 		if (auth.isAuthenticated()) {
@@ -341,6 +343,7 @@
 					streak.checkMissedTasksAndApplyDailyReset(get(myDayMissed).length);
 				}
 				await members.hydrateFromServer();
+				await tagPalette.hydrateFromServer();
 			})();
 
 			if (auth.isAuthenticated()) {
@@ -353,6 +356,7 @@
 	}
 	$: if (!auth.isAuthenticated()) {
 		members.clear();
+		tagPalette.clear();
 		resetSyncCursor();
 		syncStatus.setSnapshot({ pull: 'idle', push: 'idle' });
 	}

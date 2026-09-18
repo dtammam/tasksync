@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
-	import { TAG_PALETTE } from '$lib/tags/palette';
+	import { tagPalette } from '$lib/stores/tagPalette';
 
 	export let value: string | undefined = undefined;
 
@@ -14,7 +14,7 @@
 </script>
 
 <div class="picker" role="radiogroup" aria-label="Tag">
-	{#each TAG_PALETTE as group}
+	{#each $tagPalette as group}
 		<div class="section">
 			<span class="section-label">{group.section}</span>
 			<div class="grid">

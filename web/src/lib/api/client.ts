@@ -24,6 +24,7 @@ import type {
 } from '$shared/types/sync';
 import type { SoundSettings, UiPreferencesWire } from '$shared/types/settings';
 import type { SpaceBackupBundle, SpaceBackupRestoreResponse } from '$shared/types/backup';
+import type { TagPaletteSection } from '$shared/types/tags';
 
 const defaultApiUrl = () => {
 	if (typeof window === 'undefined') return 'http://localhost:3000';
@@ -167,6 +168,9 @@ export const api = {
 		fetchJson<void>(`/lists/${id}`, {
 			method: 'DELETE'
 		}),
+	getTagPalette: () => fetchJson<TagPaletteSection[] | null>('/tags'),
+	updateTagPalette: (body: TagPaletteSection[]) =>
+		fetchJson<TagPaletteSection[]>('/tags', { method: 'PUT', body: JSON.stringify(body) }),
 	getTasks: () => fetchJson<SyncTask[]>('/tasks'),
 	syncPull: (body: SyncPullRequest = {}) =>
 		fetchJson<SyncPullResponse>('/sync/pull', {
