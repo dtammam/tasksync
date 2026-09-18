@@ -22,7 +22,7 @@ higher-cost model; execution of pieces 2–4 is intended for Opus sessions.
 |---|-------|--------------------|-------|
 | 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | **Shipped** — PR #138 (+ #139 cleanup), merged 2026-09-17 |
 | 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Parked** — intake done (root cause confirmed, approach ready), no code yet; see its own plan doc |
-| 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | up next |
+| 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | **Shipped** — PR #141, merged 2026-09-18; validated by owner in beta on a real device |
 | 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | `feat/bulk-task-ops` | not started |
 
 Order: **3 → 2 → 4**, reprioritized by the owner 2026-09-17 (originally
@@ -31,6 +31,20 @@ not abandoned — cheap to resume later. Rationale for the original order (2
 smallest/highest-friction, 4 unchanged data model, 3 highest blast radius)
 still holds as *relative* difficulty; the owner chose to take the highest-value
 piece first regardless of blast radius.
+
+**Piece 3 follow-up, inserted 2026-09-18** (owner direction, after validating
+Piece 3 in beta): an in-app Settings UI to manage the tag palette itself
+(add/edit/remove/reorder entries) — see
+`docs/exec-plans/completed/2026-09-18-feat-task-emoji.md`'s closing note.
+This goes ahead of resuming Piece 2, per the owner's explicit call. Needs its
+own intake (`spec`-anchored, likely — turns the palette from a static code
+config into synced, per-space data).
+
+**After the palette-settings piece ships, pause all other roadmap work**
+(owner direction, 2026-09-18) for a live pairing session investigating the
+CI E2E flakiness pattern (tech-debt #050 — chromium/`offline.spec.ts` and
+webkit/`pull-to-refresh.spec.ts`, both marginal-timeout-under-CI-load, not
+logic bugs) before resuming Piece 2 or starting Piece 4.
 
 ## Anchor recommendations (project default: `outcome`)
 
@@ -479,3 +493,155 @@ to the pre-review staged state apart from this appended section
 originally-staged files, this section included).
 
 Gate: APPROVED r1 @039a87fc283667e92820221e425e0c4258a5de6-staged — adversary
+
+## Piece 3 close-out gate
+
+Findings (adversary, r1):
+
+1. **CRITICAL — the plan doc was copied to `completed/`, not moved; the
+   stale `active/` copy is still tracked and unchanged.** `git ls-files
+   docs/exec-plans/active/2026-09-18-feat-task-emoji.md` shows it is still
+   in the index, and its content on disk is byte-identical to the last
+   commit on `main` (`54b145e`) — frontmatter still reads `status:
+   Building`, no `## Closed` section. The staged diff never `git rm`s
+   this file; it only adds a second copy at
+   `docs/exec-plans/completed/2026-09-18-feat-task-emoji.md` with
+   `status: Shipped PR#141` and the closing note. `diff` between the two
+   copies shows only the intended frontmatter + appended-section change —
+   confirming the `completed/` copy's *content* is correct and complete
+   (all D1–D11 decisions and all three r1/r2/r3 gate rounds for
+   adversary/qa/security-brief are present verbatim), but the repo now
+   has two contradictory records of the same plan's status at once:
+   `active/` says "Building" (and `docs/exec-plans/active/README.md`
+   defines that folder as "work that is currently in progress" and
+   explicitly instructs "move it to `../completed/`" on completion — this
+   diff violates that contract), while the same commit's roadmap edit
+   says "**Shipped**". `.harness/lib/check-markers.sh` independently
+   flags this file: `terminal status (Shipped/Abandoned) still under
+   active/ — move to completed/` — though I traced that specific trigger
+   to a coincidental lowercase "shipped" at the start of a prose line
+   inside the file's own adversary r1 gate section (line 658: "shipped
+   this is a real, reachable data-shape bug..."), not to the frontmatter
+   (which still says "Building" and would not itself trip the regex).
+   The tool's *trigger* is accidental; the *diagnosis* is correct and
+   independently confirmed by my own `git ls-files` check. Fix: stage a
+   deletion of `docs/exec-plans/active/2026-09-18-feat-task-emoji.md`
+   alongside the new `completed/` file (`git rm` it, do not just leave it
+   behind).
+   Repro:
+   ```
+   git ls-files docs/exec-plans/active/2026-09-18-feat-task-emoji.md
+   diff docs/exec-plans/active/2026-09-18-feat-task-emoji.md \
+        docs/exec-plans/completed/2026-09-18-feat-task-emoji.md
+   ```
+
+Verified clean (no findings):
+
+- **Surface 1 (Shipped claims).** No `gh` CLI installed, but the sandbox
+  has outbound network access, so I hit the GitHub REST API directly
+  (primary source) for PRs #138–#141:
+  `curl -s https://api.github.com/repos/dtammam/tasksync/pulls/{138,139,140,141}`
+  — all four report `"merged": true`, and each `merge_commit_sha` matches
+  the corresponding merge commit in `git log --oneline main` exactly
+  (#141 → `6fa81f77…`, #140 → `3eb4e6e8…` = current `HEAD`). Also
+  confirmed on-disk: `web/src/lib/tags/palette.ts` and
+  `server/migrations/0018_task_and_list_emoji.sql` both exist on the
+  current tree.
+- **Surface 2 (moved-doc completeness).** Full 1053-line read of
+  `completed/2026-09-18-feat-task-emoji.md`: all eleven decisions (D1–D11)
+  present, all three gate rounds present verbatim
+  (`security-brief` r1/r2/r3, `qa` r1/r2/r3, `adversary` r1/r2/r3), in
+  order, nothing truncated. (The content is fine — see finding 1 for why
+  the *location* isn't.)
+- **Surface 3 (stray references).** Repo-wide content grep for
+  `2026-09-18-feat-task-emoji` outside the two file copies themselves
+  turns up exactly one hit: the roadmap doc's new follow-up note, which
+  correctly points at the new `completed/` path. No stale index/README/
+  code references. (Again, the residual problem is finding 1's stray
+  *file*, not a stray *reference*.)
+- **Surface 4 (tech-debt #050).** Broadened text is internally
+  consistent and attributes each flakiness pattern to the correct PR
+  (chromium/`offline.spec.ts` → PR #141; webkit/`pull-to-refresh.spec.ts`
+  → PR #140), matching the brief. Historical CI counts are unverifiable
+  from here, per the brief's own scoping — not re-litigated.
+- **Surface 5 (marker hygiene).** `.harness/lib/check-markers.sh`
+  verbatim: 25 issues found against the staged tree. I isolated which of
+  these predate this diff by `git stash -u` (removing the staged docs
+  changes) and re-running: 15 of the 25 reproduce identically against
+  `main`'s current tip with no staged changes at all — i.e. they are
+  pre-existing on `main`, not introduced by this diff (all the
+  `active/2026-09-16-roadmap...` stale-approval flags, and all the
+  `active/2026-09-18-feat-task-emoji.md` flags including the
+  terminal-status one from finding 1). The remaining 10 are the same
+  class of finding landing fresh on the *new*
+  `completed/2026-09-18-feat-task-emoji.md` file, because its own
+  historical r1/r2/r3 `Gate:` lines necessarily predate the
+  frontmatter/Closed-section edit that just added them to that path —
+  the same known whole-file-diff limitation the brief pre-authorizes as
+  non-blocking. (Restored staging exactly after the stash round-trip;
+  see tree-hygiene note below.)
+
+Tree hygiene: mutation-tested nothing destructive; the only non-read
+operation was a `git stash -u` / `git stash pop` round-trip to isolate
+pre-existing vs. new `check-markers.sh` findings, which unstaged the two
+already-staged docs files as a side effect — caught immediately via
+`git status --short` and re-staged by name
+(`git add docs/exec-plans/active/2026-09-16-roadmap-resilience-emoji-bulk.md
+docs/exec-plans/tech-debt-tracker.md`) to restore the exact original
+staged stat (1063 insertions / 2 deletions across the three files).
+Final `git status --short` before writing this verdict: the three
+originally-staged files plus the pre-existing unstaged
+`.claude/agents/security-brief.md` (untouched, out of this diff's scope,
+not my mess) — tree otherwise byte-identical to the pre-review snapshot.
+
+CRITICAL finding 1 blocks. Requesting a fix: stage the deletion of the
+stale `active/2026-09-18-feat-task-emoji.md` copy before this closes.
+
+Gate: CHANGES r1 @3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c-staged — adversary
+
+## Piece 3 close-out gate — r2 delta re-review
+
+Finding 1 (CRITICAL, r1): **fixed as prescribed.** `git status` now shows
+a proper rename:
+`renamed: docs/exec-plans/active/2026-09-18-feat-task-emoji.md ->
+docs/exec-plans/completed/2026-09-18-feat-task-emoji.md`. Verified directly:
+`ls docs/exec-plans/active/2026-09-18-feat-task-emoji.md` → no such file;
+`git ls-files docs/exec-plans/active/2026-09-18-feat-task-emoji.md` →
+empty (untracked, gone from the index too). No duplicate, no stray file.
+`git diff --cached --stat` shows exactly three paths touched (the rename
+target + the two already-reviewed doc edits), nothing else.
+
+Re-ran `.harness/lib/check-markers.sh`: 15 issues (down from 25 in r1 —
+the 10 tied to the stray `active/` copy, including the terminal-status
+flag, are gone along with the file). Of the remaining 15:
+- 10 are the same `completed/2026-09-18-feat-task-emoji.md` stale-approval
+  flags already categorized in r1 (its own historical r1/r2/r3 `Gate:`
+  lines necessarily predate the frontmatter/Closed-section edit that just
+  landed — known whole-file-diff limitation, unchanged from r1).
+- 4 are the same pre-existing roadmap-doc stale-approval flags from r1
+  (shas `f8a429b`, `f8a429b`, `54dfde5`, `039a87f` — present on `main`
+  before this diff, confirmed in r1 via the stash isolation).
+- 1 is **new but expected**: a stale-approval flag against
+  `3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c` in the roadmap doc — that's
+  my own r1 `Gate:` line, which necessarily goes stale the instant any
+  further edit lands in the same file (the owner's two r2 additions,
+  in this case). This is the identical mechanism already documented
+  earlier in this same doc's Piece 1 r2 section ("any further edit to
+  this file re-trips the same three already-bound `Gate:` lines") —
+  not a new class of problem, and it will recur again against my own r2
+  line the moment anyone edits this file again. Not blocking.
+
+The two new content additions (owner-direction note in the roadmap, and
+the matching note appended to tech-debt #050 about pausing roadmap work
+for a live pairing session on the CI flakiness after the next piece
+ships) are consistent with each other, correctly cross-reference tech-debt
+#050, and don't touch or contradict anything from the r1-reviewed diff
+(#050's PR attribution for the two flakiness patterns is unchanged and
+still correct per r1).
+
+No new findings. Tree needed no mutation this round beyond the read-only
+checks above; `git status --short` before writing this verdict shows
+only the four originally-in-play paths (three staged, one pre-existing
+unstaged `.claude/agents/security-brief.md`, still out of scope).
+
+Gate: APPROVED r2 @3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c-staged — adversary
