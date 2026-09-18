@@ -2,7 +2,7 @@
 plan: feat-task-emoji
 harness: v2 · lean
 anchor: spec
-status: Draft
+status: Approved 2026-09-18 @e93e4c9
 gate: pending
 ---
 
@@ -238,5 +238,7 @@ free-text tags) — that's a deliberate future decision, not a shortcut now.
   before either of us understood the risk; D10 replaced an initial
   import-parsing idea after the owner reasoned through the existing
   dedup/reactivation behavior in import; D11's naming split was worked out
-  explicitly). Register above reflects the final, confirmed state. Ready
-  for the owner's sign-off on the written doc, then Build.
+  explicitly). Register above reflects the final, confirmed state.
+- 2026-09-18 — Owner approved the written doc as committed at `e93e4c9`.
+  Design and build plan Approved, bound to that sha. Proceeding to Build
+  (Step 1).
