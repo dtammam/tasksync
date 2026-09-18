@@ -2,7 +2,8 @@
 plan: feat-tag-palette-settings
 harness: v2 · lean
 anchor: spec
-status: Draft
+status: Approved @7775de5
+design: Approved 2026-09-18 @7775de5
 gate: pending
 ---
 
