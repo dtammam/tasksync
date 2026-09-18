@@ -2,9 +2,9 @@
 plan: feat-tag-palette-settings
 harness: v2 · lean
 anchor: spec
-status: Building
+status: Gate:APPROVED r1 @ad3c0357
 design: Approved 2026-09-18 @10e7161
-gate: pending
+gate: APPROVED r1 @ad3c0357fcbde3c2aa05aa99b8754b6e9c8084be — adversary, qa, security-brief
 ---
 
 # In-app tag palette settings
@@ -285,8 +285,72 @@ touching an acceptance criterion or public interface the owner approved:
   subscribe to the live `$tagPalette` store reactively, or an owner's edits
   would never reach the one UI surface tags actually get assigned from. Both
   changes are import-path-only; neither component's logic changed.
+- **Step 7's E2E scope was narrowed from what the Build plan promised**,
+  flagged independently by both the QA and adversary gate seats: the plan
+  said E2E coverage for "admin edits a tag and it reflects in list/My Day
+  grouping" and "deleting a palette entry leaves an already-tagged task's
+  stored emoji untouched." The delivered `tag-palette-settings.spec.ts`
+  instead covers non-admin gating, default-palette rendering, and
+  edit-save-with-failure-recovery — real, valid coverage, but not those two
+  scenarios. Both underlying claims are still verified, just not via E2E:
+  order-propagation by `grouping.test.ts` (already palette-parameterized) and
+  `tagPalette.test.ts`'s current-palette-resolution test; the
+  emoji-left-untouched claim is a structural guarantee traced directly in
+  `tags.rs` (`PUT /tags` only ever writes `tag_palette_json`) rather than
+  something an E2E round-trip is needed to prove. Both gate seats judged this
+  non-blocking for that reason.
 
 Test coverage: 6 new server tests, 8 new `tagPalette` store tests, 8 new
 `TagPaletteSettings.svelte` tests, 3 new E2E tests (stable across 3
 consecutive local chromium runs) — 408 web unit tests and 101 server tests
 total, all passing; lint/clippy/fmt clean throughout.
+
+## Gate
+
+Gate: APPROVED r1 @ad3c0357fcbde3c2aa05aa99b8754b6e9c8084be — security-brief
+
+### QA review (r1)
+
+Instruments run verbatim (all green, all counts match the Progress log's claims):
+- `cargo test` (server/): `test result: ok. 101 passed; 0 failed; 0 ignored`
+- `cargo clippy --all-targets -- -D warnings` (server/): `Finished` dev profile, no warnings
+- `cargo fmt --check` (server/): exit 0, no diff
+- `npm run check` (web/): `svelte-check found 0 errors and 0 warnings`
+- `npm run lint` (web/): clean, no output
+- `npx vitest run` (web/): `Test Files 28 passed (28)`, `Tests 408 passed (408)`
+- `npx playwright test tests/e2e/tag-palette-settings.spec.ts tests/e2e/task-tags.spec.ts --project=chromium`, run 3x: `5 passed` all three runs, no flakes observed, no interaction with tech-debt #050's known pattern.
+
+Correctness spot-checks against the acceptance checklist: all nine citations verified to exist and assert what's claimed (`tag_palette_defaults_to_null_until_saved`, `saving_a_palette_with_duplicate_emoji_is_rejected`, `saving_an_empty_palette_is_allowed`, `contributor_cannot_save_tag_palette`, the `tagPalette.test.ts` hydration/default/clear cases, the `TagPaletteSettings.test.ts` cascade-confirm and duplicate-emoji cases). D3/D5/D8/D9 gating and validation match `lists.rs`'s established `Role::Admin` pattern exactly. Migration comment matches the project's existing "Logically reversible via..." convention verbatim (`0018_task_and_list_emoji.sql`). No new Rust or npm dependency introduced (`Cargo.toml`/`Cargo.lock`/`package.json`/`package-lock.json` all untouched), consistent with D8's "no new dependency" claim. `EmojiPicker.svelte`/`grouping.ts` import-path change verified: no stale `TAG_PALETTE`/`TAG_ORDER` references remain anywhere in `web/src/`; `EmojiPicker.svelte` now reactively subscribes via `$tagPalette`. Accessibility: the new `role="list"`/`role="listitem"` nesting on the drag-and-drop section/entry rows is valid ARIA (a listitem may contain a nested list plus other content) and each drag interaction has a non-drag up/down-button fallback, consistent with D7's accessible-fallback requirement.
+
+Security surface: no new dependency, no new secrets, space-scoped reads/writes via `ctx.space_id` (no cross-space leakage), admin gate on `PUT` matches existing convention, Svelte auto-escapes interpolated label/section text (no injection surface). Duplicate-emoji and empty-field validation is enforced both client- and server-side, request rejected atomically (no partial apply) per D8. Nothing here needing a dedicated security pass beyond what the security-brief seat already covered on the migration.
+
+**WARNING (non-blocking, disclosed here for transparency)** — `docs/exec-plans/active/2026-09-18-feat-tag-palette-settings.md:224-226`: Build plan Step 7 promised E2E coverage for two specific scenarios — "admin edits a tag and it reflects in list/My Day grouping" and "deleting a palette entry leaves an already-tagged task's stored emoji untouched." The delivered `tag-palette-settings.spec.ts` instead covers non-admin gating, default-palette rendering, and edit-save-with-failure-recovery — none of which is either of those two scenarios. The Progress log's deviation list (lines 274-287) discloses two deviations (D5/D9 correction, EmojiPicker/grouping.ts import changes) but omits this narrowing of Step 7's E2E scope, so a reader trusting the Progress log's "built end to end, Steps 1-8, all in-scope" framing would believe those two scenarios got literal E2E coverage when they didn't. This doesn't block: the underlying claims are still verified — order-propagation is covered by `grouping.test.ts` (generic, palette-parameterized) plus `tagPalette.test.ts`'s "tagRank/tagLabel resolve against the current (hydrated) palette" test, and the emoji-untouched claim is a structural guarantee (`PUT /tags` only ever writes `tag_palette_json`, confirmed by reading `tags.rs`) rather than something that needs an E2E round-trip to prove. Recommend the Progress log be amended to name this substitution explicitly, but not a re-open condition.
+
+No other CRITICAL or WARNING findings. Working tree left byte-identical aside from this appended section and the verdict line below (pre-existing untracked/modified `.claude/agents/security-brief.md` predates this session per the initial git status and is unrelated to this diff).
+
+Gate: APPROVED r1 @ad3c0357fcbde3c2aa05aa99b8754b6e9c8084be — qa
+
+### Adversary review (r1)
+
+Independent measurement, not trusting the Progress log, QA section, or security-brief section above (read after finishing my own pass, not as input to it):
+
+- `cargo test` (server/): `101 passed; 0 failed`. `cargo clippy -- -D warnings`: clean. `cargo fmt -- --check`: clean.
+- `npm run test -- --run` (web/): `408 passed (408)`. `npm run check`: `0 errors and 0 warnings`. `npm run lint`: clean.
+- `npx playwright test tests/e2e/tag-palette-settings.spec.ts --project=chromium`: `3 passed` (single real run against a live dev server, not trusted from the doc).
+- **Migration reversibility, actually executed** (not just read): ran `alter table space add column tag_palette_json text` then `alter table space drop column tag_palette_json` against a live SQLite DB — succeeds and drops the data, on both the ambient `sqlite3` module (3.40.1) and, confirmed via `strings`/`ldd` on the built `target/debug/tasksync-server` binary, the actual bundled `libsqlite3-sys 0.30.1` the server links (statically bundled, no `libsqlite3.so` dependency; embedded version string `3.46.0`). `DROP COLUMN` has been supported since SQLite 3.35.0, so the rollback comment is not aspirational — it is a real, run rollback path.
+- **Mutation-tested the bindings** (mutate against committed tree via scratch copy + restore, confirmed `git status`/`git diff` clean after each):
+  - Removed the duplicate-emoji branch from `TagPaletteSettings.svelte`'s client `validate()` → `TagPaletteSettings.test.ts`'s "rejects saving... client-side" test goes red (`saveMock` gets called, error text missing). Caught.
+  - Removed the `Role::Admin` check from `put_tag_palette` (server/src/routes/tags.rs) → `contributor_cannot_save_tag_palette` goes red. Caught.
+  - No-opped the server's `seen_emoji.insert` duplicate check (insert-without-reject) → `saving_a_palette_with_duplicate_emoji_is_rejected` goes red. Caught.
+  - Dropped `adminOnly: true` from the `tags` entry in `settingsMenu.ts` and re-ran the E2E spec live → "non-admin cannot see the Tags settings section at all" fails for real (`getByTestId('settings-section-tags')` resolves to 1, not 0). Caught end-to-end, not just at the unit level.
+  All four mutants killed; no surviving mutant found on the surfaces I attacked.
+- **D4 (edits never touch tasks) traced directly, not trusted**: `put_tag_palette` in `server/src/routes/tags.rs` issues exactly one write, `update space set tag_palette_json = ?1 where id = ?2` — no `task`/`list` table is referenced anywhere in `tags.rs`. Structurally impossible for this endpoint to touch task/list rows.
+- **D9 deviation re-verified independently**: `delete_list` (`server/src/routes/lists.rs:131-160`) does count tasks and return `409 CONFLICT` on a non-empty list, never cascades — the Progress log's characterization of this precedent is accurate.
+- **`/spaces/:id` nonexistence re-verified**: `grep -rn "/spaces/" server/src web/src shared` returns nothing. The D5 deviation's premise holds.
+- **Space scoping re-verified**: both `get_tag_palette`/`put_tag_palette` derive `ctx.space_id` from `ctx_from_headers`, which decodes it from the signed JWT claim server-side — never from a URL param or client-suppliable header — identical to `lists.rs`/`tasks.rs`. No cross-space read/write path exists for `/tags` that doesn't already exist for every other resource.
+- **Static-to-dynamic pivot swept for stale references**: `grep` across `web/src` for `TAG_PALETTE`/`TAG_ORDER`/direct `palette.ts` imports of `tagRank`/`tagLabel` turned up none outside `palette.ts` itself; `EmojiPicker.svelte` and `grouping.ts` both import from `$lib/stores/tagPalette` (the live store), confirmed by diff, not by the doc's say-so.
+- Agree with the WARNING already on record above (Build Plan Step 7 vs. delivered E2E scope) — reproduced this independently before reading the QA section that also flagged it. Non-blocking for the same reason: I traced the underlying D4 guarantee myself at the code level above, and it does not depend on that missing E2E test.
+
+No CRITICAL or WARNING findings of my own beyond the one already on record. Tree restored after every mutation (`git status`/`git diff` clean apart from the doc appends and the pre-existing unrelated `.claude/agents/security-brief.md` modification, which predates this session).
+
+Gate: APPROVED r1 @ad3c0357fcbde3c2aa05aa99b8754b6e9c8084be — adversary
