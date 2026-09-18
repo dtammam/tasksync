@@ -863,3 +863,39 @@ the pre-existing `.claude/agents/security-brief.md` working-tree edit
 (untouched by me, described above). No other untracked or modified files.
 
 Gate: APPROVED r2 @c816a220fbd3bd99d7fb50417a3672e7d11e170d — qa
+
+## Post-gate owner feedback (2026-09-18)
+
+Owner reviewed the merged-ready PR on a real device (My Day, phone width)
+and gave four pieces of feedback:
+
+1. **Fixed now, blocking.** The My Day "Group by tag" toggle (a full
+   `ghost-pill` with text) crowded the header next to `SortControls` on a
+   phone, pushing the date/title into an awkward wrap. Replaced with a
+   34x34 icon-only toggle (🏷️, `aria-label`/`title="Group by tag"`,
+   `data-testid` unchanged so the existing E2E spec didn't need updating).
+   Owner noted the underlying cause is the app having no token-based
+   design system yet ("my fault, not this piece's") — not chasing that
+   further here.
+2. **Discussed, not built yet.** Owner asked whether tapping a task's
+   emoji indicator directly in the list (not just via the detail drawer)
+   should open the picker inline, to cut the current 3-step path (open row
+   menu → Details → Tag toggle → pick) down to one tap. Architect's read:
+   good, bounded idea (reuses `EmojiPicker.svelte` as-is, just needs a new
+   tap target + popover anchoring on `TaskRow`) — recommended as a small
+   follow-up piece rather than folding into this one.
+3. **Documented, not resolved** — tech-debt #049: `Task.priority`/Starred
+   and the tag system's "Time / priority" section (⭐/⏰/🎯) are now two
+   independent concepts that can visually collide. Owner's explicit call:
+   flag it, don't fix it now.
+4. **Confirmed, no code needed.** Owner asked whether palette order in
+   `tags/palette.ts` actually drives group/sort order end-to-end. Yes —
+   already true and already tested (`grouping.test.ts`, "groups tagged
+   items in fixed palette order, not insertion order"); pointed the owner
+   at the mechanism rather than having them hand-verify it.
+
+Fix for (1) re-verified: `npm run check`/`lint`/`test` (392 passed),
+`task-tags.spec.ts` (2 passed), and a manual phone-width (390px) screenshot
+confirming the header no longer crowds. Re-engaging the same r2 seat
+instances for r3 delta confirmation before merge, since the sha moves
+again.

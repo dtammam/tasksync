@@ -311,13 +311,15 @@
 			<SortControls mode={sortMode} direction={sortDirection} on:change={onSortChange} />
 			<button
 				type="button"
-				class="chip ghost"
+				class="icon-toggle"
 				class:active={groupByTagEnabled}
 				data-testid="myday-group-by-tag-toggle"
 				aria-pressed={groupByTagEnabled}
+				aria-label="Group by tag"
+				title="Group by tag"
 				on:click={() => (groupByTagEnabled = !groupByTagEnabled)}
 			>
-				Group by tag
+				🏷️
 			</button>
 		</div>
 	</header>
@@ -473,18 +475,27 @@
 
 	.actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }
 
-	.chip.ghost {
-		border-radius: 999px;
-		padding: 8px 12px;
-		font-size: 12px;
+	/* Icon-only so it doesn't compete with SortControls for width in the
+	   already-tight My Day header, especially on narrow phones. */
+	.icon-toggle {
+		width: 34px;
+		height: 34px;
+		min-width: 34px;
+		flex: 0 0 auto;
+		border-radius: 10px;
+		padding: 0;
+		font-size: 15px;
+		line-height: 1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		cursor: pointer;
 		background: var(--surface-1);
 		border: 1px solid var(--border-2);
-		color: var(--app-text);
 		box-shadow: var(--ring-shadow);
 	}
 
-	.chip.ghost.active {
+	.icon-toggle.active {
 		border-color: color-mix(in oklab, var(--surface-accent) 64%, var(--border-2) 36%);
 		background: color-mix(in oklab, var(--surface-accent) 20%, var(--surface-1) 80%);
 	}
