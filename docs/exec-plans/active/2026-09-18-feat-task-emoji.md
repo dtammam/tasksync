@@ -2,7 +2,7 @@
 plan: feat-task-emoji
 harness: v2 · lean
 anchor: spec
-status: Approved 2026-09-18 @e93e4c9
+status: Building
 gate: pending
 ---
 
@@ -242,3 +242,30 @@ free-text tags) — that's a deliberate future decision, not a shortcut now.
 - 2026-09-18 — Owner approved the written doc as committed at `e93e4c9`.
   Design and build plan Approved, bound to that sha. Proceeding to Build
   (Step 1).
+- 2026-09-18 — Steps 1-4 complete: `Task.emoji?: string` (also removed a
+  dead, unused `tags: string[]` field found on `Task` during Step 1 — a
+  deviation flagged to and approved by the owner, since it wasn't in the
+  original register); server migration `0018_task_and_list_emoji.sql`
+  (bundles `task.emoji` and `list.default_emoji` for D10); `TaskRow`,
+  `CreateTask`, `UpdateTaskMeta`, and every SQL query that returns a task
+  row updated across `tasks.rs`, `auth.rs` (space-backup export/import,
+  `BackupTaskRow`), and `mod.rs` (test call sites); `update_task_meta`'s
+  SQL uses direct assignment for `emoji` (not `coalesce`), matching D4;
+  sync wire types and push bodies updated in `sync.ts`/`shared/types/sync.ts`;
+  `hasChangesSinceCreate` (`tasks.ts`) gained the missing `emoji` comparison
+  needed for the local-edit-vs-stale-ack race D4 depends on.
+  Environment note: `cc` (linker) was missing from this sandbox entirely —
+  installed `gcc` via `sudo apt-get install gcc` to actually build/test the
+  server; this had been masked all session because no prior push touched
+  Rust source.
+  Tests added: server `admin_can_set_change_and_clear_task_emoji_via_task_meta_update`
+  (set/change/clear via the real endpoint); client
+  `keeps the emoji tag stable when the server ack echoes back the same value`
+  and `preserves a local emoji edit made after push but before the ack
+  lands, over a stale remote echo` (the latter specifically exercises the
+  `hasChangesSinceCreate` fix). All gates green: `cargo fmt --check`,
+  `cargo clippy -D warnings`, `cargo test` (94 passed), `npm run lint`,
+  `npm run check`, `npm run test` (382 passed).
+  Remaining: Steps 5-10 (picker component + palette, task detail UI, list
+  grouping, My Day toggle, per-list default tag + settings UI, remaining
+  tests).

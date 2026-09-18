@@ -43,6 +43,7 @@ const makeLocalTask = (
 		url?: string;
 		notes?: string;
 		assignee_user_id?: string;
+		emoji?: string;
 	}
 ) => {
 	const nowTs = Date.now();
@@ -56,7 +57,7 @@ const makeLocalTask = (
 		status: opts?.status ?? 'pending',
 		list_id,
 		my_day: opts?.my_day ?? false,
-		tags: [],
+		emoji: opts?.emoji,
 		checklist: [],
 		order,
 		due_date: opts?.due_date,
@@ -93,7 +94,8 @@ const hasChangesSinceCreate = (current: Task, sent: Task) =>
 	current.assignee_user_id !== sent.assignee_user_id ||
 	(current.occurrences_completed ?? 0) !== (sent.occurrences_completed ?? 0) ||
 	current.punted_from_due_date !== sent.punted_from_due_date ||
-	current.punted_on_date !== sent.punted_on_date;
+	current.punted_on_date !== sent.punted_on_date ||
+	current.emoji !== sent.emoji;
 
 const clearPuntState = (task: Task) => ({
 	...task,

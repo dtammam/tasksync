@@ -224,6 +224,7 @@ pub(super) struct BackupTaskRow {
     pub(super) due_date: Option<String>,
     pub(super) punted_from_due_date: Option<String>,
     pub(super) punted_on_date: Option<String>,
+    pub(super) emoji: Option<String>,
     pub(super) occurrences_completed: i64,
     pub(super) completed_ts: Option<i64>,
     pub(super) notes: Option<String>,
@@ -760,7 +761,7 @@ pub(super) async fn load_space_backup(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tasks = sqlx::query_as::<_, BackupTaskRow>(
-        "select id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+        "select id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -993,7 +994,7 @@ pub(super) async fn auth_restore_backup(
 
     for task in &body.tasks {
         sqlx::query(
-            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         )
         .bind(&task.id)
         .bind(&task.space_id)
@@ -1010,6 +1011,7 @@ pub(super) async fn auth_restore_backup(
         .bind(&task.due_date)
         .bind(&task.punted_from_due_date)
         .bind(&task.punted_on_date)
+        .bind(&task.emoji)
         .bind(task.occurrences_completed)
         .bind(task.completed_ts)
         .bind(&task.notes)

@@ -43,7 +43,6 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	list_id: overrides.list_id ?? 'goal-management',
 	my_day: overrides.my_day ?? false,
 	priority: overrides.priority ?? 0,
-	tags: overrides.tags ?? [],
 	checklist: overrides.checklist ?? [],
 	order: overrides.order ?? 'a',
 	created_ts: overrides.created_ts ?? Date.now(),
@@ -58,7 +57,8 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	url: overrides.url,
 	completed_ts: overrides.completed_ts,
 	assignee_user_id: overrides.assignee_user_id,
-	created_by_user_id: overrides.created_by_user_id
+	created_by_user_id: overrides.created_by_user_id,
+	emoji: overrides.emoji
 });
 
 describe('tasks store helpers', () => {
@@ -534,6 +534,44 @@ describe('tasks store helpers', () => {
 		const updated = tasks.getAll().find((t) => t.id === 'replace-punt');
 		expect(updated?.punted_from_due_date).toBe('2026-02-02');
 		expect(updated?.punted_on_date).toBe('2026-02-02');
+	});
+
+	it('keeps the emoji tag stable when the server ack echoes back the same value', () => {
+		const local = baseTask({
+			id: 'emoji-roundtrip',
+			emoji: '🥦',
+			dirty: true,
+			local: false
+		});
+		tasks.setAll([local]);
+
+		tasks.replaceWithRemote(
+			'emoji-roundtrip',
+			baseTask({ id: 'emoji-roundtrip', emoji: '🥦', dirty: false, local: false }),
+			{ ...local }
+		);
+
+		const updated = tasks.getAll().find((t) => t.id === 'emoji-roundtrip');
+		expect(updated?.emoji).toBe('🥦');
+	});
+
+	it('preserves a local emoji edit made after push but before the ack lands, over a stale remote echo', () => {
+		const sent = baseTask({ id: 'emoji-race', emoji: '🥦', dirty: true, local: false });
+		tasks.setAll([sent]);
+
+		// User changes the tag locally while the push for the original value is in flight.
+		tasks.setAll([{ ...sent, emoji: '🧀' }]);
+
+		// The ack that comes back reflects what was actually sent (the stale value), not the new local edit.
+		tasks.replaceWithRemote(
+			'emoji-race',
+			baseTask({ id: 'emoji-race', emoji: '🥦', dirty: false, local: false }),
+			{ ...sent }
+		);
+
+		const updated = tasks.getAll().find((t) => t.id === 'emoji-race');
+		expect(updated?.emoji).toBe('🧀');
+		expect(updated?.dirty).toBe(true);
 	});
 
 	it('does not carry punt state to next occurrence after completing a punted recurring task via sync round-trip', () => {

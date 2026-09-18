@@ -25,6 +25,7 @@ export interface SyncTask {
 	due_date?: string;
 	punted_from_due_date?: string;
 	punted_on_date?: string;
+	emoji?: string;
 	occurrences_completed?: number;
 	completed_ts?: number;
 	notes?: string;
@@ -64,6 +65,7 @@ export interface SyncCreateTaskChange {
 		due_date?: string;
 		punted_from_due_date?: string;
 		punted_on_date?: string;
+		emoji?: string;
 		notes?: string;
 		assignee_user_id?: string;
 	};
@@ -84,6 +86,7 @@ export interface SyncUpdateTaskChange {
 		due_date?: string;
 		punted_from_due_date?: string;
 		punted_on_date?: string;
+		emoji?: string;
 		notes?: string;
 		occurrences_completed?: number;
 		completed_ts?: number;

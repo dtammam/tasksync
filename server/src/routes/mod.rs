@@ -1056,6 +1056,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: Some("u-admin".to_string()),
+                emoji: None,
             }),
         )
         .await
@@ -1092,6 +1093,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: Some("u-admin".to_string()),
+                emoji: None,
             }),
         )
         .await
@@ -1117,6 +1119,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: Some("u-admin".to_string()),
+                emoji: None,
             }),
         )
         .await
@@ -1161,6 +1164,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
@@ -1242,12 +1246,78 @@ mod tests {
                 occurrences_completed: None,
                 completed_ts: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await
         .expect("update should work")
         .0;
         assert_eq!(updated.my_day, 0);
+    }
+
+    #[tokio::test]
+    async fn admin_can_set_change_and_clear_task_emoji_via_task_meta_update() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, task_order, updated_ts, created_ts, occurrences_completed, assignee_user_id, created_by_user_id) values ('t-emoji', 's1', 'Grocery item', 'pending', 'goal-management', 0, 'a', 1, 1, 0, 'u-admin', 'u-admin')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert task");
+
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let set_body = || UpdateTaskMeta {
+            title: None,
+            status: None,
+            list_id: None,
+            my_day: None,
+            priority: None,
+            url: None,
+            recur_rule: None,
+            due_date: None,
+            punted_from_due_date: None,
+            punted_on_date: None,
+            notes: None,
+            occurrences_completed: None,
+            completed_ts: None,
+            assignee_user_id: None,
+            emoji: None,
+        };
+
+        let set = update_task_meta(
+            State(state.clone()),
+            headers.clone(),
+            Path("t-emoji".to_string()),
+            Json(UpdateTaskMeta { emoji: Some("🥦".to_string()), ..set_body() }),
+        )
+        .await
+        .expect("set emoji should work")
+        .0;
+        assert_eq!(set.emoji.as_deref(), Some("🥦"));
+
+        let changed = update_task_meta(
+            State(state.clone()),
+            headers.clone(),
+            Path("t-emoji".to_string()),
+            Json(UpdateTaskMeta { emoji: Some("🧀".to_string()), ..set_body() }),
+        )
+        .await
+        .expect("change emoji should work")
+        .0;
+        assert_eq!(changed.emoji.as_deref(), Some("🧀"));
+
+        let cleared = update_task_meta(
+            State(state),
+            headers,
+            Path("t-emoji".to_string()),
+            Json(UpdateTaskMeta { emoji: None, ..set_body() }),
+        )
+        .await
+        .expect("clear emoji should work")
+        .0;
+        assert_eq!(cleared.emoji, None);
     }
 
     #[tokio::test]
@@ -1283,6 +1353,7 @@ mod tests {
                 occurrences_completed: Some(1),
                 completed_ts: Some(completed_ts),
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await
@@ -1327,6 +1398,7 @@ mod tests {
                 occurrences_completed: None,
                 completed_ts: None,
                 assignee_user_id: Some("u-contrib".to_string()),
+                emoji: None,
             }),
         )
         .await;
@@ -1365,6 +1437,7 @@ mod tests {
                 occurrences_completed: None,
                 completed_ts: None,
                 assignee_user_id: Some("u-admin".to_string()),
+                emoji: None,
             }),
         )
         .await
@@ -1418,6 +1491,7 @@ mod tests {
                 occurrences_completed: None,
                 completed_ts: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
@@ -1563,6 +1637,7 @@ mod tests {
                             punted_on_date: None,
                             notes: None,
                             assignee_user_id: Some("u-admin".to_string()),
+                            emoji: None,
                         },
                     },
                     SyncPushChange::UpdateTaskStatus {
@@ -2190,6 +2265,7 @@ mod tests {
                 // is attributed to — this must be ignored in favor of the
                 // owner identity `ctx_from_api_token` resolved.
                 assignee_user_id: Some("u-contrib".to_string()),
+                emoji: None,
             }),
         )
         .await
@@ -2225,6 +2301,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
@@ -2256,6 +2333,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
@@ -2287,6 +2365,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
@@ -2341,6 +2420,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
@@ -2397,6 +2477,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
@@ -2425,6 +2506,7 @@ mod tests {
             punted_on_date: None,
             notes: None,
             assignee_user_id: None,
+            emoji: None,
         };
 
         let first = create_task_via_api_token(
@@ -2477,6 +2559,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await
@@ -2542,6 +2625,7 @@ mod tests {
                 punted_on_date: None,
                 notes: None,
                 assignee_user_id: None,
+                emoji: None,
             }),
         )
         .await;
