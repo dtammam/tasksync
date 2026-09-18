@@ -18,15 +18,20 @@
 	import ServerSettings from '$lib/components/settings/ServerSettings.svelte';
 	import MemberList from '$lib/components/settings/MemberList.svelte';
 	import ColorSwatchPicker from '$lib/components/ColorSwatchPicker.svelte';
+	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
 
 	const dispatch = createEventDispatcher();
 
 	let newListName = '';
 	let newListIcon = '';
 	let newListColor = '#3b82f6';
+	let newListDefaultEmoji: string | undefined = undefined;
+	let showNewListTagPicker = false;
 	let listNameDrafts: Record<string, string> = {};
 	let listIconDrafts: Record<string, string> = {};
 	let listColorDrafts: Record<string, string> = {};
+	let listDefaultEmojiDrafts: Record<string, string> = {};
+	let openTagPickerForListId: string | null = null;
 	let listError = '';
 	let busy = false;
 	let listSortMode = 'manual';
@@ -278,10 +283,20 @@
 		listNameDrafts = {};
 		listIconDrafts = {};
 		listColorDrafts = {};
+		listDefaultEmojiDrafts = {};
+		openTagPickerForListId = null;
 		newListName = '';
 		newListIcon = '';
 		newListColor = '#3b82f6';
+		newListDefaultEmoji = undefined;
+		showNewListTagPicker = false;
 		listError = '';
+	};
+
+	const listTagDisplay = (list: List): string => {
+		const draft = listDefaultEmojiDrafts[list.id];
+		if (typeof draft === 'string') return draft || '🏷';
+		return list.default_emoji || '🏷';
 	};
 
 	const sortByOrder = (items: List[]): List[] =>
@@ -298,7 +313,12 @@
 		busy = true;
 		listError = '';
 		try {
-			await lists.createRemote(name, normalizeListIcon(newListIcon), newListColor || undefined);
+			await lists.createRemote(
+				name,
+				normalizeListIcon(newListIcon),
+				newListColor || undefined,
+				newListDefaultEmoji
+			);
 			resetDrafts();
 		} catch (err) {
 			listError = err instanceof Error ? err.message : String(err);
@@ -312,9 +332,16 @@
 		const name = (listNameDrafts[id] ?? '').trim();
 		const iconInput = listIconDrafts[id];
 		const colorInput = listColorDrafts[id];
+		const emojiInput = listDefaultEmojiDrafts[id];
 		const icon = typeof iconInput === 'string' ? normalizeListIcon(iconInput) : undefined;
 		const color = typeof colorInput === 'string' ? colorInput.trim() : undefined;
-		if (!name && typeof iconInput !== 'string' && typeof colorInput !== 'string') return;
+		if (
+			!name &&
+			typeof iconInput !== 'string' &&
+			typeof colorInput !== 'string' &&
+			typeof emojiInput !== 'string'
+		)
+			return;
 		busy = true;
 		listError = '';
 		try {
@@ -322,10 +349,13 @@
 				name: name || undefined,
 				icon: typeof iconInput === 'string' ? icon || '' : undefined,
 				color: typeof colorInput === 'string' ? color || '' : undefined,
+				default_emoji: typeof emojiInput === 'string' ? emojiInput || '' : undefined,
 			});
 			listNameDrafts = { ...listNameDrafts, [id]: '' };
 			listIconDrafts = { ...listIconDrafts, [id]: '' };
 			listColorDrafts = { ...listColorDrafts, [id]: '' };
+			listDefaultEmojiDrafts = { ...listDefaultEmojiDrafts, [id]: '' };
+			openTagPickerForListId = null;
 		} catch (err) {
 			listError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -913,6 +943,27 @@
 								Color (optional)
 								<ColorSwatchPicker bind:value={newListColor} />
 							</label>
+							<label>
+								Default tag (optional)
+								<button
+									type="button"
+									class="ghost tiny"
+									on:click={() => (showNewListTagPicker = !showNewListTagPicker)}
+								>
+									{newListDefaultEmoji ?? '— Add tag'}
+								</button>
+							</label>
+							{#if showNewListTagPicker}
+								<div class="tag-picker-panel">
+									<EmojiPicker
+										value={newListDefaultEmoji}
+										on:change={(e) => {
+											newListDefaultEmoji = e.detail;
+											showNewListTagPicker = false;
+										}}
+									/>
+								</div>
+							{/if}
 							<button
 								type="button"
 								class="primary"
@@ -955,6 +1006,17 @@
 											<button
 												type="button"
 												class="ghost tiny"
+												aria-label={`Default tag for ${list.name}`}
+												title="Default tag"
+												on:click={() =>
+													(openTagPickerForListId =
+														openTagPickerForListId === list.id ? null : list.id)}
+											>
+												{listTagDisplay(list)}
+											</button>
+											<button
+												type="button"
+												class="ghost tiny"
 												aria-label={`Move ${list.name} up`}
 												title="Move up"
 												on:click={() => moveList(list.id, -1)}
@@ -984,6 +1046,17 @@
 												Delete
 											</button>
 										</div>
+										{#if openTagPickerForListId === list.id}
+											<div class="tag-picker-panel">
+												<EmojiPicker
+													value={listDefaultEmojiDrafts[list.id] || list.default_emoji}
+													on:change={(e) => {
+														listDefaultEmojiDrafts[list.id] = e.detail ?? '';
+														openTagPickerForListId = null;
+													}}
+												/>
+											</div>
+										{/if}
 									</div>
 								{/each}
 							</div>
@@ -1845,6 +1918,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
+		margin-top: 4px;
+	}
+
+	.tag-picker-panel {
+		padding: 8px;
+		border: 1px solid var(--border-1);
+		border-radius: 9px;
+		background: var(--surface-1);
 		margin-top: 4px;
 	}
 

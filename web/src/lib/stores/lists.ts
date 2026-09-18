@@ -19,6 +19,7 @@ const normalizeListFromApi = (l: Awaited<ReturnType<typeof api.getLists>>[number
 	name: l.name,
 	icon: l.icon ?? undefined,
 	color: l.color ?? undefined,
+	default_emoji: l.default_emoji ?? undefined,
 	order: l.order
 });
 
@@ -30,11 +31,12 @@ export const lists = {
 		listStore.update((prev) => [...prev, list]);
 		void repo.saveLists(get(listStore));
 	},
-	async createRemote(name: string, icon?: string, color?: string) {
+	async createRemote(name: string, icon?: string, color?: string, defaultEmoji?: string) {
 		const created = await api.createList({
 			name,
 			icon,
 			color,
+			default_emoji: defaultEmoji,
 			order: nextOrder()
 		});
 		const mapped = normalizeListFromApi(created);
@@ -42,7 +44,10 @@ export const lists = {
 		void repo.saveLists(get(listStore));
 		return mapped;
 	},
-	async updateRemote(id: string, body: { name?: string; icon?: string; color?: string; order?: string }) {
+	async updateRemote(
+		id: string,
+		body: { name?: string; icon?: string; color?: string; default_emoji?: string; order?: string }
+	) {
 		const updated = await api.updateList(id, body);
 		const mapped = normalizeListFromApi(updated);
 		listStore.update((prev) => prev.map((l) => (l.id === id ? mapped : l)));

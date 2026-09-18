@@ -157,10 +157,12 @@ export const api = {
 	setListGrant: (body: SetListGrantRequest) =>
 		fetchJson<ListGrant>('/auth/grants', { method: 'PUT', body: JSON.stringify(body) }),
 	getLists: () => fetchJson<SyncList[]>('/lists'),
-	createList: (body: { name: string; icon?: string; color?: string; order?: string }) =>
+	createList: (body: { name: string; icon?: string; color?: string; default_emoji?: string; order?: string }) =>
 		fetchJson<SyncList>('/lists', { method: 'POST', body: JSON.stringify(body) }),
-	updateList: (id: string, body: { name?: string; icon?: string; color?: string; order?: string }) =>
-		fetchJson<SyncList>(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+	updateList: (
+		id: string,
+		body: { name?: string; icon?: string; color?: string; default_emoji?: string; order?: string }
+	) => fetchJson<SyncList>(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 	deleteList: (id: string) =>
 		fetchJson<void>(`/lists/${id}`, {
 			method: 'DELETE'

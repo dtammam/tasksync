@@ -196,6 +196,7 @@ pub(super) struct BackupListRow {
     pub(super) name: String,
     pub(super) icon: Option<String>,
     pub(super) color: Option<String>,
+    pub(super) default_emoji: Option<String>,
     pub(super) list_order: String,
 }
 
@@ -224,6 +225,7 @@ pub(super) struct BackupTaskRow {
     pub(super) due_date: Option<String>,
     pub(super) punted_from_due_date: Option<String>,
     pub(super) punted_on_date: Option<String>,
+    pub(super) emoji: Option<String>,
     pub(super) occurrences_completed: i64,
     pub(super) completed_ts: Option<i64>,
     pub(super) notes: Option<String>,
@@ -744,7 +746,7 @@ pub(super) async fn load_space_backup(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let lists = sqlx::query_as::<_, BackupListRow>(
-        "select id, space_id, name, icon, color, list_order from list where space_id = ?1 order by list_order asc",
+        "select id, space_id, name, icon, color, default_emoji, list_order from list where space_id = ?1 order by list_order asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -760,7 +762,7 @@ pub(super) async fn load_space_backup(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tasks = sqlx::query_as::<_, BackupTaskRow>(
-        "select id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+        "select id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
     )
     .bind(space_id)
     .fetch_all(pool)
@@ -965,13 +967,14 @@ pub(super) async fn auth_restore_backup(
 
     for list in &body.lists {
         sqlx::query(
-            "insert into list (id, space_id, name, icon, color, list_order) values (?1, ?2, ?3, ?4, ?5, ?6)",
+            "insert into list (id, space_id, name, icon, color, default_emoji, list_order) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .bind(&list.id)
         .bind(&list.space_id)
         .bind(&list.name)
         .bind(&list.icon)
         .bind(&list.color)
+        .bind(&list.default_emoji)
         .bind(&list.list_order)
         .execute(&mut *tx)
         .await
@@ -993,7 +996,7 @@ pub(super) async fn auth_restore_backup(
 
     for task in &body.tasks {
         sqlx::query(
-            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         )
         .bind(&task.id)
         .bind(&task.space_id)
@@ -1010,6 +1013,7 @@ pub(super) async fn auth_restore_backup(
         .bind(&task.due_date)
         .bind(&task.punted_from_due_date)
         .bind(&task.punted_on_date)
+        .bind(&task.emoji)
         .bind(task.occurrences_completed)
         .bind(task.completed_ts)
         .bind(&task.notes)

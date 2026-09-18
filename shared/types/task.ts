@@ -20,7 +20,7 @@ export interface Task {
 	list_id: string;
 	project_id?: string;
 	area_id?: string;
-	tags: string[];
+	emoji?: string;
 	checklist: ChecklistItem[];
 	order: string;
 	recurrence_id?: string;
