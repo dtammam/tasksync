@@ -3,7 +3,7 @@ plan: feat-task-emoji
 harness: v2 · lean
 anchor: spec
 status: Building
-gate: APPROVED r2 @c816a220fbd3bd99d7fb50417a3672e7d11e170d — adversary, qa, security-brief
+gate: APPROVED r3 @6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88 — adversary, qa, security-brief
 ---
 
 # Feat — optional per-task emoji ("tag")
@@ -401,6 +401,22 @@ re-confirmed unchanged. No `{@html}` introduced; XSS surface unchanged. No
 new CRITICAL/HIGH/MEDIUM/LOW findings within scope.
 
 Gate: APPROVED r2 @c816a220fbd3bd99d7fb50417a3672e7d11e170d — security-brief
+
+### r3 (delta re-confirmation)
+
+Note: same tool-gap as r1/r2 — Architect appending on the seat's behalf;
+content below is the seat's own review, unedited.
+
+Delta re-review: commit is a cosmetic change (My Day "Group by tag" toggle
+button, text pill → icon, `web/src/routes/+page.svelte`) plus two
+documentation-only additions. Verified independently: no server code
+touched, no new field, no new render path — the toggle's `on:click`
+handler, localStorage persistence, and the tag-group-title rendering it
+gates are byte-identical to what was reviewed at r1/r2 (still plain
+`{...}` Svelte interpolation, no `{@html}` anywhere in `web/src`). No
+change within scope.
+
+Gate: APPROVED r3 @6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88 — security-brief
 
 ## Gate — qa (r1)
 
@@ -899,3 +915,127 @@ Fix for (1) re-verified: `npm run check`/`lint`/`test` (392 passed),
 confirming the header no longer crowds. Re-engaging the same r2 seat
 instances for r3 delta confirmation before merge, since the sha moves
 again.
+
+### r3 — delta re-review @6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88
+
+Scope per commit stat: `web/src/routes/+page.svelte` (the toggle markup/
+CSS), `docs/exec-plans/tech-debt-tracker.md` (new #049 row), and this plan
+doc's own progress log. No other files touched.
+
+- **Toggle behavior unchanged, verified by diff not by the commit
+  message's claim.** `git show` on `+page.svelte` confirms the element
+  keeps the exact same `data-testid="myday-group-by-tag-toggle"`,
+  `aria-pressed={groupByTagEnabled}`, and
+  `on:click={() => (groupByTagEnabled = !groupByTagEnabled)}` — byte-for-
+  byte identical logic. Only the CSS class (`chip ghost` → `icon-toggle`),
+  inner content (`Group by tag` text → `🏷️` glyph), and two new
+  accessibility attributes (`aria-label`, `title`, both `"Group by tag"`)
+  changed. No new state variable, no change to the `groupToggleLoaded`/
+  localStorage load-and-persist effects from r1/r2 (untouched by this
+  diff) — the off-by-default behavior I verified at r1 still applies
+  unchanged.
+- **Nothing else touches logic.** `tech-debt-tracker.md`'s new #049 row is
+  a docs-only entry; read it against the actual code
+  (`TaskRow.svelte`'s `.star-indicator` for `Task.priority` and
+  `.emoji-indicator` for `Task.emoji`, plus `palette.ts`'s ⭐/⏰/🎯 "Time /
+  priority" section) — the described overlap is accurate, and it's
+  explicitly flagged as observed-not-fixed, not a claim of a fix.
+- **Regression check:** `npm run test` → 392 passed (unchanged from r2,
+  no tests added or removed by this commit, consistent with a markup-only
+  change). `npm run check` / `npm run lint` clean. `npx playwright test
+  tests/e2e/task-tags.spec.ts --project=chromium` → 2 passed (the spec
+  asserts `data-testid`/`aria-pressed`, not visible text, so it needed no
+  changes and still passes against the new markup, as claimed).
+- No new findings. r1/r2 findings remain resolved (unaffected by this
+  commit — it doesn't touch `tags/palette.ts`, `tags/grouping.ts`,
+  `stores/tasks.ts`, or `shared/types/backup.ts`).
+
+Tree note: same pre-existing, unrelated `.claude/agents/security-brief.md`
+working-tree modification observed at r2 is still present, still
+untouched by me, still not part of the reviewed commit (confirmed via
+`git show --stat 6a24d2f`). No other untracked or modified files.
+
+Gate: APPROVED r3 @6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88 — adversary
+
+## Gate — qa (r3, delta re-confirmation)
+
+Re-reviewed at `6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88` (per commit stat,
+one substantive commit on top of the r2 sha — `git log --oneline
+c816a22..6a24d2f` also shows the intervening `40b4fa1` "docs: close the
+gate" commit, which is doc-only frontmatter/gate-status bookkeeping with
+zero code diff, confirmed via `git diff c816a22..40b4fa1 -- . ':!docs/...'`
+returning empty — not a separate round, doesn't change this verdict's
+scope). This round's actual diff (`git diff c816a22..6a24d2f`) touches
+only `web/src/routes/+page.svelte`, `docs/exec-plans/tech-debt-tracker.md`,
+and this plan doc.
+
+**(1) `task-tags.spec.ts` against the new markup — ran it for real, not
+assumed from the diff:**
+```
+npx playwright test tests/e2e/task-tags.spec.ts --project=chromium
+  ✓ list view groups into tag-headed sections in palette order, untagged at the bottom
+  ✓ My Day grouping is off by default and only groups once the toggle is enabled
+  2 passed
+```
+Confirmed why it still passes rather than just observing that it does: the
+spec's only touchpoints on this button are
+`page.getByTestId('myday-group-by-tag-toggle')` and
+`.toHaveAttribute('aria-pressed', ...)` (`task-tags.spec.ts:70-74`) — it
+never asserts on the button's visible text or class. The diff
+(`web/src/routes/+page.svelte`) confirms `data-testid`, `aria-pressed`,
+and the `on:click={() => (groupByTagEnabled = !groupByTagEnabled)}`
+handler are byte-identical to r2; only the CSS class name
+(`chip ghost` → `icon-toggle`), inner content (`Group by tag` text →
+`🏷️` glyph), and two new a11y attributes (`aria-label`, `title`, both
+`"Group by tag"`) changed. No change to `groupByTagEnabled`'s
+localStorage load/persist effects (`MY_DAY_GROUP_BY_TAG_KEY` block,
+untouched) — the off-by-default behavior verified at r1 still holds and
+is exercised by the same test.
+
+**(2) Standards / layer-boundary check on the CSS-only change:** no
+violation. The diff is confined to one `<script>`-free markup change
+(button element + class swap) and a `<style>` block edit inside
+`+page.svelte`; no new imports, no new store/data-layer access, no new
+component. The icon-only button correctly keeps (in fact improves)
+accessibility: an icon-only control with no visible text now carries both
+`aria-label="Group by tag"` and `title="Group by tag"`, whereas the prior
+text-pill relied on its own label text for its accessible name — this is
+a net improvement, not a regression, and doesn't cross any layer boundary
+(`docs/FRONTEND.md`'s components/routes-must-not-import-data/ rule is not
+implicated — no import changed at all in this file).
+
+**Full regression sweep** (not just the two requested checks, since the
+suites are fast and this branch is about to close):
+- `npm run lint` — clean.
+- `npm run check` — `svelte-check found 0 errors and 0 warnings`.
+- `npm run test` — `Test Files 26 passed (26)` / `Tests 392 passed (392)`
+  (unchanged from r2 — correct, this commit adds/removes no tests, it's a
+  markup-only fix with existing E2E coverage).
+- `npx playwright test --project=chromium --workers=2` (full suite, not
+  just the one spec) — `60 passed`, zero regressions anywhere else in the
+  shared My Day page this diff touches.
+- Did not re-run `cargo fmt`/`clippy`/`cargo test` — no server file is
+  touched by this commit (confirmed via the file list above), and r2's
+  server-side verification already stands.
+
+**Docs-only additions — spot-checked for accuracy, not just presence:**
+- `docs/exec-plans/tech-debt-tracker.md` #049 (Task.priority/Starred vs.
+  the tag palette's "Time / priority" section visually colliding):
+  checked against `TaskRow.svelte` — it does render both
+  `.star-indicator` (priority) and `.emoji-indicator` (tag) side by side
+  when a task is both starred and tagged ⭐/⏰/🎯, exactly as described.
+  Accurate, and correctly framed as observed-and-deferred, not claimed-fixed.
+  Doesn't block this gate (owner's own explicit call per the progress log).
+- The new progress-log entry's claims (392 passed, `task-tags.spec.ts` 2
+  passed, items 2/4 discussed-not-built) match what I independently
+  re-ran/verified above.
+
+**New issues introduced by this round:** none found.
+
+**Clean-tree check:** `git status` at review time shows only this
+addition plus the same pre-existing, out-of-scope
+`.claude/agents/security-brief.md` working-tree edit noted at r2 (still
+untouched by me, still not part of any reviewed commit). No other
+untracked or modified files.
+
+Gate: APPROVED r3 @6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88 — qa
