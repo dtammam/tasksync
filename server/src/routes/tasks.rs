@@ -30,6 +30,7 @@ pub(super) struct TaskRow {
     pub(super) due_date: Option<String>,
     pub(super) punted_from_due_date: Option<String>,
     pub(super) punted_on_date: Option<String>,
+    pub(super) emoji: Option<String>,
     pub(super) occurrences_completed: i64,
     pub(super) completed_ts: Option<i64>,
     pub(super) notes: Option<String>,
@@ -56,6 +57,7 @@ pub(super) struct CreateTask {
     pub(super) due_date: Option<String>,
     pub(super) punted_from_due_date: Option<String>,
     pub(super) punted_on_date: Option<String>,
+    pub(super) emoji: Option<String>,
     pub(super) notes: Option<String>,
     #[allow(dead_code)]
     pub(super) assignee_user_id: Option<String>,
@@ -78,6 +80,7 @@ pub(super) struct UpdateTaskMeta {
     pub(super) due_date: Option<String>,
     pub(super) punted_from_due_date: Option<String>,
     pub(super) punted_on_date: Option<String>,
+    pub(super) emoji: Option<String>,
     pub(super) notes: Option<String>,
     pub(super) occurrences_completed: Option<i64>,
     pub(super) completed_ts: Option<i64>,
@@ -99,7 +102,7 @@ pub(super) async fn get_tasks_for_ctx(
 ) -> Result<Vec<TaskRow>, StatusCode> {
     let rows = if ctx.role == Role::Admin {
         sqlx::query_as::<_, TaskRow>(
-            "select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
+            "select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where space_id = ?1 order by task_order asc",
         )
         .bind(&ctx.space_id)
         .fetch_all(&state.pool)
@@ -107,7 +110,7 @@ pub(super) async fn get_tasks_for_ctx(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
         sqlx::query_as::<_, TaskRow>(
-            "select t.id, t.space_id, t.title, t.status, t.list_id, t.my_day, t.priority, t.task_order as \"order\", t.updated_ts, t.created_ts, t.url, t.recur_rule, t.due_date, t.punted_from_due_date, t.punted_on_date, t.occurrences_completed, t.completed_ts, t.notes, t.assignee_user_id, t.created_by_user_id from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.task_order asc",
+            "select t.id, t.space_id, t.title, t.status, t.list_id, t.my_day, t.priority, t.task_order as \"order\", t.updated_ts, t.created_ts, t.url, t.recur_rule, t.due_date, t.punted_from_due_date, t.punted_on_date, t.emoji, t.occurrences_completed, t.completed_ts, t.notes, t.assignee_user_id, t.created_by_user_id from task t join list_grant g on g.list_id = t.list_id and g.space_id = t.space_id where t.space_id = ?1 and g.user_id = ?2 order by t.task_order asc",
         )
         .bind(&ctx.space_id)
         .bind(&ctx.user_id)
@@ -183,7 +186,7 @@ pub(super) async fn create_task_for_ctx(
     let punted_from_due_date = body.punted_from_due_date.clone();
     let punted_on_date = body.punted_on_date.clone();
     let insert_result = sqlx::query_as::<_, TaskRow>(
-		"insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, 0, null, ?14, ?15, ?16) returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+		"insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id) values (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0, null, ?15, ?16, ?17) returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&id)
 	.bind(&ctx.space_id)
@@ -198,6 +201,7 @@ pub(super) async fn create_task_for_ctx(
 	.bind(&body.due_date)
 	.bind(&punted_from_due_date)
 	.bind(&punted_on_date)
+	.bind(&body.emoji)
 	.bind(&body.notes)
     .bind(&assignee_user_id)
     .bind(&ctx.user_id)
@@ -210,7 +214,7 @@ pub(super) async fn create_task_for_ctx(
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
             let existing = sqlx::query_as::<_, TaskRow>(
-				"select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
+				"select id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id from task where id = ?1 and space_id = ?2 limit 1",
 			)
 			.bind(&id)
 			.bind(&ctx.space_id)
@@ -272,7 +276,7 @@ pub(super) async fn update_task_status_for_ctx(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-		"update task set status = ?1, completed_ts = case when ?1 = 'done' then coalesce(completed_ts, ?2) else null end, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+		"update task set status = ?1, completed_ts = case when ?1 = 'done' then coalesce(completed_ts, ?2) else null end, updated_ts = ?2 where id = ?3 and space_id = ?4 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
 	)
 	.bind(&body.status)
 	.bind(now)
@@ -439,7 +443,7 @@ pub(super) async fn update_task_meta_for_ctx(
 
     let now = chrono::Utc::now().timestamp_millis();
     let rec = sqlx::query_as::<_, TaskRow>(
-        "update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), priority = coalesce(?5, priority), url = coalesce(?6, url), recur_rule = coalesce(?7, recur_rule), due_date = coalesce(?8, due_date), punted_from_due_date = ?9, punted_on_date = ?10, occurrences_completed = coalesce(?11, occurrences_completed), completed_ts = case when ?12 is not null then ?12 when ?2 is null then completed_ts when ?2 = 'done' then coalesce(completed_ts, ?15) else null end, notes = coalesce(?13, notes), assignee_user_id = coalesce(?14, assignee_user_id), updated_ts = ?15 where id = ?16 and space_id = ?17 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
+        "update task set title = coalesce(?1, title), status = coalesce(?2, status), list_id = coalesce(?3, list_id), my_day = coalesce(?4, my_day), priority = coalesce(?5, priority), url = coalesce(?6, url), recur_rule = coalesce(?7, recur_rule), due_date = coalesce(?8, due_date), punted_from_due_date = ?9, punted_on_date = ?10, emoji = ?11, occurrences_completed = coalesce(?12, occurrences_completed), completed_ts = case when ?13 is not null then ?13 when ?2 is null then completed_ts when ?2 = 'done' then coalesce(completed_ts, ?16) else null end, notes = coalesce(?14, notes), assignee_user_id = coalesce(?15, assignee_user_id), updated_ts = ?16 where id = ?17 and space_id = ?18 returning id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id",
     )
     .bind(&body.title)
     .bind(&body.status)
@@ -451,6 +455,7 @@ pub(super) async fn update_task_meta_for_ctx(
     .bind(&body.due_date)
     .bind(&body.punted_from_due_date)
     .bind(&body.punted_on_date)
+    .bind(&body.emoji)
     .bind(body.occurrences_completed)
     .bind(body.completed_ts)
     .bind(&body.notes)

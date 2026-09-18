@@ -37,6 +37,7 @@ export interface SpaceBackupList {
 	name: string;
 	icon?: string;
 	color?: string;
+	default_emoji?: string;
 	list_order: string;
 }
 
@@ -63,6 +64,7 @@ export interface SpaceBackupTask {
 	due_date?: string;
 	punted_from_due_date?: string;
 	punted_on_date?: string;
+	emoji?: string;
 	occurrences_completed: number;
 	completed_ts?: number;
 	notes?: string;

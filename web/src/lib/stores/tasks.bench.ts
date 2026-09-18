@@ -33,7 +33,6 @@ function makeTask(i: number): Task {
 		order: `${i}`,
 		created_ts: Date.now() - i * 1000,
 		updated_ts: Date.now() - i * 500,
-		tags: [],
 		checklist: []
 	} as unknown as Task;
 }

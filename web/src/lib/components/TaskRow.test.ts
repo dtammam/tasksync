@@ -53,7 +53,6 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
 	status: 'pending',
 	list_id: 'list-1',
 	my_day: false,
-	tags: [],
 	checklist: [],
 	order: '1',
 	due_date: todayIso(),

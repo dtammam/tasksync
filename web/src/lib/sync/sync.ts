@@ -54,7 +54,7 @@ const mapApiTask = (t: SyncTask): Task => ({
 	dirty: false,
 	local: false,
 	priority: toTaskPriority(typeof t.priority === 'number' ? t.priority : undefined),
-	tags: [],
+	emoji: t.emoji ?? undefined,
 	checklist: [],
 	order: t.order,
 	url: t.url ?? undefined,
@@ -103,6 +103,7 @@ const toPushChange = (
 					due_date: task.due_date,
 					punted_from_due_date: task.punted_from_due_date,
 					punted_on_date: task.punted_on_date,
+					emoji: task.emoji,
 					notes: task.notes,
 					assignee_user_id: task.assignee_user_id
 				}
@@ -127,6 +128,7 @@ const toPushChange = (
 				due_date: task.due_date,
 				punted_from_due_date: task.punted_from_due_date,
 				punted_on_date: task.punted_on_date,
+				emoji: task.emoji,
 				notes: task.notes,
 				occurrences_completed: task.occurrences_completed,
 				assignee_user_id: task.assignee_user_id,
