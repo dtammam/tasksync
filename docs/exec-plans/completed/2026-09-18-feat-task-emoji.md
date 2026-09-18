@@ -2,7 +2,7 @@
 plan: feat-task-emoji
 harness: v2 · lean
 anchor: spec
-status: Building
+status: Shipped PR#141
 gate: APPROVED r3 @6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88 — adversary, qa, security-brief
 ---
 
@@ -1039,3 +1039,15 @@ untouched by me, still not part of any reviewed commit). No other
 untracked or modified files.
 
 Gate: APPROVED r3 @6a24d2fbaf7e7c3bcb0c8d2f7ccda7554c6edf88 — qa
+
+## Closed (2026-09-18)
+
+Merged to `main` as PR #141 (merge commit `6fa81f77321e6540f4856a1693144b85b8936c49`),
+after owner validation in beta on a real device. Moving to `completed/`.
+
+Next piece, per owner direction: an in-app Settings UI to manage the tag
+palette itself (add/edit/remove/reorder entries) — replaces the originally
+discussed tappable-quick-retag follow-up as the immediate next slice. Needs
+its own intake: this is very likely a `spec`-anchored piece in its own right,
+since a user-editable, presumably per-space-synced palette is a new data
+model, not just a UI layer on the existing static `tags/palette.ts` config.
