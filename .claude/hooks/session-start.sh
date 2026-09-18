@@ -11,11 +11,7 @@ echo "Branch: ${branch:-(detached)}"
 
 # Active plan(s) and their real status, read from the doc markers themselves.
 shopt -s nullglob 2>/dev/null || true
-plans=()
-for f in docs/exec-plans/active/*.md; do
-  [ "$(basename "$f")" = "README.md" ] && continue
-  plans+=("$f")
-done
+plans=(docs/exec-plans/active/*.md)
 if [ "${#plans[@]}" -gt 0 ]; then
   echo "Active plans (${#plans[@]}):"
   for p in "${plans[@]}"; do

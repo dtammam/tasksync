@@ -26,15 +26,18 @@ moved after the last approval, those markers are stale — re-run `/gate` first.
    Report any failure VERBATIM, with counts, before any framing. "Verified" is
    not "should work."
 
-2. **Mark the plan Shipped.** Set `status: Shipped <version>` in the status
-   block and move the doc from `docs/exec-plans/active/` to
-   `docs/exec-plans/completed/`. A terminal status left under `active/` is
-   exactly what `check-markers` flags.
+2. **Mark the plan Shipped.** Set `status: Shipped <version>` in `plan.md` and
+   move the **whole plan directory** from `docs/exec-plans/active/<slug>/` to
+   `docs/exec-plans/completed/<slug>/` (its `research/` and `design.md` travel
+   with it). A terminal status left under `active/` is exactly what
+   `check-markers` flags.
 
-3. **Commit, staged by name.** Stage each file explicitly — the moved plan doc
-   and the work's own files — by name. Never `git add .` / `git add -A`. Use an
-   imperative, descriptive commit message (HEREDOC for multi-line) with the
-   co-author trailer. Never `--no-verify`.
+3. **Commit the close-out, staged by name.** The work's own files are already
+   committed and gated (Phase 3/4). This commit is just the bookkeeping — the
+   plan doc moved to `completed/` with its `Shipped` status. Stage it explicitly
+   by name (never `git add .` / `git add -A`), commit with an imperative message
+   (HEREDOC for multi-line) and the co-author trailer, never `--no-verify`.
+   Because it touches only the plan doc, the gated approval stays valid.
 
 4. **Run the marker check before push.** Run `.harness/lib/check-markers.sh` and report
    its output. If it exits non-zero, STOP and fix the flagged markers — a stale
