@@ -2,7 +2,7 @@
 plan: feat-tag-palette-settings
 harness: v2 · lean
 anchor: spec
-status: Approved @10e7161
+status: Building
 design: Approved 2026-09-18 @10e7161
 gate: pending
 ---
@@ -228,24 +228,65 @@ Two nested sortable lists, reusing `Sidebar.svelte`'s existing
 
 ## Acceptance
 
-- [ ] An admin can add, edit (label and/or emoji), and remove a tag from the
+- [x] An admin can add, edit (label and/or emoji), and remove a tag from the
   in-app Tags settings section — no file edit required.
-- [ ] An admin can reorder entries within a section and reorder sections
+  (`TagPaletteSettings.svelte`; `TagPaletteSettings.test.ts`)
+- [x] An admin can reorder entries within a section and reorder sections
   themselves, and that order is what list/My Day grouping and the palette
-  picker use afterward.
-- [ ] A non-admin cannot reach the edit UI (gated the same way Lists/Members/
-  Backups are).
-- [ ] Deleting or changing the emoji of a palette entry does not alter any
+  picker use afterward. (`paletteOrder`/`rankInPalette` flatten section-then-
+  entry array order; unchanged since Piece 3's `grouping.test.ts`, now fed by
+  the live store instead of a static const)
+- [x] A non-admin cannot reach the edit UI (gated the same way Lists/Members/
+  Backups are). (`settingsMenu.ts` `adminOnly: true`;
+  `tag-palette-settings.spec.ts` "non-admin cannot see...")
+- [x] Deleting or changing the emoji of a palette entry does not alter any
   existing task's or list's stored `emoji`/`default_emoji` value; those tasks
   render via the existing unrecognized-emoji fallback, and the UI states this
-  before the action is taken.
-- [ ] A space that has never touched this feature (`tag_palette_json` is
+  before the action is taken. Structurally guaranteed: `PUT /tags` only ever
+  writes `space.tag_palette_json`, never touches `task`/`list` rows; the
+  unrecognized-emoji fallback itself was built and tested in Piece 3. The
+  settings panel's persistent note states this before any delete/edit action.
+- [x] A space that has never touched this feature (`tag_palette_json` is
   null) sees the same palette contents/order as today, unchanged.
-- [ ] Saving a palette with a duplicate emoji is rejected client-side and
+  (`tag_palette_defaults_to_null_until_saved` server test; `tagPalette.test.ts`
+  "serves the default palette when the server has none saved"; E2E)
+- [x] Saving a palette with a duplicate emoji is rejected client-side and
   server-side with a clear error, not silently accepted.
-- [ ] Cold offline boot (no hydration yet) still renders a non-empty palette
-  (the built-in default) in the picker and in grouping.
-- [ ] An admin can add a new section and a new entry, and can delete a
+  (`saving_a_palette_with_duplicate_emoji_is_rejected` server test;
+  `TagPaletteSettings.test.ts` "rejects saving... client-side")
+- [x] Cold offline boot (no hydration yet) still renders a non-empty palette
+  (the built-in default) in the picker and in grouping. (`tagPalette.test.ts`
+  "seeds the default palette before any hydration" / "clears to the default
+  palette when not authenticated")
+- [x] An admin can add a new section and a new entry, and can delete a
   section, with a confirm that names the entries it will take with it.
-- [ ] Emptying a section, or the entire palette, to zero is allowed and
+  (`TagPaletteSettings.test.ts` cascade-confirm tests)
+- [x] Emptying a section, or the entire palette, to zero is allowed and
   renders a plain empty state rather than a validation error.
+  (`saving_an_empty_palette_is_allowed` server test; `TagPaletteSettings.test.ts`
+  "shows an empty state...")
+
+## Progress log
+
+Built end to end, Steps 1-8, all in-scope. Two deviations from the approved
+design, both caught before the gate rather than by a reviewer, neither
+touching an acceptance criterion or public interface the owner approved:
+
+- **D5's endpoint shape and D9's cascade rationale were corrected before any
+  code was written** (see the `docs: correct tag-palette-settings design
+  before implementing` commit) — `/spaces/:id/tag-palette` doesn't match this
+  codebase's routing convention (fixed-path resources, space from
+  `ctx_from_headers`) and became `/tags`; `delete_list`'s actual behavior is
+  to 409 on a non-empty list, not cascade, so section cascade-delete is
+  justified by D4 (safe because non-destructive), not by a nonexistent
+  precedent.
+- **`EmojiPicker.svelte` and `tags/grouping.ts` DO need import changes**,
+  contrary to the design's "no changes at all" claim — `EmojiPicker` must
+  subscribe to the live `$tagPalette` store reactively, or an owner's edits
+  would never reach the one UI surface tags actually get assigned from. Both
+  changes are import-path-only; neither component's logic changed.
+
+Test coverage: 6 new server tests, 8 new `tagPalette` store tests, 8 new
+`TagPaletteSettings.svelte` tests, 3 new E2E tests (stable across 3
+consecutive local chromium runs) — 408 web unit tests and 101 server tests
+total, all passing; lint/clippy/fmt clean throughout.
