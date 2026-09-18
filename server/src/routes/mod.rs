@@ -2,6 +2,7 @@ mod auth;
 mod integrations;
 mod lists;
 mod sync;
+mod tags;
 mod tasks;
 pub(super) mod types;
 
@@ -9,6 +10,7 @@ pub use auth::auth_routes;
 pub use integrations::integration_routes;
 pub use lists::list_routes;
 pub use sync::sync_routes;
+pub use tags::tag_routes;
 pub use tasks::task_routes;
 pub use types::validate_boot_secrets;
 
@@ -37,6 +39,7 @@ mod tests {
     };
     use super::lists::{create_list, delete_list, get_lists, update_list, CreateList, UpdateList};
     use super::sync::{sync_pull, sync_push, SyncPullBody, SyncPushBody, SyncPushChange};
+    use super::tags::{get_tag_palette, put_tag_palette, TagPaletteEntry, TagPaletteSection};
     use super::tasks::{
         create_task, delete_task, get_tasks, update_task_meta, update_task_status, CreateTask,
         UpdateTaskMeta, UpdateTaskStatus,
@@ -1836,6 +1839,115 @@ mod tests {
             .expect("delete list should succeed");
 
         assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn tag_palette_defaults_to_null_until_saved() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let Json(palette) =
+            get_tag_palette(State(state), headers).await.expect("get tag palette should succeed");
+        assert!(palette.is_none(), "unsaved space should report null, not a server-side default");
+    }
+
+    #[tokio::test]
+    async fn admin_can_save_and_read_back_a_tag_palette() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let sections = vec![TagPaletteSection {
+            section: "Custom".to_string(),
+            entries: vec![TagPaletteEntry {
+                emoji: "🚀".to_string(), label: "Launch".to_string()
+            }],
+        }];
+
+        let Json(saved) = put_tag_palette(State(state.clone()), headers.clone(), Json(sections))
+            .await
+            .expect("put tag palette should succeed");
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].entries[0].emoji, "🚀");
+
+        let Json(reloaded) =
+            get_tag_palette(State(state), headers).await.expect("get tag palette should succeed");
+        let reloaded = reloaded.expect("saved palette should no longer be null");
+        assert_eq!(reloaded.len(), 1);
+        assert_eq!(reloaded[0].section, "Custom");
+        assert_eq!(reloaded[0].entries[0].label, "Launch");
+    }
+
+    #[tokio::test]
+    async fn contributor_cannot_save_tag_palette() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-contrib", "s1");
+
+        let sections = vec![TagPaletteSection {
+            section: "Custom".to_string(),
+            entries: vec![TagPaletteEntry {
+                emoji: "🚀".to_string(), label: "Launch".to_string()
+            }],
+        }];
+
+        let result = put_tag_palette(State(state), headers, Json(sections)).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::FORBIDDEN));
+    }
+
+    #[tokio::test]
+    async fn saving_a_palette_with_duplicate_emoji_is_rejected() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let sections = vec![
+            TagPaletteSection {
+                section: "One".to_string(),
+                entries: vec![TagPaletteEntry {
+                    emoji: "⭐".to_string(),
+                    label: "Starred".to_string(),
+                }],
+            },
+            TagPaletteSection {
+                section: "Two".to_string(),
+                entries: vec![TagPaletteEntry {
+                    emoji: "⭐".to_string(),
+                    label: "Also starred".to_string(),
+                }],
+            },
+        ];
+
+        let result = put_tag_palette(State(state), headers, Json(sections)).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::BAD_REQUEST));
+    }
+
+    #[tokio::test]
+    async fn saving_an_empty_palette_is_allowed() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let Json(saved) = put_tag_palette(State(state), headers, Json(vec![]))
+            .await
+            .expect("saving an empty palette should succeed");
+        assert!(saved.is_empty());
+    }
+
+    #[tokio::test]
+    async fn saving_a_palette_entry_with_empty_label_is_rejected() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-admin", "s1");
+
+        let sections = vec![TagPaletteSection {
+            section: "One".to_string(),
+            entries: vec![TagPaletteEntry { emoji: "⭐".to_string(), label: "".to_string() }],
+        }];
+
+        let result = put_tag_palette(State(state), headers, Json(sections)).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::BAD_REQUEST));
     }
 
     #[tokio::test]
