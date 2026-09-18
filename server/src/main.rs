@@ -9,7 +9,8 @@ use axum::{
     Router,
 };
 use routes::{
-    auth_routes, integration_routes, list_routes, sync_routes, task_routes, validate_boot_secrets,
+    auth_routes, integration_routes, list_routes, sync_routes, tag_routes, task_routes,
+    validate_boot_secrets,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
@@ -140,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/auth", auth_routes(&pool))
         .nest("/lists", list_routes(&pool))
         .nest("/tasks", task_routes(&pool))
+        .nest("/tags", tag_routes(&pool))
         .nest("/sync", sync_routes(&pool))
         .nest("/api", integration_routes(&pool))
         .layer(

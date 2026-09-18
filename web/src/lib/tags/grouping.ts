@@ -1,4 +1,4 @@
-import { tagLabel, tagRank } from './palette';
+import { tagLabel, tagRank } from '$lib/stores/tagPalette';
 
 export interface TagGroup<T> {
 	key: string;
