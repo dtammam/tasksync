@@ -314,6 +314,7 @@
 		if (!name) return;
 		busy = true;
 		listError = '';
+		listMessage = '';
 		try {
 			await lists.createRemote(
 				name,
@@ -346,6 +347,7 @@
 			return;
 		busy = true;
 		listError = '';
+		listMessage = '';
 		try {
 			await lists.updateRemote(id, {
 				name: name || undefined,
@@ -388,6 +390,7 @@
 
 		busy = true;
 		listError = '';
+		listMessage = '';
 		try {
 			await Promise.all(updates);
 		} catch (err) {
@@ -441,6 +444,7 @@
 		});
 
 		listError = '';
+		listMessage = '';
 		try {
 			await Promise.all(updates);
 		} catch (err) {
