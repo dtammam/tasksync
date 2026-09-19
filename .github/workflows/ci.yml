@@ -52,6 +52,13 @@ jobs:
       - name: Playwright smoke gate (push)
         if: github.event_name == 'push'
         run: npm run test:e2e:smoke
+      - name: Upload Playwright trace/report (smoke gate failure)
+        if: failure() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-smoke
+          path: web/test-results
+          retention-days: 7
 
   web-e2e-matrix:
     if: github.event_name == 'pull_request'
@@ -92,6 +99,13 @@ jobs:
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Playwright full suite (${{ matrix.browser }})
         run: npx playwright test --project=${{ matrix.browser }}
+      - name: Upload Playwright trace/report (${{ matrix.browser }} failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: web/test-results
+          retention-days: 7
 
   server:
     runs-on: ubuntu-latest
