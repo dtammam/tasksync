@@ -2024,6 +2024,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn admin_cannot_bulk_clear_a_different_spaces_list_by_id() {
+        // `list.id` is a global primary key (not composite with space_id), so
+        // two lists can never literally share an id across spaces -- the
+        // meaningful boundary to test isn't "colliding ids" (schema-
+        // impossible) but whether an s1-admin can reach into space s2's own
+        // real list, by its real id, and delete its tasks. This is exactly
+        // what the `and space_id = ctx.space_id` clause in the DELETE
+        // statement defends against; dropping that clause would make this
+        // test fail (the s2 task would be deleted despite the caller being
+        // authenticated as an s1 admin).
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+
+        sqlx::query("insert into space (id, name) values ('s2', 'Other Space')")
+            .execute(&pool)
+            .await
+            .expect("insert second space");
+        sqlx::query(
+            "insert into list (id, space_id, name, list_order) values ('l-other-space-real', 's2', 'Other Space List', 'a')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert second-space list");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values ('t-cross-space-target', 's2', 'must survive', 'pending', 'l-other-space-real', 0, 0, 'a', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert task in other space's list");
+
+        let headers = auth_headers(&state, "u-admin", "s1");
+        let Json(response) =
+            clear_list_tasks(State(state), headers, Path("l-other-space-real".to_string()))
+                .await
+                .expect(
+                    "clearing a list id that doesn't belong to the caller's space is a safe no-op",
+                );
+        assert_eq!(
+            response.deleted_count, 0,
+            "an s1 admin must not be able to delete s2's tasks by supplying s2's real list id"
+        );
+
+        let survived: i64 =
+            sqlx::query_scalar("select count(1) from task where id = 't-cross-space-target'")
+                .fetch_one(&pool)
+                .await
+                .expect("check cross-space task");
+        assert_eq!(survived, 1, "the other space's task must be completely untouched");
+    }
+
+    #[tokio::test]
     async fn delete_list_succeeds_after_bulk_clear() {
         let pool = setup_pool().await;
         let state = test_state(&pool);
