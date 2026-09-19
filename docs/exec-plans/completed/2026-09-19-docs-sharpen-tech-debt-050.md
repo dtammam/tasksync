@@ -2,8 +2,8 @@
 plan: docs-sharpen-tech-debt-050
 harness: v2 · lean
 anchor: docs-and-content (slim gate, adversary only)
-status: Changes requested
-gate: CHANGES r1 @6855878814a85105a7b3258407a296b489d33b53 — adversary
+status: Shipped PR#147
+gate: APPROVED r2 @5466f7b587a33148c9d9690ab4453615f80be022 — adversary
 ---
 
 # docs: sharpen tech-debt #050 with real trace evidence, close the PTR half

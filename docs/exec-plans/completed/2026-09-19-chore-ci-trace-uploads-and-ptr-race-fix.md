@@ -2,7 +2,7 @@
 plan: chore-ci-trace-uploads-and-ptr-race-fix
 harness: v2 · lean
 anchor: outcome
-status: Gate:APPROVED r1 @ccf77bc
+status: Shipped PR#146
 gate: APPROVED r1 @ccf77bc — adversary, qa
 ---
 

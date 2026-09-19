@@ -2,7 +2,7 @@
 plan: feat-bulk-clear-list-tasks
 harness: v2 · lean
 anchor: spec
-status: Gate:APPROVED r5 @8877885
+status: Shipped PR#148
 gate: APPROVED r5 @8877885 — adversary, qa, security-brief
 ---
 

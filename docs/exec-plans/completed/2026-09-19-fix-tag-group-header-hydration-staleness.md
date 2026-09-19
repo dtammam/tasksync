@@ -2,7 +2,7 @@
 plan: fix-tag-group-header-hydration-staleness
 harness: v2 · lean
 anchor: outcome
-status: Gate:APPROVED r1 @6b7610a
+status: Shipped PR#145
 gate: APPROVED r1 @6b7610ac8cedacd1b52c5d609bcf2735189944df — adversary, qa
 ---
 

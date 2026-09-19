@@ -2,7 +2,7 @@
 plan: feat-tag-palette-settings
 harness: v2 · lean
 anchor: spec
-status: Gate:APPROVED r1 @ad3c0357
+status: Shipped PR#143
 design: Approved 2026-09-18 @10e7161
 gate: APPROVED r1 @ad3c0357fcbde3c2aa05aa99b8754b6e9c8084be — adversary, qa, security-brief
 ---
