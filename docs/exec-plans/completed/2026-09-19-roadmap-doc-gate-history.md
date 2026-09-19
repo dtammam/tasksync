@@ -3,7 +3,7 @@ plan: roadmap-resilience-emoji-bulk-gate-history
 harness: v2 · lean
 anchor: outcome
 status: Shipped (relocation)
-gate: APPROVED r2 @3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c — adversary
+gate: pending
 ---
 
 # Roadmap doc's own edit-history gate record
@@ -482,3 +482,147 @@ only the four originally-in-play paths (three staged, one pre-existing
 unstaged `.claude/agents/security-brief.md`, still out of scope).
 
 Gate: APPROVED r2 @3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c-staged — adversary
+
+## Gate — adversary, PR#152 review (r1)
+
+Reviewed `f9193b171cfd01029793e2dff5e2bbea2f19fd12` against `main`
+(`4d80da6`). Treated the "verbatim" claim with the same suspicion PR#150
+earned (that PR claimed "verbatim" while silently condensing content and
+citing a nonexistent upstream bug report) — verified everything below by
+direct measurement, not by trusting the commit message.
+
+### Claim 1 — "verbatim, nothing reworded" — CONFIRMED, zero diff
+
+Reconstructed the pre-PR roadmap doc (`git show main:docs/exec-plans/active/
+2026-09-16-roadmap-resilience-emoji-bulk.md`), located the six gate rounds
+by `grep -n '^Gate:'` / `^### Gate` / `^## Piece` (old lines 228–368 =
+Piece 1 r1+r2, old lines 375–667 = post-migration-cleanup r1,
+park-add-task-resilience-intake r1, Piece 3 close-out r1+r2 — the
+`## Progress log` block at old lines 370–373 sits *between* these and was
+correctly excluded, since it was supposed to stay in the roadmap). Diffed
+that reconstruction, concatenated, against the new file's lines 50–190 and
+192–484 (excluding only the new intro/frontmatter and the one added
+`## Piece 1 — Harness v2 migration, gate history` grouping subheading, both
+pre-authorized by the brief):
+
+```
+diff old_combined.txt new_combined.txt   # 434 lines each side
+ZERO DIFF
+```
+
+Byte-for-byte identical across all 434 lines. All 6 `Gate:` lines present
+with unaltered shas (`f8a429b...`×2, `54dfde5...`, `039a87f...`,
+`3eb4e6e8...`×2), all 8 `### Gate` / `## Piece...` headers present, and
+CRITICAL/WARNING occurrence counts (6/4) match old-to-new exactly. Nothing
+condensed, reworded, or dropped.
+
+### Claim 3 — surviving roadmap content intact — CONFIRMED
+
+`diff` of old lines 1–227 (frontmatter through end of Piece 1's acceptance
+block) against new lines 1–227: zero diff. `diff` of the old `## Progress
+log` block (370–373) against its new location (241–244): zero diff. Status
+table, anchor recommendations, Piece 2/3/4 descriptions, Piece 1's
+acceptance bullets, and the progress log are all untouched.
+
+### Claim 4 — no fabricated claims in the new prose — CONFIRMED
+
+Read both added passages in full (roadmap doc's pointer paragraph; the
+new completed/ doc's intro) and checked every factual assertion at the
+primary source:
+- `harness-markers.md:104-107` (read directly): "An umbrella / roadmap doc
+  holds status *pointers*... never its own bound `Gate:` / `Approved`
+  markers" — matches the claim verbatim, not paraphrased incorrectly.
+- Ran `bash .harness/lib/check-markers.sh docs/exec-plans` against a
+  detached worktree of `main` (pre-PR): 5 issues, including
+  `approved work @3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c is already in
+  'main' but plan not Shipped — run /release` — the exact flag and exact
+  sha the new doc's intro describes.
+- Cross-checked the same sha/flag against PR#151's own completed doc
+  (`docs/exec-plans/completed/2026-09-19-chore-harness-update-v2.1.1.md`,
+  lines 66-70, 146-160): identical sha, identical flag text, same
+  characterization ("umbrella doc... one piece's gate-and-merge landed
+  while the umbrella document itself is intentionally still Draft"). No
+  fabricated citation, no invented upstream report — everything traces to
+  a file in this tree.
+
+### Claim 5 — check-markers.sh result — CONFIRMED, and confirmed causal
+
+`bash .harness/lib/check-markers.sh docs/exec-plans` on this HEAD:
+`check-markers: clean (docs/exec-plans)`, exit 0 — 0 issues, first clean
+run this session. Isolated via a detached worktree of `main`
+(`4d80da6`, pre-PR): same command reports 5 issues (the same 4
+pre-existing stale-approval flags plus the "merged but not released"
+flag on `3eb4e6e8...`, all on the roadmap doc). This confirms the PR is
+what fixed it, not a coincidence.
+
+### Claim 6 — scope — CONFIRMED
+
+`git diff --name-only main...HEAD`: exactly the two files claimed (roadmap
+doc modified — 12 insertions / 434 deletions; new completed/ doc added —
+484 insertions). No source code, no other doc touched.
+
+### Claim 7 — new doc's own frontmatter — CRITICAL, blocks
+
+`gate: APPROVED r2 @3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c — adversary`
+in this file's own frontmatter is **not a description of this file's own
+review**. `3eb4e6e8...` is the Piece 3 close-out r2 verdict — an approval
+of a *completely different diff* (adding a `## Closed` section + rename
+to `completed/2026-09-18-feat-task-emoji.md`), merged earlier the same day
+this new file's content originated. This brand-new file
+(`docs/exec-plans/completed/2026-09-19-roadmap-doc-gate-history.md`) did
+not exist before this PR (`git log --oneline -- <this file>` shows its
+whole history is this PR's own single commit `f9193b1`) and its own
+creation — the relocation mechanics, the new intro prose, the new pointer
+paragraph — had not been reviewed by anyone until this section was
+written. Reusing an unrelated sha's approval to describe an unreviewed
+act is exactly the "stale/lying marker" failure class (a `Gate:`/status
+line whose `@sha` no longer matches its content).
+
+This is not a hypothetical: this exact repo just fixed the identical bug
+one PR ago. `git log --oneline main | grep -n 150` plus reading
+`docs/exec-plans/completed/2026-09-19-chore-plan-doc-lifecycle-cleanup.md`'s
+own r2→r3→r4 gate history shows PR#150 shipped with its frontmatter
+`gate:` bound to a *different* PR's (#149's) closing sha, was flagged at
+r2 as a "frontmatter conflation," and was explicitly rebound at r3/r4
+(commit `2e99dd5`, "bind final frontmatter to PR#150's own r3 approval")
+before that doc's final approval — i.e., the very convention this repo
+just established is that a completed/ doc's frontmatter `gate:` must bind
+to *that doc's own* last-reviewed sha, not a sha it happens to contain or
+relocate.
+
+Tooling does not catch this: `check-markers.sh:103-110`'s self-consistency
+check for `completed/` docs extracts only the verdict *word*
+(`APPROVED`/`CHANGES`) via `grep -oE 'Gate:[[:space:]]*(APPROVED|CHANGES)'`
+and compares that word to the frontmatter — it does not compare shas. Once
+this section's own `Gate: ... — adversary` line is appended below (last
+`Gate:` line in the body becomes mine), `check-markers.sh` will still see
+`APPROVED` as a substring of the frontmatter and report clean, silently
+missing the mismatch. This makes it a real, tool-invisible marker-hygiene
+gap, not a cosmetic one — exactly the class of finding the standing
+disciplines require hunting for.
+
+**Fix required:** rebind this file's frontmatter `gate:` to this review's
+own verdict/sha once approved (matching PR#150's precedent at commit
+`2e99dd5`), not to `3eb4e6e8...`. `status: Shipped (relocation)` can stay
+if the frontmatter `gate:` correctly names the review of the relocation
+itself.
+
+### Tree hygiene
+
+No destructive operations. Read-only greps/diffs/execution of
+`check-markers.sh` throughout. The only non-read step was `git worktree
+add --detach` against `main` to isolate the pre-PR `check-markers.sh`
+baseline, removed immediately after via `git worktree remove --force`
+(confirmed via `git worktree list` showing only this checkout afterward).
+`git status --porcelain -uall` on the primary checkout is clean throughout
+this review apart from this appended section.
+
+### Verdict
+
+Claims 1, 3, 4, 5, 6 verified true by direct measurement — the relocation
+itself is sound and matches the "verbatim" claim exactly, unlike PR#150's
+initial round. Claim 7 (frontmatter self-description) is a real,
+tool-invisible marker-hygiene defect with a directly-applicable in-repo
+precedent for the fix. This blocks per that precedent.
+
+Gate: CHANGES r1 @f9193b171cfd01029793e2dff5e2bbea2f19fd12 — adversary
