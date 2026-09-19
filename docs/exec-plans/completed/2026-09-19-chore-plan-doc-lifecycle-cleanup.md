@@ -338,3 +338,42 @@ untouched throughout this entire review thread.
 No new findings this round.
 
 Gate: APPROVED r3 @2bde7dd87298a8b48c0b4d27a69ad360ebf01790 — adversary
+
+## Gate — adversary, PR#150 review (r4)
+
+Re-reviewed `2e99dd5b7c5eee021033908cbc961d7751398e6d`, one commit ahead of
+the `2bde7dd` approved at r3.
+
+### Diff scope — confirmed as claimed
+`git diff 2bde7dd 2e99dd5` contains exactly two things: (1) the 2-line
+frontmatter rebind (`status: Shipped PR#149 (+ PR#150 follow-up)` →
+`Shipped PR#149, PR#150`; `gate: APPROVED r2 @1cf9d838...` →
+`gate: APPROVED r3 @2bde7dd87298a8b48c0b4d27a69ad360ebf01790 — adversary`),
+and (2) my own r3 section, previously sitting uncommitted in the working
+tree, captured into a commit for the first time — read line-by-line against
+the diff output and confirmed byte-identical to what I wrote, nothing
+altered in transit. `git diff --name-status main...HEAD` still shows only
+this one new file relative to `main`. No other file touched.
+
+### Frontmatter — deferred item now resolved, accurate
+`status: Shipped PR#149, PR#150` and `gate: APPROVED r3 @2bde7dd...` now
+bind to this doc's own last-reviewed commit rather than reusing PR#149's
+separate gate sha, resolving the conflation flagged (non-blocking) at r2.
+`check-markers.sh` doesn't scan `completed/` regardless, so this was never
+a tooling-enforced concern — it was a readability one, and it's now
+resolved by construction.
+
+### Baselines re-confirmed unchanged
+`check-markers.sh docs/exec-plans`: 5 issues, identical file and lines to
+`main`'s pre-existing baseline. Bulk-check-uncheck-tasks plan doc: `git diff
+main -- .../plan.md` still empty, still fully restored.
+
+### Tree hygiene
+Only file modified this round: this appendix, to the same file. `git
+status --porcelain` otherwise clean, no stray worktrees, pre-existing
+`stash@{0}` untouched throughout this entire four-round thread.
+
+No new findings. All prior findings (r1, r2) confirmed fixed as prescribed
+and re-verified against their respective fix commits.
+
+Gate: APPROVED r4 @2e99dd5b7c5eee021033908cbc961d7751398e6d — adversary
