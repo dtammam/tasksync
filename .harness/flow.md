@@ -27,15 +27,45 @@ the user decides. Propose the acceptance for this work, and confirm once.
   by blast radius (data models & interfaces first). Approve the batch or override
   individual IDs.
 
-Either way a plan doc now exists with a bound status block. There is always a
-written acceptance the gate can measure against; a bullet the Adversary cannot
-measure is itself a finding — send it back here.
+Either way a **plan directory** now exists — `docs/exec-plans/active/<date>-<slug>/`
+with a `plan.md` carrying the bound status block, the acceptance, and a `next:`
+line. Research and design are anchor-scaled siblings (below), not crammed into
+one file. There is always a written acceptance the gate can measure against; a
+bullet the Adversary cannot measure is itself a finding — send it back here.
+
+## Phase 1.5 — Research  *(when the work warrants it)*
+
+Run this when the piece turns on something you have not confirmed — an
+unfamiliar API, a library's real behavior, prior art, how the existing code
+actually works. The agent decides whether it is needed, the same way it proposes
+the anchor; a trivial change skips it.
+
+- Write findings to `<slug>/research/<topic>.md`, one file per topic, and **cite
+  the source** for anything you did not derive yourself — a file path, a repo, a
+  URL, the dependency's own code (never "the docs say"). Research exists to
+  change decisions; stop when more reading would not change one.
+- **Don't manufacture noise.** Write an artifact only for a finding that (a)
+  changed a decision AND (b) can't be cheaply re-derived from the code or git
+  history — a verified third-party behavior, a constraint, a ruled-out approach,
+  the *why* behind a non-obvious choice. A trivial lookup, something obvious from
+  the code, or a fact git already records does NOT get a file. Research captures
+  what you had to find out, not a log of everything you read.
+- **Invalidation rule (non-negotiable):** if research contradicts a decision the
+  user already accepted, you MUST surface it and let them re-decide — never
+  quietly resolve the contradiction yourself. They accepted that decision on
+  different information.
+- The research artifacts are referenced by the design and available to the gate,
+  so the Adversary can check a claim against its cited source.
 
 ## Phase 2 — Design & plan  *(depth = anchor)*
 
-- **outcome:** a short approach note, or nothing. No formal gate.
-- **spec:** a self-contained design → record `design: Approved <date> @<sha>`,
-  then a plan of `Step N:` items → `status: Approved @<sha>`.
+- **outcome:** a short approach note in `plan.md`, or nothing. No formal gate.
+- **spec:** write `<slug>/design.md` — **self-contained** (no links to local
+  planning files, so it survives being read outside the repo), with fixed
+  sections: Overview, Requirements, Architecture, Components & Interfaces, Data
+  Models, Error Handling, Testing Strategy. Approve it → `design: Approved <date>
+  @<sha>`. Then a plan of `Step N:` items in `plan.md`, **each with a Demo** (the
+  observable behavior available once the step is done) → `status: Approved @<sha>`.
 - **tdd:** as spec, and each acceptance criterion names the test that will bind
   it before any code exists.
 
@@ -47,11 +77,18 @@ public interface, a data model, an acceptance criterion, or user-visible
 behavior halts and returns to the user, whatever the involvement setting** — the
 approval covered the design as written.
 
+**Commit the work before gating** (staged by name; a WIP/checkpoint commit is
+fine). The gate binds its verdict to a commit sha, and the reviewers mutate
+against a committed tree — so a real commit must exist before Phase 4. This
+commit is what ships; do not rewrite it after approval (that would void the
+bound verdict). A fix in the gate's fix loop is a *new* commit, re-gated.
+
 ## Phase 4 — Gate  *(always)*
 
-Run the gate protocol (`.harness/lib/gate-protocol.md`). Seats are set by `.harness/scrutiny.toml`
-against the diff — never by your judgment; you may only escalate. Each seat
-writes `Gate: <verdict> r<n> @<sha> — <seat>`.
+Run the gate protocol (`.harness/lib/gate-protocol.md`) against the committed
+work — `<sha>` is `HEAD`. Seats are set by `.harness/scrutiny.toml` against the
+diff — never by your judgment; you may only escalate. Each seat writes
+`Gate: <verdict> r<n> @<sha> — <seat>`.
 
 **The fix loop:** on `CHANGES`, fix, then re-engage the **same seat instances**
 for a delta re-review; they re-verify their findings (and their own
@@ -63,9 +100,12 @@ required seat is `APPROVED` at the same final sha. Never self-merge.
 - **outcome:** you verify the result yourself.
 - **spec / tdd:** verify against the acceptance criteria / the tests.
 
-Then: update the plan's status marker (`Shipped <version>` and move the doc to
-`completed/`), commit staged-by-name, and run any release ceremony. Run
-`.harness/lib/check-markers.sh` before push — a stale approval never leaves the machine.
+The work is already committed and gated (Phase 3/4). Now close it out: set the
+plan's status to `Shipped <version>`, move the doc to `completed/`, and commit
+that **as its own bookkeeping commit** — it touches only the plan doc, so it
+does not change the reviewed code and the approval stays valid. Then run any
+release ceremony and push. Run `.harness/lib/check-markers.sh` before push — a
+stale approval never leaves the machine.
 
 ## The shape, at a glance
 
