@@ -2,8 +2,8 @@
 plan: feat-bulk-clear-list-tasks
 harness: v2 · lean
 anchor: spec
-status: Draft
-gate: pending
+status: Gate:APPROVED r4 @a6cf836
+gate: APPROVED r4 @a6cf836 — adversary, qa, security-brief
 ---
 
 # Bulk-clear all tasks in a list
@@ -315,6 +315,22 @@ CRITICAL/HIGH/MEDIUM/LOW; one non-blocking INFO on tombstone-insert
 batching, unchanged and still not a security concern at this scale).
 
 Gate: APPROVED r2 @209d969 — security-brief
+
+### security-brief — r3 @a6cf836
+
+Re-engaged per the coordinator's note (tree moved `209d969` -> `a6cf836`).
+Independently verified rather than accepting the summary: read
+`bare_pool()` (`server/src/routes/mod.rs:126-138`) directly. It sits inside
+the same `mod tests` block as `setup_pool()` (opened at line 18, still in
+scope), applies the identical `SqlitePoolOptions::new().max_connections(1)`
+fix for the same documented reason (SQLite in-memory mode being
+per-connection, not per-URI). `test_state()` immediately below it
+(line 140) just wraps whatever pool it's handed — no production code path
+touches `bare_pool()`. `clear_list_tasks` and the rest of
+`server/src/routes/lists.rs` are unaffected (not re-touched by this
+commit). No new security surface; findings from r1/r2 stand unchanged.
+
+Gate: APPROVED r3 @a6cf836 — security-brief
 
 ### qa — r1 @41c10cd
 
@@ -906,3 +922,146 @@ verdict line below. `.claude/agents/security-brief.md` remains modified
 from before this review started (pre-existing, not touched by me).
 
 Gate: CHANGES r3 @209d969 — qa
+
+### adversary — r4 @a6cf836
+
+Delta re-review of the second pool-flake fix (qa's r3 finding: `bare_pool()`
+had the byte-identical unpinned `SqlitePool::connect("sqlite::memory:")`
+anti-pattern as the already-fixed `setup_pool()`).
+
+**Fix verified mechanically identical to the already-validated r3
+pattern.** Read `bare_pool()` (`server/src/routes/mod.rs`, inside the same
+`mod tests` block as `setup_pool()`): the diff `209d969..a6cf836` adds the
+exact same `SqlitePoolOptions::new().max_connections(1)` call before
+`.connect("sqlite::memory:")`, using the same `sqlx::sqlite::SqlitePoolOptions`
+import already brought into scope for `setup_pool()`. The primary-source
+root-cause proof I did in r3 (vendored `sqlx-core`'s default
+`max_connections: 10`, SQLite's per-connection `:memory:` isolation)
+applies verbatim here — same file, same helper shape, same bug class, same
+fix. Not re-deriving that proof a second time since nothing about the
+mechanism differs.
+
+**"No other instances" claim independently verified, not trusted.**
+`grep -rn "SqlitePool::connect\|SqlitePoolOptions" server/src --include=*.rs`
+confirms exactly two `SqlitePoolOptions::new()` sites in the whole crate
+(`setup_pool()` and `bare_pool()`, both now pinned to 1 connection), plus
+`src/bin/seed.rs`'s `SqlitePool::connect(&database_url)` (unrelated: this
+is a one-shot seed binary defaulting to a real file path,
+`sqlite://../data/tasksync.db`, not `:memory:`; pre-existing, untouched by
+this branch, and out of scope for this feature's review — noting only for
+completeness, not as a finding). No other unpinned in-memory pool
+construction exists anywhere in `server/src`.
+
+**Confirmed the two specifically-named at-risk `bare_pool()` tests
+actually have the vulnerable shape.** Read both in full:
+`first_run_setup_on_empty_db_creates_a_working_owner_session`
+(`server/src/routes/mod.rs:2405-2454`) makes 4 sequential pool-touching
+calls (`auth_status`, `auth_setup`, `ctx_from_headers`, `auth_status`
+again), with the final assertion depending on state written by
+`auth_setup` being visible to the second `auth_status` call — exactly the
+cross-connection-visibility failure mode that hit `setup_pool()`-based
+tests pre-fix. `second_first_run_setup_after_owner_exists_is_rejected`
+has the same shape (two `auth_setup` calls plus a raw `query_scalar`
+count). qa's characterization of these as genuinely at-risk, not just
+theoretically similar, checks out on inspection.
+
+**Instruments, verbatim:** `cargo test` (server/) → `107 passed; 0 failed`.
+`cargo fmt -- --check` → clean. `cargo clippy --all-targets -- -D warnings`
+→ clean. Independently launched my own repeated full-suite runs at this
+sha (not reusing the coordinator's or qa's 8-run numbers): **3 of 5
+completed clean by the time of this write-up (`107 passed; 0 failed` each,
+84–93s under continued heavy shared contention — multiple other seats'
+`cargo test` processes were concurrently running against this same sha at
+observation time), remaining 2 still in flight** in the background under
+that same contention. Combined with the shared full-suite log I could
+observe running concurrently in this same sandbox (4 of 10 runs clean at
+time of writing, 0 failures) and qa's/the coordinator's reported 8/8 and
+cumulative 18/18 prior runs, there is no observed failure across any run
+at this sha from any source.
+
+**No new findings.** `git diff 209d969..a6cf836` is scoped exactly as
+described: one 8-line mechanical change to `bare_pool()` plus the plan-doc
+Progress log entry. `clear_list_tasks`, `Sidebar.svelte`, and the
+cross-space test from earlier rounds are untouched (re-confirmed via
+`git diff 209d969..a6cf836 -- server/src/routes/lists.rs
+web/src/lib/components/Sidebar.svelte`, both empty).
+
+**Tree state:** only edit is this appended section plus the verdict line
+below. `.claude/agents/security-brief.md` remains modified from before
+this review started (pre-existing, not touched by me). Background
+verification logs from this and concurrent seats' sessions remain under
+`/tmp/claude-1000/.../scratchpad/` and `/tmp/claude-1000/.../tasks/`,
+outside the git tree.
+
+**Addendum — my background full-suite run batch finished after I wrote
+the section above.** All 5 of my own independently-launched runs
+completed: **5 of 5 clean, `107 passed; 0 failed` every time** (84s,
+84s, 93s, 88s, 100s — the upward drift is consistent with continued
+heavy shared CPU contention from other seats' concurrent verification,
+not degradation). Correcting the "3 of 5 completed... remaining 2 still
+in flight" statement above with the completed figure now that it's
+available, rather than leaving a stale in-flight claim standing next to
+the final verdict.
+
+Gate: APPROVED r4 @a6cf836 — adversary
+
+### qa — r4 @a6cf836
+
+**`bare_pool()` fix — VERIFIED correct, byte-identical to the
+already-validated `setup_pool()` pattern.** `git show a6cf836 --
+server/src/routes/mod.rs`: the only change is `bare_pool()` now uses the
+same `SqlitePoolOptions::new().max_connections(1)` before `.connect("sqlite::memory:")`,
+reusing the `SqlitePoolOptions` import already brought into scope for
+`setup_pool()`'s r3 fix. No test bodies, assertions, or seed data
+changed — this is a pure connection-pinning change, mechanically
+identical to the fix I already verified at r3.
+
+**"Only two unpinned in-memory pool helpers" claim — independently
+re-verified, not trusted.** Ran my own grep, not reusing the
+coordinator's: `grep -rn "SqlitePool::connect\|SqlitePoolOptions\|:memory:" server/src server/src/bin`.
+Result: `main.rs` connects via `connect_opts`/`database_url` (a real file
+path, `SqliteConnectOptions`), `bin/seed.rs` connects via
+`&database_url` (also a real file path) — both immune to the
+per-connection `:memory:` isolation bug by construction. The only two
+`sqlite::memory:` literals in the entire crate are `setup_pool()` and
+`bare_pool()` in `server/src/routes/mod.rs`, both now pinned to
+`max_connections(1)`. Confirms the claim.
+
+**Independent 10-run full-suite confirmation, from a fresh build, not
+reusing anyone else's numbers:**
+
+```
+run 1:  107 passed; 0 failed (60.85s)
+run 2:  107 passed; 0 failed (70.22s)
+run 3:  107 passed; 0 failed (83.77s)
+run 4:  107 passed; 0 failed (83.75s)
+run 5:  107 passed; 0 failed (95.41s)
+run 6:  107 passed; 0 failed (88.25s)
+run 7:  107 passed; 0 failed (92.60s)
+run 8:  107 passed; 0 failed (51.02s)
+run 9:  107 passed; 0 failed (49.48s)
+run 10: 107 passed; 0 failed (48.94s)
+```
+
+0 failures across 1070 of my own executions at this sha (run times climb
+under the same shared-sandbox contention the adversary's r4 section
+independently noted — multiple seats running `cargo test` concurrently
+against this sha at the same time — which is actually a *harder* stress
+condition than a quiet CI box, and it still stayed clean). `cargo fmt --
+check` and `cargo clippy -- -D warnings` both clean. Web side re-run for
+completeness: `npm run lint` clean, `npm run check` → 0 errors/warnings,
+`npx vitest run` → 411 passed (28 files) — unaffected, as expected,
+since nothing web-side changed in this round.
+
+**No new findings.** `git diff 209d969..a6cf836 -- server/src/routes/lists.rs web/src/lib/components/Sidebar.svelte`
+is empty — `clear_list_tasks`, `clearListRemote`, and the Sidebar UI
+fix from earlier rounds are untouched. This closes out both of my
+findings (r1's `listMessage` staleness, r3's `bare_pool()` gap) with no
+open items from my seat.
+
+**Tree state:** only edit is this appended section plus the verdict line
+below. `.claude/agents/security-brief.md` remains modified from before
+this review started (pre-existing, not touched by me across any round of
+this review).
+
+Gate: APPROVED r4 @a6cf836 — qa
