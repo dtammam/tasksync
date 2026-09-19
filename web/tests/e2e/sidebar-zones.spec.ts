@@ -36,14 +36,16 @@ test('@smoke settings button is visible in viewport on mobile without scrolling'
 	const viewportHeight = 844;
 
 	// The Settings button must sit fully within the viewport — no scrolling. Poll
-	// the bounding box (rather than sleeping through the ~170ms drawer transition
-	// and measuring once) so it settles deterministically under load: the top
-	// edge on-screen and the bottom edge within the viewport height.
+	// the bottom edge (rather than sleeping through the ~170ms drawer transition
+	// and measuring once) so it settles deterministically under load, reporting
+	// the actual pixel value on failure instead of a bare boolean.
 	await expect
 		.poll(async () => {
 			const box = await settingsBtn.boundingBox();
-			if (!box) return null;
-			return box.y >= 0 && box.y + box.height <= viewportHeight;
+			return box ? Math.round(box.y + box.height) : Number.POSITIVE_INFINITY;
 		})
-		.toBe(true);
+		.toBeLessThanOrEqual(viewportHeight);
+	// Top edge on-screen (not scrolled off), checked once the box has settled.
+	const settledBox = await settingsBtn.boundingBox();
+	expect(settledBox?.y ?? -1).toBeGreaterThanOrEqual(0);
 });

@@ -11,6 +11,11 @@ import { expect, type Page } from '@playwright/test';
  * it is a bounded wait on a real, deterministic condition that resolves the
  * instant the sync settles — not a fixed sleep — so it tolerates a slow boot or
  * pull under CI load without racing the default 10s expect window.
+ *
+ * Precondition: an AUTHENTICATED session. `app-shell` (and both markers) only
+ * renders in the authenticated branch of +layout.svelte; an anonymous session
+ * shows the login wall and never flips `data-synced`, so this helper would
+ * (correctly) time out. Do not call it on an anonymous page.
  */
 export async function expectAppSynced(page: Page, timeout = 30_000): Promise<void> {
 	const shell = page.getByTestId('app-shell');
