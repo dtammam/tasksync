@@ -168,6 +168,10 @@ export const api = {
 		fetchJson<void>(`/lists/${id}`, {
 			method: 'DELETE'
 		}),
+	clearListTasks: (id: string) =>
+		fetchJson<{ deleted_count: number }>(`/lists/${id}/tasks`, {
+			method: 'DELETE'
+		}),
 	getTagPalette: () => fetchJson<TagPaletteSection[] | null>('/tags'),
 	updateTagPalette: (body: TagPaletteSection[]) =>
 		fetchJson<TagPaletteSection[]>('/tags', { method: 'PUT', body: JSON.stringify(body) }),

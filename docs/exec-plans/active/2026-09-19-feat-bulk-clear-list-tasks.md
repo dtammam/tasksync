@@ -94,15 +94,41 @@ sequence in one place.
 
 ## Acceptance
 
-- [ ] An admin can clear every task (pending and completed) in a list via
+- [x] An admin can clear every task (pending and completed) in a list via
   one confirmed action, without hand-deleting each task first.
-- [ ] After clearing, `delete_list` on that now-empty list succeeds (no
-  longer 409s).
-- [ ] A contributor cannot call the bulk-clear endpoint (403).
-- [ ] Every cleared task gets a `task_tombstone` row, matching the existing
+  (`admin_can_bulk_clear_all_tasks_in_a_list` server test; `Sidebar.svelte`
+  "Clear tasks" button + confirm; `tasks.clearListRemote` store method)
+- [x] After clearing, `delete_list` on that now-empty list succeeds (no
+  longer 409s). (`delete_list_succeeds_after_bulk_clear` server test)
+- [x] A contributor cannot call the bulk-clear endpoint (403).
+  (`contributor_cannot_bulk_clear_list_tasks` server test)
+- [x] Every cleared task gets a `task_tombstone` row, matching the existing
   single-delete behavior, so other clients' offline sync learns about the
   deletion correctly — verified for a multi-task clear (not just N=1).
-- [ ] Clearing an already-empty list succeeds with `deleted_count: 0`, not
-  an error.
-- [ ] Tasks in *other* lists, or other spaces, are never touched by a
+  (`admin_can_bulk_clear_all_tasks_in_a_list`, via `sync_pull`)
+- [x] Clearing an already-empty list succeeds with `deleted_count: 0`, not
+  an error. (`bulk_clearing_an_already_empty_list_succeeds_with_zero`)
+- [x] Tasks in *other* lists, or other spaces, are never touched by a
   clear on one list — verified directly, not assumed.
+  (`bulk_clear_does_not_touch_other_lists_or_spaces`)
+
+## Progress log
+
+**E2E coverage attempted, then dropped as unreliable, not as skipped.**
+Wrote a full E2E test (create list -> add tasks -> clear -> delete) and hit
+a reproducible issue: list creation makes a real, non-optimistic
+`POST /lists` network call (unlike task creation, which is local-first via
+IndexedDB) with no live backend in this E2E environment, requiring
+`page.route` mocking. After fixing that, task creation on the *newly
+mocked* list intermittently failed to persist even to IndexedDB — and,
+digging further, the *same* flakiness reproduced on a **pre-existing,
+completely unmodified** list/task-creation flow when run back-to-back in
+the same spec file (confirmed via a throwaway debug script, not shipped).
+This points at an environment-level timing issue in this sandbox unrelated
+to the bulk-clear feature itself — the same class of issue the CI pairing
+session (tech-debt #050/#051) already spent real effort on. Given the
+server (5 tests, including tombstone/cross-list/cross-space verification)
+and the client store (2 tests, success and failure paths) already directly
+verify every acceptance criterion above, shipping without E2E coverage
+here rather than forcing in a test that doesn't reliably reflect the
+feature itself.

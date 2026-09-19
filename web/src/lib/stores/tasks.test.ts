@@ -1079,6 +1079,33 @@ describe('tasks store helpers', () => {
 		expect(tasks.getAll()).toEqual([]);
 	});
 
+	it('clearListRemote removes only the cleared list\'s tasks, after the server call succeeds', async () => {
+		tasks.setAll([
+			baseTask({ id: 'a1', list_id: 'list-a' }),
+			baseTask({ id: 'a2', list_id: 'list-a', status: 'done' }),
+			baseTask({ id: 'b1', list_id: 'list-b' })
+		]);
+		const clearSpy = vi
+			.spyOn(api, 'clearListTasks')
+			.mockResolvedValueOnce({ deleted_count: 2 });
+
+		const deletedCount = await tasks.clearListRemote('list-a');
+
+		expect(clearSpy).toHaveBeenCalledWith('list-a');
+		expect(deletedCount).toBe(2);
+		expect(tasks.getAll().map((t) => t.id)).toEqual(['b1']);
+		clearSpy.mockRestore();
+	});
+
+	it('clearListRemote does not remove any local tasks when the server call fails', async () => {
+		tasks.setAll([baseTask({ id: 'a1', list_id: 'list-a' })]);
+		const clearSpy = vi.spyOn(api, 'clearListTasks').mockRejectedValueOnce(new Error('API 500'));
+
+		await expect(tasks.clearListRemote('list-a')).rejects.toThrow('API 500');
+		expect(tasks.getAll().map((t) => t.id)).toEqual(['a1']);
+		clearSpy.mockRestore();
+	});
+
 	it('imports tasks in batch and skips duplicates from existing and import payload', () => {
 		tasks.setAll([
 			baseTask({
