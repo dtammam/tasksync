@@ -70,16 +70,46 @@ reliably under repeated runs); no data model or public interface changes.
 - `docs/exec-plans/tech-debt-tracker.md`'s #051 row moves back to Closed,
   linking this PR, once the above is verified — not just asserted.
 
-## Verification (local, pre-gate)
+## Fix revision r2 (post QA-CHANGES @90666af → new sha)
 
-- `npx playwright test --project=webkit --grep "wheel gesture" --repeat-each=10 --retries=0 --workers=1`: 10/10 passed.
-- `npx playwright test --project=webkit --grep "wheel gesture" --repeat-each=30 --retries=0 --workers=2`: 30/30 passed.
-- `npx playwright test tests/e2e/pull-to-refresh.spec.ts --project=chromium --project=webkit --retries=0 --workers=2`: 5 passed, 1 pre-existing skip (webkit touch-gesture, unrelated to this change), 0 failed — confirms no regression to the sibling touch/pointer-gesture tests or the rest of this same wheel-gesture test (fade-out, content translation).
-- `grep -n "page.mouse.wheel" web/tests/e2e/pull-to-refresh.spec.ts`: no matches.
+QA's r1 CHANGES was correct: the first attempt (single `page.evaluate()` for
+the *dispatch*, followed by an `await expect(indicator).toHaveCSS('opacity',
+'1')` locator assertion) still left the *closing assertion's* own Node↔WebKit
+round trip inside the 150ms debounce window — it shrank the race, it never
+closed it. Under load that single remaining round trip loses the race a large
+fraction of the time, which is exactly what QA reproduced (19/40 failed).
+
+r2 folds the dispatch **and the observation** into one `page.evaluate()`:
+dispatch the 5 `WheelEvent`s, then poll the computed opacity in-page across
+microtasks (bounded by a wall-clock deadline of 120ms, safely under the 150ms
+debounce) until Svelte has flushed its reactive DOM update, and read the
+content `style` in the same in-page execution; the test asserts on the
+returned values. The 150ms `setTimeout` runs on the same in-page event loop as
+this script, so it provably cannot fire before we read — a tight microtask
+loop does not yield to the macrotask (timer) queue. Deliberately **not**
+`requestAnimationFrame`: rAF is frame-throttled, so on a CPU-starved 2-core
+GitHub free runner (the actual failure surface — local timing on this shared
+6-core box is only indicative) a single frame could itself stall past 150ms.
+Microtask yields are not frame-throttled and resolve sub-millisecond. No
+automation-channel round trip remains inside the timed window — the race is
+closed by construction, not merely narrowed, and the argument holds
+independent of core count/CPU load. The mid-gesture `content` translateY
+assertions (which had the *same* race and would have become the next flaky
+line) are folded into the same read.
+
+## Verification (local, pre-gate) — r2
+
 - `npm run lint` / `npm run check`: both clean.
-- Firefox project not locally runnable (browser binary not installed in this sandbox) — unrelated to this change; CI covers it.
+- `npx playwright test --project=webkit --grep "wheel gesture" --repeat-each=20 --retries=0 --workers=1` (unloaded): **20/20 passed.**
+- **Controlled load A/B (same machine, 2× `yes > /dev/null` background, `--workers=2`, load avg 5.8→7.9 on 6 cores — comparable-to-heavier than QA r1's 4.39–6.08):**
+  - r2 fix, `--repeat-each=20`: **20/20 passed.**
+  - main's old `page.mouse.wheel()` pattern (restored into the working file), same command under the same live load: **7 failed / 13 passed (35%).**
+  - This reproduces the historical failure on this machine *right now* on the old pattern and shows the r2 fix eliminating it under identical conditions — resolving the r1 Adversary-vs-QA conflict (both were honest measurements at different ambient load; the discriminating A/B settles it).
+- `npx playwright test tests/e2e/pull-to-refresh.spec.ts --project=chromium --project=webkit --retries=0`: **5 passed, 1 pre-existing skip** (webkit touch-gesture, CDP-only, unrelated), 0 failed — no regression to the sibling pointer/touch tests (those hold the pointer down with no debounce, so their `opacity:1` assertion is not subject to this race) or to the wheel test's fade-out path.
+- `grep -c "page\.mouse\.wheel(" web/tests/e2e/pull-to-refresh.spec.ts`: **0 call sites** (r1's false "no matches for `page.mouse.wheel`" claim is dropped — the bare string no longer appears at all in r2, since the explanatory comment was rewritten).
+- Firefox project not locally runnable (browser binary absent in this sandbox) — unrelated to this change; CI covers it.
 
-60 consecutive webkit passes with zero failures is not a formal proof the CI-load race is fully eliminated (local timing differs from CI runners), but it directly validates the causal fix: the 4 extra automation-channel round trips previously in the critical window before the debounce fires are gone, replaced with a single in-page script execution. Will confirm against real CI in the gate/CI cycle.
+The load A/B is not a formal proof the CI-load race is impossible, but it is a direct causal demonstration under reproduced failure conditions, not the "60 consecutive passes at unknown ambient load" that r1 (correctly) got challenged on. Will confirm against real CI in the gate cycle.
 
 ## Gate
 
