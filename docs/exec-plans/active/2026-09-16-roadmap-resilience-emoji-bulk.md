@@ -23,7 +23,7 @@ higher-cost model; execution of pieces 2–4 is intended for Opus sessions.
 | 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | **Shipped** — PR #138 (+ #139 cleanup), merged 2026-09-17 |
 | 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Parked** — intake done (root cause confirmed, approach ready), no code yet; see its own plan doc |
 | 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | **Shipped** — PR #141, merged 2026-09-18; validated by owner in beta on a real device |
-| 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | `feat/bulk-task-ops` | not started |
+| 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | `feat/bulk-task-ops` | not started — but see the "Piece 4 overlap" note below: list-level bulk-clear already shipped out of band |
 
 Order: **3 → 2 → 4**, reprioritized by the owner 2026-09-17 (originally
 2 → 4 → 3, confirmed 2026-09-16). Piece 2's intake is complete and parked,
@@ -36,15 +36,34 @@ piece first regardless of blast radius.
 Piece 3 in beta): an in-app Settings UI to manage the tag palette itself
 (add/edit/remove/reorder entries) — see
 `docs/exec-plans/completed/2026-09-18-feat-task-emoji.md`'s closing note.
-This goes ahead of resuming Piece 2, per the owner's explicit call. Needs its
-own intake (`spec`-anchored, likely — turns the palette from a static code
-config into synced, per-space data).
+**Shipped** — PR #143, merged 2026-09-19; see
+`docs/exec-plans/completed/2026-09-18-feat-tag-palette-settings.md`.
 
-**After the palette-settings piece ships, pause all other roadmap work**
-(owner direction, 2026-09-18) for a live pairing session investigating the
-CI E2E flakiness pattern (tech-debt #050 — chromium/`offline.spec.ts` and
+**After the palette-settings piece shipped, the owner-directed CI-flakiness
+pairing session ran** (tech-debt #050 — chromium/`offline.spec.ts` and
 webkit/`pull-to-refresh.spec.ts`, both marginal-timeout-under-CI-load, not
-logic bugs) before resuming Piece 2 or starting Piece 4.
+logic bugs). **Shipped** — PR #146 (CI trace-upload capability + a genuine
+root-caused PTR wheel-gesture race fix found live during the session), merged
+2026-09-19; see
+`docs/exec-plans/completed/2026-09-19-chore-ci-trace-uploads-and-ptr-race-fix.md`
+and the sharpened tech-debt-tracker entries (PR #147). Roadmap work below
+(Piece 2 / Piece 4) resumes from here.
+
+**Piece 4 overlap, noted 2026-09-19:** the owner separately asked, out of
+band, for a way to bulk-clear a list's tasks before deleting the list itself
+(manually deleting hundreds of items first was "a real slog"). Shipped as
+`feat/bulk-clear-list-tasks`, PR #148, merged 2026-09-19 — see
+`docs/exec-plans/completed/2026-09-19-feat-bulk-clear-list-tasks.md`. This is
+list-scoped ("clear every task in list X"), not the per-task multi-select
+described in Piece 4 below, so Piece 4's remaining scope is unchanged: quick
+single-task delete/undo, multi-select, bulk **move**, and **clone** still need
+their own intake.
+
+**Also parked here, 2026-09-19** (owner asked to pause for this doc-lifecycle
+housekeeping pass before resuming): a "check all" to complement the existing
+"Uncheck all" list-header action, plus per-tag-section check/uncheck — intake
+done, decision register drafted, not yet confirmed. See
+`docs/exec-plans/active/2026-09-19-feat-bulk-check-uncheck-tasks/plan.md`.
 
 ## Anchor recommendations (project default: `outcome`)
 
