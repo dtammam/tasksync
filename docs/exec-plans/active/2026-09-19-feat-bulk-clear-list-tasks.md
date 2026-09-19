@@ -2,8 +2,8 @@
 plan: feat-bulk-clear-list-tasks
 harness: v2 · lean
 anchor: spec
-status: Gate:APPROVED r4 @a6cf836
-gate: APPROVED r4 @a6cf836 — adversary, qa, security-brief
+status: Gate:APPROVED r5 @8877885
+gate: APPROVED r5 @8877885 — adversary, qa, security-brief
 ---
 
 # Bulk-clear all tasks in a list
@@ -331,6 +331,32 @@ touches `bare_pool()`. `clear_list_tasks` and the rest of
 commit). No new security surface; findings from r1/r2 stand unchanged.
 
 Gate: APPROVED r3 @a6cf836 — security-brief
+
+### security-brief — r4 @8877885
+
+**Tool gap, stated up front:** I have no Bash tool in this seat, so I
+could not run `git diff a6cf836 8877885 -- server/ web/src` myself to
+confirm it's empty, as requested. I cannot verify "empty diff" as a
+literal fact from here. What I did instead, as the closest available
+substitute: re-read the actual current content of every file that
+constitutes the security surface I've been tracking —
+`server/src/routes/lists.rs` (full file) and the `ctx_from_headers`
+function in `server/src/routes/types.rs` — and grepped
+`web/src/lib/components/Sidebar.svelte` for every `listMessage`/
+`clearListTasks` occurrence. All of it is character-for-character
+identical to what I reviewed at r3. I did not re-diff the merged-in main
+commits (PR #147 docs changes) myself; the coordinator describes them as
+docs-only and unrelated to this feature, which is consistent with a
+main-merge picking up nothing under `server/` or `web/src`, but that
+specific claim about the merge's contents is relayed, not independently
+verified by me.
+
+Given the security-relevant files are confirmed unchanged by direct
+re-read, the r1-r3 findings stand without modification: zero
+CRITICAL/HIGH/MEDIUM/LOW, one non-blocking INFO (tombstone-insert
+batching at extreme list sizes).
+
+Gate: APPROVED r4 @8877885 — security-brief
 
 ### qa — r1 @41c10cd
 
@@ -1065,3 +1091,86 @@ this review started (pre-existing, not touched by me across any round of
 this review).
 
 Gate: APPROVED r4 @a6cf836 — qa
+
+### adversary — r5 @8877885
+
+Delta re-review of the branch-protection merge (`origin/main` merged into
+`feat/bulk-clear-list-tasks` to clear a "behind main" block).
+
+**Verified `server/`/`web/src` are byte-identical to the already-approved
+`a6cf836`, not trusted from the summary.** `git diff a6cf836 8877885 --
+server/ web/src` → empty output. `git diff a6cf836 8877885 --name-only` →
+exactly three files, all docs: `docs/exec-plans/active/2026-09-19-feat-bulk-clear-list-tasks.md`
+(the plan doc itself — see below), `docs/exec-plans/completed/2026-09-19-docs-sharpen-tech-debt-050.md`
+(new file), and `docs/exec-plans/tech-debt-tracker.md` (3 lines). No
+`Cargo.lock`, `package.json`/lockfile, or any code path changed.
+`clear_list_tasks`, `Sidebar.svelte`, `tasks.clearListRemote`, and both
+pool-fix helpers (`setup_pool`/`bare_pool`) are confirmed unchanged.
+
+**Merge itself checked, not just its diff.** `git show 8877885 --stat` /
+`git log -1 --format="%P"` confirm two parents: `86b7f98` (this branch's
+tip, which carries only the gate-doc commit recording all r4 APPROVEDs at
+`a6cf836`) and `5d90618` (`origin/main`'s tip — PR #147's own merge
+commit, an already-independently-reviewed docs change per its own commit
+history, `1198819 docs: adversary APPROVED r2 for tech-debt-050
+sharpening`). `git merge-base --is-ancestor a6cf836 8877885` confirms
+`a6cf836`'s history is preserved intact (no rebase/rewrite). Grepped the
+plan doc for conflict markers (`<<<<<<<`/`=======`/`>>>>>>>`) — zero
+matches; a genuinely clean merge, not one with markers left in by
+mistake. `git diff 86b7f98 8877885 -- docs/exec-plans/active/2026-09-19-feat-bulk-clear-list-tasks.md`
+is empty — the merge didn't touch the plan doc at all; everything in it
+(including this section) predates the merge and survived unmodified.
+
+**No new findings; nothing to re-verify beyond the diff-emptiness check
+above** — there is no new code at this sha to mutate or test that wasn't
+already exhaustively covered at `a6cf836` r4. All required seats
+(adversary, qa, security-brief) show APPROVED bound to `a6cf836` in this
+doc, and this round confirms `8877885` carries forward exactly that same
+code, unmodified, merged only with already-reviewed upstream docs.
+
+**Tree state:** no edit other than this appended section plus the
+verdict line below. `.claude/agents/security-brief.md` remains modified
+from before this review started (pre-existing, not touched by me, not
+part of this branch's diff).
+
+Gate: APPROVED r5 @8877885 — adversary
+
+### qa — r5 @8877885
+
+**Merge-to-main verified inert for this feature's code.** Confirmed
+directly, not just trusting the summary:
+
+```
+git diff a6cf836 8877885 -- server/   → 0 lines
+git diff a6cf836 8877885 -- web/      → 0 lines
+```
+
+(checked the whole `web/` tree, not just `web/src`, to be strict).
+`git log a6cf836..origin/main` shows the only new commits are PR #147
+(`docs/sharpen-tech-debt-050`), which only touches
+`docs/exec-plans/2026-09-19-docs-sharpen-tech-debt-050.md` and
+`docs/exec-plans/tech-debt-tracker.md` — confirmed via
+`git show 8877885 --stat` on the merge commit itself, which lists
+exactly those two files plus this plan doc (my own and others' r4
+sections landing via the intervening `86b7f98` docs commit). No
+conflict markers, no code paths touched. `8877885`'s parents are
+`86b7f98` (the final-round gate-summary docs commit) and `5d90618`
+(main's own merge of #147) — a clean two-parent merge, nothing rebased
+or reordered.
+
+**Instruments re-run at this exact sha, not inferred from the empty
+diff alone:** `cargo fmt -- --check` clean, `cargo clippy -- -D
+warnings` clean, `cargo test` → `107 passed; 0 failed`. `npm run lint`
+clean, `npm run check` → 0 errors/warnings, `npx vitest run` → `411
+passed` (28 files). All match r4's numbers exactly, as expected for a
+byte-identical `server/`+`web/` tree.
+
+**No open findings from this seat.** Both of mine (r1 `listMessage`
+staleness, r3 `bare_pool()` flake) were closed at r2/r4 respectively and
+remain closed here since nothing code-side moved.
+
+**Tree state:** only edit is this appended section plus the verdict line
+below. `.claude/agents/security-brief.md` remains modified from before
+this review started (pre-existing, not touched by me across any round).
+
+Gate: APPROVED r5 @8877885 — qa
