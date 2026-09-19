@@ -2,9 +2,9 @@
 plan: fix-webkit-ptr-wheel-debounce-race
 harness: v2 · lean
 anchor: outcome
-status: Building
-next: Commit and run /gate.
-gate: pending
+status: Gated
+next: /release — push and confirm on real CI (GitHub free runners), the true failure surface.
+gate: APPROVED r2 @cf23684100297bd351a31b68dbe4c8738c3c6036 (adversary + qa)
 ---
 
 # Fix: webkit PTR wheel-gesture debounce race (tech-debt #051, reopened)
@@ -220,3 +220,112 @@ the comment text if this is touched again.
 No CRITICAL or blocking WARNING findings.
 
 Gate: APPROVED r1 @90666af2bfa55c5e4ace5ddd5e8d43a97e48143a — adversary
+
+## Gate
+
+**Adversary review (r2 @cf23684100297bd351a31b68dbe4c8738c3c6036)**
+
+Delta re-review of r2 (r1 QA CHANGES @90666af was the correct blocker; r1
+Adversary APPROVED @90666af is void — the tree moved). Verified by measurement:
+
+- **Instruments (verbatim).** `cd web && npm run lint`: clean, no output, exit 0.
+  `npm run check`: `svelte-check found 0 errors and 0 warnings`. Server untouched
+  (`git diff --name-only b6b930b HEAD | grep -E '^server/|^web/src/'` → none), so
+  cargo skipped per brief.
+- **Regression (full file, all projects).** `npx playwright test
+  tests/e2e/pull-to-refresh.spec.ts --project=chromium --project=webkit
+  --retries=0`: **5 passed, 1 skipped** (webkit touch-gesture, pre-existing
+  CDP-only skip), 0 failed. Sibling pointer/touch tests and the wheel test's
+  fade-out (`opacity 0`, line 270) path unaffected.
+- **Race closure — controlled A/B, same machine, 2× `yes > /dev/null`,
+  `--workers=2`, load avg peaking 8.9–10.2 on 6 cores (heavier than QA r1's
+  4.39–6.08):**
+  - r2 fix (committed), `--repeat-each=20 --retries=0`: **20/20 passed.**
+  - main's old `page.mouse.wheel()` pattern (`git show b6b930b:` restored into
+    the working file), same command under the same live load: **6 failed / 14
+    passed (30%)** — every failure at the old `toHaveCSS('opacity','1')`
+    assertion line, first polled value already mid-fade (`0.417219`, `0` …), the
+    historical #051 signature. Tree restored (`git checkout --`) and
+    gitignored `web/test-results/` removed afterward; `git status` clean.
+  - This is a direct causal before/after under reproduced failure conditions on
+    this box right now. My old-pattern rate (30%) is consistent in magnitude with
+    the plan's r2 A/B (35%) and QA r1 (47.5%); the fix's 0% is consistent with the
+    plan's 20/20 and the Adversary r1 A/B (20/20).
+- **Microtask reasoning verified at primary source (Svelte 5.48.2).**
+  `Batch.ensure()` schedules `batch.flush()` via `queue_micro_task(...)`
+  (`svelte/src/internal/client/reactivity/batch.js:487-495`), and
+  `queue_micro_task` uses `queueMicrotask` (`.../dom/task.js:16-19`). So the DOM
+  flush queued during the synchronous 5-event dispatch is a microtask that drains
+  (FIFO) before any macrotask; `getComputedStyle(indicatorEl).opacity` after
+  `await Promise.resolve()` reliably reflects the flushed inline `style="opacity:
+  1"` (indicator opacity is inline, no transition while `animateOut` is false).
+  The tight microtask loop keeps the queue non-empty, so the 150ms
+  `wheelEndTimer` macrotask (armed at end of dispatch, PullToRefresh.svelte:443)
+  cannot fire until the loop exits at its 120ms deadline — ~30ms margin, closed by
+  construction. `indicatorOpacity = min(pullDistance/threshold, 1)` reaches exactly
+  1 at ~99px/64px (line 108), so `'1'` is reachable — no false deadline read; the
+  120ms deadline was never hit across 40 loaded + 20 unloaded runs.
+- **Assertion strength not weakened vs r1.** r2 preserves all three checks with
+  equal strength: `opacity === '1'`, `contentStyle` matches `/translateY\(/`,
+  and NOT `/translateY\(0px\)/` — both reading the same sources (computed opacity;
+  inline `style` attr) r1 used.
+- **Comment/source honesty.** 150ms debounce (line 443), `normalizeDeltaY` reads
+  `deltaMode`/`deltaY` with deltaMode-0 as-is (lines 363-372), `wheel` listener
+  `{ passive: false }` (line 474), no `isTrusted` gate anywhere (zero matches) —
+  all confirmed. r1's false grep claim is corrected: `grep -c
+  "page\.mouse\.wheel(" web/tests/e2e/pull-to-refresh.spec.ts` → **0**, and the
+  bare string `page.mouse.wheel` no longer appears at all (grep exit 1). #051
+  correctly left Reopened (not re-closed) pending CI, per acceptance bullet 4.
+- **Scope.** Exactly 3 files (this plan, tech-debt-tracker, the spec); nothing
+  under `server/` or `web/src/**`. **Security surface:** none (hardcoded synthetic
+  `WheelEvent`s in a trusted automation context; two Markdown docs).
+- **Tree state:** clean apart from this verdict line; only pre-existing gitignored
+  `web/test-results/` was produced during A/B and has been removed. No other
+  untracked files.
+
+No CRITICAL or blocking WARNING findings. The r1 CHANGES is resolved: the race is
+closed by construction (verified at Svelte's source) and by a discriminating
+load A/B on this machine.
+
+Gate: APPROVED r2 @cf23684100297bd351a31b68dbe4c8738c3c6036 — adversary
+
+## Gate
+
+**QA re-review (r2 @cf23684100297bd351a31b68dbe4c8738c3c6036)**
+
+Delta re-review of my r1 CHANGES @90666af. My r1 CRITICAL was: folding only the
+*dispatch* into `page.evaluate()` left the closing `toHaveCSS('opacity','1')`
+locator assertion's own Node↔WebKit round trip inside the 150ms debounce window,
+so the race was narrowed, not closed. r2 folds dispatch AND observation into one
+`page.evaluate()`. Verified by measurement:
+
+**Instruments (verbatim):**
+- `cd web && npm run lint`: `> eslint .`, no output, `LINT_EXIT=0`.
+- `cd web && npm run check`: `svelte-check found 0 errors and 0 warnings`.
+- `cd web && npx vitest run`: **Test Files 28 passed (28), Tests 411 passed (411)**, 0 failed.
+- Server untouched — `git diff --name-only b6b930b HEAD -- server/` is empty; cargo suite skipped per brief (scope: exactly 3 files — this plan, tech-debt-tracker, the spec).
+- `npx playwright test tests/e2e/pull-to-refresh.spec.ts --project=chromium --project=webkit --retries=0`: **5 passed, 1 skipped** (webkit touch-gesture, pre-existing CDP-only `test.skip`), 0 failed. No regression to sibling pointer/touch tests or the wheel test's fade-out path (line 270 `opacity 0`).
+
+**R1 CRITICAL resolved — verified by discriminating load A/B (same machine, my own 2× `yes > /dev/null`, load avg ~3–6 on 6 cores, comparable to my r1's 4.39–6.08):**
+- r2 fix (committed HEAD), `--project=webkit --grep "wheel gesture" --repeat-each=20 --retries=0 --workers=1`: **20/20 passed** (EXIT=0), zero opacity failures, zero connection-refused artifacts.
+- main's old `page.mouse.wheel()` pattern (`git show b6b930b:` restored into the working file), identical command under the same live load: **8 failed / 12 passed (40%)** — every failure the old `toHaveCSS('opacity',…)` race, first polled values already mid-fade (`0.879534`, `0.001753`, `0.012188`, `0.012753` …), the documented #051 signature family. Zero connection-refused artifacts (confirmed the failures are the debounce race, not harness overload).
+- (An earlier heavier attempt — 5× `yes`, load ~11 — produced `page.goto: Could not connect to localhost:4173` on BOTH patterns, i.e. it overloaded the vite-preview webServer itself rather than isolating the race; discarded in favor of the lighter, discriminating load above.)
+- Direct causal before/after on this box right now: the old pattern reproduces the historical failure at 40% where the r2 fix is 0%. My 40%-old/0%-fix is consistent with the Adversary r2 A/B (30%/0%) and my own r1 (47.5% old-family). Tree restored via `git checkout HEAD --` afterward; gitignored `web/test-results/` is not tracked.
+
+**Correctness of the microtask read (focus #2):** sound.
+- `.ptr-indicator` opacity is inline `style="opacity: {indicatorOpacity}"` (line 562) with `transition: none` while `animateOut` is false (line 610; the 0.3s transition only attaches via `.ptr-animate`, applied on animate-out) — so opacity is set instantly on Svelte flush, no interpolation, `getComputedStyle().opacity` reads exactly `'1'`. `indicatorOpacity = min(pullDistance/threshold, 1)` = `min(99/64,1)` = 1 (line 108), so `'1'` is reachable — no false-deadline read. Svelte's reactive flush is queued as a microtask, which drains (FIFO) before the 150ms `wheelEndTimer` macrotask (armed at end of the synchronous dispatch loop, PullToRefresh.svelte:443); the tight `await Promise.resolve()` loop keeps the microtask queue non-empty so the timer cannot fire before the read, and the 120ms deadline (< 150ms, ~30ms margin) never triggered across 40 loaded + 20 unloaded runs (any deadline-with-opacity≠1 would have surfaced as a failure; none did).
+- No coverage weakening vs r1: all three checks preserved with equal strength — `opacity === '1'` (computed, same source as r1's `toHaveCSS`), `contentStyle` matches `/translateY\(/` and NOT `/translateY\(0px\)/` (inline `style` attr via `getAttribute`, same source and same regexes as r1's `toHaveAttribute`). Both `indicatorOpacity` and `contentTranslateY` derive from `pullDistance` and are applied in the same Svelte flush, so reading `contentStyle` after the opacity loop confirms it is already applied.
+
+**R1 WARNING resolved:** `grep -c "page\.mouse\.wheel(" web/tests/e2e/pull-to-refresh.spec.ts` → **0** call sites, and the bare string `page.mouse.wheel` no longer appears at all (`grep` exit 1). The plan's r2 Verification claim now matches reality; the false "no matches" framing is dropped.
+
+**Comment/source accuracy (verified against PullToRefresh.svelte):** 150ms debounce (line 443), `normalizeDeltaY` reads `deltaMode`/`deltaY` with `deltaMode 0` as-is (lines 363–372), `wheel` listener `{ passive: false }` (line 474), no `isTrusted` gate anywhere — all confirmed. Test comments (lines 213–226, 235–243) accurately describe the mechanism.
+
+**tech-debt-tracker.md #051:** correctly moved from the Closed table back into Active/Open as "Reopened 2026-09-19", `unassigned`, "before re-closing" language intact — not prematurely re-closed while CI is unconfirmed. Honest diff.
+
+**Security surface:** none. The diff dispatches hardcoded-literal synthetic `WheelEvent`s inside an already-trusted browser-automation context (no external/untrusted input reaches `dispatchEvent`); the other two files are static Markdown. No injection, traversal, SSRF, auth, or data-exposure surface.
+
+**Tree state:** clean apart from this verdict write and the Adversary's own r2 block; test file restored byte-identical to HEAD after the A/B (`git diff HEAD` = 0 lines); no untracked files (`web/test-results/` is gitignored). Firefox not locally runnable (binary absent) — CI covers it.
+
+No CRITICAL or WARNING findings. My r1 CRITICAL is resolved by construction (microtask-vs-macrotask ordering) and empirically (discriminating load A/B); my r1 WARNING is resolved.
+
+Gate: APPROVED r2 @cf23684100297bd351a31b68dbe4c8738c3c6036 — qa
