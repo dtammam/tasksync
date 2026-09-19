@@ -47,7 +47,7 @@ export const groupTasksByTag = <T extends { emoji?: string }>(
 			const rankA = rankInPalette(palette, a.key === UNTAGGED_KEY ? undefined : a.key);
 			const rankB = rankInPalette(palette, b.key === UNTAGGED_KEY ? undefined : b.key);
 			if (rankA !== rankB) return rankA - rankB;
-			// tagRank alone can't distinguish multiple different unrecognized
+			// rankInPalette alone can't distinguish multiple different unrecognized
 			// emoji (they share one "unknown" bucket rank) -- break ties on the
 			// emoji string itself so their relative order is deterministic
 			// regardless of task array iteration order, not just "stable sort

@@ -44,7 +44,7 @@ describe('groupTasksByTag', () => {
 	});
 
 	it('orders multiple unrecognized emoji deterministically, independent of input order', () => {
-		// Both 🛸 and 🦄 are off-palette, so they'd tie on tagRank alone -- the
+		// Both 🛸 and 🦄 are off-palette, so they'd tie on rankInPalette alone -- the
 		// tie-break must produce the same order regardless of which appeared
 		// first in the source array (a plain stable sort would not).
 		const forward = groupTasksByTag([item('a', '🦄'), item('b', '🛸')], DEFAULT_TAG_PALETTE);
