@@ -152,6 +152,25 @@ supplying s2's real list id? Added
 `admin_cannot_bulk_clear_a_different_spaces_list_by_id`, verified it fails
 against the dropped-clause mutant and passes against the real code.
 
+**r2 fix round.** QA re-verified the r1 fixes clean, then surfaced a NEW
+finding while re-running instruments: `cargo test` failed once in 5
+full-suite runs on the new `admin_cannot_bulk_clear_a_different_spaces_list_by_id`
+test (0 failures in 5 isolated single-test runs — a pool-contention
+signature, not a logic bug). Root cause, confirmed by reading `setup_pool()`
+directly: it opened a plain `SqlitePool::connect("sqlite::memory:")` --
+SQLite's in-memory mode is per-*connection*, not per-URI, so a default
+multi-connection pool can hand a query to a connection that never saw the
+migrations or that test's seed data, intermittently. This is pre-existing
+test infrastructure shared by all 107 tests in this file, not something the
+bulk-clear feature introduced -- but it was surfacing here first because
+this is the one test whose safety property is sensitive enough to actually
+notice a stale/empty connection's wrong answer. Fixed at the source:
+`setup_pool()` now uses `SqlitePoolOptions::new().max_connections(1)`,
+forcing every query within one test onto the same connection (the standard
+fix for this well-known sqlx/SQLite interaction). Verified with 10
+consecutive full-suite `cargo test` runs, 0 failures (1070 test executions
+total); `cargo clippy -- -D warnings` and `cargo fmt -- --check` both clean.
+
 ## Gate
 
 ### security-brief — r1 @41c10cd
@@ -484,3 +503,168 @@ by me: the 4-line `Sidebar.svelte` diff noted above. My only edit is this
 appended section plus the verdict line below.
 
 Gate: CHANGES r1 @41c10cd — adversary
+
+### adversary — r2 @b66ab6c
+
+Delta re-review of both r1 findings. Both fixed as prescribed; no new
+findings introduced.
+
+**Finding 1 (mine) — cross-space test-quality gap: FIXED AS PRESCRIBED,
+verified by re-running the exact mutant.** Re-applied my r1 mutant
+(dropping `and space_id = ?2` from the `DELETE` in `clear_list_tasks`,
+`server/src/routes/lists.rs`) against the `b66ab6c` tree and ran the full
+`bulk_clear` test group: the new
+`admin_cannot_bulk_clear_a_different_spaces_list_by_id`
+(`server/src/routes/mod.rs`) now goes red —
+`left: 1, right: 0, "an s1 admin must not be able to delete s2's tasks by
+supplying s2's real list id"` — while it passes against the real,
+restored code. File restored after the mutation cycle (`git diff` on
+`lists.rs` empty).
+
+The fix deviates from my literal suggestion (I asked for "the same
+`list_id` string under two different `space_id`s") but the deviation is
+correct and better: I verified the schema myself
+(`server/migrations/0001_init.sql:21-22`, `id text primary key` on
+`list`, not composite with `space_id`) — a literal same-id collision
+across spaces is enforced schema-impossible by the primary key, so my
+originally-suggested repro shape could never occur. The shipped test
+instead targets the actual reachable boundary: an s1-authenticated admin
+supplying s2's real (distinct, valid) list id. This is the correct
+mutation-discriminating shape for this schema and a better test than the
+one I proposed. Full server suite: `cargo test` → **107 passed, 0
+failed** (106 + 1 new). `cargo fmt -- --check` clean, `cargo clippy
+--all-targets -- -D warnings` clean.
+
+**Finding 2 (qa's, concurred in r1) — stale `listMessage`: FIXED AS
+PRESCRIBED.** `web/src/lib/components/Sidebar.svelte` now has 6
+`listMessage = ''` resets, one at the top of each of the 6 actions that
+render into the shared `{#if listMessage}` block: `createList` (317),
+`renameList` (350), `moveList` (393), `handleDrop` (447), `deleteList`
+(468), `clearListTasks` (488) — verified by grep + cross-referencing each
+line number against its enclosing `const <name> = async` declaration.
+Matches the sibling `teamMessage` convention qa cited (every action
+resets its own shared-slot message state before running). `npm run
+check` → 0 errors/warnings; `npm run test` → 411 passed (28 files); `npm
+run lint` → clean.
+
+**No new findings.** Diffed `41c10cd..b66ab6c`: two commits, exactly the
+scope described (`98ad493` touches only the 4 missing `listMessage`
+resets in `Sidebar.svelte`; `b66ab6c` adds only the one new server test
+in `mod.rs` plus the plan-doc Progress-log entry). No production logic in
+`clear_list_tasks`/`clearListRemote` itself changed between r1 and r2.
+
+**Tree state:** restored `server/src/routes/lists.rs` after the r2
+mutation cycle (`git diff` on it is empty). Only edit is this appended
+section plus the verdict line below.
+`.claude/agents/security-brief.md` remains modified from before this
+review started (pre-existing, not touched by me or this fix round).
+
+Gate: APPROVED r2 @b66ab6c — adversary
+
+### qa — r2 @b66ab6c
+
+**Delta re-verify of my r1 finding: FIXED AS PRESCRIBED.** Diffed
+`web/src/lib/components/Sidebar.svelte` between `41c10cd` and `98ad493`
+(the fix commit) directly: `listMessage = '';` was added at the top of
+`createList` (line 317), `renameList` (350), `moveList` (393), and
+`handleDrop` (447) — exactly the 4 handlers I named, no more, no less.
+Re-grepped the live file at `b66ab6c`: 6 total `listMessage = ''` resets
+(37 is the `let` declaration, so 6 assignment sites at lines 317, 350,
+393, 447, 468, 488), one per action that renders into the shared
+`{#if listMessage}` block, matching the sibling `teamMessage`
+convention I cited. `npm run lint` clean, `npm run check` → 0
+errors/warnings, `npx vitest run` → 411 passed (28 files), all
+re-confirmed at this sha. Concrete re-check of my original scenario:
+clear-tasks-then-rename-a-different-list no longer leaves a stale
+"Cleared N tasks..." message, since `renameList` now clears it on entry.
+This finding is closed.
+
+**New, since r1 — adversary's cross-space test-quality fix
+(`b66ab6c`).** Not mine to re-litigate, but I read it since it touches a
+file/behavior in my focus area. `admin_cannot_bulk_clear_a_different_spaces_list_by_id`
+(`server/src/routes/mod.rs`) is a genuinely distinct binding, not a
+rename of the existing `bulk_clear_does_not_touch_other_lists_or_spaces`
+— it targets the real reachable boundary (an s1-admin supplying s2's
+actual list id) rather than the schema-impossible "colliding id" case,
+and the commit message documents verifying it red/green against a
+dropped-clause mutant. No objection.
+
+**CRITICAL — reproduced, intermittent `cargo test` failure on this
+exact new test, at this exact sha.** Required instrument, re-run
+verbatim as part of this delta re-verification:
+
+```
+---- routes::tests::admin_cannot_bulk_clear_a_different_spaces_list_by_id stdout ----
+
+thread 'routes::tests::admin_cannot_bulk_clear_a_different_spaces_list_by_id' (323091) panicked at server/src/routes/mod.rs:2064:9:
+assertion `left == right` failed: an s1 admin must not be able to delete s2's tasks by supplying s2's real list id
+  left: 1
+ right: 0
+
+test result: FAILED. 106 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 83.40s
+```
+
+Full reproduction matrix from this session, all at `b66ab6c`, nothing
+changed between runs:
+- Full-suite `cargo test`, run 1 (first attempt at re-verifying this
+  round): **FAILED** as quoted above.
+- Full-suite `cargo test`, runs 2 through 5 (immediately after, no code
+  changes): all **passed**, `107 passed; 0 failed` each time.
+- The single test in isolation
+  (`cargo test admin_cannot_bulk_clear_a_different_spaces_list_by_id --
+  --test-threads=1`), 5 separate invocations: **all passed**.
+
+So: 1 failure in 5 full-suite runs, 0 failures in 5 isolated runs — this
+is contention-dependent, not a deterministic logic bug reproducible on
+demand. I read the test and the production query
+(`server/src/routes/lists.rs`'s `delete from task where list_id = ?1 and
+space_id = ?2`) looking for a plausible bind-order or literal-value bug
+that would explain an s1-scoped delete matching an s2-owned row, and
+found none — the test's seed SQL hardcodes `'s2'` directly in the
+literal SQL text (no `.bind()` calls to get out of order), and
+`auth_headers(&state, "u-admin", "s1")` is the same helper used
+successfully by ~40 other tests. That rules out an application-logic
+explanation for me; the leading candidate is `setup_pool()`
+(`server/src/routes/mod.rs:55`): `SqlitePool::connect("sqlite::memory:")`
+uses default pool options (multiple possible connections) against a bare
+`:memory:` URI with no `cache=shared` — a well-known sqlx/SQLite
+footgun where different physical connections in the same pool can each
+land on a *separate*, independent in-memory database. Under the
+scheduling pressure of a 6-core full-suite parallel run this could
+manifest as query results computed against an unexpected connection;
+under `--test-threads=1` or in isolation there's no contention to
+trigger it. I was not able to fully verify this mechanism end-to-end
+(the observed failure mode — an *extra* row matching rather than a
+missing table/row — doesn't cleanly fall out of it either), so I'm
+reporting this as a confirmed, reproduced instrument failure with a
+plausible-but-unconfirmed lead, not a root-caused diagnosis.
+
+Why this blocks rather than "safe to ship disclosed": this is exactly
+the test that exists to verify the single most safety-critical property
+in a change this scrutiny table already flagged as data-loss-class
+(cross-space task deletion). A test that guards that property but only
+sometimes runs green under real CI-like parallel load (this repo's own
+`pre-push` hook runs the full `cargo test`, matching how I triggered
+this) is not yet trustworthy evidence that the property holds — and an
+intermittently-red test on `pre-push`/CI is exactly the class of problem
+this project has already spent real effort chasing down before (the
+webkit PTR wheel-gesture CI flake, `ccf77bc`). I'd rather flag this now
+than let it merge and reappear later as an unexplained CI flake on an
+unrelated-looking commit.
+
+**Suggested next step (not prescriptive):** try pinning test pools to a
+single connection (`SqlitePoolOptions::new().max_connections(1).connect(...)`)
+or switching the test DSN to `sqlite:file::memory:?cache=shared`, then
+run `cargo test` several times back-to-back (and/or under
+`--test-threads` matching CI) to confirm the flake is gone before
+re-requesting review. If it turns out this is specific to my sandbox's
+resource contention right now rather than a real risk under normal CI
+load, that's a valid rebuttal — but it needs to be demonstrated (e.g. a
+tight loop of N full-suite runs going clean), not asserted, given I have
+a verbatim, reproduced counter-example at this exact sha.
+
+**Tree state:** only edit is this appended section plus the updated
+verdict line below. `.claude/agents/security-brief.md` remains modified
+from before this review started (pre-existing, not touched by me).
+
+Gate: CHANGES r2 @b66ab6c — qa

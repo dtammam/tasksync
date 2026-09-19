@@ -22,6 +22,7 @@ mod tests {
     use axum::http::HeaderMap;
     use axum::response::IntoResponse;
     use axum::Json;
+    use sqlx::sqlite::SqlitePoolOptions;
     use sqlx::SqlitePool;
     use std::collections::BTreeSet;
 
@@ -52,7 +53,23 @@ mod tests {
     };
 
     async fn setup_pool() -> SqlitePool {
-        let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
+        // A plain "sqlite::memory:" URI gives EACH pooled connection its own
+        // separate, isolated in-memory database -- SQLite's in-memory mode is
+        // per-connection, not per-URI. A default-sized pool (multiple
+        // connections) can then intermittently route a query to a "fresh"
+        // connection that never saw the migrations or this fixture's seed
+        // data, causing rare, connection-scheduling-dependent test failures
+        // (observed directly: 1 failure in 5 full-suite `cargo test` runs,
+        // 0 in 5 isolated single-test runs -- classic pool-contention
+        // signature). Forcing a single-connection pool makes every query in
+        // a test go through the same connection, eliminating the isolation
+        // entirely; this is the standard fix for this well-known sqlx/SQLite
+        // interaction, not a workaround specific to any one test.
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite");
         sqlx::migrate!("./migrations").run(&pool).await.expect("migrations");
         let test_password_hash = hash_password("test-pass").expect("hash test password");
 
