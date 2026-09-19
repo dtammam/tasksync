@@ -171,6 +171,17 @@ fix for this well-known sqlx/SQLite interaction). Verified with 10
 consecutive full-suite `cargo test` runs, 0 failures (1070 test executions
 total); `cargo clippy -- -D warnings` and `cargo fmt -- --check` both clean.
 
+**r3 fix round.** QA independently re-ran the fix 10x clean (0/1070) and
+confirmed it correct, then found a SECOND helper in the same file,
+`bare_pool()`, with the byte-identical unpinned pattern
+(`SqlitePool::connect("sqlite::memory:")`, no `max_connections` pin) used
+by 6 other tests. Applied the identical fix. Grepped the whole `server/src`
+tree afterward to confirm these were the only two unpinned in-memory pool
+helpers in the crate (the production pool in `main.rs` and `bin/seed.rs`
+both connect to a real file path, immune to this class of bug entirely).
+Verified with 8 more consecutive full-suite runs, 0 failures (18/18 clean
+runs total across both fix commits, 1926 test executions).
+
 ## Gate
 
 ### security-brief — r1 @41c10cd
@@ -264,6 +275,46 @@ modified in `git status` from before this review started — not something I
 touched, and outside the scope of this branch's feature diff.)
 
 Gate: APPROVED r1 @41c10cd — security-brief
+
+### security-brief — r2 @209d969
+
+Re-engaged per the coordinator's note that the tree moved (three commits,
+`41c10cd` -> `209d969`) after r1. Re-verified independently rather than
+taking the summary on faith — read the current state of every file the
+summary named, plus re-confirmed `clear_list_tasks` itself.
+
+1. **`server/src/routes/lists.rs`** — read in full again: byte-for-byte
+   identical to what I reviewed at r1. `clear_list_tasks`'s admin check,
+   the `list_id = ?1 and space_id = ?2` bind order, and the
+   transaction/tombstone-loop structure are unchanged. Named surfaces 1, 2,
+   3, 4, 5 from r1 all still hold as verified.
+2. **`web/src/lib/components/Sidebar.svelte`** — confirmed the only change
+   is `listMessage = ''` added to `createList`, `renameList`, `moveList`,
+   and `handleDrop` (grepped all six call sites), matching the existing
+   convention already present in `deleteList`/`clearListTasks`. No new
+   network call, no new data flow, no security surface.
+3. **New test `admin_cannot_bulk_clear_a_different_spaces_list_by_id`**
+   (`server/src/routes/mod.rs:2044`) — read in full. This is a genuine
+   strengthening of exactly the gap I noted at r1 (I'd verified the
+   cross-space no-op by code tracing since the prior test only covered a
+   *different* list_id in a different space, not an admin explicitly
+   supplying an*other* space's real list_id). This new test does that
+   directly: s1-admin calls `clear_list_tasks` with s2's real `list_id`,
+   asserts `deleted_count == 0` and that s2's task survives. Confirms my r1
+   reasoning was correct; no logic changed to produce this result.
+4. **`setup_pool()` single-connection fix** (`server/src/routes/mod.rs:55`,
+   inside `mod tests` at line 18) — confirmed this is confined to the test
+   module and not part of any production code path (production pool
+   construction is separate, in `main.rs`/`types.rs::app_state`, untouched
+   by this commit). Fixes a documented test-flake mechanism (SQLite
+   in-memory mode being per-connection, not per-URI, under a multi-
+   connection pool). No security relevance.
+
+No new findings. All prior findings stand as previously banded (zero
+CRITICAL/HIGH/MEDIUM/LOW; one non-blocking INFO on tombstone-insert
+batching, unchanged and still not a security concern at this scale).
+
+Gate: APPROVED r2 @209d969 — security-brief
 
 ### qa — r1 @41c10cd
 
@@ -668,3 +719,190 @@ verdict line below. `.claude/agents/security-brief.md` remains modified
 from before this review started (pre-existing, not touched by me).
 
 Gate: CHANGES r2 @b66ab6c — qa
+
+### adversary — r3 @209d969
+
+Delta re-review of the new CRITICAL (qa's r2 finding: intermittent
+`cargo test` failure on `admin_cannot_bulk_clear_a_different_spaces_list_by_id`,
+root-caused to `setup_pool()`'s bare multi-connection `sqlite::memory:`
+pool) and its fix (`209d969`, `SqlitePoolOptions::new().max_connections(1)`).
+
+**Root cause verified against primary source, not the commit message's
+say-so.** Read the vendored `sqlx-core` and `sqlx-sqlite` crates directly
+(`~/.cargo/registry/src/.../sqlx-core-0.8.6/src/pool/options.rs`): the
+pre-fix `SqlitePool::connect("sqlite::memory:")` goes through
+`SqlitePoolOptions::default()`, whose `max_connections` field is
+hardcoded to `10` (`options.rs:151`). Combined with the base SQLite C
+library's own documented behavior that a bare `:memory:` URI opens a
+*new, independent* in-memory database per physical connection handle
+(not shared across connections, unlike a real file path) — the old test
+pool could genuinely hand a query to a connection that never ran the
+migration or saw the test's seed data. This is a real, well-known
+sqlx/SQLite interaction, confirmed by reading the actual default value
+in the dependency's own source, not asserted from a blog post or the fix
+commit's prose.
+
+**Fix scope verified: test-only, zero production blast radius.** Diffed
+`b66ab6c..209d969`: touches only `server/src/routes/mod.rs`, inside
+`mod tests` (confirmed `setup_pool` is declared at line ~55, well within
+the `mod tests {` block opened at line 18). Read `server/src/main.rs`
+directly: production's pool is built from
+`SqliteConnectOptions::from_str(&database_url)` against a real
+file-backed path (`sqlite://.../data/tasksync.db`, `create_if_missing`),
+with its own separate `SqlitePoolOptions::new().max_connections(5)` —
+completely unaffected by this change, and immune to the bug in the first
+place (a real file-backed SQLite database is the same physical file
+regardless of which pooled connection reaches it; the per-connection
+`:memory:` isolation this fix addresses doesn't apply to on-disk
+databases). No other route/handler code touched.
+
+**No deadlock/regression risk from forcing `max_connections(1)`.**
+Checked for any test or handler that needs two connections from the same
+pool concurrently (which would starve under a 1-connection pool): grepped
+for `join!`/`spawn`/concurrent-await patterns across `server/src/routes/`
+— none exist. Every handler that opens a transaction (`lists.rs`,
+`tasks.rs`, `auth.rs`) acquires exactly one connection via `.begin()`,
+uses it exclusively, then commits/drops before the test's next await
+point. A single-connection pool is safe for this codebase's actual usage
+pattern, not just theoretically convenient.
+
+**Verified the fix itself holds, by measurement, under real contention —
+not by re-stating the commit's claim.** Independently launched my own 5
+consecutive full-suite `cargo test` runs (not reusing the coordinator's
+or qa's numbers): **5/5 clean, `107 passed; 0 failed` every time**
+(77–90s each). Notably this ran under *heavier* real concurrent load than
+qa's original repro conditions — `ps aux` showed up to 5 simultaneous
+`cargo test` processes on the box at once (mine, plus concurrent
+re-verification runs from other seats sharing this sandbox), which is a
+harder contention scenario than a single full-suite run, and still 0
+failures. I did not additionally revert the fix myself to re-reproduce
+the pre-fix flake at this sha: qa's own r2/r3 work was concurrently
+running a bare-pool revert-and-reproduce cycle in this same shared
+environment (observed via `ps aux` and shared scratchpad activity while
+this review was in progress), and mutating the same file myself
+mid-flight risked a shared source-tree edit landing inside another
+seat's in-progress measurement window and corrupting their result — an
+avoidable hazard given qa was already doing exactly that experiment. I
+rely instead on the primary-source root-cause trace above (which fully
+explains the original failure mode deterministically, not just
+plausibly) plus my own 5/5 clean high-contention runs as sufficient
+independent confirmation that the fix holds.
+
+**No new findings.** This commit is narrowly scoped to the described
+test-infrastructure fix; nothing else changed.
+
+**Tree state:** only edit is this appended section plus the verdict line
+below. `.claude/agents/security-brief.md` remains modified from before
+this review started (pre-existing, not touched by me). Background
+verification artifacts from this and other seats' concurrent sessions
+live only under `/tmp/claude-1000/.../scratchpad/` and
+`/tmp/claude-1000/.../tasks/` — outside the git tree, not cleaned up by
+me since they're shared scratch space for the ongoing multi-seat review,
+not repository state.
+
+Gate: APPROVED r3 @209d969 — adversary
+
+### qa — r3 @209d969
+
+**The `setup_pool()` fix — VERIFIED correct and consistent with the
+diagnosis.** Read `server/src/routes/mod.rs`'s diff directly: the only
+change is `setup_pool()` now uses `SqlitePoolOptions::new().max_connections(1)`
+before `.connect("sqlite::memory:")`, forcing a single physical
+connection for every query in a test — the standard fix for the
+per-connection (not per-URI) semantics of SQLite's `:memory:` mode. No
+production code touched (`git diff b66ab6c..209d969` is scoped to
+`server/src/routes/mod.rs` test helpers + the plan doc). This doesn't
+mask anything: it doesn't change what any test asserts, seeds, or
+skips — it only removes the ambiguity in which physical connection a
+query lands on within a single test's pool, which is exactly the
+variable that was producing the earlier wrong `deleted_count`.
+
+**Independent multi-run confirmation — flake not reproduced.** Ran my
+own 10 consecutive full-suite `cargo test` runs from a fresh build at
+`209d969`, independently of the coordinator's 10 runs:
+
+```
+run 1:  107 passed; 0 failed (74.52s)
+run 2:  107 passed; 0 failed (84.78s)
+run 3:  107 passed; 0 failed (79.14s)
+run 4:  107 passed; 0 failed (79.51s)
+run 5:  107 passed; 0 failed (85.51s)
+run 6:  107 passed; 0 failed (57.90s)
+run 7:  107 passed; 0 failed (52.15s)
+run 8:  107 passed; 0 failed (45.11s)
+run 9:  107 passed; 0 failed (45.07s)
+run 10: 107 passed; 0 failed (44.97s)
+```
+
+0 failures across 1070 of my own test executions, on top of the
+coordinator's separately-reported 1070. Combined with my r2 baseline
+(1 failure in 5 pre-fix full-suite runs), this is a real before/after
+delta, not two parties getting lucky on the same seed — `cargo fmt --
+check` and `cargo clippy -- -D warnings` also re-confirmed clean at this
+sha.
+
+**WARNING — the fix is scoped to one of two helpers sharing the
+identical anti-pattern; the second is still exposed.**
+`server/src/routes/mod.rs:127`, `bare_pool()`:
+
+```rust
+async fn bare_pool() -> SqlitePool {
+    let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
+    ...
+}
+```
+
+This is the *exact* unpinned, default-multi-connection
+`SqlitePool::connect("sqlite::memory:")` call that `setup_pool()` had
+before this fix — same file, same root cause the fix commit itself
+describes ("SQLite's in-memory mode is per-connection, not per-URI").
+`bare_pool()` is used by 6 tests
+(`server/src/routes/mod.rs:294,2399,2450,2499,2518,2635`), at least two
+of which have the identical multi-await-point-per-connection shape that
+made the original bug possible:
+`first_run_setup_on_empty_db_creates_a_working_owner_session` (4
+sequential pool-touching calls: `auth_status`, `auth_setup`,
+`ctx_from_headers`, `auth_status` again — the last assertion
+specifically depends on state persisting *across* those calls on the
+*same* connection) and `second_first_run_setup_after_owner_exists_is_rejected`
+(`auth_setup` twice plus a raw `query_scalar` count, same shape).
+
+The commit message's framing — "pre-existing test infrastructure shared
+by all 107 tests in this file" — overstates what was actually fixed:
+only the `setup_pool()`-based tests (the large majority) got the fix;
+the `bare_pool()`-based tests still carry the same latent risk. I tried
+to independently reproduce a failure in just the `bare_pool` tests (20
+repeated runs filtered to `first_run`, `--test-threads=4`) and got 0
+failures — but that's a weaker experiment than the one that originally
+caught this (a *full*-suite run, all 107 tests contending for
+connections/scheduling at once), so a clean result there doesn't clear
+`bare_pool()`; it's simply a less loaded environment for the same bug to
+manifest in. I'm not treating this as a repro-required blocker (I did
+try, in good faith, before writing this up) — it's a straightforward,
+narrow code-inspection finding: the identical pattern that just caused a
+real, quoted, verbatim test failure exists unmodified four lines below
+the fix, in the same function's sibling helper, in the same file, by the
+same author, in the same commit's stated rationale.
+
+**Recommendation:** apply the identical
+`SqlitePoolOptions::new().max_connections(1)` fix to `bare_pool()`. This
+is a small, mechanical, one-line change with no behavior risk (same
+argument the existing fix already made for `setup_pool()`), and it's the
+right time to close this out — the mechanism is now fresh in both this
+review and the codebase's own memory (the plan doc's Progress log
+paragraph on the r2 fix), rather than waiting for a future test on
+`bare_pool()` to intermittently surface it again as if it were a new
+mystery.
+
+**Not re-litigating:** did not re-review `clear_list_tasks`, the
+Sidebar.svelte fix, or the adversary's new cross-space test's logic
+again here — those were confirmed at r1/r2 and nothing in `209d969`
+touches them (confirmed via `git diff b66ab6c..209d969 --
+server/src/routes/lists.rs web/src/lib/components/Sidebar.svelte`,
+both empty).
+
+**Tree state:** only edit is this appended section plus the updated
+verdict line below. `.claude/agents/security-brief.md` remains modified
+from before this review started (pre-existing, not touched by me).
+
+Gate: CHANGES r3 @209d969 — qa

@@ -124,7 +124,15 @@ mod tests {
     /// (`setup_pool` above always seeds an admin, which would make
     /// `owner_exists` trivially true).
     async fn bare_pool() -> SqlitePool {
-        let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
+        // Same fix, same reason as setup_pool() above: a plain
+        // "sqlite::memory:" URI gives each pooled connection its own
+        // isolated in-memory database, so a default multi-connection pool
+        // can intermittently see a connection that never ran migrations.
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite");
         sqlx::migrate!("./migrations").run(&pool).await.expect("migrations");
         pool
     }
