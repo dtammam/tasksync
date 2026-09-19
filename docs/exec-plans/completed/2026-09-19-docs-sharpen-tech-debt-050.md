@@ -171,3 +171,68 @@ file — nothing else differs.
 ## Verdict
 
 Gate: CHANGES r1 @6855878814a85105a7b3258407a296b489d33b53 — adversary
+
+## r2 delta review — @5466f7b
+
+Re-verified after the coordinator's fix (`0f7e53e`, "fix: un-conflate
+tech-debt #050's two distinct app-shell flake signatures") and rebase
+(`docs/sharpen-tech-debt-050` now at `5466f7b587a33148c9d9690ab4453615f80be022`,
+onto `main` post-PR-#146-merge).
+
+### CRITICAL (conflated chromium/firefox mechanism) — fixed as prescribed
+Read `0f7e53e`'s diff to `docs/exec-plans/tech-debt-tracker.md` directly. The
+`050` row now states two explicit, separately-labeled signatures instead of
+one: **(a) chromium/PR #141** — `toHaveAttribute('data-ready','true')` itself
+times out on the check immediately after `page.reload()`, lines ~637/706, 3/4
+runs; **(b) firefox/PR #146** — `data-ready` flips promptly on a fresh
+`page.goto('/')`, but the `task-row` count assertion fails right after because
+the list hasn't rendered — with an explicit line: *"(a) and (b) may share a
+root cause... but that is NOT established — treat as two open questions, not
+one, until proven otherwise."* Also splits the `next action` column into
+separate reload-path vs fresh-boot investigation instructions.
+
+Re-checked this against the same primary sources from r1, not just trusting
+the new prose:
+- `web/tests/e2e/offline.spec.ts` is untouched by PR #146/the rebase (`git log
+  -- web/tests/e2e/offline.spec.ts` shows no commit past `f709d10`, well
+  before this work) — line numbers are stable. `awk 'NR==547||NR==604||
+  NR==637||NR==706'` confirms 547/604 are still the initial `task-row` count
+  checks and 637/706 are still the post-`reload()` `data-ready`
+  `toHaveAttribute` checks, exactly as the rewritten row now describes.
+- Re-read the three chromium job logs from r1 (`105717287432`,
+  `105718403678`, `105719852309`) — still show `toHaveAttribute` timing out
+  at 637/706, matching (a) verbatim.
+- Re-read the firefox trace JSONL and `error-context.md` from r1
+  (`playwright-report-firefox`, run `35418732440`) — still show `data-ready`
+  succeeding then `task-row` `toHaveCount(1)` failing on a fresh `goto`,
+  matching (b) verbatim, with the empty-state snapshot correctly retained in
+  the prose.
+- The new row no longer asserts a unified mechanism anywhere, and the
+  disclaimer is unambiguous. **Fixed as prescribed — no surviving instance of
+  the conflation.**
+
+### WARNING (051 closing against an unmerged PR) — fixed as prescribed
+`git merge-base --is-ancestor 8d6d566 HEAD` (PR #146's actual merge commit)
+now returns true, and `git merge-base HEAD main` **is** `8d6d566` — the branch
+is rebased cleanly onto `main` post-merge, not just claiming it. Re-confirmed
+PR #146 itself via the GitHub API: `merged: true`. The `051` row's content
+(link, summary) is unchanged from r1 and was already verified accurate to
+PR #146's actual diff. **Fixed as prescribed.**
+
+### Scope re-check
+`git diff --name-only main HEAD` (new base): only
+`docs/exec-plans/tech-debt-tracker.md` and this record file
+(`docs/exec-plans/completed/2026-09-19-docs-sharpen-tech-debt-050.md`, added
+by the coordinator's own r1-recording commit `5466f7b`, byte-identical to
+what I wrote — diffed and confirmed). Nothing else changed. No new issue
+introduced by the fix commit itself (single-purpose `050`-row edit only).
+
+### Tree hygiene
+No repo file modified during this delta review except this appendix. `git
+status` shows only the pre-existing, out-of-scope `M .claude/agents/
+security-brief.md` (unchanged since r1, still not part of any commit under
+review) plus this file's own edit.
+
+## Verdict
+
+Gate: APPROVED r2 @5466f7b587a33148c9d9690ab4453615f80be022 — adversary
