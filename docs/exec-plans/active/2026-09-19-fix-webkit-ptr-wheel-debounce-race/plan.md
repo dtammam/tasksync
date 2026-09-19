@@ -219,14 +219,14 @@ the comment text if this is touched again.
 
 No CRITICAL or blocking WARNING findings.
 
-Gate: APPROVED r1 @90666af2bfa55c5e4ace5ddd5e8d43a97e48143a — adversary
+Gate: r1 adversary verdict SUPERSEDED by r2 below — it approved @90666af, but that sha's code is stale (now @cf23684); superseded, not re-endorsed.
 
 ## Gate
 
 **Adversary review (r2 @cf23684100297bd351a31b68dbe4c8738c3c6036)**
 
 Delta re-review of r2 (r1 QA CHANGES @90666af was the correct blocker; r1
-Adversary APPROVED @90666af is void — the tree moved). Verified by measurement:
+Adversary approval @90666af is void — the tree moved). Verified by measurement:
 
 - **Instruments (verbatim).** `cd web && npm run lint`: clean, no output, exit 0.
   `npm run check`: `svelte-check found 0 errors and 0 warnings`. Server untouched
