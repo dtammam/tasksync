@@ -2,8 +2,8 @@
 plan: chore-plan-doc-lifecycle-cleanup
 harness: v2 · lean
 anchor: outcome
-status: Shipped PR#149 (+ PR#150 follow-up)
-gate: APPROVED r2 @1cf9d838ac72cf8d58ea1c144c6ff9a7ee243d0a — adversary
+status: Shipped PR#149, PR#150
+gate: APPROVED r3 @2bde7dd87298a8b48c0b4d27a69ad360ebf01790 — adversary
 ---
 
 # Plan-doc lifecycle cleanup — gate history (PR#149, PR#150)
@@ -290,3 +290,51 @@ otherwise clean. The pre-existing `stash@{0}` (predates this whole review
 thread) remains untouched.
 
 Gate: CHANGES r2 @2a001a1d7f25ed49ab505f7a807c78736a7bc3b7 — adversary
+
+## Gate — adversary, PR#150 review (r3)
+
+Re-reviewed the fix commit `2bde7dd87298a8b48c0b4d27a69ad360ebf01790`, one
+commit ahead of the `2a001a1` reviewed at r2.
+
+### r2 finding 1 (fabricated bug-report claim) — fixed as prescribed
+`git diff 2a001a1 2bde7dd` shows the sentence "(See the harness bug report
+filed upstream — this exact false-positive class is item 4 there.)" removed
+outright, with nothing put in its place. `grep -rn "harness bug"` across the
+tree now returns only two hits, both inside my own r2 findings text above,
+quoting the removed sentence for the record — expected, the same pattern
+already established by the PR#149 r2 section's own "Own-artifact hygiene"
+precedent for reproducing a since-fixed violation as evidence. No
+replacement claim was substituted, so no new unverifiable assertion was
+introduced in its place. **Fixed as prescribed.**
+
+### r2 finding 2 ("nothing lost or altered" framing) — fixed as prescribed
+"What PR #150 did" now reads: "the same gate history condensed below
+(verdicts, severities, and findings preserved; supporting narrative such as
+exact commands run and self-correction detail trimmed)." This matches what
+I actually measured at r2 — no overclaim of verbatim fidelity remains, and
+the description of what was and wasn't preserved is accurate. **Fixed as
+prescribed.**
+
+### Scope re-check
+`git diff --name-status 2a001a1 2bde7dd` touches only this one file; `git
+diff --name-status main...HEAD` still shows only this one new file relative
+to `main`. The bulk-check-uncheck-tasks plan doc remains byte-identical to
+`main` (`git diff main -- .../plan.md` empty, re-confirmed). `check-
+markers.sh docs/exec-plans` still reports 5 issues, identical file and
+lines to `main`'s pre-existing baseline — unchanged by this fix commit.
+
+### Frontmatter conflation (flagged at r2, non-blocking) — deferral accepted
+Explicitly deferred to the pass that sets this PR's final approved
+status/gate, on the reasoning that it needs a second edit at that point
+regardless. I called this non-blocking at r2 and see no reason to change
+that now; noting it stays open, not silently dropped.
+
+### Tree hygiene
+Only file modified this round: this appendix, to the same file. `git
+status --porcelain` is otherwise clean, no stray worktrees (`git worktree
+list` shows only this checkout), and the pre-existing `stash@{0}` remains
+untouched throughout this entire review thread.
+
+No new findings this round.
+
+Gate: APPROVED r3 @2bde7dd87298a8b48c0b4d27a69ad360ebf01790 — adversary
