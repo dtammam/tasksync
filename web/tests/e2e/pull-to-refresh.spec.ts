@@ -120,7 +120,7 @@ test.describe('PTR touch gesture', () => {
 test.describe('PTR desktop pointer gesture', () => {
 	// No device override — uses default desktop viewport
 
-	test('pull-to-refresh mouse drag triggers sync @smoke', async ({ page, browserName }) => {
+	test('pull-to-refresh mouse drag triggers sync @smoke', async ({ page }) => {
 		await setAuthenticatedClientState(page);
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
@@ -130,15 +130,12 @@ test.describe('PTR desktop pointer gesture', () => {
 		// Indicator starts hidden (opacity 0).
 		await expect(indicator).toHaveCSS('opacity', '0');
 
-		// Wait for hydration — pointer listeners must be registered before interacting.
-		// CDP is Chromium-only; fall back to a delay on other browsers.
-		if (browserName === 'chromium') {
-			const client = await page.context().newCDPSession(page);
-			await waitForPtrListeners(page, client, 'pointerdown');
-			await client.detach();
-		} else {
-			await page.waitForTimeout(2000);
-		}
+		// Wait for hydration — gesture listeners must be attached before interacting.
+		// PullToRefresh exposes data-ptr-ready once onMount registers them (all
+		// browsers), a deterministic signal in place of a fixed sleep / CDP probe.
+		await expect(page.locator('.ptr-wrap')).toHaveAttribute('data-ptr-ready', 'true', {
+			timeout: 20_000
+		});
 
 		// Reset scroll position so the component's scroll guard does not fire.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
@@ -178,7 +175,7 @@ test.describe('PTR desktop pointer gesture', () => {
 test.describe('PTR wheel gesture', () => {
 	// No device override — uses default desktop viewport
 
-	test('wheel gesture triggers sync @smoke', async ({ page, browserName }) => {
+	test('wheel gesture triggers sync @smoke', async ({ page }) => {
 		await setAuthenticatedClientState(page);
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
@@ -188,15 +185,12 @@ test.describe('PTR wheel gesture', () => {
 		// Indicator starts hidden (opacity 0).
 		await expect(indicator).toHaveCSS('opacity', '0');
 
-		// Wait for hydration — wheel listener must be registered before interacting.
-		// CDP is Chromium-only; fall back to a delay on other browsers.
-		if (browserName === 'chromium') {
-			const client = await page.context().newCDPSession(page);
-			await waitForPtrListeners(page, client, 'wheel');
-			await client.detach();
-		} else {
-			await page.waitForTimeout(2000);
-		}
+		// Wait for hydration — the wheel listener must be attached before interacting.
+		// PullToRefresh exposes data-ptr-ready once onMount registers listeners (all
+		// browsers), a deterministic signal in place of a fixed sleep / CDP probe.
+		await expect(page.locator('.ptr-wrap')).toHaveAttribute('data-ptr-ready', 'true', {
+			timeout: 20_000
+		});
 
 		// Reset scroll position so the wheel scroll guard (scrollTop === 0) is satisfied.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
