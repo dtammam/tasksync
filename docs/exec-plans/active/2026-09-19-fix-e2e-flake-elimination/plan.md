@@ -82,3 +82,42 @@ interface spec, so `spec` is not warranted.
 - The `data-synced` signal keys off `syncStatus.pull` settling (running → idle/
   error) after startup while authenticated; for offline/anonymous it must still
   resolve (errored pull counts as settled) so it never hangs the app or a test.
+
+## Scope adjustments discovered during build
+
+- **Offline signature (a) root cause was NOT auth-blocking.** Under load repro
+  showed `app-shell` never renders after an offline `page.reload()` because e2e
+  ran against the **Vite dev server**, whose SW precaches nothing (`build`/
+  `files` from `$service-worker` are empty in dev) — so offline reload can't
+  re-load Vite's dynamic ESM modules and the app never boots. Fixed by running
+  e2e against a **production build** (`playwright.config.ts` webServer →
+  `vite build && vite preview`); the built SW precaches all assets. Cache-first
+  auth is kept as a correct, independent offline-first improvement (not the (a)
+  fix). Owner approved the build+preview change (test-only; production already
+  ships this bundle).
+- **#051 wheel fix folded in.** This branch was off main (no #051 fix), so the
+  wheel test flaked here too; merged `fix/webkit-ptr-wheel-debounce-race` in so
+  one branch makes the whole suite green (supersedes standalone PR #153).
+- **task-tags deferred.** The suspected direct-IDB-write vs app-re-persist race
+  and weak `toHaveCount(0)` assertions were NOT CI-confirmed flakes; fixing them
+  needs a UI-driven tag-set rewrite that risks a passing test. Filed as its own
+  tech-debt row rather than forced into this PR.
+
+## Verification (local, pre-gate)
+
+- `npm run lint` / `npm run check`: clean. `npx vitest run`: **414 passed** (28
+  files; +3 new cache-first auth tests).
+- Production build succeeds (`vite build`, adapter-static, ~6s).
+- **Full e2e suite on the preview build** (chromium + webkit): **120 passed, 8
+  skipped, 0 failed** — build+preview regressed nothing.
+- **Under induced CPU load (2× `yes`, `--workers=2`, load avg 7–11.5 on 6 cores):**
+  - `offline.spec.ts` (all offline tests) chromium ×12: **66 passed, 0 failed**
+    (6 graceful SW-not-ready skips under extreme load — pre-existing
+    `allowUnregistered` behavior, not failures).
+  - `offline.spec.ts:589` (the #050 (a)+(b) test) chromium ×25: **23 passed, 0
+    failed**, 2 graceful skips. (Pre-fix on the dev server this failed ~2/30 with
+    `app-shell` absent after reload.)
+  - `sidebar-drag` + `sidebar-zones` chromium ×15: **30 passed, 0 failed**.
+  - wheel gesture (webkit) ×15: **15 passed, 0 failed**.
+- Firefox not locally runnable (binary absent); CI covers it — the real arbiter,
+  as with #051.
