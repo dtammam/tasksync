@@ -3,7 +3,7 @@ plan: roadmap-resilience-emoji-bulk-gate-history
 harness: v2 · lean
 anchor: outcome
 status: Shipped (relocation)
-gate: pending
+gate: APPROVED r2 @8433359e4da44a9b981afae8a8893b927dba9de8 — adversary
 ---
 
 # Roadmap doc's own edit-history gate record
@@ -626,3 +626,72 @@ tool-invisible marker-hygiene defect with a directly-applicable in-repo
 precedent for the fix. This blocks per that precedent.
 
 Gate: CHANGES r1 @f9193b171cfd01029793e2dff5e2bbea2f19fd12 — adversary
+
+## Gate — adversary, PR#152 review (r2, delta re-review)
+
+Re-reviewed the fix commit `8433359e4da44a9b981afae8a8893b927dba9de8`, one
+commit ahead of the `f9193b1` reviewed at r1.
+
+### Finding (r1, CRITICAL — frontmatter conflation): fixed as prescribed
+
+`git diff f9193b1 8433359 -- docs/exec-plans/completed/2026-09-19-roadmap-doc-gate-history.md`
+shows exactly two things: (1) `gate: APPROVED r2 @3eb4e6e82403bb1dee7c875b34f4c88e3097ad1c
+— adversary` → `gate: pending`, and (2) this review's own r1 section,
+previously sitting uncommitted in the shared working tree, captured into a
+commit for the first time — read against the diff output and confirmed
+byte-identical to what I wrote (`git show 8433359:<path>` diffed against
+the current working file: identical). No other line changed. This is
+exactly the same capture-on-next-commit mechanism PR#150's r4 review
+documented for its own r3 section, not a new or surprise change.
+
+Frontmatter now reads `gate: pending` — no longer names `3eb4e6e8...` or
+any other unrelated sha. The false "this file's own creation was already
+approved" claim is gone. `status: Shipped (relocation)` still stands
+alongside `gate: pending`, which is the same shape `2e99dd5`'s *pre*-final
+state used before PR#150 rebound it to its own approval sha at the very
+end — an acceptable intermediate state per that established two-pass
+precedent, not a new defect. The coordinator has stated intent to rebind
+`gate:` to this review's own final approval sha as a last step, matching
+PR#150 exactly; I'll re-verify that rebind when it lands (same as r4 did
+for PR#150).
+
+### Re-ran the other instruments — all still hold
+
+- `bash .harness/lib/check-markers.sh docs/exec-plans` on `8433359`:
+  `check-markers: clean (docs/exec-plans)`, exit 0 — still 0 issues.
+- `git diff --name-only main...HEAD`: still exactly the two files
+  (`docs/exec-plans/active/2026-09-16-roadmap-resilience-emoji-bulk.md`,
+  `docs/exec-plans/completed/2026-09-19-roadmap-doc-gate-history.md`). No
+  scope creep introduced by the fix commit.
+- The zero-diff verbatim-relocation result from r1 (Claims 1/3/4/5/6) is
+  unaffected — this commit only touched the new file's own frontmatter and
+  captured my own review text; it did not touch any of the six relocated
+  gate sections or the roadmap doc's surviving content. Spot-re-ran
+  `grep -n '^Gate:'` on the current file: still the same 6 relocated shas
+  unchanged, plus my own r1 `Gate: CHANGES ... @f9193b1...` line, as
+  expected.
+
+### New-fix sweep
+
+Nothing new introduced by this fix commit beyond the frontmatter edit and
+the pre-existing capture of my r1 text. No new file, no other doc touched,
+no code touched.
+
+### Tree hygiene
+
+Read-only this round (greps, diffs, `check-markers.sh`). `git status
+--porcelain -uall` clean apart from this appended section; no worktrees,
+no stashes.
+
+### Verdict
+
+r1's sole CRITICAL finding is fixed as prescribed. No new issues found.
+Approving at this sha; the frontmatter still reads `gate: pending` rather
+than pointing at this approval, which the coordinator has stated will be
+rebound in a following commit per the PR#150 two-pass pattern — that
+follow-up rebind itself will need one more quick re-check (that it points
+at *this* r2 sha or the final rebind commit, not back at `3eb4e6e8...` or
+anything else unrelated) before this doc is fully closed out, exactly as
+PR#150's r4 confirmed its own rebind.
+
+Gate: APPROVED r2 @8433359e4da44a9b981afae8a8893b927dba9de8 — adversary
