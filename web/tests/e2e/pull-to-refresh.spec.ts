@@ -201,39 +201,37 @@ test.describe('PTR wheel gesture', () => {
 		// Reset scroll position so the wheel scroll guard (scrollTop === 0) is satisfied.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
 
-		// Position the mouse over the .ptr-wrap element before dispatching wheel events.
-		// page.mouse.wheel() dispatches the event at the current mouse cursor position;
-		// the cursor must be within .ptr-wrap so that the containerEl event listener fires.
-		const wrapBox = await page.locator('.ptr-wrap').boundingBox();
-		if (!wrapBox) throw new Error('.ptr-wrap not found');
-		const cx = Math.round(wrapBox.x + wrapBox.width / 2);
-		const cy = Math.round(wrapBox.y + 10);
-		await page.mouse.move(cx, cy);
-
 		// Send multiple wheel-up events (negative deltaY) to accumulate pull distance
-		// past the 64px refresh threshold.
+		// past the 64px refresh threshold, all in one page.evaluate() rather than
+		// awaiting page.mouse.wheel() per event.
 		//
 		// The damping formula is: PULL_MAX * (1 - exp(-wheelAccumulator * 0.9 / 140)).
 		// To reach pullDistance >= 64px, wheelAccumulator must exceed ~95px.
 		// Sending 5 × 40px = 200px raw delta yields pullDistance ≈ 99px, well past threshold.
 		//
-		// page.mouse.wheel() dispatches real WheelEvent objects in DOM_DELTA_PIXEL mode,
-		// which the component's handleWheel handler normalises and accumulates.
-		for (let i = 0; i < 5; i++) {
-			await page.mouse.wheel(0, -40);
-		}
+		// handleWheel's end-detection timer is a real, hardcoded 150ms debounce
+		// (PullToRefresh.svelte) that resets on every wheel event and starts the
+		// fade-out the moment it elapses with no new event. page.mouse.wheel()
+		// dispatches through the full automation-channel round trip per call --
+		// five awaited calls, on WebKit's measurably slower channel, plus the
+		// following expect()'s own round trip, was enough dead time to let the
+		// debounce fire before the opacity assertion below ever got its first
+		// poll in (observed in CI as opacity already partway or fully through
+		// its fade-out instead of the expected mid-gesture '1'; tech-debt #051).
+		// Dispatching synthetic WheelEvents directly on .ptr-wrap inside a
+		// single evaluate() call removes that round-trip budget entirely --
+		// deltaMode 0 matches page.mouse.wheel()'s DOM_DELTA_PIXEL, which
+		// handleWheel's normalizeDeltaY() reads as-is.
+		await page.evaluate(() => {
+			const wrap = document.querySelector('.ptr-wrap');
+			if (!wrap) throw new Error('.ptr-wrap not found');
+			for (let i = 0; i < 5; i++) {
+				wrap.dispatchEvent(
+					new WheelEvent('wheel', { deltaY: -40, deltaMode: 0, bubbles: true, cancelable: true })
+				);
+			}
+		});
 
-		// Check the debounce-sensitive assertion FIRST, immediately after the
-		// wheel loop: handleWheel's end-detection timer is a real, hardcoded
-		// 150ms debounce that resets on every wheel event (PullToRefresh.svelte)
-		// and starts the fade-out the moment it elapses with no new event. Each
-		// `expect()` round-trips to the browser, so checking anything else
-		// first burns into that same 150ms budget -- on a slower CI runner
-		// (WebKit's automation channel has measurably higher per-command
-		// latency than Chromium/Firefox's), that overhead alone was enough to
-		// let the debounce fire before this assertion ever ran, observed as
-		// the indicator having already completed its fade-out (opacity 0)
-		// instead of being caught fully visible (opacity 1).
 		await expect(indicator).toHaveCSS('opacity', '1');
 
 		// Content wrapper must be translated down during the active gesture.
