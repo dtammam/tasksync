@@ -29,22 +29,21 @@ test('@smoke settings button is visible in viewport on mobile without scrolling'
 	const drawer = page.getByTestId('sidebar-drawer');
 	await expect(drawer).toHaveClass(/open/, { timeout: 5_000 });
 
-	// Wait for the CSS transition (170ms) to finish before measuring positions.
-	await page.waitForTimeout(300);
-
 	// Locate the Settings button inside the bottom zone.
 	const settingsBtn = page.getByTestId('settings-open');
 	await expect(settingsBtn).toBeVisible();
 
-	// Assert the Settings button bounding box is fully within the visible viewport.
-	// No scrolling should be needed — it must be pinned to the bottom zone.
-	const box = await settingsBtn.boundingBox();
-	if (!box) throw new Error('Settings button bounding box not found');
-
 	const viewportHeight = 844;
 
-	// The button bottom edge must be within the viewport height.
-	expect(box.y + box.height).toBeLessThanOrEqual(viewportHeight);
-	// The button top edge must be within the viewport (not scrolled off screen).
-	expect(box.y).toBeGreaterThanOrEqual(0);
+	// The Settings button must sit fully within the viewport — no scrolling. Poll
+	// the bounding box (rather than sleeping through the ~170ms drawer transition
+	// and measuring once) so it settles deterministically under load: the top
+	// edge on-screen and the bottom edge within the viewport height.
+	await expect
+		.poll(async () => {
+			const box = await settingsBtn.boundingBox();
+			if (!box) return null;
+			return box.y >= 0 && box.y + box.height <= viewportHeight;
+		})
+		.toBe(true);
 });

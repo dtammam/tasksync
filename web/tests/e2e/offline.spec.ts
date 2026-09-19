@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readTasksFromIdbByTitle } from './helpers/idb';
 import { setAuthenticatedClientState, type TestUser } from './helpers/auth';
+import { expectAppSynced } from './helpers/ready';
 
 const makeTitle = (base: string) => `${base} ${Math.random().toString(36).slice(2, 8)}`;
 const todayIso = () => {
@@ -64,7 +65,7 @@ const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnre
 		// its activate handler. Use domcontentloaded — networkidle can hang
 		// when Playwright mock routes are active.
 		await page.reload({ waitUntil: 'domcontentloaded' });
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		// Give claim() a reasonable window. If the SW never claims (e.g. mock
 		// routes interfere with SW fetch scope in CI), return false so callers
 		// that pass allowUnregistered can skip gracefully.
@@ -455,7 +456,7 @@ test.describe('Offline continuity', () => {
 		};
 		await setAuthenticatedClientState(page, user);
 		await page.goto('/');
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 
 		const title = makeTitle('Offline continuity');
 		await page.getByTestId('new-task-input').fill(title);
@@ -473,7 +474,7 @@ test.describe('Offline continuity', () => {
 		const bootStart = Date.now();
 		await page.reload({ waitUntil: 'domcontentloaded' });
 
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		expect(Date.now() - bootStart, 'offline boot must complete within 3 s').toBeLessThan(3000);
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
@@ -490,7 +491,7 @@ test.describe('Offline continuity', () => {
 		const mockServer = await mockAuthenticatedSyncServer(page, user);
 
 		await page.goto('/');
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 
@@ -506,7 +507,7 @@ test.describe('Offline continuity', () => {
 			return;
 		}
 		await page.reload({ waitUntil: 'domcontentloaded' });
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 		await expect
 			.poll(async () => {
@@ -543,7 +544,7 @@ test.describe('Offline continuity', () => {
 		});
 
 		await page.goto('/');
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 
@@ -563,7 +564,7 @@ test.describe('Offline continuity', () => {
 			return;
 		}
 		await page.reload({ waitUntil: 'domcontentloaded' });
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 		await expect
 			.poll(async () => {
@@ -600,7 +601,7 @@ test.describe('Offline continuity', () => {
 		});
 
 		await page.goto('/');
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByTestId('task-row').filter({ hasText: originalTitle })).toHaveCount(1);
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 
@@ -634,7 +635,7 @@ test.describe('Offline continuity', () => {
 			return;
 		}
 		await page.reload({ waitUntil: 'domcontentloaded' });
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByTestId('task-row').filter({ hasText: editedTitle })).toHaveCount(1);
 		await expect(
 			page.getByTestId('task-title').filter({
@@ -669,7 +670,7 @@ test.describe('Offline continuity', () => {
 		});
 
 		await page.goto('/');
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 
@@ -703,7 +704,7 @@ test.describe('Offline continuity', () => {
 			return;
 		}
 		await page.reload({ waitUntil: 'domcontentloaded' });
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByTestId('task-row').filter({ hasText: title })).toHaveCount(1);
 		await expect
 			.poll(async () => {
@@ -750,7 +751,7 @@ test.describe('Offline continuity', () => {
 		};
 		await setAuthenticatedClientState(page, user);
 		await page.goto('/');
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		const swReady = await ensureServiceWorkerControlsPage(page, { allowUnregistered: true });
 		if (!swReady) {
 			// SW unavailable; offline scope continuity cannot be verified without cached shell.
@@ -769,7 +770,7 @@ test.describe('Offline continuity', () => {
 		await context.setOffline(true);
 		await page.reload({ waitUntil: 'domcontentloaded' });
 
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+		await expectAppSynced(page);
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
 		await expect(page.getByTestId('task-row').filter({ hasText: scopedTaskTitle })).toHaveCount(1);
 		await expect(page.getByTestId('task-row').filter({ hasText: 'Anonymous scope task' })).toHaveCount(0);

@@ -37,6 +37,10 @@
 
 	/** Root element bound via bind:this; used to locate the <main> scroll container. */
 	let containerEl: HTMLDivElement;
+	// Flips true once onMount has attached the gesture listeners, so tests can
+	// wait on a deterministic signal instead of a fixed sleep (the SSR DOM
+	// exists before hydration attaches these handlers).
+	let ptrReady = false;
 
 	/** Damped pull distance driven by touchmove; drives content translation + emoji. */
 	let pullDistance = 0;
@@ -473,6 +477,9 @@
 		// Must be non-passive because it calls preventDefault during active pull gestures.
 		containerEl.addEventListener('wheel', handleWheel, { passive: false });
 
+		// All gesture listeners are now attached — expose a deterministic marker.
+		ptrReady = true;
+
 		return () => {
 			mql.removeEventListener('change', handleMqlChange);
 			containerEl.removeEventListener('touchstart', handleTouchStart);
@@ -549,7 +556,12 @@
 	});
 </script>
 
-<div class="ptr-wrap" class:ptr-dragging={isPointerDragging} bind:this={containerEl}>
+<div
+	class="ptr-wrap"
+	class:ptr-dragging={isPointerDragging}
+	data-ptr-ready={ptrReady ? 'true' : 'false'}
+	bind:this={containerEl}
+>
 	<!--
 		Pull indicator: absolute, sits at the top of ptr-wrap.
 		Revealed by content translating down; only opacity is animated.

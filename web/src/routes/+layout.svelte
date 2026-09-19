@@ -31,6 +31,11 @@
 	let navOpen = false;
 	let settingsDialogOpen = false;
 	let appReady = false;
+	// Distinct from appReady/data-ready (which reflects only local IDB/seed
+	// hydration): flips true once the first authenticated startup sync attempt
+	// has settled, so callers can wait on "server state applied" instead of the
+	// local-hydration proxy. See docs/exec-plans .../e2e-flake-elimination.
+	let firstSyncSettled = false;
 	let syncInFlight: Promise<void> | null = null;
 	let syncCoordinator: SyncCoordinator | null = null;
 	let syncLeader = true;
@@ -277,7 +282,18 @@
 		})();
 
 		if (auth.isAuthenticated()) {
-			requestSync('startup');
+			const startupSync = requestSync('startup');
+			if (startupSync) {
+				// Leader tab: mark synced once the first pull/push cycle settles
+				// (success OR error — an errored offline pull still "settles").
+				void startupSync.finally(() => {
+					firstSyncSettled = true;
+				});
+			} else {
+				// Follower tab: the leader drives the pull and the coordinator's
+				// onStatus path hydrates this tab; don't hang the marker on it.
+				firstSyncSettled = true;
+			}
 		}
 		retryTimer = setInterval(() => {
 			const s = get(syncStatus);
@@ -404,6 +420,7 @@
 	class={`app-shell ${settingsDialogOpen ? 'settings-open' : ''}`}
 	data-testid="app-shell"
 	data-ready={appReady ? 'true' : 'false'}
+	data-synced={firstSyncSettled ? 'true' : 'false'}
 	data-settings-open={settingsDialogOpen ? 'true' : 'false'}
 >
 	<div class={`sidebar-drawer ${navOpen ? 'open' : ''} ${settingsDialogOpen ? 'settings-open' : ''}`} data-testid="sidebar-drawer">
