@@ -223,13 +223,25 @@ test.describe('PTR wheel gesture', () => {
 			await page.mouse.wheel(0, -40);
 		}
 
+		// Check the debounce-sensitive assertion FIRST, immediately after the
+		// wheel loop: handleWheel's end-detection timer is a real, hardcoded
+		// 150ms debounce that resets on every wheel event (PullToRefresh.svelte)
+		// and starts the fade-out the moment it elapses with no new event. Each
+		// `expect()` round-trips to the browser, so checking anything else
+		// first burns into that same 150ms budget -- on a slower CI runner
+		// (WebKit's automation channel has measurably higher per-command
+		// latency than Chromium/Firefox's), that overhead alone was enough to
+		// let the debounce fire before this assertion ever ran, observed as
+		// the indicator having already completed its fade-out (opacity 0)
+		// instead of being caught fully visible (opacity 1).
+		await expect(indicator).toHaveCSS('opacity', '1');
+
 		// Content wrapper must be translated down during the active gesture.
+		// Safe to check after the opacity assertion above already confirmed
+		// we're still within the active (pre-debounce) window.
 		const content = page.locator('.ptr-content');
 		await expect(content).toHaveAttribute('style', /translateY\(/);
 		await expect(content).not.toHaveAttribute('style', /translateY\(0px\)/);
-
-		// Indicator must be fully visible while pull distance exceeds threshold.
-		await expect(indicator).toHaveCSS('opacity', '1');
 
 		// The wheel handler uses a 150ms debounce for gesture-end detection.
 		// After the last wheel event, allow the debounce to settle.
