@@ -51,7 +51,8 @@ and the sharpened tech-debt-tracker entries (PR #147). Roadmap work below
 
 **Piece 4 overlap, noted 2026-09-19:** the owner separately asked, out of
 band, for a way to bulk-clear a list's tasks before deleting the list itself
-(manually deleting hundreds of items first was "a real slog"). Shipped as
+(manually deleting hundreds of items first was tedious and error-prone).
+Shipped as
 `feat/bulk-clear-list-tasks`, PR #148, merged 2026-09-19 — see
 `docs/exec-plans/completed/2026-09-19-feat-bulk-clear-list-tasks.md`. This is
 list-scoped ("clear every task in list X"), not the per-task multi-select
