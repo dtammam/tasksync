@@ -111,6 +111,29 @@ line) are folded into the same read.
 
 The load A/B is not a formal proof the CI-load race is impossible, but it is a direct causal demonstration under reproduced failure conditions, not the "60 consecutive passes at unknown ambient load" that r1 (correctly) got challenged on. Will confirm against real CI in the gate cycle.
 
+## CI confirmation (real GitHub free runners) @63b99d2
+
+The actual arbiter — CI on GitHub's shared free runners, the true failure
+surface (not this 6-core box). Pushed sha `63b99d2` (= `cf23684` fix + gate/
+bookkeeping doc commits; code identical):
+- **`web-e2e-matrix (webkit)`: success** — the `wheel gesture triggers sync
+  @smoke` test passed on the real webkit runner. This is the acceptance
+  criterion #051 was reopened for.
+- `web-e2e-matrix (chromium)`: success. `web` (unit/lint/build): success.
+  `server`: success.
+- **Two CI jobs went red, both on the SAME unrelated test**
+  `tests/e2e/offline.spec.ts:588` ("@smoke offline title edit survives reload
+  and syncs once after reconnect") — firefox full suite failed at :604
+  (`toHaveCount`, 56 passed / 1 failed); the push smoke gate failed on chromium
+  at :637 (`toHaveAttribute`, 23 passed / 1 failed). This is **tech-debt #050**
+  (the pre-existing offline flake, open/unassigned), NOT this change: this diff
+  touches only `pull-to-refresh.spec.ts` + docs, nothing `offline.spec.ts`
+  depends on. #050 is what currently keeps PR #153 red; #051's own fix is green
+  on CI across all browsers.
+
+Net: #051's fix is verified on the real failure surface. PR #153 cannot go
+fully green (and so should not merge) until #050 is addressed separately.
+
 ## Gate
 
 ### QA r1 @90666af2bfa55c5e4ace5ddd5e8d43a97e48143a
