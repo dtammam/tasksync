@@ -54,6 +54,63 @@ test.describe('Task tags', () => {
 		).toBeVisible();
 	});
 
+	test('group headers update once a custom palette finishes hydrating, with no reload or extra edit', async ({
+		page
+	}) => {
+		// Reproduces a real reactivity bug: `pendingGroups`/`completedGroups` are
+		// Svelte `$:` blocks that call groupTasksByTag(), which reads the tag
+		// palette store through a plain function call the Svelte compiler can't
+		// see into -- so the groups never recomputed once the palette finished
+		// hydrating asynchronously after first paint (by design: hydration must
+		// not block first paint). The tag's own emoji glyph still rendered fine
+		// (TaskRow reads task.emoji directly), but the group *header* stayed
+		// frozen at whatever the palette looked like on first render -- the
+		// built-in default, since a real palette hasn't hydrated yet. A custom
+		// tag not in the default palette (like this one) renders a doubled-emoji
+		// fallback label until the fix makes the header depend on `$tagPalette`.
+		let releaseTagsResponse: (() => void) | null = null;
+		const tagsResponseGate = new Promise<void>((resolve) => {
+			releaseTagsResponse = resolve;
+		});
+		await page.route('**/tags', async (route) => {
+			if (route.request().method() !== 'GET') {
+				await route.continue();
+				return;
+			}
+			await tagsResponseGate;
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify([{ section: 'Night', entries: [{ emoji: '🌙', label: 'Night' }] }])
+			});
+		});
+
+		await setAuthenticatedClientState(page);
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const title = makeTitle('Night item');
+		await page.getByTestId('new-task-input').fill(title);
+		await page.getByTestId('new-task-submit').click();
+		await waitForTaskInIdb(page, title);
+		await updateTaskInIdb(page, title, { emoji: '🌙' });
+
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		// Before hydration resolves: 🌙 isn't in the built-in default palette,
+		// so the group falls back to the raw emoji as its own label -- the
+		// bug's exact symptom (a doubled emoji, never a real label) if this
+		// never clears without further interaction.
+		const nightGroup = page.getByTestId('tag-group-title').filter({ hasText: '🌙' });
+		await expect(nightGroup).toBeVisible();
+		await expect(nightGroup).not.toContainText('Night');
+
+		releaseTagsResponse!();
+
+		await expect(page.getByTestId('tag-group-title').filter({ hasText: 'Night' })).toBeVisible();
+	});
+
 	test('My Day grouping is off by default and only groups once the toggle is enabled', async ({
 		page
 	}) => {

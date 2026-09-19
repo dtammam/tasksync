@@ -12,6 +12,7 @@
 	import { uiPreferences, DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
 	import { hydrated } from '$lib/stores/hydration';
 	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
+	import { tagPalette } from '$lib/stores/tagPalette';
 	import type { Task } from '$shared/types/task';
 
 	// Hydration transition suppression: All fly/fade transitions use duration: $hydrated ? <ms> : 0
@@ -177,10 +178,10 @@
 	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode, sortDirection);
 	$: sortedCompleted = sortTasks($myDayCompleted ?? [], sortMode, sortDirection);
 	$: pendingGroups = groupByTagEnabled
-		? groupTasksByTag(sortedPending)
+		? groupTasksByTag(sortedPending, $tagPalette)
 		: [{ key: '__all__', label: '', tasks: sortedPending }];
 	$: completedGroups = groupByTagEnabled
-		? groupTasksByTag(sortedCompleted)
+		? groupTasksByTag(sortedCompleted, $tagPalette)
 		: [{ key: '__all__', label: '', tasks: sortedCompleted }];
 	$: copyLines = [
 		...sortedMissed.map((task) => `- [ ] ${task.title}`),

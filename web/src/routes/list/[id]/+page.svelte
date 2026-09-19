@@ -10,6 +10,7 @@
 	import { lists } from '$lib/stores/lists';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
+	import { tagPalette } from '$lib/stores/tagPalette';
 	import type { Task } from '$shared/types/task';
 
 	let quickTitle = '';
@@ -81,8 +82,8 @@
 		$uiPreferences.listSort.mode,
 		$uiPreferences.listSort.direction
 	);
-	$: pendingGroups = groupTasksByTag(pendingTasks);
-	$: completedGroups = groupTasksByTag(completedTasks);
+	$: pendingGroups = groupTasksByTag(pendingTasks, $tagPalette);
+	$: completedGroups = groupTasksByTag(completedTasks, $tagPalette);
 
 	$: isContributor = $auth.user?.role === 'contributor';
 	$: contributorUserId = isContributor ? $auth.user?.user_id : undefined;
