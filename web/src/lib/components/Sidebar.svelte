@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { createEventDispatcher } from 'svelte';
 	import { lists } from '$lib/stores/lists';
-	import { listCounts, myDayPending } from '$lib/stores/tasks';
+	import { listCounts, myDayPending, tasks } from '$lib/stores/tasks';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { streak, streakState } from '$lib/stores/streak';
 	import { auth } from '$lib/stores/auth';
@@ -34,6 +34,7 @@
 	let listDefaultEmojiDrafts: Record<string, string> = {};
 	let openTagPickerForListId: string | null = null;
 	let listError = '';
+	let listMessage = '';
 	let busy = false;
 	let listSortMode = 'manual';
 	let draggedListId: string | null = null;
@@ -313,6 +314,7 @@
 		if (!name) return;
 		busy = true;
 		listError = '';
+		listMessage = '';
 		try {
 			await lists.createRemote(
 				name,
@@ -345,6 +347,7 @@
 			return;
 		busy = true;
 		listError = '';
+		listMessage = '';
 		try {
 			await lists.updateRemote(id, {
 				name: name || undefined,
@@ -387,6 +390,7 @@
 
 		busy = true;
 		listError = '';
+		listMessage = '';
 		try {
 			await Promise.all(updates);
 		} catch (err) {
@@ -440,6 +444,7 @@
 		});
 
 		listError = '';
+		listMessage = '';
 		try {
 			await Promise.all(updates);
 		} catch (err) {
@@ -460,6 +465,7 @@
 		if (!confirm('Delete this list? Tasks within cannot be deleted yet.')) return;
 		busy = true;
 		listError = '';
+		listMessage = '';
 		try {
 			await lists.deleteRemote(id);
 		} catch (err) {
@@ -469,6 +475,22 @@
 					: err instanceof Error
 						? err.message
 						: String(err);
+		} finally {
+			busy = false;
+		}
+	};
+
+	const clearListTasks = async (id: string, name: string) => {
+		if (!adminMode) return;
+		if (!confirm(`Delete all tasks in "${name}"? This cannot be undone.`)) return;
+		busy = true;
+		listError = '';
+		listMessage = '';
+		try {
+			const deletedCount = await tasks.clearListRemote(id);
+			listMessage = `Cleared ${deletedCount} task${deletedCount === 1 ? '' : 's'} from "${name}".`;
+		} catch (err) {
+			listError = err instanceof Error ? err.message : String(err);
 		} finally {
 			busy = false;
 		}
@@ -976,6 +998,9 @@
 							{#if listError}
 								<p class="error">{listError}</p>
 							{/if}
+							{#if listMessage}
+								<p class="ok">{listMessage}</p>
+							{/if}
 							<p class="muted-note">
 								Manual order: use ↑ and ↓, then keep list sort set to Manual.
 							</p>
@@ -1037,6 +1062,16 @@
 											</button>
 											<button type="button" class="primary" on:click={() => renameList(list.id)} disabled={busy}>
 												Save
+											</button>
+											<button
+												type="button"
+												class="ghost tiny"
+												aria-label={`Clear all tasks in ${list.name}`}
+												title="Delete every task in this list"
+												on:click={() => clearListTasks(list.id, list.name)}
+												disabled={busy}
+											>
+												Clear tasks
 											</button>
 											<button
 												type="button"

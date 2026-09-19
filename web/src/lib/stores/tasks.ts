@@ -427,6 +427,11 @@ export const tasks = {
 		await api.deleteTask(existing.id);
 		tasks.remove(id);
 	},
+	async clearListRemote(listId: string): Promise<number> {
+		const { deleted_count } = await api.clearListTasks(listId);
+		updateAndPersist((list) => list.filter((t) => t.list_id !== listId));
+		return deleted_count;
+	},
 	moveToList(id: string, list_id: string) {
 		updateAndPersist((list) =>
 			list.map((t) =>

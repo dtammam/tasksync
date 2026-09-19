@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, patch},
+    routing::{delete, get, patch},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -161,10 +161,54 @@ pub(super) async fn delete_list(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Serialize)]
+pub(super) struct ClearListTasksResponse {
+    pub(super) deleted_count: i64,
+}
+
+pub(super) async fn clear_list_tasks(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<ClearListTasksResponse>, StatusCode> {
+    let ctx = ctx_from_headers(&headers, &state).await?;
+    if ctx.role != Role::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let now = chrono::Utc::now().timestamp_millis();
+    let mut tx = state.pool.begin().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let deleted_ids: Vec<String> =
+        sqlx::query_scalar("delete from task where list_id = ?1 and space_id = ?2 returning id")
+            .bind(&id)
+            .bind(&ctx.space_id)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    for task_id in &deleted_ids {
+        sqlx::query(
+            "insert into task_tombstone (task_id, space_id, list_id, deleted_ts) values (?1, ?2, ?3, ?4) on conflict(task_id, space_id) do update set list_id = excluded.list_id, deleted_ts = excluded.deleted_ts",
+        )
+        .bind(task_id)
+        .bind(&ctx.space_id)
+        .bind(&id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    tx.commit().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ClearListTasksResponse { deleted_count: deleted_ids.len() as i64 }))
+}
+
 pub fn list_routes(pool: &sqlx::SqlitePool) -> Router {
     let state = app_state(pool);
     Router::new()
         .route("/", get(get_lists).post(create_list))
         .route("/:id", patch(update_list).delete(delete_list))
+        .route("/:id/tasks", delete(clear_list_tasks))
         .with_state(state)
 }

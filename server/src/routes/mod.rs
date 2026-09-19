@@ -22,6 +22,7 @@ mod tests {
     use axum::http::HeaderMap;
     use axum::response::IntoResponse;
     use axum::Json;
+    use sqlx::sqlite::SqlitePoolOptions;
     use sqlx::SqlitePool;
     use std::collections::BTreeSet;
 
@@ -37,7 +38,9 @@ mod tests {
     use super::integrations::{
         create_task_via_api_token, reject_log_message, unknown_list_log_message, ApiTaskError,
     };
-    use super::lists::{create_list, delete_list, get_lists, update_list, CreateList, UpdateList};
+    use super::lists::{
+        clear_list_tasks, create_list, delete_list, get_lists, update_list, CreateList, UpdateList,
+    };
     use super::sync::{sync_pull, sync_push, SyncPullBody, SyncPushBody, SyncPushChange};
     use super::tags::{get_tag_palette, put_tag_palette, TagPaletteEntry, TagPaletteSection};
     use super::tasks::{
@@ -50,7 +53,23 @@ mod tests {
     };
 
     async fn setup_pool() -> SqlitePool {
-        let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
+        // A plain "sqlite::memory:" URI gives EACH pooled connection its own
+        // separate, isolated in-memory database -- SQLite's in-memory mode is
+        // per-connection, not per-URI. A default-sized pool (multiple
+        // connections) can then intermittently route a query to a "fresh"
+        // connection that never saw the migrations or this fixture's seed
+        // data, causing rare, connection-scheduling-dependent test failures
+        // (observed directly: 1 failure in 5 full-suite `cargo test` runs,
+        // 0 in 5 isolated single-test runs -- classic pool-contention
+        // signature). Forcing a single-connection pool makes every query in
+        // a test go through the same connection, eliminating the isolation
+        // entirely; this is the standard fix for this well-known sqlx/SQLite
+        // interaction, not a workaround specific to any one test.
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite");
         sqlx::migrate!("./migrations").run(&pool).await.expect("migrations");
         let test_password_hash = hash_password("test-pass").expect("hash test password");
 
@@ -105,7 +124,15 @@ mod tests {
     /// (`setup_pool` above always seeds an admin, which would make
     /// `owner_exists` trivially true).
     async fn bare_pool() -> SqlitePool {
-        let pool = SqlitePool::connect("sqlite::memory:").await.expect("in-memory sqlite");
+        // Same fix, same reason as setup_pool() above: a plain
+        // "sqlite::memory:" URI gives each pooled connection its own
+        // isolated in-memory database, so a default multi-connection pool
+        // can intermittently see a connection that never ran migrations.
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite");
         sqlx::migrate!("./migrations").run(&pool).await.expect("migrations");
         pool
     }
@@ -1839,6 +1866,284 @@ mod tests {
             .expect("delete list should succeed");
 
         assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn admin_can_bulk_clear_all_tasks_in_a_list() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let create_headers = auth_headers(&state, "u-admin", "s1");
+        let (_, Json(list)) = create_list(
+            State(state.clone()),
+            create_headers,
+            Json(CreateList {
+                name: "To Clear".to_string(),
+                icon: None,
+                color: None,
+                default_emoji: None,
+                order: None,
+            }),
+        )
+        .await
+        .expect("create list");
+
+        for (id, status) in
+            [("t-clear-1", "pending"), ("t-clear-2", "done"), ("t-clear-3", "pending")]
+        {
+            sqlx::query(
+                "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values (?1, 's1', 'to clear', ?2, ?3, 0, 0, 'a', 0, 0)",
+            )
+            .bind(id)
+            .bind(status)
+            .bind(&list.id)
+            .execute(&pool)
+            .await
+            .expect("seed task");
+        }
+
+        let headers = auth_headers(&state, "u-admin", "s1");
+        let Json(response) =
+            clear_list_tasks(State(state.clone()), headers.clone(), Path(list.id.clone()))
+                .await
+                .expect("bulk clear should succeed");
+        assert_eq!(response.deleted_count, 3);
+
+        let remaining: i64 = sqlx::query_scalar("select count(1) from task where list_id = ?1")
+            .bind(&list.id)
+            .fetch_one(&pool)
+            .await
+            .expect("count remaining tasks");
+        assert_eq!(remaining, 0);
+
+        let pull = sync_pull(State(state), headers, Json(SyncPullBody { since_ts: Some(0) }))
+            .await
+            .expect("sync pull should include tombstones")
+            .0;
+        let cleared_ids: std::collections::BTreeSet<&str> =
+            pull.deleted_tasks.iter().map(|t| t.id.as_str()).collect();
+        assert!(cleared_ids.contains("t-clear-1"));
+        assert!(cleared_ids.contains("t-clear-2"));
+        assert!(cleared_ids.contains("t-clear-3"));
+    }
+
+    #[tokio::test]
+    async fn contributor_cannot_bulk_clear_list_tasks() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let headers = auth_headers(&state, "u-contrib", "s1");
+
+        let result =
+            clear_list_tasks(State(state), headers, Path("goal-management".to_string())).await;
+        assert_eq!(result.err(), Some(axum::http::StatusCode::FORBIDDEN));
+    }
+
+    #[tokio::test]
+    async fn bulk_clearing_an_already_empty_list_succeeds_with_zero() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let create_headers = auth_headers(&state, "u-admin", "s1");
+        let (_, Json(list)) = create_list(
+            State(state.clone()),
+            create_headers,
+            Json(CreateList {
+                name: "Already Empty".to_string(),
+                icon: None,
+                color: None,
+                default_emoji: None,
+                order: None,
+            }),
+        )
+        .await
+        .expect("create list");
+
+        let headers = auth_headers(&state, "u-admin", "s1");
+        let Json(response) = clear_list_tasks(State(state), headers, Path(list.id))
+            .await
+            .expect("clearing an empty list should not error");
+        assert_eq!(response.deleted_count, 0);
+    }
+
+    #[tokio::test]
+    async fn bulk_clear_does_not_touch_other_lists_or_spaces() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let create_headers = auth_headers(&state, "u-admin", "s1");
+        let (_, Json(list_to_clear)) = create_list(
+            State(state.clone()),
+            create_headers.clone(),
+            Json(CreateList {
+                name: "Clear Me".to_string(),
+                icon: None,
+                color: None,
+                default_emoji: None,
+                order: None,
+            }),
+        )
+        .await
+        .expect("create list to clear");
+        let (_, Json(other_list)) = create_list(
+            State(state.clone()),
+            create_headers,
+            Json(CreateList {
+                name: "Leave Me Alone".to_string(),
+                icon: None,
+                color: None,
+                default_emoji: None,
+                order: None,
+            }),
+        )
+        .await
+        .expect("create other list");
+
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values ('t-should-go', 's1', 'gone', 'pending', ?1, 0, 0, 'a', 0, 0)",
+        )
+        .bind(&list_to_clear.id)
+        .execute(&pool)
+        .await
+        .expect("seed task in list to clear");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values ('t-should-stay', 's1', 'stays', 'pending', ?1, 0, 0, 'a', 0, 0)",
+        )
+        .bind(&other_list.id)
+        .execute(&pool)
+        .await
+        .expect("seed task in other list");
+
+        sqlx::query("insert into space (id, name) values ('s2', 'Other Space')")
+            .execute(&pool)
+            .await
+            .expect("insert second space");
+        sqlx::query(
+            "insert into list (id, space_id, name, list_order) values ('l-other', 's2', 'Other List', 'a')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert second-space list");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values ('t-other-space', 's2', 'other space task', 'pending', 'l-other', 0, 0, 'a', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert other-space task");
+
+        let headers = auth_headers(&state, "u-admin", "s1");
+        let Json(response) = clear_list_tasks(State(state), headers, Path(list_to_clear.id))
+            .await
+            .expect("bulk clear");
+        assert_eq!(response.deleted_count, 1);
+
+        let stayed: i64 =
+            sqlx::query_scalar("select count(1) from task where id = 't-should-stay'")
+                .fetch_one(&pool)
+                .await
+                .expect("check other list task");
+        assert_eq!(stayed, 1, "task in a different list must not be touched");
+
+        let other_space_task: i64 =
+            sqlx::query_scalar("select count(1) from task where id = 't-other-space'")
+                .fetch_one(&pool)
+                .await
+                .expect("check other space task");
+        assert_eq!(other_space_task, 1, "task in a different space must not be touched");
+    }
+
+    #[tokio::test]
+    async fn admin_cannot_bulk_clear_a_different_spaces_list_by_id() {
+        // `list.id` is a global primary key (not composite with space_id), so
+        // two lists can never literally share an id across spaces -- the
+        // meaningful boundary to test isn't "colliding ids" (schema-
+        // impossible) but whether an s1-admin can reach into space s2's own
+        // real list, by its real id, and delete its tasks. This is exactly
+        // what the `and space_id = ctx.space_id` clause in the DELETE
+        // statement defends against; dropping that clause would make this
+        // test fail (the s2 task would be deleted despite the caller being
+        // authenticated as an s1 admin).
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+
+        sqlx::query("insert into space (id, name) values ('s2', 'Other Space')")
+            .execute(&pool)
+            .await
+            .expect("insert second space");
+        sqlx::query(
+            "insert into list (id, space_id, name, list_order) values ('l-other-space-real', 's2', 'Other Space List', 'a')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert second-space list");
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values ('t-cross-space-target', 's2', 'must survive', 'pending', 'l-other-space-real', 0, 0, 'a', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert task in other space's list");
+
+        let headers = auth_headers(&state, "u-admin", "s1");
+        let Json(response) =
+            clear_list_tasks(State(state), headers, Path("l-other-space-real".to_string()))
+                .await
+                .expect(
+                    "clearing a list id that doesn't belong to the caller's space is a safe no-op",
+                );
+        assert_eq!(
+            response.deleted_count, 0,
+            "an s1 admin must not be able to delete s2's tasks by supplying s2's real list id"
+        );
+
+        let survived: i64 =
+            sqlx::query_scalar("select count(1) from task where id = 't-cross-space-target'")
+                .fetch_one(&pool)
+                .await
+                .expect("check cross-space task");
+        assert_eq!(survived, 1, "the other space's task must be completely untouched");
+    }
+
+    #[tokio::test]
+    async fn delete_list_succeeds_after_bulk_clear() {
+        let pool = setup_pool().await;
+        let state = test_state(&pool);
+        let create_headers = auth_headers(&state, "u-admin", "s1");
+        let (_, Json(list)) = create_list(
+            State(state.clone()),
+            create_headers,
+            Json(CreateList {
+                name: "Clear Then Delete".to_string(),
+                icon: None,
+                color: None,
+                default_emoji: None,
+                order: None,
+            }),
+        )
+        .await
+        .expect("create list");
+
+        sqlx::query(
+            "insert into task (id, space_id, title, status, list_id, my_day, priority, task_order, updated_ts, created_ts) values ('t-blocking', 's1', 'blocks delete', 'pending', ?1, 0, 0, 'a', 0, 0)",
+        )
+        .bind(&list.id)
+        .execute(&pool)
+        .await
+        .expect("seed blocking task");
+
+        let headers = auth_headers(&state, "u-admin", "s1");
+        let before =
+            delete_list(State(state.clone()), headers.clone(), Path(list.id.clone())).await;
+        assert_eq!(
+            before.err(),
+            Some(axum::http::StatusCode::CONFLICT),
+            "sanity check: delete_list still blocks on a non-empty list"
+        );
+
+        let Json(_) =
+            clear_list_tasks(State(state.clone()), headers.clone(), Path(list.id.clone()))
+                .await
+                .expect("bulk clear");
+
+        let after = delete_list(State(state), headers, Path(list.id))
+            .await
+            .expect("delete_list should succeed once the list is empty");
+        assert_eq!(after, axum::http::StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]
