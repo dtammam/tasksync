@@ -66,6 +66,12 @@ describe('streak store — increment', () => {
 		expect(get(streakState).count).toBe(1);
 	});
 
+	it('silent increment keeps the count accounting but shows no per-task overlay', () => {
+		streak.increment('task-1', { silent: true });
+		expect(get(streakState).count).toBe(1); // accounting still happens
+		expect(get(streakDisplay).visible).toBe(false); // but no overlay/announcer (bulk path)
+	});
+
 	it('does not double-count the same task ID', () => {
 		streak.increment('task-1');
 		streak.increment('task-1');

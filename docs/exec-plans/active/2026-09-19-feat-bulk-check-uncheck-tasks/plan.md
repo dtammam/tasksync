@@ -2,8 +2,8 @@
 plan: feat-bulk-check-uncheck-tasks
 harness: v2 · lean
 anchor: spec
-status: Parked(revisit: owner paused to do plan-doc lifecycle housekeeping first, 2026-09-19)
-next: Resume intake confirmation of anchor (spec) + decision register D1-D10 with the owner.
+status: Building (resumed 2026-09-20 on feat/bulk-check-uncheck-tasks; scope narrowed to list-level Check all per owner)
+next: Tests done; commit + /gate.
 gate: pending
 ---
 
@@ -191,3 +191,46 @@ judgment-call items; D6/D10 are closest to "no real alternative"). No
 research pass proposed — the relevant behavior (`toggle()`, `groupTasksByTag`,
 `uncheckAllInList`) is already fully read and cited above, nothing
 unfamiliar to verify first.
+
+## Confirmed scope + decisions (owner, 2026-09-20)
+
+Resumed live. Owner confirmed a **narrowed, keep-it-simple scope**:
+- **Scope: list-level "Check all" only.** Per-tag-section check/uncheck (D4, D5,
+  D9) is **deferred** to a possible later slice — NOT built here.
+- **D2 (recurring): advance one occurrence** — a pending recurring task is
+  advanced exactly like a single `toggle()` (status stays pending, due date rolls
+  forward, `occurrences_completed`+1), not flat-set to `done`. Additionally, a
+  recurring task already completed today is **skipped** (no double-advance).
+- **D3 (side effects): batched.** Streak accounting is kept but **silent** (a new
+  `streak.increment(id, { silent: true })` keeps the count/persist/sync but
+  suppresses the per-task overlay + announcer); recurring reuses its id so it is
+  incremented then `undoCompletion`'d exactly like `toggle`; the day-complete
+  check runs once and **at most one** completion sound plays for the whole batch.
+- **D1/D7/D8/D10:** `checkAllInList(listId, opts?)` mirrors `uncheckAllInList`
+  (client-only, contributor-scoped, single `repo.saveTasks`); a `Check all`
+  ghost-pill sits before `Uncheck all`, disabled when `checkEligibleCount`
+  (pending, contributor-scoped) is 0; no confirm dialog; **no server endpoint**.
+
+## Build (2026-09-20)
+
+- `web/src/lib/stores/streak.ts`: `increment(taskId, opts?: { silent?: boolean })`
+  — silent keeps accounting, skips the overlay/announcer.
+- `web/src/lib/stores/tasks.ts`: new `checkAllInList` (after `uncheckAllInList`).
+- `web/src/routes/list/[id]/+page.svelte`: `checkEligibleCount`, `checkAllPending`
+  handler, and a `data-testid="list-check-all"` ghost-pill before `Uncheck all`.
+
+## Verification (local, pre-gate)
+
+- `npm run lint` / `npm run check`: clean. `npx vitest run`: **427 passed** —
+  incl. 5 new `checkAllInList` store tests (complete + contributor scope +
+  recurring advance + recurring-done-today skip + no-op) and 1 streak `silent`
+  test.
+- **New E2E `@smoke`** `tests/e2e/list-check-all.spec.ts`: add two pending tasks
+  → Check all completes both (button state flips, tasks not lost) → Uncheck all
+  reverses it. **Passes chromium + firefox + webkit** (local tasks, no mock-sync
+  — no firefox flake surface).
+- `git diff --name-only main...HEAD -- server/`: empty — no server change (D10).
+
+## Deferred (own follow-up slice)
+Per-tag-section check/uncheck buttons on group headers (D4/D5/D9) — the store
+already generalizes cleanly to a per-id-set variant if/when the owner wants it.
