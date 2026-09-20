@@ -2,8 +2,8 @@
 plan: e2e-flake-elimination
 harness: v2 · lean
 anchor: outcome
-status: Gated
-next: Ready to merge PR #154 (owner's call — never self-merge). On merge: mark Shipped, move to completed/, close #050/#051/sidebar-drag.
+status: Shipped (PR #154, merged to main @31c76e8)
+next: Done. Landed green across chromium/firefox/webkit; #050/#051/sidebar-drag closed; task-tags tracked as #052.
 gate: APPROVED r4 @2c0f3447ac1d4b162e0e98f1303650735c44ef78 (adversary + qa + security-brief); CI green (chromium+firefox+webkit)
 ---
 

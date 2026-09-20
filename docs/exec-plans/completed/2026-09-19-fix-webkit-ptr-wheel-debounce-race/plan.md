@@ -2,9 +2,9 @@
 plan: fix-webkit-ptr-wheel-debounce-race
 harness: v2 · lean
 anchor: outcome
-status: Gated
-next: /release — push and confirm on real CI (GitHub free runners), the true failure surface.
-gate: superseded — #051 folded into fix/e2e-flake-elimination; the live gate is that plan's r2 @484e65c. Historical verdicts below.
+status: Shipped (superseded — #051 landed via PR #154, merged to main @31c76e8)
+next: Done. This standalone branch was folded into fix/e2e-flake-elimination; see that plan.
+gate: APPROVED — the combined change landed via #154 (r4 @2c0f344); this standalone plan's own verdicts are historical (below).
 ---
 
 # Fix: webkit PTR wheel-gesture debounce race (tech-debt #051, reopened)
@@ -352,3 +352,5 @@ so the race was narrowed, not closed. r2 folds dispatch AND observation into one
 No CRITICAL or WARNING findings. My r1 CRITICAL is resolved by construction (microtask-vs-macrotask ordering) and empirically (discriminating load A/B); my r1 WARNING is resolved.
 
 Gate: r2 qa verdict (approved @cf23684) SUPERSEDED — the combined change re-gated on fix/e2e-flake-elimination at r2 @484e65c; historical.
+
+Gate: APPROVED — landed via PR #154 (combined e2e-flake-elimination change, r4 @2c0f344, merged to main @31c76e8). This standalone plan is superseded; verdicts above are historical.
