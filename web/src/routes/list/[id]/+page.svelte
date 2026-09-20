@@ -409,12 +409,17 @@
 	.tools {
 		display: flex;
 		gap: 6px;
+		align-items: center;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 
 	.ghost-pill {
 		border-radius: 999px;
 		padding: 8px 12px;
 		font-size: 12px;
+		line-height: 1.1;
+		white-space: nowrap;
 		cursor: pointer;
 		box-shadow: var(--ring-shadow);
 		background: var(--surface-1);
@@ -551,6 +556,8 @@
 			margin-left: 0;
 			justify-content: space-between;
 			align-items: center;
+			flex-wrap: wrap;
+			row-gap: 10px;
 		}
 
 		.order-control {
@@ -559,6 +566,11 @@
 
 		.tools {
 			margin-left: auto;
+		}
+
+		/* Compact the pills a touch on phones so all four fit without clipping. */
+		.tools .ghost-pill {
+			padding: 7px 11px;
 		}
 
 		h1 {

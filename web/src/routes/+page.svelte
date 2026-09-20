@@ -539,6 +539,8 @@
 		border-radius: 999px;
 		padding: 8px 12px;
 		font-size: 12px;
+		line-height: 1.1;
+		white-space: nowrap;
 		cursor: pointer;
 		box-shadow: var(--ring-shadow);
 		background: var(--surface-1);
