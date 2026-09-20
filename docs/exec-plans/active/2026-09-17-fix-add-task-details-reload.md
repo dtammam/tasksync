@@ -2,8 +2,8 @@
 plan: fix-add-task-details-reload
 harness: v2 · lean
 anchor: outcome
-status: Parked(revisit: owner reprioritized emoji piece first, 2026-09-17)
-gate: pending
+status: Gated (fix/add-task-details-reload @1d1b06d; ready to push + CI, then owner merge)
+gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a (adversary + qa)
 ---
 
 # Fix — add-task details resilience
@@ -146,3 +146,42 @@ and test fixtures). So:
   roadmap, taking Piece 3 (task emoji) next instead. Nothing here is stale —
   the root cause, acceptance, and approach above are ready to resume as-is
   whenever this piece comes back up. No code has been written yet.
+- 2026-09-20 — **Resumed and built** on `fix/add-task-details-reload` (off main
+  @3d94dfd). Implemented exactly the approach above.
+
+## Build (2026-09-20)
+
+**Change (one line + comment):** `makeLocalTask` (`tasks.ts:51`) now mints a
+bare `crypto.randomUUID()` instead of `local-${uuid}`; the non-crypto fallback
+keeps its `local-` id (a degenerate path that never syncs). `requestIdForLocalTask`
+unchanged — a bare UUID passes `isServerId` and is sent as-is; a legacy
+`local-<uuid>` (pre-fix task) is still stripped (self-heals on first push).
+Net: the id the client mints = stores in IDB = keys `{#each (task.id)}` and the
+drawer `detailId` lookup = sends to the server = the server echoes back, so
+`replaceWithRemote`'s `id: remote.id` is a same-value no-op and the drawer/rows
+keep their identity across the create-ack.
+
+## Verification (local, pre-gate)
+
+- `npm run lint` / `npm run check`: clean. `npx vitest run`: **417 passed** (28
+  files; +2 store tests for bare-UUID mint & id-stability-across-ack, +1 net
+  sync test — updated the old "strips local- prefix" test to the new bare-UUID
+  behavior and added a legacy-strip self-heal test).
+- **New E2E `@smoke`** `tests/e2e/add-task-details-resilience.spec.ts`: add a
+  task, open its details while still optimistic, then let the create push→ack
+  land (mock echoes the client id, as the real server does) — the drawer stays
+  mounted and editable. **Passes chromium+firefox+webkit.** Mutation-tested:
+  reverting the fix (restore the `local-` prefix) makes it FAIL at
+  `expect(drawer).toBeVisible()` ("element(s) not found" — the drawer unmounts),
+  proving it guards the exact regression.
+- **Full e2e suite on the preview build, run per-engine (this shared box can't
+  run three engines concurrently without memory starvation):** chromium 63/0,
+  firefox 57/0, webkit 57/0 — **0 failed**. (An earlier combined run reported
+  179/0 by luck; a pre-existing webkit test `myday.spec.ts:905` fails under
+  concurrent-engine load on this box and on base `main` too — environmental,
+  unrelated to task-id minting, and green on CI for #154. Watch CI; not filed as
+  debt unless CI shows it.)
+
+Gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a (adversary + qa).
+Gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a — adversary
+Gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a — qa

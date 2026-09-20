@@ -48,7 +48,14 @@ const makeLocalTask = (
 	}
 ) => {
 	const nowTs = Date.now();
-	const id = `local-${crypto.randomUUID ? crypto.randomUUID() : nowTs.toString(36)}`;
+	// Mint a BARE UUID (no `local-` prefix) so the task's id is stable through the
+	// create→sync-ack lifecycle: the server accepts this id verbatim and acks it
+	// back unchanged, so replaceWithRemote's `id: remote.id` is a same-value no-op
+	// and the Svelte {#each (task.id)} rows + the details-drawer detailId lookup
+	// never lose their key mid-edit. Optimistic state lives in `local`/`dirty`,
+	// not the id shape (see fix-add-task-details-reload plan). The non-crypto
+	// fallback keeps a `local-` id — a degenerate path that never syncs anyway.
+	const id = crypto.randomUUID ? crypto.randomUUID() : `local-${nowTs.toString(36)}`;
 	const order = `local-${nowTs}`;
 	const currentUserId = auth.get().user?.user_id;
 	const task: Task = {
