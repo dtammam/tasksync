@@ -2,8 +2,8 @@
 plan: feat-bulk-check-uncheck-tasks
 harness: v2 · lean
 anchor: spec
-status: Gated (feat/bulk-check-uncheck-tasks; list-level Check all)
-next: Push + CI, then owner merge. (Per-tag-section check/uncheck deferred to a follow-up slice.)
+status: Shipped 2026-09-20 (#160; list-level Check all)
+next: Done. (Per-tag-section check/uncheck deferred to a follow-up slice.)
 gate: APPROVED r1 @1444804c7e6d9824765875c8f60aa6c806b34ca9 (adversary + qa)
 ---
 

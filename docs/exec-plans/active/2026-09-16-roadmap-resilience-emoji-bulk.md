@@ -60,11 +60,14 @@ described in Piece 4 below, so Piece 4's remaining scope is unchanged: quick
 single-task delete/undo, multi-select, bulk **move**, and **clone** still need
 their own intake.
 
-**Also parked here, 2026-09-19** (owner asked to pause for this doc-lifecycle
-housekeeping pass before resuming): a "check all" to complement the existing
-"Uncheck all" list-header action, plus per-tag-section check/uncheck — intake
-done, decision register drafted, not yet confirmed. See
-`docs/exec-plans/active/2026-09-19-feat-bulk-check-uncheck-tasks/plan.md`.
+**Check all — Shipped 2026-09-20** (PR #160, `feat/bulk-check-uncheck-tasks`): a
+list-level "Check all" to complement the existing "Uncheck all" list-header
+action. Kept simple per owner — **list-level only**; a pending recurring task
+advances one occurrence (like a single toggle), side effects batched (streak
+accounting silent, one completion sound, day-complete evaluated once). See
+`docs/exec-plans/completed/2026-09-19-feat-bulk-check-uncheck-tasks/`.
+**Deferred to a follow-up slice:** per-tag-section check/uncheck (decision
+register D4/D5/D9 in that plan).
 
 ## Anchor recommendations (project default: `outcome`)
 
