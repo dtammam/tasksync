@@ -23,7 +23,7 @@ higher-cost model; execution of pieces 2–4 is intended for Opus sessions.
 | 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | **Shipped** — PR #138 (+ #139 cleanup), merged 2026-09-17 |
 | 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Shipped** — PR #156, merged 2026-09-20 (bare-UUID task id keeps the drawer mounted across the create-sync ack; gate APPROVED, CI green all browsers) |
 | 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | **Shipped** — PR #141, merged 2026-09-18; validated by owner in beta on a real device |
-| 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | (sliced) | **In progress — sliced.** Slice 1 (quick single-task delete + undo) **Shipped** — PR #158, merged 2026-09-20 (`feat/quick-task-delete-undo`; see completed/2026-09-20-feat-quick-task-delete-undo). Remaining slices: multi-select, bulk delete, bulk move, clone — each its own branch/plan. (List-level bulk-clear already shipped out of band, PR #148.) |
+| 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | (sliced) | **In progress — sliced.** Slice 1 (quick single-task delete + undo) **Shipped** — PR #158, merged 2026-09-20 (`feat/quick-task-delete-undo`; see completed/2026-09-20-feat-quick-task-delete-undo). Slice 3 (multi-select + bulk delete + bulk **tag** + tap-to-select, list view + My Day) **Shipped** — PR #162, merged 2026-09-20, owner-validated in beta (`feat/multi-select-bulk-delete`; see completed/2026-09-20-feat-multi-select-bulk-delete). Remaining slices: bulk **move**, **clone** — each its own branch/plan. (List-level bulk-clear already shipped out of band, PR #148; list-level Check all shipped PR #160.) |
 
 Order: **3 → 2 → 4**, reprioritized by the owner 2026-09-17 (originally
 2 → 4 → 3, confirmed 2026-09-16). Piece 2's intake is complete and parked,
@@ -60,11 +60,11 @@ described in Piece 4 below, so Piece 4's remaining scope is unchanged: quick
 single-task delete/undo, multi-select, bulk **move**, and **clone** still need
 their own intake.
 
-**Also parked here, 2026-09-19** (owner asked to pause for this doc-lifecycle
-housekeeping pass before resuming): a "check all" to complement the existing
-"Uncheck all" list-header action, plus per-tag-section check/uncheck — intake
-done, decision register drafted, not yet confirmed. See
-`docs/exec-plans/active/2026-09-19-feat-bulk-check-uncheck-tasks/plan.md`.
+**Check all — Shipped 2026-09-20** (PR #160, `feat/bulk-check-uncheck-tasks`): a
+list-level "Check all" complementing the existing "Uncheck all" list-header
+action (list-level only; a pending recurring task advances one occurrence; side
+effects batched). See `docs/exec-plans/completed/2026-09-19-feat-bulk-check-uncheck-tasks/`.
+**Deferred to a follow-up slice:** per-tag-section check/uncheck.
 
 ## Anchor recommendations (project default: `outcome`)
 

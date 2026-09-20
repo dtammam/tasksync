@@ -2,8 +2,8 @@
 plan: feat-multi-select-bulk-delete
 harness: v2 · lean
 anchor: outcome
-status: Gated (holding for owner review + merge)
-next: Owner reviews and authorizes merge (PR #162 open, CI running). No self-merge.
+status: Shipped 2026-09-20 (#162)
+next: Done. Owner tested in beta and merged. (Bulk move, clone, per-tag check/uncheck still deferred.)
 gate: APPROVED r4 @792bfb9236009a62c405b9ff82efe364e1077816 (adversary + qa + security-brief)
 ---
 
