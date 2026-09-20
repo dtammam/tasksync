@@ -2,9 +2,9 @@
 plan: feat-multi-select-bulk-delete
 harness: v2 · lean
 anchor: outcome
-status: Gated (holding for owner review + merge)
-next: Owner reviews and authorizes merge (PR open, CI running). No self-merge.
-gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a (adversary + qa + security-brief)
+status: Built (re-gate r3 — header CSS fix)
+next: Delta re-gate r3 (CSS-only header-pill fix over r2-APPROVED). Then hold for owner review + merge.
+gate: r2 APPROVED (adversary + qa + security-brief) @89dedc6 — re-gating r3 after a CSS-only header-pill fix (owner-reported beta visual)
 ---
 
 # Multi-select + bulk delete (Piece 4, slice 3)
@@ -174,6 +174,26 @@ branch). **No new wire verb** — bulk commit is N idempotent `deleteRemote` cal
   window commits). **Green on chromium + firefox + webkit.**
 - **No regression:** `task-delete-undo` + `list-check-all` E2E green; lint +
   `svelte-check` clean (0/0).
+
+## r3 — header-pill visual fix (2026-09-20, owner-reported from beta)
+
+Owner validated the feature in beta and flagged a graphical bug: the list header
+action pills (Import / Select / Check all / Uncheck all) rendered as oversized
+two-line ovals and the row overflowed, clipping "Uncheck all". Root cause: the
+pills lacked `white-space: nowrap` (two-word labels wrapped to two lines) and
+`.tools` is a flex row whose default `align-items: stretch` then sized every pill
+to that tallest wrapped one. CSS-only fix (`list/[id]/+page.svelte`, `+page.svelte`):
+
+- `.ghost-pill`: `white-space: nowrap` + `line-height: 1.1` — labels stay on one
+  line, pills keep natural height.
+- `.tools`: `align-items: center`, `flex-wrap: wrap`, `justify-content: flex-end`
+  — pills keep natural height and wrap to their own row instead of clipping.
+- Mobile (≤900px): `.actions` flex-wraps (tools drop below the sort controls);
+  `.tools .ghost-pill` padding trimmed to `7px 11px` so all four fit.
+
+No markup or behavior change. Verified at a 390px viewport (all four pills
+compact, single-line, fully visible); vitest 441 still green, lint + check clean.
+Broader design/token system deferred (owner: "address after this is solved").
 
 ## Out of scope (deferred slices)
 
