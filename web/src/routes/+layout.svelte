@@ -12,7 +12,7 @@
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
 	import { tagPalette } from '$lib/stores/tagPalette';
-	import { tasks, myDayMissed, pendingDelete, setDbScope } from '$lib/stores/tasks';
+	import { tasks, myDayMissed, pendingDelete, pendingDeleteBatch, setDbScope } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
 	import { playCompletion } from '$lib/sound/sound';
 	import { uiPreferences } from '$lib/stores/preferences';
@@ -453,6 +453,16 @@
 				on:click={() => {
 					if ($pendingDelete) tasks.undoDelete($pendingDelete.id);
 				}}>Undo</button
+			>
+		</div>
+	{:else if $pendingDeleteBatch}
+		<div class="remote-task-toast undo-toast" role="status" data-testid="undo-delete-batch-toast">
+			<span>Deleted {$pendingDeleteBatch.count} tasks</span>
+			<button
+				type="button"
+				class="toast-undo"
+				data-testid="undo-delete-batch"
+				on:click={() => tasks.undoDeleteAll()}>Undo</button
 			>
 		</div>
 	{/if}

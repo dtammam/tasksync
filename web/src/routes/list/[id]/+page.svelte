@@ -2,11 +2,13 @@
 	import { page } from '$app/stores';
 	import { onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import TaskRow from '$lib/components/TaskRow.svelte';
+	import SelectableTask from '$lib/components/SelectableTask.svelte';
+	import BulkSelectToolbar from '$lib/components/BulkSelectToolbar.svelte';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import ImportTasksModal from '$lib/components/ImportTasksModal.svelte';
 	import { auth } from '$lib/stores/auth';
 	import { tasks, tasksByList } from '$lib/stores/tasks';
+	import { selection, selectionMode } from '$lib/stores/selection';
 	import { lists } from '$lib/stores/lists';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
@@ -94,6 +96,22 @@
 		(task) => !contributorUserId || task.created_by_user_id === contributorUserId
 	).length;
 
+	// A task is selectable for a bulk op only if the current user may edit it —
+	// contributors can act on their own tasks; owners/admins on all.
+	const canEditTask = (task: Task, ownerId: string | undefined) =>
+		!ownerId || task.created_by_user_id === ownerId;
+	$: selectableIds = [...pendingTasks, ...completedTasks]
+		.filter((task) => canEditTask(task, contributorUserId))
+		.map((task) => task.id);
+
+	const enterSelection = () => {
+		listActionMessage = '';
+		selection.enter();
+	};
+	const onBulkDeleted = (count: number) => {
+		listActionMessage = `Deleted ${count} task${count === 1 ? '' : 's'}.`;
+	};
+
 	$: copyLines = [...pendingTasks, ...completedTasks].map(
 		(task) => `- [${task.status === 'done' ? 'x' : ' '}] ${task.title}`
 	);
@@ -143,6 +161,7 @@
 	}
 
 	onDestroy(() => {
+		selection.exit();
 		if (typeof window !== 'undefined' && Reflect.get(window, '__copyTasksAsJoplin') === copyProvider) {
 			Reflect.deleteProperty(window, '__copyTasksAsJoplin');
 		}
@@ -193,6 +212,17 @@
 				>
 					Import
 				</button>
+				{#if !$selectionMode}
+					<button
+						type="button"
+						class="ghost-pill"
+						data-testid="list-select-mode"
+						on:click={enterSelection}
+						disabled={selectableIds.length === 0}
+					>
+						Select
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="ghost-pill"
@@ -215,6 +245,10 @@
 		</div>
 	</header>
 
+	{#if $selectionMode}
+		<BulkSelectToolbar eligibleIds={selectableIds} onDeleted={onBulkDeleted} />
+	{/if}
+
 	{#if listActionMessage}
 		<p class="ok-msg" data-testid="list-action-message">{listActionMessage}</p>
 	{/if}
@@ -229,7 +263,11 @@
 				<div class="stack">
 					{#each group.tasks as task (task.id)}
 						<div in:fly={{ y: -6, duration: 150 }} out:fade={{ duration: 150 }}>
-							<TaskRow {task} on:openDetail={openDetail} />
+							<SelectableTask
+								{task}
+								selectable={canEditTask(task, contributorUserId)}
+								on:openDetail={openDetail}
+							/>
 						</div>
 					{/each}
 				</div>
@@ -252,7 +290,11 @@
 				<div class="stack">
 					{#each group.tasks as task (task.id)}
 						<div transition:fade={{ duration: 150 }}>
-							<TaskRow {task} on:openDetail={openDetail} />
+							<SelectableTask
+								{task}
+								selectable={canEditTask(task, contributorUserId)}
+								on:openDetail={openDetail}
+							/>
 						</div>
 					{/each}
 				</div>
