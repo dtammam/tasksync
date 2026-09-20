@@ -13,8 +13,6 @@ export let inMyDayView = false;
 
 const dispatch = createEventDispatcher();
 let showActions = false;
-let deleting = false;
-let actionError = '';
 let statusAck = false;
 let toggleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -110,19 +108,12 @@ const toggleStar = () => {
 
 const closeActions = () => (showActions = false);
 
-const deleteTask = async () => {
-	if (!canEditTask || deleting) return;
-	if (!confirm('Delete this task?')) return;
-	deleting = true;
-	actionError = '';
-	try {
-		await tasks.deleteRemote(task.id);
-		showActions = false;
-	} catch (err) {
-		actionError = err instanceof Error ? err.message : String(err);
-	} finally {
-		deleting = false;
-	}
+const deleteTask = () => {
+	if (!canEditTask) return;
+	// Soft-delete with an undo grace window (feat-quick-task-delete-undo): the
+	// task hides immediately and the layout shows an undo toast — no confirm().
+	tasks.softDelete(task.id);
+	showActions = false;
 };
 
 const openDetailFromMenu = () => {
@@ -271,15 +262,10 @@ $: isRecurringCompletedToday =
 					<button type="button" on:click={addTomorrow}>Tomorrow</button>
 					<button type="button" on:click={addNextWeek}>Next week</button>
 					<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
-					<button class="danger" type="button" on:click={deleteTask} disabled={deleting}>
-						{deleting ? 'Deleting...' : 'Delete'}
-					</button>
+					<button class="danger" type="button" on:click={deleteTask}>Delete</button>
 				{/if}
 				<button class="ghost" type="button" on:click={closeActions}>Close</button>
 			</div>
-			{#if actionError}
-				<p class="error">{actionError}</p>
-			{/if}
 		{/if}
 	</div>
 
@@ -393,7 +379,6 @@ $: isRecurringCompletedToday =
 	.quick button.ghost { border-color:var(--border-2); }
 	.quick button.danger { border-color:#7f1d1d; color:#fecaca; }
 	.title-text.link { color:#60a5fa; text-decoration:underline; }
-	.error { grid-column:1 / -1; margin:0; color:#fda4af; font-size:12px; }
 	@media (max-width: 900px) {
 		.task { padding: 11px 12px; gap: 12px; border-radius: 14px; }
 		.task.compact { padding: 10px 11px; gap: 10px; }
