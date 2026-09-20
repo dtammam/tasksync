@@ -15,6 +15,44 @@ import {
 } from '$lib/tasks/recurrence';
 
 const tasksStore = writable<Task[]>([]);
+
+// ── Quick-delete grace window (feat-quick-task-delete-undo) ──────────────────
+// A soft-deleted task STAYS in tasksStore (so a sync pull that lands during the
+// grace window can't resurrect it) but is filtered out of every derived view via
+// `visibleTasks`. One pending delete at a time — starting a new one commits the
+// previous. Commit calls the real `deleteRemote`; undo just clears the flag, so
+// undo is instant and makes no server call. See the fix plan for the rationale.
+const GRACE_DELETE_MS = 5000;
+const pendingDeleteId = writable<string | null>(null);
+let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Tasks minus the one in its soft-delete grace window — what every view renders. */
+const visibleTasks = derived([tasksStore, pendingDeleteId], ([$tasks, $pending]) =>
+	$pending ? $tasks.filter((task) => task.id !== $pending) : $tasks
+);
+
+/** The task currently in its soft-delete grace window (drives the undo toast), or null. */
+export const pendingDelete = derived([tasksStore, pendingDeleteId], ([$tasks, $pending]) =>
+	$pending ? ($tasks.find((task) => task.id === $pending) ?? null) : null
+);
+
+function clearPendingDeleteTimer() {
+	if (pendingDeleteTimer !== null) {
+		clearTimeout(pendingDeleteTimer);
+		pendingDeleteTimer = null;
+	}
+}
+
+// Fire the real delete for the task in the grace window (if any). Called by the
+// grace timer, when a second delete starts, or explicitly (e.g. on navigation).
+function commitPendingDelete() {
+	const id = get(pendingDeleteId);
+	if (id === null) return;
+	clearPendingDeleteTimer();
+	pendingDeleteId.set(null);
+	void tasks.deleteRemote(id).catch((err: unknown) => console.error('deleteRemote failed', err));
+}
+
 const isServerId = (id: string) =>
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 const todayIso = () => toLocalIsoDate(new Date());
@@ -184,7 +222,9 @@ const updateAndPersist = (fn: (list: Task[]) => Task[]) => {
 };
 
 export const tasks = {
-	subscribe: tasksStore.subscribe,
+	// Components see VISIBLE tasks (a soft-deleted task is hidden during its grace
+	// window); internal methods use get(tasksStore) for the raw list.
+	subscribe: visibleTasks.subscribe,
 	add(task: Task) {
 		updateAndPersist((list) => [...list, task]);
 	},
@@ -433,6 +473,27 @@ export const tasks = {
 		}
 		await api.deleteTask(existing.id);
 		tasks.remove(id);
+	},
+	/**
+	 * Soft-delete with an undo grace window: hide the task from all views now, but
+	 * defer the real delete until the window commits. Only one at a time — a new
+	 * soft-delete commits any previous one. No-op if the id isn't a known task.
+	 */
+	softDelete(id: string) {
+		commitPendingDelete();
+		if (!get(tasksStore).some((task) => task.id === id)) return;
+		pendingDeleteId.set(id);
+		pendingDeleteTimer = setTimeout(commitPendingDelete, GRACE_DELETE_MS);
+	},
+	/** Cancel the pending soft-delete for `id` (task reappears; no server call). */
+	undoDelete(id: string) {
+		if (get(pendingDeleteId) !== id) return;
+		clearPendingDeleteTimer();
+		pendingDeleteId.set(null);
+	},
+	/** Commit any in-flight soft-delete immediately (e.g. on navigation/unload). */
+	commitDelete() {
+		commitPendingDelete();
 	},
 	async clearListRemote(listId: string): Promise<number> {
 		const { deleted_count } = await api.clearListTasks(listId);
@@ -771,7 +832,7 @@ const wasCompletedToday = (task: Task) => {
 };
 
 export const myDayPending = derived(
-	[tasksStore, auth, myDayDateKey],
+	[visibleTasks, auth, myDayDateKey],
 	([$tasks, $auth, _myDayDateKey]) => {
 		void _myDayDateKey;
 		return $tasks.filter(
@@ -784,7 +845,7 @@ export const myDayPending = derived(
 	}
 );
 
-export const myDayMissed = derived([tasksStore, auth, myDayDateKey], ([$tasks, $auth, _myDayDateKey]) => {
+export const myDayMissed = derived([visibleTasks, auth, myDayDateKey], ([$tasks, $auth, _myDayDateKey]) => {
 	void _myDayDateKey;
 	return $tasks
 		.filter(
@@ -802,7 +863,7 @@ export const myDayMissed = derived([tasksStore, auth, myDayDateKey], ([$tasks, $
 });
 
 export const myDayCompleted = derived(
-	[tasksStore, auth, myDayDateKey],
+	[visibleTasks, auth, myDayDateKey],
 	([$tasks, $auth, _myDayDateKey]) => {
 		void _myDayDateKey;
 		return $tasks.filter(
@@ -816,7 +877,7 @@ export const myDayCompleted = derived(
 );
 
 export const myDaySuggestions = derived(
-	[tasksStore, auth, myDayDateKey],
+	[visibleTasks, auth, myDayDateKey],
 	([$tasks, $auth, _myDayDateKey]) => {
 		void _myDayDateKey;
 		const today = todayIso();
@@ -843,11 +904,11 @@ export const myDaySuggestions = derived(
 );
 
 export const tasksByList = (listId: string) =>
-	derived([tasksStore, auth], ([$tasks]) =>
+	derived([visibleTasks, auth], ([$tasks]) =>
 		$tasks.filter((task) => task.list_id === listId)
 	);
 
-export const listCounts = derived([tasksStore], ([$tasks]) => {
+export const listCounts = derived([visibleTasks], ([$tasks]) => {
 	return $tasks.reduce<Record<string, { pending: number; total: number }>>((acc, task) => {
 		const entry = acc[task.list_id] ?? { pending: 0, total: 0 };
 		entry.total += 1;

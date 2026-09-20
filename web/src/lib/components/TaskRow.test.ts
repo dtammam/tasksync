@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { readable } from 'svelte/store';
 import TaskRow from './TaskRow.svelte';
+import { tasks } from '$lib/stores/tasks';
 import type { Task } from '$shared/types/task';
 
 // ── Store mocks ────────────────────────────────────────────────────────────
@@ -13,6 +14,7 @@ vi.mock('$lib/stores/tasks', () => ({
 		setPriority: vi.fn(),
 		punt: vi.fn(),
 		deleteRemote: vi.fn().mockResolvedValue(undefined),
+		softDelete: vi.fn(),
 		toggle: vi.fn(),
 		catchUp: vi.fn(),
 		undoRecurringCompletion: vi.fn(),
@@ -127,17 +129,16 @@ describe('TaskRow action shelf — closes after each action', () => {
 		expect(container.querySelector('.quick')).toBeNull();
 	});
 
-	it('deleteTask closes the shelf (regression guard)', async () => {
-		vi.spyOn(window, 'confirm').mockReturnValue(true);
+	it('deleteTask soft-deletes and closes the shelf, with no confirm dialog', async () => {
+		const confirmSpy = vi.spyOn(window, 'confirm');
 
 		const { container, getByText } = await openShelf(makeTask());
 		expect(container.querySelector('.quick')).toBeTruthy();
 
-		// fireEvent is synchronous but deleteTask is async; wait for the DOM to settle.
 		await fireEvent.click(getByText('Delete'));
-		// Allow the microtask queue to flush so the async handler completes.
-		await Promise.resolve();
 
+		expect(tasks.softDelete).toHaveBeenCalledTimes(1);
+		expect(confirmSpy).not.toHaveBeenCalled(); // undo toast, not a blocking confirm
 		expect(container.querySelector('.quick')).toBeNull();
 	});
 

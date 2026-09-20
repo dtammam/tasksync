@@ -12,7 +12,7 @@
 	import { lists } from '$lib/stores/lists';
 	import { members } from '$lib/stores/members';
 	import { tagPalette } from '$lib/stores/tagPalette';
-	import { tasks, myDayMissed, setDbScope } from '$lib/stores/tasks';
+	import { tasks, myDayMissed, pendingDelete, setDbScope } from '$lib/stores/tasks';
 	import { soundSettings } from '$lib/stores/settings';
 	import { playCompletion } from '$lib/sound/sound';
 	import { uiPreferences } from '$lib/stores/preferences';
@@ -59,6 +59,8 @@
 
 	afterNavigate(() => {
 		navOpen = false;
+		// Leaving the view commits any in-flight soft-delete (the undo toast is gone).
+		tasks.commitDelete();
 	});
 
 	const runSync = async () => {
@@ -439,6 +441,19 @@
 					: `${remoteTaskToast.count} new tasks added by a team member`}
 			</span>
 			<button type="button" class="toast-dismiss" aria-label="Dismiss" on:click={dismissRemoteTaskToast}>×</button>
+		</div>
+	{/if}
+	{#if $pendingDelete}
+		<div class="remote-task-toast undo-toast" role="status" data-testid="undo-delete-toast">
+			<span>Deleted "{$pendingDelete.title}"</span>
+			<button
+				type="button"
+				class="toast-undo"
+				data-testid="undo-delete"
+				on:click={() => {
+					if ($pendingDelete) tasks.undoDelete($pendingDelete.id);
+				}}>Undo</button
+			>
 		</div>
 	{/if}
 	<StreakDisplay />
@@ -872,6 +887,27 @@
 
 	.toast-dismiss:hover {
 		color: var(--app-text);
+	}
+
+	/* Stack the undo toast above the remote-task toast when both are visible. */
+	.undo-toast {
+		bottom: calc(env(safe-area-inset-bottom, 0px) + 132px);
+	}
+
+	.toast-undo {
+		background: none;
+		border: none;
+		color: var(--app-text);
+		cursor: pointer;
+		font-size: 13px;
+		font-weight: 600;
+		text-decoration: underline;
+		padding: 0 2px;
+		flex-shrink: 0;
+	}
+
+	.toast-undo:hover {
+		color: var(--app-muted);
 	}
 
 	@media (max-width: 900px) {

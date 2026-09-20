@@ -28,7 +28,7 @@ vi.mock('$lib/stores/streak', () => ({
 	getRandomJudgmentImage: vi.fn()
 }));
 
-import { myDayCompleted, myDayMissed, myDayPending, myDaySuggestions, tasks } from './tasks';
+import { myDayCompleted, myDayMissed, myDayPending, myDaySuggestions, pendingDelete, tasks } from './tasks';
 import { playCompletion } from '$lib/sound/sound';
 import { streak } from '$lib/stores/streak';
 import type { Task } from '$shared/types/task';
@@ -1307,5 +1307,82 @@ describe('tasks store helpers', () => {
 		expect(changed).toBe(1);
 		expect(tasks.getAll().find((task) => task.id === 'mine')?.status).toBe('pending');
 		expect(tasks.getAll().find((task) => task.id === 'theirs')?.status).toBe('done');
+	});
+});
+
+describe('tasks quick delete + undo (grace window)', () => {
+	const syncedTask = (over: Partial<Task> = {}): Task =>
+		baseTask({
+			id: '11111111-1111-4111-8111-111111111111',
+			title: 'Delete me',
+			local: false,
+			dirty: false,
+			...over
+		});
+	let deleteSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		tasks.setAll([]);
+		deleteSpy = vi.spyOn(api, 'deleteTask').mockResolvedValue(undefined as never);
+	});
+	afterEach(() => {
+		deleteSpy.mockRestore();
+		vi.useRealTimers();
+	});
+
+	it('hides the task as pending-delete with no server call, and undo restores it', () => {
+		const t = syncedTask();
+		tasks.setAll([t]);
+
+		tasks.softDelete(t.id);
+		expect(get(tasks).some((x) => x.id === t.id)).toBe(false); // hidden from every view
+		expect(tasks.getAll().some((x) => x.id === t.id)).toBe(true); // still in the raw store
+		expect(get(pendingDelete)?.id).toBe(t.id); // drives the undo toast
+		expect(deleteSpy).not.toHaveBeenCalled();
+
+		tasks.undoDelete(t.id);
+		expect(get(tasks).some((x) => x.id === t.id)).toBe(true); // restored, byte-identical
+		expect(get(pendingDelete)).toBeNull();
+		expect(deleteSpy).not.toHaveBeenCalled();
+	});
+
+	it('commits exactly one server delete when the grace window elapses', async () => {
+		const t = syncedTask();
+		tasks.setAll([t]);
+
+		tasks.softDelete(t.id);
+		expect(deleteSpy).not.toHaveBeenCalled();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(deleteSpy).toHaveBeenCalledTimes(1);
+		expect(deleteSpy).toHaveBeenCalledWith(t.id);
+		expect(tasks.getAll().some((x) => x.id === t.id)).toBe(false);
+		expect(get(pendingDelete)).toBeNull();
+	});
+
+	it('undo before the window elapses cancels the delete entirely', async () => {
+		const t = syncedTask();
+		tasks.setAll([t]);
+
+		tasks.softDelete(t.id);
+		tasks.undoDelete(t.id);
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(tasks.getAll().some((x) => x.id === t.id)).toBe(true);
+	});
+
+	it('a second soft-delete commits the previous one (one at a time)', () => {
+		const a = syncedTask({ id: '11111111-1111-4111-8111-111111111111', title: 'A' });
+		const b = syncedTask({ id: '22222222-2222-4222-8222-222222222222', title: 'B' });
+		tasks.setAll([a, b]);
+
+		tasks.softDelete(a.id);
+		tasks.softDelete(b.id); // commits a synchronously
+
+		expect(deleteSpy).toHaveBeenCalledWith(a.id);
+		expect(get(pendingDelete)?.id).toBe(b.id);
 	});
 });
