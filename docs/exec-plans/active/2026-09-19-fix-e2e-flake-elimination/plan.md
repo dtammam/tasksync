@@ -2,9 +2,9 @@
 plan: e2e-flake-elimination
 harness: v2 · lean
 anchor: outcome
-status: Building
-next: Re-gate r4 (sidebar-drag identity wait after CI r3 firefox failure), then re-confirm on CI.
-gate: pending (r3 @1c26d69 superseded — sidebar-drag firefox fix moved the tree)
+status: Gated
+next: Ready to merge PR #154 (owner's call — never self-merge). On merge: mark Shipped, move to completed/, close #050/#051/sidebar-drag.
+gate: APPROVED r4 @2c0f3447ac1d4b162e0e98f1303650735c44ef78 (adversary + qa + security-brief); CI green (chromium+firefox+webkit)
 ---
 
 # Fix: eliminate e2e test flakes at their root (#050 + sidebar-drag + same class)
@@ -212,7 +212,7 @@ only the security surface.
 
 No CRITICAL/HIGH/MEDIUM/LOW findings. INFO from r1 still stands.
 
-Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — security-brief
+Gate: r2 security-brief verdict SUPERSEDED by r4 @2c0f344 below — approved @484e65c, code has since moved.
 
 ### security-brief (r3 @1c26d69) — re-bind to new sha
 
@@ -231,7 +231,25 @@ by reading the current files, whose security-relevant content matches r2.
 
 No CRITICAL/HIGH/MEDIUM/LOW findings. INFO from r1 still stands.
 
-Gate: APPROVED r3 @1c26d6906475eedbbd7f68a798ee83fc91fd17e3 — security-brief
+Gate: r3 security-brief verdict SUPERSEDED by r4 @2c0f344 below — approved @1c26d69, code has since moved.
+
+### security-brief (r4 @2c0f344) — re-bind to new sha
+
+Delta 1c26d69 → 2c0f344 is test + doc only; no `web/src/` change, so the
+auth boot / token surface I reviewed at r1/r2/r3 is byte-identical and every r1
+finding stands. I re-read the touched test:
+`sidebar-drag.spec.ts` adds a 30s bounded identity wait for a mocked list
+(`items.filter({ hasText: 'Alpha List' }).toHaveCount(1, { timeout: 30_000 })`,
+line 187) before the count assertion; surrounding `page.route` mocks return
+canned JSON. No secret, token, or injection surface introduced.
+
+Tool gap (verbatim, honest): I have no Bash, so I could NOT run
+`git diff 1c26d69 2c0f344 -- web/src/` myself — I confirmed "no source change"
+by reading the current files, whose security-relevant content matches r3.
+
+No CRITICAL/HIGH/MEDIUM/LOW findings. INFO from r1 still stands.
+
+Gate: APPROVED r4 @2c0f3447ac1d4b162e0e98f1303650735c44ef78 — security-brief
 
 ### qa (r1 @2e8e8e7)
 
@@ -390,7 +408,7 @@ absent locally (per r1); the coordinator measured the full preview matrix at
 
 Working tree left byte-identical apart from this verdict block; no untracked files.
 
-Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — qa
+Gate: r2 qa verdict SUPERSEDED by r4 @2c0f344 below — approved @484e65c, code has since moved.
 
 ### adversary delta re-review (r2 @484e65c)
 
@@ -409,7 +427,7 @@ Note (non-blocking): firefox offline-RELOAD continuity is now unexercised locall
 
 Working tree left byte-identical apart from this verdict block: `git status` shows only this plan.md modified; build/ and test-results/ are gitignored; no stray processes; other seats' verdict lines untouched.
 
-Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — adversary
+Gate: r2 adversary verdict SUPERSEDED by r4 @2c0f344 below — approved @484e65c, code has since moved.
 
 ### qa delta re-review (r3 @1c26d69)
 
@@ -443,4 +461,75 @@ Measured (verbatim, this box):
 No new issues; nothing regressed. Working tree left byte-identical apart from
 this verdict block; no untracked files.
 
-Gate: APPROVED r3 @1c26d6906475eedbbd7f68a798ee83fc91fd17e3 — qa
+Gate: r3 qa verdict SUPERSEDED by r4 @2c0f344 below — approved @1c26d69, code has since moved.
+
+### adversary delta re-review (r3 @1c26d69)
+
+Scope: `git diff 484e65c 1c26d69 -- web/src/` **empty** — app/auth source byte-identical to r1/r2, so my prior auth + `data-synced` mutation kills carry over. Delta is test + doc only (`offline.spec.ts`, two plan docs).
+
+r3 change (CI showed firefox failing at `offline.spec.ts:565` `toHaveCount(1)=0` — even PRE-reload assertions race SW-mediated mock hydration on firefox under CI load, so the r2 reload-only firefox skip was insufficient). r3: the whole `Offline continuity` describe now `test.skip(({browserName}) => browserName === 'webkit' || browserName === 'firefox')`, and the r2 firefox short-circuit inside `ensureServiceWorkerControlsPage` is removed. **VERIFIED:**
+- No dead code from the removed block: `options?.allowUnregistered` is still referenced twice in `ensureServiceWorkerControlsPage` (the catch guard and the claim-timeout fallback); the removal cleanly restores the original chromium/webkit function. `npm run lint` exit 0; `npm run check` 0 errors/0 warnings.
+- Measured on an isolated consistent production build (see infra note): `offline.spec.ts` across `--project=firefox --project=chromium --project=webkit --retries=0` → **6 passed (chromium), 12 skipped (firefox 6 + webkit 6), 0 failed**. The firefox/webkit skip is a describe-level static `browserName` predicate — deterministic by construction, no timing, so no skip-vs-fail flake. Chromium single runs + smoke pass cleanly.
+- Coverage note (non-blocking, disclosed in the code comment): firefox offline-continuity is now entirely unexercised (both pre-reload and reload assertions), joining webkit; chromium is the sole offline-coverage browser. Pragmatic given the Playwright firefox+SW-offline limitation, but the offline suite's cross-engine coverage is now chromium-only.
+
+INFRA NOTE (verbatim, not a code finding): on this shared box a concurrent `npm run build` (the Architect's parallel work) corrupted the repo `build/` dir mid-run — served `index.html` referenced `/_app/immutable/entry/start.*.js` chunks that 404'd, making chromium `app-shell` never boot (6/6 spurious fails + smoke fail). Load was ~0.4, so not contention. I isolated by building, snapshotting `build/` to a private scratch dir, and serving that snapshot on :4173 via a static server (SPA fallback + `service-worker-allowed:/`); chromium then passed. A later `--repeat-each=3` cohort showed transient `net::ERR_CONNECTION_REFUSED` (my static server was killed externally by a concurrent `pkill`) and one 6-fail cohort — all infra, since single runs pass green. The r3 diff is test/doc only and cannot cause chunk 404s or connection-refused.
+
+BLOCKING-FOR-THE-NEXT-SHA (flag, not a defect in 1c26d69): during this review the working tree acquired a **STAGED, UNREVIEWED** change to `web/tests/e2e/sidebar-drag.spec.ts` that is NOT part of 1c26d69 (adds `await expect(items.filter({ hasText: 'Alpha List' })).toHaveCount(1, { timeout: 30_000 })` before the count asserts). Its own comment states the important truth that `data-synced` "only means the first sync SETTLED — it can settle on an errored/empty first attempt with a retry applying the data slightly later" — i.e. `expectAppSynced` does NOT guarantee server-origin data is applied, only that the first pull attempt settled (confirmed at source: `firstSyncSettled` is set in `startupSync.finally`, and `runSync` swallows pull errors, so an errored first pull still settles). Waiting for a mocked row BY IDENTITY (as this pending edit does) is the correct pattern for server-origin assertions. I did NOT revert this foreign uncommitted work. My approval below binds STRICTLY to committed sha 1c26d69; when the Architect commits this sidebar-drag change the HEAD moves and every seat's r3 @1c26d69 approval (incl. this one) is VOID — that change needs its own gate round.
+
+My r1 firefox CRITICAL and r2 verdict remain resolved. No CRITICAL/WARNING against the committed 1c26d69 diff.
+
+Working tree at verdict time: `git status` shows `docs/…/e2e-flake-elimination/plan.md` (this verdict) and `web/tests/e2e/sidebar-drag.spec.ts` (the Architect's staged foreign edit, left untouched); `build/` and `test-results/` gitignored; my static server + snapshot are in scratchpad (outside the repo); no stray server processes.
+
+Gate: r3 adversary verdict SUPERSEDED by r4 @2c0f344 below — approved @1c26d69, code has since moved.
+
+### qa delta re-review (r4 @2c0f344)
+
+Delta scope: `git diff 1c26d69 2c0f344` touches only `sidebar-drag.spec.ts` and
+this plan doc — **no app/src/server change**, so all prior correctness + security
+conclusions stand.
+
+The r4 fix, verified: after `expectAppSynced`, the test now waits for the mocked
+`Alpha List` BY IDENTITY with a 30s bound (`toHaveCount(1, { timeout: 30_000 })`)
+before asserting exactly 2 lists + no `Goal Management` seed. This addresses the
+CI r3 firefox race (`sidebar-drag.spec.ts:184` count=5): `data-synced` only means
+the first sync SETTLED — it can settle on an errored/empty first pull, with a
+retry applying the mocked lists slightly later, so the old bare `toHaveCount(2)`
+raced the default 10s window. `Alpha List` is a genuine mocked list (line 7);
+`lists.setAll` replaces seeds atomically, so once Alpha appears the count is
+exactly 2 and the seed is gone. Semantically-equivalent end-state, robust to slow
+apply, not a fixed sleep. The downstream order/drag/reorder assertions
+(Alpha→nth0, Beta→nth1, dragTo, reversed-order poll) are unchanged — no regression.
+
+Measured (verbatim, this box):
+- `npx vitest run` → **414 passed (28 files)**. Production build OK.
+- `sidebar-drag.spec.ts` on a preview I built + served myself (persistent bg
+  server, throwaway config removed, build/ gitignored), chromium+webkit,
+  retries=0, `--repeat-each=3`: **6 passed, 0 failed (exit 0)** — 3/3 chromium +
+  3/3 webkit.
+- Firefox binary absent locally; coordinator measured 30/30 firefox+chromium
+  under load. Firefox-green rests on CI, as the plan states.
+
+No new issues; nothing regressed. Working tree left byte-identical apart from this
+verdict block; no untracked files.
+
+Gate: APPROVED r4 @2c0f3447ac1d4b162e0e98f1303650735c44ef78 — qa
+
+### adversary delta re-review (r4 @2c0f344)
+
+(My r3 @1c26d69 approval is VOID — HEAD moved to 2c0f344 when the sidebar-drag change I flagged as staged/unreviewed in the r3 block was committed. This r4 supersedes it and binds to the current HEAD.)
+
+Scope: `git diff 1c26d69 2c0f344 -- web/src/` **empty** — no app/auth change; prior mutation kills carry over. Delta is `sidebar-drag.spec.ts` (the identity-wait) + plan doc only.
+
+CI r3 failure was firefox `sidebar-drag.spec.ts:184` `toHaveCount(2)=5` — `data-synced` settled on an errored/empty first pull and the mocked lists applied on a later retry, so the bare count raced under firefox CI load. r4 inserts `await expect(items.filter({ hasText: 'Alpha List' })).toHaveCount(1, { timeout: 30_000 })` before `toHaveCount(2)` + seed-absent. **VERIFIED:**
+- `'Alpha List'` (id `list-alpha`) is a MOCKED list; the seeds are different (`Goal Management` et al.). So the identity wait can only pass once the mocked `/sync/pull` has actually been applied — it is a real bounded wait, not a fixed sleep.
+- Robustness under induced load (2× `yes`, load avg 4–7, `--workers=2`), isolated consistent production build: `sidebar-drag.spec.ts` firefox + chromium `--repeat-each=15` → **30 passed / 0 failed**.
+- Not masking a genuine non-apply (mutation): set the `/sync/pull` mock to `lists: []` (seeds never replaced) → the identity wait **failed at 30s** (`toHaveCount(1)` for 'Alpha List' Received: 0), and the test went red rather than passing vacuously. Restored. This proves the wait binds to the applied state; if the mock never delivers, the test fails — it cannot hide a non-apply. `toHaveCount(2)` + `Goal Management` absent still guard against un-replaced seeds.
+- `npm run lint` / `npm run check` were clean at r3 and this delta touches no lint-relevant logic beyond the added assertion (eslint-parseable; run confirmed clean earlier this session).
+
+INFRA NOTE (verbatim, not a code finding): as in r3, a concurrent `npm run build` on this shared box intermittently corrupts the repo `build/` dir and a concurrent `pkill` kills preview servers, producing spurious `net::ERR_CONNECTION_REFUSED` / `app-shell`-never-boots failures unrelated to the diff. I measured against a private snapshot of `build/` served on :4173 by an isolated static server (SPA fallback + `service-worker-allowed:/`) to get a stable signal; single runs and the ×15 load run are green.
+
+The `data-synced` semantic surfaced here is real and now correctly handled: `expectAppSynced` guarantees only that the first startup sync SETTLED (an errored/empty first pull still settles via `runSync`'s internal catch + `startupSync.finally`), NOT that server-origin data is applied. Any spec asserting mocked server rows/lists should wait BY IDENTITY (as sidebar-drag now does, and as the offline specs do via their post-goto row assertions). No open instance of this pattern left unguarded in the touched specs.
+
+No CRITICAL/WARNING against 2c0f344. Working tree left byte-identical apart from this verdict block (`git status` shows only this plan.md); sidebar-drag mutation restored via `git checkout --`; `build/`/`test-results/` gitignored; snapshot + static server in scratchpad (outside repo); no stray processes.
+
+Gate: APPROVED r4 @2c0f3447ac1d4b162e0e98f1303650735c44ef78 — adversary
