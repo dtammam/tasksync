@@ -2,9 +2,9 @@
 plan: feat-bulk-check-uncheck-tasks
 harness: v2 · lean
 anchor: spec
-status: Building (resumed 2026-09-20 on feat/bulk-check-uncheck-tasks; scope narrowed to list-level Check all per owner)
-next: Tests done; commit + /gate.
-gate: pending
+status: Gated (feat/bulk-check-uncheck-tasks; list-level Check all)
+next: Push + CI, then owner merge. (Per-tag-section check/uncheck deferred to a follow-up slice.)
+gate: APPROVED r1 @1444804c7e6d9824765875c8f60aa6c806b34ca9 (adversary + qa)
 ---
 
 # Bulk check/uncheck-all, list-wide and per tag section
@@ -234,3 +234,8 @@ Resumed live. Owner confirmed a **narrowed, keep-it-simple scope**:
 ## Deferred (own follow-up slice)
 Per-tag-section check/uncheck buttons on group headers (D4/D5/D9) — the store
 already generalizes cleanly to a per-id-set variant if/when the owner wants it.
+
+## Gate
+
+Gate: APPROVED r1 @1444804c7e6d9824765875c8f60aa6c806b34ca9 — qa
+Gate: APPROVED r1 @1444804c7e6d9824765875c8f60aa6c806b34ca9 — adversary
