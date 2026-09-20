@@ -169,7 +169,16 @@ const setupAdminSession = async (page: Page) => {
 	return { patchedIds };
 };
 
-test('@smoke admin in manual sort mode can drag a sidebar list to reorder it', async ({ page }) => {
+test('@smoke admin in manual sort mode can drag a sidebar list to reorder it', async ({
+	page,
+	browserName
+}) => {
+	// Firefox under Playwright does not reliably apply the mocked /sync/pull under
+	// CI load — the seed lists are not replaced by the two mocked lists within the
+	// 30s identity-wait window (observed intermittently: "Alpha List" toHaveCount 0).
+	// This is the same mock-sync limitation that makes firefox skip the offline
+	// describe; chromium + webkit cover this drag-reorder flow. See tech-debt #050.
+	test.skip(browserName === 'firefox', 'firefox unreliably applies the mocked sync under CI');
 	const { patchedIds } = await setupAdminSession(page);
 
 	await page.goto('/');
