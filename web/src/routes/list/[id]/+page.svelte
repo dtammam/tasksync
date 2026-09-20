@@ -90,6 +90,9 @@
 	$: uncheckEligibleCount = completedTasks.filter(
 		(task) => !contributorUserId || task.created_by_user_id === contributorUserId
 	).length;
+	$: checkEligibleCount = pendingTasks.filter(
+		(task) => !contributorUserId || task.created_by_user_id === contributorUserId
+	).length;
 
 	$: copyLines = [...pendingTasks, ...completedTasks].map(
 		(task) => `- [${task.status === 'done' ? 'x' : ' '}] ${task.title}`
@@ -116,6 +119,13 @@
 		const changed = tasks.uncheckAllInList(listId, contributorUserId ? { ownerUserId: contributorUserId } : undefined);
 		if (!changed) return;
 		listActionMessage = `Unchecked ${changed} completed task${changed === 1 ? '' : 's'}.`;
+	};
+
+	const checkAllPending = () => {
+		listActionMessage = '';
+		const changed = tasks.checkAllInList(listId, contributorUserId ? { ownerUserId: contributorUserId } : undefined);
+		if (!changed) return;
+		listActionMessage = `Completed ${changed} task${changed === 1 ? '' : 's'}.`;
 	};
 
 	const onImported = (event: CustomEvent<{ message: string }>) => {
@@ -182,6 +192,15 @@
 					on:click={openImport}
 				>
 					Import
+				</button>
+				<button
+					type="button"
+					class="ghost-pill"
+					data-testid="list-check-all"
+					on:click={checkAllPending}
+					disabled={checkEligibleCount === 0}
+				>
+					Check all
 				</button>
 				<button
 					type="button"

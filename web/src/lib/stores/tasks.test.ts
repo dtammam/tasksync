@@ -1386,3 +1386,104 @@ describe('tasks quick delete + undo (grace window)', () => {
 		expect(get(pendingDelete)?.id).toBe(b.id);
 	});
 });
+
+describe('tasks checkAllInList (bulk complete)', () => {
+	const mockedIncrement = vi.mocked(streak.increment);
+	const mockedUndo = vi.mocked(streak.undoCompletion);
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-02-02T12:00:00Z'));
+		tasks.setAll([]);
+		mockedIncrement.mockClear();
+		mockedUndo.mockClear();
+		mockedPlayCompletion.mockClear();
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('completes a list’s pending tasks, contributor-scoped, and returns the count', () => {
+		tasks.setAll([
+			baseTask({ id: 'p1', list_id: 'tasks', status: 'pending', created_by_user_id: 'me' }),
+			baseTask({ id: 'p2', list_id: 'tasks', status: 'pending', created_by_user_id: 'other' }),
+			baseTask({ id: 'done1', list_id: 'tasks', status: 'done', created_by_user_id: 'me' }),
+			baseTask({ id: 'other-list', list_id: 'health', status: 'pending', created_by_user_id: 'me' })
+		]);
+
+		// Admin (no ownerUserId): completes both pending tasks in the list, not other lists / already-done.
+		const changed = tasks.checkAllInList('tasks');
+		expect(changed).toBe(2);
+		expect(tasks.getAll().find((t) => t.id === 'p1')?.status).toBe('done');
+		expect(tasks.getAll().find((t) => t.id === 'p2')?.status).toBe('done');
+		expect(tasks.getAll().find((t) => t.id === 'other-list')?.status).toBe('pending');
+		expect(tasks.getAll().find((t) => t.id === 'p1')?.dirty).toBe(true);
+		// Streak accounting is silent, one per completed task; one completion sound for the batch.
+		expect(mockedIncrement).toHaveBeenCalledWith('p1', { silent: true });
+		expect(mockedIncrement).toHaveBeenCalledTimes(2);
+		expect(mockedPlayCompletion).toHaveBeenCalledTimes(1);
+	});
+
+	it('is contributor-scoped: only completes tasks the caller created', () => {
+		tasks.setAll([
+			baseTask({ id: 'mine', list_id: 'tasks', status: 'pending', created_by_user_id: 'me' }),
+			baseTask({ id: 'theirs', list_id: 'tasks', status: 'pending', created_by_user_id: 'other' })
+		]);
+
+		const changed = tasks.checkAllInList('tasks', { ownerUserId: 'me' });
+		expect(changed).toBe(1);
+		expect(tasks.getAll().find((t) => t.id === 'mine')?.status).toBe('done');
+		expect(tasks.getAll().find((t) => t.id === 'theirs')?.status).toBe('pending');
+	});
+
+	it('advances a pending recurring task one occurrence (not a flat done), and undoes its streak id', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'rec',
+				list_id: 'tasks',
+				status: 'pending',
+				recurrence_id: 'daily',
+				due_date: '2026-02-02',
+				occurrences_completed: 0
+			})
+		]);
+
+		const changed = tasks.checkAllInList('tasks');
+		expect(changed).toBe(1);
+		const rec = tasks.getAll().find((t) => t.id === 'rec');
+		expect(rec?.status).toBe('pending'); // recurring stays pending
+		expect(rec?.due_date).toBe('2026-02-03'); // rolled forward one occurrence
+		expect(rec?.occurrences_completed).toBe(1);
+		expect(typeof rec?.completed_ts).toBe('number');
+		// recurring reuses its id → increment then undo so the next occurrence can count
+		expect(mockedIncrement).toHaveBeenCalledWith('rec', { silent: true });
+		expect(mockedUndo).toHaveBeenCalledWith('rec');
+	});
+
+	it('skips a recurring task already completed today (no double-advance)', () => {
+		tasks.setAll([
+			baseTask({
+				id: 'rec-done',
+				list_id: 'tasks',
+				status: 'pending',
+				recurrence_id: 'daily',
+				due_date: '2026-02-03',
+				occurrences_completed: 1,
+				completed_ts: new Date('2026-02-02T10:00:00Z').getTime()
+			})
+		]);
+
+		const changed = tasks.checkAllInList('tasks');
+		expect(changed).toBe(0);
+		const rec = tasks.getAll().find((t) => t.id === 'rec-done');
+		expect(rec?.due_date).toBe('2026-02-03'); // unchanged
+		expect(rec?.occurrences_completed).toBe(1);
+		expect(mockedIncrement).not.toHaveBeenCalled();
+	});
+
+	it('is a no-op (returns 0, no sound) when the list has no eligible pending tasks', () => {
+		tasks.setAll([baseTask({ id: 'd', list_id: 'tasks', status: 'done' })]);
+		expect(tasks.checkAllInList('tasks')).toBe(0);
+		expect(mockedPlayCompletion).not.toHaveBeenCalled();
+	});
+});

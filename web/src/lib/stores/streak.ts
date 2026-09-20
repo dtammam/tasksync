@@ -347,7 +347,7 @@ export const streak = {
 	 * If the task was already counted in this combo run, this is a no-op and
 	 * returns false.
 	 */
-	increment(taskId: string): boolean {
+	increment(taskId: string, opts?: { silent?: boolean }): boolean {
 		const prefs = uiPreferences.get();
 		if (!prefs.streakSettings.enabled) return false;
 
@@ -367,6 +367,10 @@ export const streak = {
 		});
 
 		if (newCount === 0) return false;
+
+		// Bulk callers (e.g. checkAllInList) keep the streak accounting above but
+		// suppress the per-task overlay + announcer so a batch doesn't spam them.
+		if (opts?.silent) return false;
 
 		// Pick a fresh judgment image on every completion (not just when overlay first appears)
 		const judgmentSrc = getRandomJudgmentImage(prefs.streakSettings.theme);

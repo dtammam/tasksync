@@ -355,6 +355,67 @@ export const tasks = {
 		}
 		return changed;
 	},
+	/**
+	 * Bulk-complete a list's pending tasks (the mirror of uncheckAllInList).
+	 * A recurring task advances one occurrence exactly like a single toggle
+	 * (status stays pending, due date rolls forward). Contributor-scoped
+	 * identically. Side effects are batched: streak accounting is silent
+	 * (no per-task overlay/announcer), and the day-complete check + at most one
+	 * completion sound fire once for the whole action.
+	 */
+	checkAllInList(listId: string, opts?: { ownerUserId?: string }): number {
+		const now = Date.now();
+		const completedIds: string[] = [];
+		const recurringIds = new Set<string>();
+		tasksStore.update((list) =>
+			list.map((task) => {
+				if (task.list_id !== listId || task.status !== 'pending') return task;
+				if (opts?.ownerUserId && task.created_by_user_id !== opts.ownerUserId) return task;
+				if (task.recurrence_id) {
+					// A recurring task already advanced today is "done for today" — don't
+					// advance it a second occurrence (that would skip an occurrence).
+					if (wasRecurringCompletedToday(task)) return task;
+					recurringIds.add(task.id);
+					completedIds.push(task.id);
+					return {
+						...clearPuntState(task),
+						status: 'pending',
+						due_date: nextRecurringDueAfterCurrent(task),
+						occurrences_completed: (task.occurrences_completed ?? 0) + 1,
+						completed_ts: now,
+						updated_ts: now,
+						dirty: true
+					};
+				}
+				completedIds.push(task.id);
+				return {
+					...task,
+					status: 'done',
+					punted_from_due_date: undefined,
+					punted_on_date: undefined,
+					completed_ts: now,
+					updated_ts: now,
+					dirty: true
+				};
+			})
+		);
+		if (completedIds.length === 0) return 0;
+		void repo.saveTasks(get(tasksStore)).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
+		for (const id of completedIds) {
+			// Silent: keep streak accounting, suppress per-task overlay/announcer.
+			streak.increment(id, { silent: true });
+			// Recurring reuses its id across occurrences — undo the count so the next
+			// occurrence can still count, exactly like toggle().
+			if (recurringIds.has(id)) streak.undoCompletion(id);
+		}
+		// One day-complete evaluation + at most one completion sound for the batch.
+		const isLastMyDayTask = get(myDayPending).length === 0 && get(myDayCompleted).length > 0;
+		const willDayComplete = isLastMyDayTask && streak.triggerDayComplete();
+		if (!willDayComplete) {
+			void playCompletion(soundSettings.get());
+		}
+		return completedIds.length;
+	},
 	setAll(next: Task[]) {
 		tasksStore.set(next);
 		void repo.saveTasks(next).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
