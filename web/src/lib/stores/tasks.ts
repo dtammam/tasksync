@@ -49,8 +49,14 @@ function commitPendingDelete() {
 	const id = get(pendingDeleteId);
 	if (id === null) return;
 	clearPendingDeleteTimer();
-	pendingDeleteId.set(null);
-	void tasks.deleteRemote(id).catch((err: unknown) => console.error('deleteRemote failed', err));
+	// Keep the task filtered (pendingDeleteId still set) until deleteRemote has
+	// actually removed it — otherwise a synced task, whose delete awaits a network
+	// round-trip, would flash back into view mid-commit. Clear the flag only if
+	// this id is still the pending one (a newer soft-delete may have taken over).
+	void tasks
+		.deleteRemote(id)
+		.catch((err: unknown) => console.error('deleteRemote failed', err))
+		.finally(() => pendingDeleteId.update((current) => (current === id ? null : current)));
 }
 
 const isServerId = (id: string) =>

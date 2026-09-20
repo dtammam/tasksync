@@ -128,6 +128,12 @@ newest commits the previous); **remove the `confirm()`** dialog entirely.
 - **+layout.svelte**: an undo toast driven by `$pendingDelete` (reuses the
   remote-task-toast shape; `data-testid="undo-delete-toast"` + `undo-delete`
   button) and `afterNavigate` commits any in-flight delete.
+- **Commit ordering (r2, addressing qa r1 suggestion):** `commitPendingDelete`
+  keeps the task filtered (`pendingDeleteId` still set) until `deleteRemote` has
+  actually removed it, clearing the flag in `.finally` (id-guarded so a newer
+  soft-delete still wins). Without this, a *synced* task — whose delete awaits a
+  network round-trip — flashed back into view mid-commit. The reversible
+  hide/undo path is unchanged; all four store unit tests stay green.
 
 ## Verification (local, pre-gate)
 
@@ -149,3 +155,8 @@ newest commits the previous); **remove the `confirm()`** dialog entirely.
 - This slice deliberately keeps the *committed* delete on the existing immediate
   `deleteRemote` path — moving deletes to a queued/offline-durable model is a
   separate concern, out of scope here.
+
+## Gate
+
+Gate: APPROVED r1 @a6e615f30f392d5493e63991d9664e76c44f91c1 — adversary
+Gate: APPROVED r1 @a6e615f30f392d5493e63991d9664e76c44f91c1 — qa
