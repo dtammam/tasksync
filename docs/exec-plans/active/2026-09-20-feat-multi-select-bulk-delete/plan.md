@@ -2,9 +2,9 @@
 plan: feat-multi-select-bulk-delete
 harness: v2 · lean
 anchor: outcome
-status: Built (re-gate r3 — header CSS fix)
-next: Delta re-gate r3 (CSS-only header-pill fix over r2-APPROVED). Then hold for owner review + merge.
-gate: r2 APPROVED (adversary + qa + security-brief) @89dedc6 — re-gating r3 after a CSS-only header-pill fix (owner-reported beta visual)
+status: Gated (holding for owner review + merge)
+next: Owner reviews and authorizes merge (PR #162 open, CI running). No self-merge.
+gate: APPROVED r3 @f83bb3377245bc2eb4420294845e7dfc33398266 (adversary + qa + security-brief)
 ---
 
 # Multi-select + bulk delete (Piece 4, slice 3)
@@ -203,6 +203,7 @@ bulk-move/clone slices will reuse.
 
 Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — security-brief
 Gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a — security-brief
+Gate: APPROVED r3 @f83bb3377245bc2eb4420294845e7dfc33398266 — security-brief
 
 Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — qa
 
@@ -211,3 +212,7 @@ Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — adversary
 Gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a — qa
 
 Gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a — adversary
+
+Gate: APPROVED r3 @f83bb3377245bc2eb4420294845e7dfc33398266 — qa
+
+Gate: APPROVED r3 @f83bb3377245bc2eb4420294845e7dfc33398266 — adversary
