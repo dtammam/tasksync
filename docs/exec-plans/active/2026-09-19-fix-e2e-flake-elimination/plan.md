@@ -3,8 +3,8 @@ plan: e2e-flake-elimination
 harness: v2 · lean
 anchor: outcome
 status: Building
-next: Re-gate r3 (firefox offline describe-skip after CI r2 firefox failure), then push and re-confirm on CI.
-gate: pending (r2 @484e65c superseded — firefox offline fix moved the tree)
+next: Re-gate r4 (sidebar-drag identity wait after CI r3 firefox failure), then re-confirm on CI.
+gate: pending (r3 @1c26d69 superseded — sidebar-drag firefox fix moved the tree)
 ---
 
 # Fix: eliminate e2e test flakes at their root (#050 + sidebar-drag + same class)
@@ -214,6 +214,25 @@ No CRITICAL/HIGH/MEDIUM/LOW findings. INFO from r1 still stands.
 
 Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — security-brief
 
+### security-brief (r3 @1c26d69) — re-bind to new sha
+
+Delta 484e65c → 1c26d69 is test + doc only; no `web/src/` change, so the
+auth boot / token surface I reviewed at r1/r2 is byte-identical and every r1
+finding stands. I re-read the touched test in its current state:
+`offline.spec.ts` `ensureServiceWorkerControlsPage` (28+) is now a generic SW
+registration/control poll with the firefox-specific branch removed, and the
+Offline-continuity describe skips both webkit and firefox
+(`test.skip(... 'webkit' || 'firefox')`, line 446). No secret, token, or
+injection surface introduced.
+
+Tool gap (verbatim, honest): I have no Bash, so I could NOT run
+`git diff 484e65c 1c26d69 -- web/src/` myself — I confirmed "no source change"
+by reading the current files, whose security-relevant content matches r2.
+
+No CRITICAL/HIGH/MEDIUM/LOW findings. INFO from r1 still stands.
+
+Gate: APPROVED r3 @1c26d6906475eedbbd7f68a798ee83fc91fd17e3 — security-brief
+
 ### qa (r1 @2e8e8e7)
 
 Instruments (verbatim, run on this box):
@@ -391,3 +410,37 @@ Note (non-blocking): firefox offline-RELOAD continuity is now unexercised locall
 Working tree left byte-identical apart from this verdict block: `git status` shows only this plan.md modified; build/ and test-results/ are gitignored; no stray processes; other seats' verdict lines untouched.
 
 Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — adversary
+
+### qa delta re-review (r3 @1c26d69)
+
+Delta scope: `git diff 484e65c 1c26d69` touches only `offline.spec.ts` and two
+plan docs — **no app/src/server change**, so all r1/r2 correctness + security
+conclusions stand.
+
+The r3 fix, verified:
+- `Offline continuity` describe now skips on `webkit || firefox` (was webkit
+  only); comment updated honestly (firefox NS_ERROR_OFFLINE + pre-reload
+  mock-hydration race under CI load — the r2 reload-only skip was insufficient,
+  matching the CI r2 firefox failure at `offline.spec.ts:565` toHaveCount(1)=0).
+  Chromium is the sole offline-coverage browser — stated plainly.
+- The redundant firefox short-circuit inside `ensureServiceWorkerControlsPage`
+  is removed cleanly: `options?.allowUnregistered` is still used in the normal
+  SW-not-ready path (no unused-param), no import was tied to the removed block,
+  and the only remaining `firefox` references are the accurate comment + the
+  `test.skip` predicate. No dangling references.
+
+Measured (verbatim, this box):
+- `npm run lint` → clean. `npx vitest run` → **414 passed (28 files)**.
+- Production build OK; offline.spec.ts on a preview I built + served myself
+  (persistent bg server, throwaway config removed, build/ gitignored),
+  chromium+webkit, retries=0: **6 passed, 6 skipped, 0 failed (exit 0)** —
+  chromium ran all 6 offline reload tests (pass), webkit skipped all 6 via the
+  broadened describe skip.
+- Firefox binary absent locally; its skip is now guaranteed by the deterministic
+  `browserName === 'firefox'` describe predicate (verified by inspection). Actual
+  firefox-green rests on CI, as the plan states.
+
+No new issues; nothing regressed. Working tree left byte-identical apart from
+this verdict block; no untracked files.
+
+Gate: APPROVED r3 @1c26d6906475eedbbd7f68a798ee83fc91fd17e3 — qa

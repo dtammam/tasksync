@@ -177,10 +177,14 @@ test('@smoke admin in manual sort mode can drag a sidebar list to reorder it', a
 
 	const items = page.getByTestId('sidebar-list-item');
 
-	// The startup /sync/pull has applied (data-synced): the sidebar shows exactly
-	// the two mocked lists, and the built-in seed lists have been replaced. Assert
-	// by identity so a lingering seed can never masquerade as a passing count
-	// (the previous bare count-of-2 poll saw the 5 seed lists under CI load).
+	// The startup /sync/pull replaces the built-in seed lists with the two mocked
+	// lists. data-synced only means the first sync SETTLED — it can settle on an
+	// errored/empty first attempt with a retry applying the data slightly later —
+	// so wait for a mocked list to actually appear BY IDENTITY, with a generous
+	// bound, rather than racing the default 10s window (this is what failed on
+	// firefox under CI load: the seeds hadn't been replaced yet, count was 5).
+	// Then assert exactly the two mocked lists and that no seed remains.
+	await expect(items.filter({ hasText: 'Alpha List' })).toHaveCount(1, { timeout: 30_000 });
 	await expect(items).toHaveCount(2);
 	await expect(items.filter({ hasText: 'Goal Management' })).toHaveCount(0);
 
