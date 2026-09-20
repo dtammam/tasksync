@@ -2,8 +2,8 @@
 plan: fix-add-task-details-reload
 harness: v2 · lean
 anchor: outcome
-status: Gated (fix/add-task-details-reload @1d1b06d; ready to push + CI, then owner merge)
-gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a (adversary + qa)
+status: Shipped (PR #156, merged to main @aa24686)
+gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a (adversary + qa); CI green all browsers
 ---
 
 # Fix — add-task details resilience

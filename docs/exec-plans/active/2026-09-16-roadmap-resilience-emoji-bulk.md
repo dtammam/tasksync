@@ -21,7 +21,7 @@ higher-cost model; execution of pieces 2–4 is intended for Opus sessions.
 | # | Piece | Branch / plan slug | State |
 |---|-------|--------------------|-------|
 | 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | **Shipped** — PR #138 (+ #139 cleanup), merged 2026-09-17 |
-| 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Parked** — intake done (root cause confirmed, approach ready), no code yet; see its own plan doc |
+| 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Shipped** — PR #156, merged 2026-09-20 (bare-UUID task id keeps the drawer mounted across the create-sync ack; gate APPROVED, CI green all browsers) |
 | 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | **Shipped** — PR #141, merged 2026-09-18; validated by owner in beta on a real device |
 | 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | `feat/bulk-task-ops` | not started — but see the "Piece 4 overlap" note below: list-level bulk-clear already shipped out of band |
 
