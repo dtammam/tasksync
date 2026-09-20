@@ -2,9 +2,9 @@
 plan: feat-multi-select-bulk-delete
 harness: v2 · lean
 anchor: outcome
-status: Built (re-gate r2)
-next: Delta re-gate r2 (test/comment-only polish over r1-APPROVED). Then hold for owner review + merge.
-gate: r1 APPROVED (adversary + qa + security-brief) @6ef0148 — re-gating r2 after post-approval test/comment polish
+status: Gated (holding for owner review + merge)
+next: Owner reviews and authorizes merge (PR open, CI running). No self-merge.
+gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a (adversary + qa + security-brief)
 ---
 
 # Multi-select + bulk delete (Piece 4, slice 3)
@@ -182,7 +182,12 @@ later slice. This slice establishes the multi-select + batched-delete pattern th
 bulk-move/clone slices will reuse.
 
 Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — security-brief
+Gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a — security-brief
 
 Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — qa
 
 Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — adversary
+
+Gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a — qa
+
+Gate: APPROVED r2 @89dedc694a94fbd13d7ee33a84cb5f305eebe47a — adversary
