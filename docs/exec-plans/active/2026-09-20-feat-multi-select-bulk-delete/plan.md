@@ -2,9 +2,9 @@
 plan: feat-multi-select-bulk-delete
 harness: v2 · lean
 anchor: outcome
-status: Gated (holding for owner review + merge)
-next: Owner reviews and authorizes merge (PR #162 open, CI running). No self-merge.
-gate: APPROVED r3 @f83bb3377245bc2eb4420294845e7dfc33398266 (adversary + qa + security-brief)
+status: Built (re-gate r4 — tap-to-select + bulk tag)
+next: Delta re-gate r4 (two owner-requested additions over r3-APPROVED). Then hold for owner review + merge.
+gate: r3 APPROVED (adversary + qa + security-brief) @f83bb33 — re-gating r4 after adding tap-to-select + bulk tag
 ---
 
 # Multi-select + bulk delete (Piece 4, slice 3)
@@ -194,6 +194,41 @@ to that tallest wrapped one. CSS-only fix (`list/[id]/+page.svelte`, `+page.svel
 No markup or behavior change. Verified at a 390px viewport (all four pills
 compact, single-line, fully visible); vitest 441 still green, lint + check clean.
 Broader design/token system deferred (owner: "address after this is solved").
+
+## r4 — tap-to-select + bulk tag (2026-09-20, owner-requested after beta)
+
+Two friction-reducers the owner asked for once the base multi-select worked in
+beta. Decisions confirmed with the owner: bulk-tag **applies + exits** (with a
+Clear-tag option); tap-to-select **keeps row controls active** (empty/text space
+selects; buttons + links act normally), so TaskRow stays untouched.
+
+- **Tap-anywhere-to-select (`SelectableTask.svelte`).** In selection mode a tap on
+  the row toggles selection UNLESS it lands on a real control/link
+  (`closest('a, button, input, select, textarea, label, [role="button"]')`), which
+  keep doing their own thing. The checkbox remains the accessible control, so the
+  pointer handler needs no separate key handler (a11y-ignore is scoped + justified).
+  `.row.pickable` gets a pointer cursor.
+- **Bulk tag (`setEmojiMany` + `BulkSelectToolbar.svelte`).** New store method
+  `setEmojiMany(ids, emoji?)` applies (or clears, `emoji === undefined`) one tag to
+  many tasks in a single persist — the batched equivalent of `setEmoji`; each task
+  holds one emoji-tag so it overwrites; unknown ids ignored; returns the count.
+  The toolbar gains a **Tag** button that opens the existing `EmojiPicker` (the
+  `tagPalette`) inline; picking a tag applies it to `selection ∩ eligibleIds`, then
+  **exits selection**; a **Clear tag** button applies `undefined`. Delete + tag are
+  both confined to the view's editable ids (contributor-safe, unchanged). List view
+  shows a "Tagged N tasks 🎯" / "Cleared the tag on N tasks" message; My Day inherits
+  both features via the shared components (no route change needed).
+- The toolbar's own `.ghost-pill` buttons had no base pill style (Svelte scopes
+  styles per component) — added it here so Tag/Delete/Cancel/etc. render as proper
+  compact pills (`white-space: nowrap`), consistent with the r3 header fix.
+
+**Verification:** unit `setEmojiMany` block (4 tests: apply-to-matching + dirty,
+overwrite, clear, unknown-id/no-op) → full suite **445 passed** (was 441). E2E
+`bulk-tag.spec.ts` (tap a row body to select/deselect; apply 🎯 to a 2-task
+selection → both tagged, third untouched, selection exits, message shown; Clear
+tag strips it) — **green on chromium + firefox + webkit**; bulk-delete E2E still
+green; lint + `svelte-check` clean. Non-destructive (tag is easily reversible), so
+no undo affordance — Clear tag / re-tag covers it.
 
 ## Out of scope (deferred slices)
 

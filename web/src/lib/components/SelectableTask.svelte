@@ -12,6 +12,17 @@
 	export let inMyDayView = false;
 
 	$: selected = $selectedIds.has(task.id);
+
+	// Tap-anywhere-to-select: a tap on the row toggles selection UNLESS it lands on
+	// a real control or link (button, link, input, the checkbox's label, a select),
+	// which keep doing their own thing. The checkbox remains the accessible control
+	// (keyboard/AT), so this pointer handler needs no separate key handler.
+	const onRowClick = (event: MouseEvent) => {
+		if (!selectable) return;
+		const el = event.target as HTMLElement | null;
+		if (el?.closest('a, button, input, select, textarea, label, [role="button"]')) return;
+		selection.toggle(task.id);
+	};
 </script>
 
 {#if $selectionMode}
@@ -26,7 +37,8 @@
 				aria-label={`Select "${task.title}"`}
 			/>
 		</label>
-		<div class="row">
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+		<div class="row" class:pickable={selectable} on:click={onRowClick}>
 			<TaskRow {task} {completedContext} {mobileCompact} {inMyDayView} on:openDetail />
 		</div>
 	</div>
@@ -66,5 +78,8 @@
 	}
 	.row {
 		min-width: 0;
+	}
+	.row.pickable {
+		cursor: pointer;
 	}
 </style>

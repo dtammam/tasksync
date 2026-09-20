@@ -715,6 +715,23 @@ export const tasks = {
 			)
 		);
 	},
+	/**
+	 * Apply (or clear, with emoji === undefined) one tag to many tasks in a single
+	 * persist — the bulk equivalent of setEmoji. Each task carries a single emoji
+	 * tag, so this overwrites whatever tag those tasks had. Unknown ids are ignored;
+	 * a no-op (no persist) when none of `ids` match a task.
+	 */
+	setEmojiMany(ids: string[], emoji?: string): number {
+		const target = new Set(ids);
+		if (target.size === 0) return 0;
+		const known = get(tasksStore).filter((t) => target.has(t.id)).length;
+		if (known === 0) return 0;
+		const now = Date.now();
+		updateAndPersist((list) =>
+			list.map((t) => (target.has(t.id) ? { ...t, emoji, dirty: true, updated_ts: now } : t))
+		);
+		return known;
+	},
 	setAssignee(id: string, assignee_user_id?: string) {
 		const now = Date.now();
 		updateAndPersist((list) =>

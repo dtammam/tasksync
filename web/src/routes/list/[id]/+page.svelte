@@ -111,6 +111,11 @@
 	const onBulkDeleted = (count: number) => {
 		listActionMessage = `Deleted ${count} task${count === 1 ? '' : 's'}.`;
 	};
+	const onBulkTagged = (count: number, emoji?: string) => {
+		listActionMessage = emoji
+			? `Tagged ${count} task${count === 1 ? '' : 's'} ${emoji}.`
+			: `Cleared the tag on ${count} task${count === 1 ? '' : 's'}.`;
+	};
 
 	$: copyLines = [...pendingTasks, ...completedTasks].map(
 		(task) => `- [${task.status === 'done' ? 'x' : ' '}] ${task.title}`
@@ -246,7 +251,11 @@
 	</header>
 
 	{#if $selectionMode}
-		<BulkSelectToolbar eligibleIds={selectableIds} onDeleted={onBulkDeleted} />
+		<BulkSelectToolbar
+			eligibleIds={selectableIds}
+			onDeleted={onBulkDeleted}
+			onTagged={onBulkTagged}
+		/>
 	{/if}
 
 	{#if listActionMessage}

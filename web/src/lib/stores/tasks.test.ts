@@ -1547,6 +1547,63 @@ describe('tasks bulk delete (batched grace window)', () => {
 	});
 });
 
+describe('tasks setEmojiMany (bulk tag)', () => {
+	const t = (id: string, over: Partial<Task> = {}): Task =>
+		baseTask({ id, title: id, local: false, dirty: false, ...over });
+
+	beforeEach(() => {
+		tasks.setAll([]);
+	});
+
+	it('applies one tag to every matching id and marks them dirty; leaves the rest', () => {
+		tasks.setAll([t('a'), t('b'), t('c')]);
+
+		const changed = tasks.setEmojiMany(['a', 'c'], '🎯');
+
+		expect(changed).toBe(2);
+		const byId = Object.fromEntries(tasks.getAll().map((task) => [task.id, task]));
+		expect(byId.a.emoji).toBe('🎯');
+		expect(byId.a.dirty).toBe(true);
+		expect(byId.c.emoji).toBe('🎯');
+		expect(byId.c.dirty).toBe(true);
+		// Untouched task keeps its (absent) tag and its clean flag.
+		expect(byId.b.emoji).toBeUndefined();
+		expect(byId.b.dirty).toBe(false);
+	});
+
+	it('overwrites an existing tag (single-tag model)', () => {
+		tasks.setAll([t('a', { emoji: '🔥' }), t('b', { emoji: '🔥' })]);
+
+		tasks.setEmojiMany(['a', 'b'], '🎯');
+
+		expect(tasks.getAll().every((task) => task.emoji === '🎯')).toBe(true);
+	});
+
+	it('clears the tag on all when emoji is undefined', () => {
+		tasks.setAll([t('a', { emoji: '🎯' }), t('b', { emoji: '🎯' })]);
+
+		const changed = tasks.setEmojiMany(['a', 'b'], undefined);
+
+		expect(changed).toBe(2);
+		expect(tasks.getAll().every((task) => task.emoji === undefined)).toBe(true);
+		expect(tasks.getAll().every((task) => task.dirty === true)).toBe(true);
+	});
+
+	it('ignores unknown ids and is a no-op (returns 0) when none match', () => {
+		tasks.setAll([t('a', { emoji: '🎯' })]);
+
+		expect(tasks.setEmojiMany([], '🔥')).toBe(0);
+		expect(tasks.setEmojiMany(['nope'], '🔥')).toBe(0);
+		// The known task is untouched by the no-op calls.
+		expect(tasks.getAll()[0].emoji).toBe('🎯');
+		expect(tasks.getAll()[0].dirty).toBe(false);
+
+		// A mix stages only the known id.
+		expect(tasks.setEmojiMany(['a', 'nope'], '🔥')).toBe(1);
+		expect(tasks.getAll()[0].emoji).toBe('🔥');
+	});
+});
+
 describe('tasks checkAllInList (bulk complete)', () => {
 	const mockedIncrement = vi.mocked(streak.increment);
 	const mockedUndo = vi.mocked(streak.undoCompletion);
