@@ -4,7 +4,7 @@ harness: v2 · lean
 anchor: outcome
 status: Gated
 next: /release — push and confirm on real CI (GitHub free runners), the true failure surface.
-gate: APPROVED r2 @cf23684100297bd351a31b68dbe4c8738c3c6036 (adversary + qa)
+gate: superseded — #051 folded into fix/e2e-flake-elimination; the live gate is that plan's r2 @484e65c. Historical verdicts below.
 ---
 
 # Fix: webkit PTR wheel-gesture debounce race (tech-debt #051, reopened)
@@ -310,7 +310,7 @@ No CRITICAL or blocking WARNING findings. The r1 CHANGES is resolved: the race i
 closed by construction (verified at Svelte's source) and by a discriminating
 load A/B on this machine.
 
-Gate: APPROVED r2 @cf23684100297bd351a31b68dbe4c8738c3c6036 — adversary
+Gate: r2 adversary verdict (approved @cf23684) SUPERSEDED — the combined change re-gated on fix/e2e-flake-elimination at r2 @484e65c; historical.
 
 ## Gate
 
@@ -351,4 +351,4 @@ so the race was narrowed, not closed. r2 folds dispatch AND observation into one
 
 No CRITICAL or WARNING findings. My r1 CRITICAL is resolved by construction (microtask-vs-macrotask ordering) and empirically (discriminating load A/B); my r1 WARNING is resolved.
 
-Gate: APPROVED r2 @cf23684100297bd351a31b68dbe4c8738c3c6036 — qa
+Gate: r2 qa verdict (approved @cf23684) SUPERSEDED — the combined change re-gated on fix/e2e-flake-elimination at r2 @484e65c; historical.

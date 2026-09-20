@@ -184,7 +184,7 @@ server-enforced.
 
 No CRITICAL/HIGH/MEDIUM/LOW findings.
 
-Gate: APPROVED r1 @2e8e8e7555d8d4931adf6fc10ea854b49b865c1f — security-brief
+Gate: r1 security-brief verdict SUPERSEDED by r2 @484e65c below — it approved @2e8e8e7; code has since moved (test/doc delta).
 
 ### security-brief (r2 @484e65c) — re-bind to new sha
 
@@ -296,7 +296,7 @@ Working tree left byte-identical apart from this verdict block (playwright.confi
 drift was a concurrent seat's transient mutation, since reverted; no untracked
 files remain).
 
-Gate: APPROVED r1 @2e8e8e7555d8d4931adf6fc10ea854b49b865c1f — qa
+Gate: r1 qa verdict SUPERSEDED by r2 @484e65c below — it approved @2e8e8e7; code has since moved (test/doc delta).
 
 ### adversary (r1 @2e8e8e7)
 
