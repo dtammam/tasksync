@@ -1175,6 +1175,40 @@ describe('tasks store helpers', () => {
 		}
 	});
 
+	it('mints a bare-UUID id for a locally created task (no local- prefix)', () => {
+		tasks.setAll([]);
+		const created = tasks.createLocalWithOptions('Fresh task', 'goal-management');
+		expect(created).toBeTruthy();
+		// A bare RFC-4122 UUID — the same shape the server stores and acks back.
+		expect(created?.id).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+		);
+		expect(created?.id.startsWith('local-')).toBe(false);
+		expect(created?.local).toBe(true);
+	});
+
+	it('keeps a locally created task id stable across its create-sync ack (drawer/keyed-row identity survives)', () => {
+		// Regression for fix-add-task-details-reload: the details drawer resolves
+		// its task by id (detailId lookup) and the task rows are keyed by task.id,
+		// so if the ack changed the id the drawer would unmount mid-edit.
+		tasks.setAll([]);
+		const created = tasks.createLocalWithOptions('Fresh task', 'goal-management');
+		const id = created?.id ?? '';
+		expect(id).not.toBe('');
+
+		// Server accepts the client-supplied id verbatim and acks it back unchanged.
+		tasks.replaceWithRemote(
+			id,
+			baseTask({ id, title: 'Fresh task', list_id: 'goal-management', local: false, dirty: false }),
+			{ ...(created as Task) }
+		);
+
+		const after = tasks.getAll().find((t) => t.id === id);
+		expect(after).toBeTruthy(); // a lookup by the ORIGINAL id still resolves
+		expect(after?.id).toBe(id); // id did not change across the ack (no-op overwrite)
+		expect(after?.local).toBe(false); // and it is now synced
+	});
+
 	it('treats a list default_emoji of empty string (cleared via the icon/color idiom) as no default', () => {
 		// Sidebar clears icon/color/default_emoji by sending '' (to work around
 		// the server's coalesce semantics), so a cleared default persists as a

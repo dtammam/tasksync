@@ -790,19 +790,22 @@ describe('pushPendingToServer', () => {
 		expect(status.lastReplayTs).toBeGreaterThanOrEqual(before);
 	});
 
-	it('strips local- prefix from task id when building create_task request body', async () => {
-		const local = tasks.createLocalWithOptions('local prefix test', 'goal-management');
-		expect(local?.id).toMatch(/^local-/);
-		const uuidPart = local!.id.slice('local-'.length);
+	it('sends a freshly created task id (a bare UUID) unchanged in the create_task body', async () => {
+		// Post fix-add-task-details-reload: makeLocalTask mints a bare UUID (no
+		// local- prefix), so the id the client stores IS the id it sends — no
+		// rewrite on push, which is what keeps the id stable across the ack.
+		const local = tasks.createLocalWithOptions('bare id test', 'goal-management');
+		expect(local?.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+		const id = local!.id;
 
 		mockedApi.syncPush.mockResolvedValue({
 			protocol: 'delta-v1',
 			cursor_ts: 1,
 			applied: [
 				{
-					id: 'srv-from-local',
+					id,
 					space_id: 's1',
-					title: 'local prefix test',
+					title: 'bare id test',
 					status: 'pending',
 					list_id: 'goal-management',
 					my_day: 0,
@@ -818,7 +821,53 @@ describe('pushPendingToServer', () => {
 
 		const body = mockedApi.syncPush.mock.calls[0]?.[0]?.changes?.[0];
 		expect(body).toMatchObject({ kind: 'create_task' });
-		expect((body as { body?: { id?: string } })?.body?.id).toBe(uuidPart);
+		expect((body as { body?: { id?: string } })?.body?.id).toBe(id);
+	});
+
+	it('still strips a legacy local- prefix in the create_task body (pre-fix task self-heals on first push)', async () => {
+		// Tasks created by a pre-fix client still carry a local-<uuid> id in IDB;
+		// requestIdForLocalTask must send the bare UUID so the server accepts it.
+		const uuid = '1c05c4d9-487d-4997-a759-9e65d18a0155';
+		const legacy: Task = {
+			id: `local-${uuid}`,
+			title: 'legacy prefixed',
+			status: 'pending',
+			list_id: 'goal-management',
+			my_day: false,
+			priority: 0,
+			checklist: [],
+			order: 'a',
+			created_ts: 1,
+			updated_ts: 1,
+			dirty: true,
+			local: true
+		};
+		tasks.setAll([legacy]);
+
+		mockedApi.syncPush.mockResolvedValue({
+			protocol: 'delta-v1',
+			cursor_ts: 1,
+			applied: [
+				{
+					id: uuid,
+					space_id: 's1',
+					title: 'legacy prefixed',
+					status: 'pending',
+					list_id: 'goal-management',
+					my_day: 0,
+					order: 'a',
+					created_ts: 1,
+					updated_ts: 1
+				}
+			],
+			rejected: []
+		});
+
+		await pushPendingToServer();
+
+		const body = mockedApi.syncPush.mock.calls[0]?.[0]?.changes?.[0];
+		expect(body).toMatchObject({ kind: 'create_task' });
+		expect((body as { body?: { id?: string } })?.body?.id).toBe(uuid);
 	});
 
 	it('logs warning when server returns fewer applied tasks than sent', async () => {
