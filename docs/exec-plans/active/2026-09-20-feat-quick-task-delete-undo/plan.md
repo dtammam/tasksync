@@ -2,9 +2,9 @@
 plan: feat-quick-task-delete-undo
 harness: v2 · lean
 anchor: outcome
-status: Building
-next: Store softDelete/undoDelete + grace timer, undo toast in layout, rewire row delete; then tests + /gate.
-gate: pending
+status: Gated
+next: Push + CI, then owner merge. (Roadmap Piece 4 slice 1 of N — quick-delete only; multi-select/bulk-delete/move/clone are later slices.)
+gate: APPROVED r2 @6f9c24dbd5eccf3d2c6a618b8e242c93cbe31e63 (adversary + qa)
 ---
 
 # Quick single-task delete + undo (roadmap Piece 4, slice 1)
@@ -158,5 +158,7 @@ newest commits the previous); **remove the `confirm()`** dialog entirely.
 
 ## Gate
 
-Gate: APPROVED r1 @a6e615f30f392d5493e63991d9664e76c44f91c1 — adversary
-Gate: APPROVED r1 @a6e615f30f392d5493e63991d9664e76c44f91c1 — qa
+Gate: r1 adversary verdict SUPERSEDED by r2 @6f9c24d below — approved @a6e615f, code has since moved (commit-ordering fix).
+Gate: r1 qa verdict SUPERSEDED by r2 @6f9c24d below — approved @a6e615f, code has since moved (commit-ordering fix).
+Gate: APPROVED r2 @6f9c24dbd5eccf3d2c6a618b8e242c93cbe31e63 — qa
+Gate: APPROVED r2 @6f9c24dbd5eccf3d2c6a618b8e242c93cbe31e63 — adversary
