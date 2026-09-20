@@ -1,10 +1,12 @@
 <script lang="ts">
-	import TaskRow from '$lib/components/TaskRow.svelte';
+	import SelectableTask from '$lib/components/SelectableTask.svelte';
+	import BulkSelectToolbar from '$lib/components/BulkSelectToolbar.svelte';
 	import MissedTaskBanner from '$lib/components/MissedTaskBanner.svelte';
 	import SuggestionPanel from '$lib/components/SuggestionPanel.svelte';
 	import SortControls from '$lib/components/SortControls.svelte';
 	import { auth } from '$lib/stores/auth';
 	import { myDayCompleted, myDayMissed, myDayPending, tasks, myDaySuggestions } from '$lib/stores/tasks';
+	import { selection, selectionMode } from '$lib/stores/selection';
 	import { lists } from '$lib/stores/lists';
 	import TaskDetailDrawer from '$lib/components/TaskDetailDrawer.svelte';
 	import { onDestroy } from 'svelte';
@@ -248,6 +250,14 @@
 		return !!$auth.user?.user_id && task.created_by_user_id === $auth.user.user_id;
 	};
 
+	// Bulk-select eligibility mirrors edit permission: contributors may pick only
+	// their own tasks. Scoped to the Planned + Completed sections (missed tasks
+	// have their own resolve/delete affordances in the banner).
+	$: selectableTasks = [...sortedPending, ...sortedCompleted].filter(canResolveMissed);
+	$: selectableIds = selectableTasks.map((task) => task.id);
+
+	const enterSelection = () => selection.enter();
+
 	const markMissedDone = (task: Task) => {
 		if (!canResolveMissed(task)) return;
 		missedActionError = '';
@@ -283,6 +293,7 @@
 	}
 
 	onDestroy(() => {
+		selection.exit();
 		if (typeof window !== 'undefined') {
 			window.removeEventListener('resize', updateMobileViewport);
 		}
@@ -322,8 +333,23 @@
 			>
 				🏷️
 			</button>
+			{#if !$selectionMode}
+				<button
+					type="button"
+					class="ghost-pill"
+					data-testid="myday-select-mode"
+					on:click={enterSelection}
+					disabled={selectableIds.length === 0}
+				>
+					Select
+				</button>
+			{/if}
 		</div>
 	</header>
+
+	{#if $selectionMode}
+		<BulkSelectToolbar eligibleIds={selectableIds} />
+	{/if}
 
 	<MissedTaskBanner
 		tasks={sortedMissed}
@@ -348,7 +374,13 @@
 				<div class="stack">
 					{#each group.tasks as task (task.id)}
 						<div in:fly={{ y: -6, duration: $hydrated ? 150 : 0 }} out:fade={{ duration: $hydrated ? 150 : 0 }}>
-							<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} on:openDetail={openDetail} />
+							<SelectableTask
+								{task}
+								selectable={canResolveMissed(task)}
+								mobileCompact={isMobilePwaViewport}
+								inMyDayView={true}
+								on:openDetail={openDetail}
+							/>
 						</div>
 					{/each}
 				</div>
@@ -379,7 +411,14 @@
 				<div class="stack">
 					{#each group.tasks as task (task.id)}
 						<div transition:fade={{ duration: $hydrated ? 150 : 0 }}>
-							<TaskRow {task} mobileCompact={isMobilePwaViewport} inMyDayView={true} completedContext={true} on:openDetail={openDetail} />
+							<SelectableTask
+								{task}
+								selectable={canResolveMissed(task)}
+								mobileCompact={isMobilePwaViewport}
+								inMyDayView={true}
+								completedContext={true}
+								on:openDetail={openDetail}
+							/>
 						</div>
 					{/each}
 				</div>
@@ -494,6 +533,31 @@
 		background: var(--surface-1);
 		border: 1px solid var(--border-2);
 		box-shadow: var(--ring-shadow);
+	}
+
+	.ghost-pill {
+		border-radius: 999px;
+		padding: 8px 12px;
+		font-size: 12px;
+		line-height: 1.1;
+		white-space: nowrap;
+		cursor: pointer;
+		box-shadow: var(--ring-shadow);
+		background: var(--surface-1);
+		border: 1px solid var(--border-2);
+		color: var(--app-text);
+	}
+
+	.ghost-pill:hover {
+		transform: translateY(-1px);
+		filter: brightness(1.07);
+	}
+
+	.ghost-pill:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+		transform: none;
+		filter: none;
 	}
 
 	.icon-toggle.active {

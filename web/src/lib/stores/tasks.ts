@@ -19,21 +19,33 @@ const tasksStore = writable<Task[]>([]);
 // ── Quick-delete grace window (feat-quick-task-delete-undo) ──────────────────
 // A soft-deleted task STAYS in tasksStore (so a sync pull that lands during the
 // grace window can't resurrect it) but is filtered out of every derived view via
-// `visibleTasks`. One pending delete at a time — starting a new one commits the
-// previous. Commit calls the real `deleteRemote`; undo just clears the flag, so
-// undo is instant and makes no server call. See the fix plan for the rationale.
+// `visibleTasks`. One grace window at a time — it holds a SET of ids so a bulk
+// delete stages many tasks under a single window/timer; starting a new window
+// commits the previous one. Commit calls the real `deleteRemote` per id; undo
+// just clears the flag(s), so undo is instant and makes no server call. A single
+// delete is simply a batch of one. See the fix plan for the rationale.
 const GRACE_DELETE_MS = 5000;
-const pendingDeleteId = writable<string | null>(null);
+const pendingDeleteIds = writable<Set<string>>(new Set());
 let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Tasks minus the one in its soft-delete grace window — what every view renders. */
-const visibleTasks = derived([tasksStore, pendingDeleteId], ([$tasks, $pending]) =>
-	$pending ? $tasks.filter((task) => task.id !== $pending) : $tasks
+/** Tasks minus those in the soft-delete grace window — what every view renders. */
+const visibleTasks = derived([tasksStore, pendingDeleteIds], ([$tasks, $pending]) =>
+	$pending.size === 0 ? $tasks : $tasks.filter((task) => !$pending.has(task.id))
 );
 
-/** The task currently in its soft-delete grace window (drives the undo toast), or null. */
-export const pendingDelete = derived([tasksStore, pendingDeleteId], ([$tasks, $pending]) =>
-	$pending ? ($tasks.find((task) => task.id === $pending) ?? null) : null
+/**
+ * The single task in its grace window when EXACTLY one is staged (drives the
+ * single-task undo toast), or null. A batch of two or more uses `pendingDeleteBatch`.
+ */
+export const pendingDelete = derived([tasksStore, pendingDeleteIds], ([$tasks, $pending]) => {
+	if ($pending.size !== 1) return null;
+	const [id] = $pending;
+	return $tasks.find((task) => task.id === id) ?? null;
+});
+
+/** The batched grace window when TWO OR MORE are staged (drives the "N deleted" toast), else null. */
+export const pendingDeleteBatch = derived(pendingDeleteIds, ($pending) =>
+	$pending.size >= 2 ? { count: $pending.size } : null
 );
 
 function clearPendingDeleteTimer() {
@@ -43,20 +55,33 @@ function clearPendingDeleteTimer() {
 	}
 }
 
-// Fire the real delete for the task in the grace window (if any). Called by the
-// grace timer, when a second delete starts, or explicitly (e.g. on navigation).
+// Un-stage one id from the grace window once its real delete resolves. Guarded so
+// a newer soft-delete window (which replaced the set) is never disturbed.
+function unstageCommitted(id: string) {
+	pendingDeleteIds.update((current) => {
+		if (!current.has(id)) return current;
+		const next = new Set(current);
+		next.delete(id);
+		return next;
+	});
+}
+
+// Fire the real delete for every task in the grace window (if any). Called by the
+// grace timer, when a new window starts, or explicitly (e.g. on navigation).
 function commitPendingDelete() {
-	const id = get(pendingDeleteId);
-	if (id === null) return;
+	const ids = get(pendingDeleteIds);
+	if (ids.size === 0) return;
 	clearPendingDeleteTimer();
-	// Keep the task filtered (pendingDeleteId still set) until deleteRemote has
-	// actually removed it — otherwise a synced task, whose delete awaits a network
-	// round-trip, would flash back into view mid-commit. Clear the flag only if
-	// this id is still the pending one (a newer soft-delete may have taken over).
-	void tasks
-		.deleteRemote(id)
-		.catch((err: unknown) => console.error('deleteRemote failed', err))
-		.finally(() => pendingDeleteId.update((current) => (current === id ? null : current)));
+	// Keep each task filtered (its id still staged) until deleteRemote has actually
+	// removed it — otherwise a synced task, whose delete awaits a network round-trip,
+	// would flash back into view mid-commit. Un-stage per id, and only if it's still
+	// staged (a newer window may have taken over the set).
+	for (const id of ids) {
+		void tasks
+			.deleteRemote(id)
+			.catch((err: unknown) => console.error('deleteRemote failed', err))
+			.finally(() => unstageCommitted(id));
+	}
 }
 
 const isServerId = (id: string) =>
@@ -542,21 +567,43 @@ export const tasks = {
 		tasks.remove(id);
 	},
 	/**
-	 * Soft-delete with an undo grace window: hide the task from all views now, but
-	 * defer the real delete until the window commits. Only one at a time — a new
-	 * soft-delete commits any previous one. No-op if the id isn't a known task.
+	 * Soft-delete one task with an undo grace window: hide it from all views now,
+	 * but defer the real delete until the window commits. A batch of one — a new
+	 * soft-delete commits any previous window. No-op if the id isn't a known task.
 	 */
 	softDelete(id: string) {
+		tasks.softDeleteMany([id]);
+	},
+	/**
+	 * Soft-delete many tasks under a SINGLE grace window: hide them all now, defer
+	 * the real per-task delete until commit, and restore them all together on undo.
+	 * Starting this window commits any previous one. Unknown/duplicate ids are
+	 * dropped; a no-op if none are known tasks.
+	 */
+	softDeleteMany(ids: string[]) {
 		commitPendingDelete();
-		if (!get(tasksStore).some((task) => task.id === id)) return;
-		pendingDeleteId.set(id);
+		const known = get(tasksStore);
+		const staged = new Set(ids.filter((id) => known.some((task) => task.id === id)));
+		if (staged.size === 0) return;
+		pendingDeleteIds.set(staged);
 		pendingDeleteTimer = setTimeout(commitPendingDelete, GRACE_DELETE_MS);
 	},
-	/** Cancel the pending soft-delete for `id` (task reappears; no server call). */
+	/**
+	 * Cancel the pending grace window if `id` is staged in it (every staged task
+	 * reappears; no server call). Wired to the single-task undo toast, which only
+	 * shows at window size 1, so in practice this cancels exactly that one task;
+	 * `undoDeleteAll` is the size-agnostic form used by the batched toast.
+	 */
 	undoDelete(id: string) {
-		if (get(pendingDeleteId) !== id) return;
+		if (!get(pendingDeleteIds).has(id)) return;
 		clearPendingDeleteTimer();
-		pendingDeleteId.set(null);
+		pendingDeleteIds.set(new Set());
+	},
+	/** Cancel the entire pending grace window (every staged task reappears; no server call). */
+	undoDeleteAll() {
+		if (get(pendingDeleteIds).size === 0) return;
+		clearPendingDeleteTimer();
+		pendingDeleteIds.set(new Set());
 	},
 	/** Commit any in-flight soft-delete immediately (e.g. on navigation/unload). */
 	commitDelete() {
@@ -667,6 +714,23 @@ export const tasks = {
 					: t
 			)
 		);
+	},
+	/**
+	 * Apply (or clear, with emoji === undefined) one tag to many tasks in a single
+	 * persist — the bulk equivalent of setEmoji. Each task carries a single emoji
+	 * tag, so this overwrites whatever tag those tasks had. Unknown ids are ignored;
+	 * a no-op (no persist) when none of `ids` match a task.
+	 */
+	setEmojiMany(ids: string[], emoji?: string): number {
+		const target = new Set(ids);
+		if (target.size === 0) return 0;
+		const known = get(tasksStore).filter((t) => target.has(t.id)).length;
+		if (known === 0) return 0;
+		const now = Date.now();
+		updateAndPersist((list) =>
+			list.map((t) => (target.has(t.id) ? { ...t, emoji, dirty: true, updated_ts: now } : t))
+		);
+		return known;
 	},
 	setAssignee(id: string, assignee_user_id?: string) {
 		const now = Date.now();

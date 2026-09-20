@@ -28,7 +28,15 @@ vi.mock('$lib/stores/streak', () => ({
 	getRandomJudgmentImage: vi.fn()
 }));
 
-import { myDayCompleted, myDayMissed, myDayPending, myDaySuggestions, pendingDelete, tasks } from './tasks';
+import {
+	myDayCompleted,
+	myDayMissed,
+	myDayPending,
+	myDaySuggestions,
+	pendingDelete,
+	pendingDeleteBatch,
+	tasks
+} from './tasks';
 import { playCompletion } from '$lib/sound/sound';
 import { streak } from '$lib/stores/streak';
 import type { Task } from '$shared/types/task';
@@ -1384,6 +1392,215 @@ describe('tasks quick delete + undo (grace window)', () => {
 
 		expect(deleteSpy).toHaveBeenCalledWith(a.id);
 		expect(get(pendingDelete)?.id).toBe(b.id);
+	});
+});
+
+describe('tasks bulk delete (batched grace window)', () => {
+	const synced = (id: string, title: string): Task =>
+		baseTask({ id, title, local: false, dirty: false });
+	const uuid = (n: number) => `${n}${n}${n}${n}${n}${n}${n}${n}-${n}${n}${n}${n}-4${n}${n}${n}-8${n}${n}${n}-${n}${n}${n}${n}${n}${n}${n}${n}${n}${n}${n}${n}`;
+	let deleteSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		tasks.undoDeleteAll(); // clear any grace window left open by a prior test
+		tasks.setAll([]);
+		deleteSpy = vi.spyOn(api, 'deleteTask').mockResolvedValue(undefined as never);
+	});
+	afterEach(() => {
+		tasks.undoDeleteAll(); // don't leak an open window into the next test
+		deleteSpy.mockRestore();
+		vi.useRealTimers();
+	});
+
+	it('hides every staged task under one window with no server call; batch drives the "N" toast', () => {
+		const a = synced(uuid(1), 'A');
+		const b = synced(uuid(2), 'B');
+		const c = synced(uuid(3), 'C');
+		tasks.setAll([a, b, c]);
+
+		tasks.softDeleteMany([a.id, b.id]);
+
+		// Both hidden from every view, both still in the raw store (a pull can't resurrect them).
+		expect(get(tasks).map((t) => t.id).sort()).toEqual([c.id]);
+		expect(tasks.getAll().length).toBe(3);
+		// Two staged → the batched toast, not the single-task toast.
+		expect(get(pendingDelete)).toBeNull();
+		expect(get(pendingDeleteBatch)).toEqual({ count: 2 });
+		expect(deleteSpy).not.toHaveBeenCalled();
+	});
+
+	it('undoDeleteAll restores the whole batch with no server call', () => {
+		const a = synced(uuid(1), 'A');
+		const b = synced(uuid(2), 'B');
+		tasks.setAll([a, b]);
+
+		tasks.softDeleteMany([a.id, b.id]);
+		expect(get(tasks).length).toBe(0);
+
+		tasks.undoDeleteAll();
+		expect(get(tasks).map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
+		expect(get(pendingDeleteBatch)).toBeNull();
+		expect(deleteSpy).not.toHaveBeenCalled();
+	});
+
+	it('commits one server delete per staged task when the window elapses', async () => {
+		const a = synced(uuid(1), 'A');
+		const b = synced(uuid(2), 'B');
+		const c = synced(uuid(3), 'C');
+		tasks.setAll([a, b, c]);
+
+		tasks.softDeleteMany([a.id, b.id, c.id]);
+		expect(deleteSpy).not.toHaveBeenCalled();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(deleteSpy).toHaveBeenCalledTimes(3);
+		expect(deleteSpy.mock.calls.map((call: unknown[]) => call[0]).sort()).toEqual(
+			[a.id, b.id, c.id].sort()
+		);
+		expect(tasks.getAll().length).toBe(0);
+		expect(get(pendingDeleteBatch)).toBeNull();
+	});
+
+	it('mixes local and synced tasks: only server ids hit the API, both are removed', async () => {
+		const local = baseTask({ id: 'local-abc', title: 'Local', local: true, dirty: true });
+		const server = synced(uuid(2), 'Server');
+		tasks.setAll([local, server]);
+
+		tasks.softDeleteMany([local.id, server.id]);
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(deleteSpy).toHaveBeenCalledTimes(1);
+		expect(deleteSpy).toHaveBeenCalledWith(server.id);
+		expect(tasks.getAll().length).toBe(0);
+	});
+
+	it('drops unknown ids and is a no-op when none are known tasks', () => {
+		const a = synced(uuid(1), 'A');
+		tasks.setAll([a]);
+
+		tasks.softDeleteMany(['nope-1', 'nope-2']);
+		expect(get(tasks).length).toBe(1); // nothing hidden
+		expect(get(pendingDeleteBatch)).toBeNull();
+
+		tasks.softDeleteMany([a.id, 'nope-1']); // known + unknown → only the known one stages
+		expect(get(tasks).length).toBe(0);
+		expect(get(pendingDelete)?.id).toBe(a.id); // exactly one staged → single toast
+		expect(get(pendingDeleteBatch)).toBeNull();
+	});
+
+	it('single softDelete still behaves as a batch of one (slice-1 parity)', () => {
+		const a = synced(uuid(1), 'A');
+		tasks.setAll([a]);
+
+		tasks.softDelete(a.id);
+		expect(get(pendingDelete)?.id).toBe(a.id);
+		expect(get(pendingDeleteBatch)).toBeNull();
+	});
+
+	it('deletes a recurring task in a batch like any other (deletes the series, no special branch)', async () => {
+		const recurring = synced(uuid(1), 'Water plants');
+		recurring.recurrence_id = 'daily';
+		recurring.due_date = '2026-02-02';
+		const normal = synced(uuid(2), 'One-off');
+		tasks.setAll([recurring, normal]);
+
+		tasks.softDeleteMany([recurring.id, normal.id]);
+		await vi.advanceTimersByTimeAsync(5000);
+
+		// The recurring task commits through the same deleteRemote → api.deleteTask
+		// path — the whole series is gone, no reschedule, no divergence from single delete.
+		expect(deleteSpy).toHaveBeenCalledTimes(2);
+		expect(deleteSpy.mock.calls.map((call: unknown[]) => call[0]).sort()).toEqual(
+			[recurring.id, normal.id].sort()
+		);
+		expect(tasks.getAll().some((t) => t.id === recurring.id)).toBe(false);
+	});
+
+	it('keeps staged tasks hidden while their real deletes are in-flight (no flash-back mid-commit)', async () => {
+		const a = synced(uuid(1), 'A');
+		const b = synced(uuid(2), 'B');
+		tasks.setAll([a, b]);
+
+		// A deleteTask that stays pending until we release it — models the network RTT.
+		let releaseDeletes: (() => void) | undefined;
+		const inFlight = new Promise<undefined>((resolve) => {
+			releaseDeletes = () => resolve(undefined);
+		});
+		deleteSpy.mockReturnValue(inFlight);
+
+		tasks.softDeleteMany([a.id, b.id]);
+		await vi.advanceTimersByTimeAsync(5000); // fires the commit → both deleteTask calls, still pending
+
+		// Mid-commit: both hidden from views, both still in the raw store (not yet removed),
+		// so a /sync/pull landing now can't resurrect them.
+		expect(deleteSpy).toHaveBeenCalledTimes(2);
+		expect(get(tasks).length).toBe(0);
+		expect(tasks.getAll().length).toBe(2);
+
+		releaseDeletes?.();
+		await vi.advanceTimersByTimeAsync(0); // flush the resolve → remove + unstage
+
+		expect(tasks.getAll().length).toBe(0);
+		expect(get(pendingDeleteBatch)).toBeNull();
+	});
+});
+
+describe('tasks setEmojiMany (bulk tag)', () => {
+	const t = (id: string, over: Partial<Task> = {}): Task =>
+		baseTask({ id, title: id, local: false, dirty: false, ...over });
+
+	beforeEach(() => {
+		tasks.setAll([]);
+	});
+
+	it('applies one tag to every matching id and marks them dirty; leaves the rest', () => {
+		tasks.setAll([t('a'), t('b'), t('c')]);
+
+		const changed = tasks.setEmojiMany(['a', 'c'], '🎯');
+
+		expect(changed).toBe(2);
+		const byId = Object.fromEntries(tasks.getAll().map((task) => [task.id, task]));
+		expect(byId.a.emoji).toBe('🎯');
+		expect(byId.a.dirty).toBe(true);
+		expect(byId.c.emoji).toBe('🎯');
+		expect(byId.c.dirty).toBe(true);
+		// Untouched task keeps its (absent) tag and its clean flag.
+		expect(byId.b.emoji).toBeUndefined();
+		expect(byId.b.dirty).toBe(false);
+	});
+
+	it('overwrites an existing tag (single-tag model)', () => {
+		tasks.setAll([t('a', { emoji: '🔥' }), t('b', { emoji: '🔥' })]);
+
+		tasks.setEmojiMany(['a', 'b'], '🎯');
+
+		expect(tasks.getAll().every((task) => task.emoji === '🎯')).toBe(true);
+	});
+
+	it('clears the tag on all when emoji is undefined', () => {
+		tasks.setAll([t('a', { emoji: '🎯' }), t('b', { emoji: '🎯' })]);
+
+		const changed = tasks.setEmojiMany(['a', 'b'], undefined);
+
+		expect(changed).toBe(2);
+		expect(tasks.getAll().every((task) => task.emoji === undefined)).toBe(true);
+		expect(tasks.getAll().every((task) => task.dirty === true)).toBe(true);
+	});
+
+	it('ignores unknown ids and is a no-op (returns 0) when none match', () => {
+		tasks.setAll([t('a', { emoji: '🎯' })]);
+
+		expect(tasks.setEmojiMany([], '🔥')).toBe(0);
+		expect(tasks.setEmojiMany(['nope'], '🔥')).toBe(0);
+		// The known task is untouched by the no-op calls.
+		expect(tasks.getAll()[0].emoji).toBe('🎯');
+		expect(tasks.getAll()[0].dirty).toBe(false);
+
+		// A mix stages only the known id.
+		expect(tasks.setEmojiMany(['a', 'nope'], '🔥')).toBe(1);
+		expect(tasks.getAll()[0].emoji).toBe('🔥');
 	});
 });
 
