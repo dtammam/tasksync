@@ -2,8 +2,8 @@
 plan: fix-add-task-details-reload
 harness: v2 · lean
 anchor: outcome
-status: Building (resumed 2026-09-20 on fix/add-task-details-reload, off main @3d94dfd)
-gate: pending
+status: Gated (fix/add-task-details-reload @1d1b06d; ready to push + CI, then owner merge)
+gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a (adversary + qa)
 ---
 
 # Fix — add-task details resilience
@@ -174,7 +174,14 @@ keep their identity across the create-ack.
   reverting the fix (restore the `local-` prefix) makes it FAIL at
   `expect(drawer).toBeVisible()` ("element(s) not found" — the drawer unmounts),
   proving it guards the exact regression.
-- **Full e2e suite on the preview build (chromium+firefox+webkit): 179 passed,
-  16 skipped, 0 failed** — no regression from the id change.
+- **Full e2e suite on the preview build, run per-engine (this shared box can't
+  run three engines concurrently without memory starvation):** chromium 63/0,
+  firefox 57/0, webkit 57/0 — **0 failed**. (An earlier combined run reported
+  179/0 by luck; a pre-existing webkit test `myday.spec.ts:905` fails under
+  concurrent-engine load on this box and on base `main` too — environmental,
+  unrelated to task-id minting, and green on CI for #154. Watch CI; not filed as
+  debt unless CI shows it.)
 
-Gate: pending.
+Gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a (adversary + qa).
+Gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a — adversary
+Gate: APPROVED r1 @1d1b06d60446b2e75d443dddb07cdfe56d4ea92a — qa
