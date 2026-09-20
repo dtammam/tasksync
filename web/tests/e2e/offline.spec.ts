@@ -26,23 +26,6 @@ interface SeedTask {
 }
 
 const ensureServiceWorkerControlsPage = async (page: Page, options?: { allowUnregistered?: boolean }) => {
-	// Firefox + Playwright cannot serve a service-worker-controlled navigation
-	// while the context is offline: page.reload() during context.setOffline(true)
-	// rejects with NS_ERROR_OFFLINE before the SW fetch handler can respond. So
-	// offline-RELOAD continuity is exercised on chromium only (webkit skips the
-	// whole describe for its own CDP/SW-control limitation). Report "not
-	// controllable" here so callers gracefully skip the reload portion after their
-	// pre-reload assertions — the same outcome firefox had on the dev server,
-	// where its SW never claimed the page, but now deterministic instead of a
-	// 20s timeout. (The production-build webServer made firefox's SW start
-	// claiming, which is what newly exposed this browser limitation.)
-	if (page.context().browser()?.browserType().name() === 'firefox') {
-		if (!options?.allowUnregistered) {
-			throw new Error('Service worker offline-reload control is not available on firefox.');
-		}
-		return false;
-	}
-
 	let registrationReady = true;
 	try {
 		await expect
@@ -454,9 +437,13 @@ const mockAuthenticatedSyncServer = async (
 
 test.describe('Offline continuity', () => {
 	test.use({ serviceWorkers: 'allow' });
-	// WebKit in CI does not reliably support offline reload (throws internal error) or
-	// mock-server hydration via page.route. Offline invariants are covered by chromium + firefox.
-	test.skip(({ browserName }) => browserName === 'webkit');
+	// Neither WebKit nor Firefox reliably supports the offline scenario under
+	// Playwright: page.reload() during context.setOffline() throws (NS_ERROR_OFFLINE
+	// on firefox, an internal error on webkit), and even the pre-reload assertions
+	// race the SW-mediated mock-server hydration on firefox under CI load. Offline
+	// invariants are exercised on chromium (which supports both); firefox + webkit
+	// skip the whole describe. See tech-debt #050 / the e2e-flake-elimination plan.
+	test.skip(({ browserName }) => browserName === 'webkit' || browserName === 'firefox');
 
 	test('@smoke hard reload offline keeps cached shell and local data', async ({ page, context }) => {
 		// The gated login wall blocks anonymous app access, so this offline-

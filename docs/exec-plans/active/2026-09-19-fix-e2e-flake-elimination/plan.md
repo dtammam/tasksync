@@ -2,9 +2,9 @@
 plan: e2e-flake-elimination
 harness: v2 · lean
 anchor: outcome
-status: Gated
-next: /release — push and confirm on real CI (full matrix incl. firefox on the preview build), the true arbiter, before closing #050/#051/sidebar-drag.
-gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b (adversary + qa + security-brief)
+status: Building
+next: Re-gate r3 (firefox offline describe-skip after CI r2 firefox failure), then push and re-confirm on CI.
+gate: pending (r2 @484e65c superseded — firefox offline fix moved the tree)
 ---
 
 # Fix: eliminate e2e test flakes at their root (#050 + sidebar-drag + same class)
@@ -121,17 +121,18 @@ interface spec, so `spec` is not warranted.
     `app-shell` absent after reload.)
   - `sidebar-drag` + `sidebar-zones` chromium ×15: **30 passed, 0 failed**.
   - wheel gesture (webkit) ×15: **15 passed, 0 failed**.
-- Firefox IS installed locally (corrected from an earlier wrong claim). Against
-  the preview build, firefox's SW claims the page, so the offline-RELOAD tests
-  would proceed into `page.reload()` while offline and firefox throws
-  `NS_ERROR_OFFLINE` (a Playwright-firefox limitation: it will not serve a
-  SW-controlled navigation under `context.setOffline`). Adversary r1 caught this
-  as a CRITICAL. Fix: `ensureServiceWorkerControlsPage` now reports
-  "not controllable" on firefox, so the offline-reload tests skip gracefully on
-  firefox after their pre-reload assertions — matching webkit (which skips the
-  whole describe) and firefox's own prior dev-server behavior. Offline-reload
-  continuity is validated on chromium; firefox/webkit run the rest of the suite.
-  Re-verified locally on firefox (see Gate r2 evidence). CI remains the arbiter.
+- Firefox IS installed locally (corrected from an earlier wrong claim). Firefox
+  cannot run the offline scenario under Playwright at all: `page.reload()` during
+  `context.setOffline()` throws `NS_ERROR_OFFLINE` (SW navigation not served),
+  AND — caught only on real CI (r2 push) — even the PRE-reload assertions race the
+  SW-mediated mock hydration under load (`offline.spec.ts:565` toHaveCount got 0
+  on firefox while chromium was solid). So the whole `Offline continuity` describe
+  now skips on firefox as well as webkit; **chromium is the offline-coverage
+  browser** (it supports both offline reload and mock hydration). Adversary r1
+  caught the NS_ERROR_OFFLINE regression; the CI r2 firefox failure then showed a
+  reload-only skip was insufficient, hence the describe-level skip. Verified: on
+  the preview build firefox offline.spec = 6 skipped / 0 failed, chromium = 6
+  passed / 0 failed.
 
 ## Gate
 
