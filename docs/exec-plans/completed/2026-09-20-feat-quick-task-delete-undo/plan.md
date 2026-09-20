@@ -2,7 +2,7 @@
 plan: feat-quick-task-delete-undo
 harness: v2 · lean
 anchor: outcome
-status: Gated
+status: Shipped (PR #158, merged to main @e49d63f)
 next: Push + CI, then owner merge. (Roadmap Piece 4 slice 1 of N — quick-delete only; multi-select/bulk-delete/move/clone are later slices.)
 gate: APPROVED r2 @6f9c24dbd5eccf3d2c6a618b8e242c93cbe31e63 (adversary + qa)
 ---
