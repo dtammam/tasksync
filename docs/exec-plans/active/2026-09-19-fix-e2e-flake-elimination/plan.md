@@ -2,9 +2,9 @@
 plan: e2e-flake-elimination
 harness: v2 · lean
 anchor: outcome
-status: Building
-next: App-side (data-synced marker, cache-first auth, data-ptr-ready), then deterministic test waits, then /gate.
-gate: pending
+status: Gated
+next: /release — push and confirm on real CI (full matrix incl. firefox on the preview build), the true arbiter, before closing #050/#051/sidebar-drag.
+gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b (adversary + qa + security-brief)
 ---
 
 # Fix: eliminate e2e test flakes at their root (#050 + sidebar-drag + same class)
@@ -186,6 +186,33 @@ No CRITICAL/HIGH/MEDIUM/LOW findings.
 
 Gate: APPROVED r1 @2e8e8e7555d8d4931adf6fc10ea854b49b865c1f — security-brief
 
+### security-brief (r2 @484e65c) — re-bind to new sha
+
+Delta 2e8e8e7 → 484e65c is test + doc only; no `web/src/` change, so the entire
+auth/token security surface I reviewed at r1 is byte-identical and every r1
+finding stands unchanged. I re-read the two touched test files for new security
+surface: `offline.spec.ts` `ensureServiceWorkerControlsPage` (28-44) adds a
+deterministic `browserType().name() === 'firefox'` early-return — no secret, no
+injection, no token; `helpers/ready.ts` waits only on the boolean `data-ready`/
+`data-synced` DOM attributes. Nothing sensitive introduced.
+
+Tool gaps (verbatim, honest): (1) I have no Bash, so I could NOT run
+`git diff 2e8e8e7 484e65c -- web/src/` myself — I confirmed "no source change"
+by reading the current files, whose security-relevant content matches r1. (2) I
+did NOT run the Playwright firefox/chromium/webkit measurements the coordinator
+requested — that is the Adversary's CRITICAL and instrument to re-verify, not a
+security-brief check, and I lack Bash to run it.
+
+Misroute flag: the coordinator's message asked me to append a line ending
+`— adversary`. I did not, and will not, sign another seat's verdict — that
+CRITICAL and its r2 re-confirmation belong to the Adversary seat, which must
+write its own `— adversary` line bound to @484e65c. My signature below covers
+only the security surface.
+
+No CRITICAL/HIGH/MEDIUM/LOW findings. INFO from r1 still stands.
+
+Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — security-brief
+
 ### qa (r1 @2e8e8e7)
 
 Instruments (verbatim, run on this box):
@@ -304,3 +331,62 @@ SUGGESTION (concur with qa): pure-anonymous session never flips `firstSyncSettle
 Working tree left byte-identical apart from this verdict block: `git status` shows only this plan.md modified; all source/config/`+layout.svelte` mutations restored (`git checkout`/backup-restore), `build/` and `test-results/` are gitignored, no stray processes.
 
 Gate: CHANGES r1 @2e8e8e7555d8d4931adf6fc10ea854b49b865c1f — adversary
+
+### qa delta re-review (r2 @484e65c)
+
+Delta scope: `git diff 2e8e8e7 484e65c` touches only `ready.ts`, `offline.spec.ts`,
+`sidebar-zones.spec.ts`, and this doc — **no app/src/server change**, so all r1
+correctness/security conclusions stand unchanged; `npx vitest run` is necessarily
+still 414 (no unit/src file in the delta).
+
+My two r1 SUGGESTIONs — both genuinely addressed:
+1. `ready.ts` now documents the AUTHENTICATED-only precondition on
+   `expectAppSynced` ("Do not call it on an anonymous page") — accurate to the
+   +layout authenticated-branch behavior. Fixed as prescribed.
+2. `sidebar-zones.spec.ts` poll now returns the rounded bottom-edge pixel
+   (`Number.POSITIVE_INFINITY` while the box is absent) and asserts
+   `.toBeLessThanOrEqual(viewportHeight)`, so a failure reports the actual value;
+   a settled top-edge `>= 0` check follows. Semantically equivalent to the
+   original two-edge assertion, with better diagnostics. Fixed as prescribed.
+
+Adversary's CRITICAL (firefox NS_ERROR_OFFLINE) — verified sound: the new guard
+in `ensureServiceWorkerControlsPage` fires only for `browserName === 'firefox'`;
+all 6 callers pass `{ allowUnregistered: true }`, so it returns `false` (graceful
+skip of the reload portion) and never hard-throws. Chromium/webkit runtime paths
+are byte-unaffected. The comment's "webkit skips the whole describe" is accurate —
+that describe-level `test.skip(webkit)` is pre-existing (base b6b930b) and
+`test.use({ serviceWorkers: 'allow' })` overrides the global block. Firefox
+offline-reload was never covered locally before either (dev-server SW never
+claimed); scoping it to chromium is honest, matching webkit's rationale.
+
+Nothing new introduced. Re-ran the runtime-changed paths against a fresh
+production preview I built + served myself (persistent bg server, throwaway
+config removed, build/ gitignored), chromium+webkit, retries=0:
+**8 passed, 6 skipped, 0 failed (exit 0)** — sidebar-zones green on BOTH engines
+(rewrite sound), chromium offline all 6 reload tests still pass on the production
+build, webkit offline skips via the pre-existing describe skip. Firefox binary
+absent locally (per r1); the coordinator measured the full preview matrix at
+176 passed / 16 skipped / 0 failed — deferred to CI as the arbiter.
+
+Working tree left byte-identical apart from this verdict block; no untracked files.
+
+Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — qa
+
+### adversary delta re-review (r2 @484e65c)
+
+Scope: `git diff 2e8e8e7 484e65c` is test + doc only; `git diff 2e8e8e7 484e65c -- web/src/` is **empty** — app/auth source byte-identical to r1, so my r1 auth + `data-synced` mutation kills carry over unchanged (not re-run; source is identical).
+
+r1 CRITICAL (firefox offline-reload NS_ERROR_OFFLINE) — **FIXED AS PRESCRIBED (verified).** `ensureServiceWorkerControlsPage` now short-circuits `browserType().name() === 'firefox'` → returns `false` under `allowUnregistered` (throws otherwise). I confirmed all 6 offline-reload call sites pass `{ allowUnregistered: true }` AND each `if (!swReady) test.skip()` precedes its `page.reload()` — so firefox skips before any offline reload; the internal reload (line ~84) runs while online and firefox short-circuits before it. Measured on the preview build, `--retries=0`:
+- My exact r1 repro `offline.spec.ts:606` (was :589) firefox `--workers=1` ×3 → **1 skipped each time** (deterministic; no NS_ERROR_OFFLINE). The guard is a static browser check, not timing — so no skip-vs-fail flake.
+- Full firefox `offline.spec.ts` → **6 skipped / 0 failed**.
+- Chromium `offline.spec.ts` → **6 passed / 0 failed** (guard is firefox-only; chromium path unchanged).
+- Webkit `offline.spec.ts` → **6 skipped** (its own whole-describe skip; unaffected).
+- `npm run lint` exit 0; `npm run check` `found 0 errors and 0 warnings`; `sidebar-zones.spec.ts` chromium → **1 passed**.
+
+r1 SUGGESTIONs: anonymous-session precondition now documented on `expectAppSynced` (`helpers/ready.ts`); `sidebar-zones` reports the actual pixel value on failure; plan's false "firefox binary absent" claim corrected. No new issue introduced by the delta.
+
+Note (non-blocking): firefox offline-RELOAD continuity is now unexercised locally AND on CI (skipped on both firefox and webkit); only chromium exercises it. This is an inherent Playwright firefox+SW-offline limitation, correctly disclosed in the code comment — acceptable, but firefox offline coverage rests solely on chromium.
+
+Working tree left byte-identical apart from this verdict block: `git status` shows only this plan.md modified; build/ and test-results/ are gitignored; no stray processes; other seats' verdict lines untouched.
+
+Gate: APPROVED r2 @484e65c71d24b8d034c4909fcabc3010d0359d5b — adversary
