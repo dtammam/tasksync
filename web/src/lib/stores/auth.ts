@@ -137,6 +137,40 @@ const isAuthFailure = (err: unknown) => {
 	return code === 401 || code === 403;
 };
 
+// Reconcile the cached session against the server. Used two ways: as the
+// awaited resolver when we booted with a token but no cached user, and as a
+// background refresh after an offline-first optimistic authenticated boot.
+// A definitive auth failure (401/403) demotes to anonymous and clears the
+// token; a network/other error preserves whatever authenticated user we
+// already have (offline-first) and only falls back to anonymous when there is
+// no user to show.
+const reconcileSession = async (): Promise<void> => {
+	try {
+		const me = await api.me();
+		persistUser(me);
+		authStore.set({ status: 'authenticated', source: 'token', user: me, error: null });
+	} catch (err) {
+		if (isAuthFailure(err)) {
+			setAuthToken(null);
+			persistUser(null);
+			authStore.set({ status: 'anonymous', source: null, user: null, error: formatHydrateError(err) });
+			return;
+		}
+		const current = get(authStore);
+		if (current.user) {
+			authStore.set({
+				status: 'authenticated',
+				source: 'token',
+				user: current.user,
+				error: formatHydrateError(err)
+			});
+			return;
+		}
+		persistUser(null);
+		authStore.set({ status: 'anonymous', source: null, user: null, error: formatHydrateError(err) });
+	}
+};
+
 export const auth = {
 	subscribe: authStore.subscribe,
 	get() {
@@ -153,12 +187,6 @@ export const auth = {
 		}
 		const token = getAuthToken();
 		const cachedUser = readStoredUser();
-		authStore.set({
-			status: 'loading',
-			source: token ? 'token' : null,
-			user: cachedUser,
-			error: null
-		});
 
 		if (!token) {
 			authStore.set({
@@ -170,46 +198,32 @@ export const auth = {
 			return;
 		}
 
-		try {
-			const me = await api.me();
-			persistUser(me);
+		if (cachedUser) {
+			// Offline-first: promote to authenticated from cache IMMEDIATELY so the
+			// first render never blocks on a live api.me() round-trip (the +layout
+			// boot contract; docs/RELIABILITY.md). Reconcile with the server in the
+			// background — success refreshes the user, a definitive 401/403 demotes
+			// to anonymous, a network error keeps the cached session.
 			authStore.set({
 				status: 'authenticated',
 				source: 'token',
-				user: me,
+				user: cachedUser,
 				error: null
 			});
-		} catch (err) {
-			if (isAuthFailure(err)) {
-				setAuthToken(null);
-				persistUser(null);
-				authStore.set({
-					status: 'anonymous',
-					source: null,
-					user: null,
-					error: formatHydrateError(err)
-				});
-				return;
-			}
-
-			if (cachedUser) {
-				authStore.set({
-					status: 'authenticated',
-					source: 'token',
-					user: cachedUser,
-					error: formatHydrateError(err)
-				});
-				return;
-			}
-
-			persistUser(null);
-			authStore.set({
-				status: 'anonymous',
-				source: null,
-				user: null,
-				error: formatHydrateError(err)
-			});
+			void reconcileSession();
+			return;
 		}
+
+		// Token but no cached user: we cannot render an authenticated identity
+		// without knowing who it is, so this one round-trip must resolve before we
+		// settle. (With no cached identity there is nothing to show offline anyway.)
+		authStore.set({
+			status: 'loading',
+			source: 'token',
+			user: null,
+			error: null
+		});
+		await reconcileSession();
 	},
 	async login(email: string, password: string, spaceId?: string) {
 		authStore.update((current) => ({

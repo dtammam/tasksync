@@ -72,31 +72,83 @@ describe('auth store', () => {
 		expect(mockedApi.me).not.toHaveBeenCalled();
 	});
 
-	it('keeps token auth session when /auth/me fails due to network', async () => {
+	it('promotes to authenticated from cache immediately, without blocking on api.me', async () => {
+		localStorage.setItem('tasksync:auth-token', 'jwt-token');
+		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
+		// api.me never settles during this check — proves boot does not await it.
+		mockedApi.me.mockReturnValue(new Promise<never>(() => {
+			/* never settles */
+		}));
+
+		await auth.hydrate();
+
+		expect(auth.get().status).toBe('authenticated');
+		expect(auth.get().source).toBe('token');
+		expect(auth.get().user?.user_id).toBe('admin');
+		expect(auth.get().error).toBeNull();
+	});
+
+	it('with a token but no cached user, resolves via an awaited api.me', async () => {
+		localStorage.setItem('tasksync:auth-token', 'jwt-token');
+		mockedApi.me.mockResolvedValue(meUser);
+
+		await auth.hydrate();
+
+		expect(mockedApi.me).toHaveBeenCalled();
+		expect(auth.get().status).toBe('authenticated');
+		expect(auth.get().user?.user_id).toBe('admin');
+	});
+
+	it('refreshes the cached user from api.me in the background', async () => {
+		localStorage.setItem('tasksync:auth-token', 'jwt-token');
+		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
+		mockedApi.me.mockResolvedValue({ ...meUser, display: 'Admin Renamed' });
+
+		// hydrate() sets the cached user synchronously before the reconcile
+		// microtask runs, so check "cache first" without awaiting.
+		const hydrating = auth.hydrate();
+		expect(auth.get().user?.display).toBe('Admin');
+		await hydrating;
+
+		await vi.waitFor(() => {
+			expect(auth.get().user?.display).toBe('Admin Renamed'); // reconciled
+		});
+	});
+
+	it('keeps token auth session when a background /auth/me fails due to network', async () => {
 		localStorage.setItem('tasksync:auth-token', 'jwt-token');
 		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
 		mockedApi.me.mockRejectedValue(new Error('TypeError: Failed to fetch'));
 
 		await auth.hydrate();
 
+		// Cache-first: authenticated immediately, before the reconcile settles.
+		expect(auth.get().status).toBe('authenticated');
+		expect(auth.get().user?.user_id).toBe('admin');
+
+		// Background reconcile: network failure keeps the session, surfaces the notice.
+		await vi.waitFor(() => {
+			expect(auth.get().error).toBe(
+				'Cannot reach the server right now. You can continue local use and retry sign-in later.'
+			);
+		});
 		expect(getAuthToken()).toBe('jwt-token');
 		expect(auth.get().status).toBe('authenticated');
 		expect(auth.get().source).toBe('token');
-		expect(auth.get().user?.user_id).toBe('admin');
-		expect(auth.get().error).toBe(
-			'Cannot reach the server right now. You can continue local use and retry sign-in later.'
-		);
 	});
 
-	it('clears token auth session when /auth/me returns unauthorized', async () => {
+	it('clears token auth session when a background /auth/me returns unauthorized', async () => {
 		localStorage.setItem('tasksync:auth-token', 'jwt-token');
 		localStorage.setItem('tasksync:auth-user', JSON.stringify(meUser));
 		mockedApi.me.mockRejectedValue(new Error('API 401 Unauthorized'));
 
 		await auth.hydrate();
 
+		// Background reconcile demotes to anonymous and clears the token on 401.
+		await vi.waitFor(() => {
+			expect(auth.get().status).toBe('anonymous');
+		});
 		expect(getAuthToken()).toBeNull();
-		expect(auth.get().status).toBe('anonymous');
 		expect(auth.get().source).toBeNull();
 		expect(auth.get().user).toBeNull();
 	});

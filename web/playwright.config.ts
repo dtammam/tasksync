@@ -29,9 +29,15 @@ export default defineConfig({
 		}
 	],
 	webServer: {
-		command: 'npm run dev -- --host --port 4173',
+		// Serve a PRODUCTION build (not the dev server) so the service worker has a
+		// real precache manifest and offline reloads are deterministic — the dev
+		// server precaches nothing, which made the offline tests flake (tech-debt
+		// #050 signature a). This is the same bundle production ships.
+		command: 'npm run build && npm run preview -- --host --port 4173',
 		url: 'http://localhost:4173',
 		reuseExistingServer: !process.env.CI,
+		// Allow time for the build step before the preview server answers.
+		timeout: 120_000,
 		stdout: 'ignore',
 		stderr: 'pipe'
 	}

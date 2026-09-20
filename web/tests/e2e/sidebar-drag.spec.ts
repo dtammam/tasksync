@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectAppSynced } from './helpers/ready';
 
 const mockLists = [
 	{
@@ -172,14 +173,20 @@ test('@smoke admin in manual sort mode can drag a sidebar list to reorder it', a
 	const { patchedIds } = await setupAdminSession(page);
 
 	await page.goto('/');
-	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
-		timeout: 30_000,
-	});
+	await expectAppSynced(page);
 
 	const items = page.getByTestId('sidebar-list-item');
 
-	// Wait for sync to deliver the two mocked lists to the sidebar.
-	await expect.poll(async () => items.count()).toBe(2);
+	// The startup /sync/pull replaces the built-in seed lists with the two mocked
+	// lists. data-synced only means the first sync SETTLED — it can settle on an
+	// errored/empty first attempt with a retry applying the data slightly later —
+	// so wait for a mocked list to actually appear BY IDENTITY, with a generous
+	// bound, rather than racing the default 10s window (this is what failed on
+	// firefox under CI load: the seeds hadn't been replaced yet, count was 5).
+	// Then assert exactly the two mocked lists and that no seed remains.
+	await expect(items.filter({ hasText: 'Alpha List' })).toHaveCount(1, { timeout: 30_000 });
+	await expect(items).toHaveCount(2);
+	await expect(items.filter({ hasText: 'Goal Management' })).toHaveCount(0);
 
 	// Verify initial sidebar order: Alpha first, Beta second.
 	await expect(items.nth(0)).toContainText('Alpha List');

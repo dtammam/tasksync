@@ -120,7 +120,7 @@ test.describe('PTR touch gesture', () => {
 test.describe('PTR desktop pointer gesture', () => {
 	// No device override — uses default desktop viewport
 
-	test('pull-to-refresh mouse drag triggers sync @smoke', async ({ page, browserName }) => {
+	test('pull-to-refresh mouse drag triggers sync @smoke', async ({ page }) => {
 		await setAuthenticatedClientState(page);
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
@@ -130,15 +130,12 @@ test.describe('PTR desktop pointer gesture', () => {
 		// Indicator starts hidden (opacity 0).
 		await expect(indicator).toHaveCSS('opacity', '0');
 
-		// Wait for hydration — pointer listeners must be registered before interacting.
-		// CDP is Chromium-only; fall back to a delay on other browsers.
-		if (browserName === 'chromium') {
-			const client = await page.context().newCDPSession(page);
-			await waitForPtrListeners(page, client, 'pointerdown');
-			await client.detach();
-		} else {
-			await page.waitForTimeout(2000);
-		}
+		// Wait for hydration — gesture listeners must be attached before interacting.
+		// PullToRefresh exposes data-ptr-ready once onMount registers them (all
+		// browsers), a deterministic signal in place of a fixed sleep / CDP probe.
+		await expect(page.locator('.ptr-wrap')).toHaveAttribute('data-ptr-ready', 'true', {
+			timeout: 20_000
+		});
 
 		// Reset scroll position so the component's scroll guard does not fire.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
@@ -178,7 +175,7 @@ test.describe('PTR desktop pointer gesture', () => {
 test.describe('PTR wheel gesture', () => {
 	// No device override — uses default desktop viewport
 
-	test('wheel gesture triggers sync @smoke', async ({ page, browserName }) => {
+	test('wheel gesture triggers sync @smoke', async ({ page }) => {
 		await setAuthenticatedClientState(page);
 		await page.goto('/');
 		await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
@@ -188,60 +185,75 @@ test.describe('PTR wheel gesture', () => {
 		// Indicator starts hidden (opacity 0).
 		await expect(indicator).toHaveCSS('opacity', '0');
 
-		// Wait for hydration — wheel listener must be registered before interacting.
-		// CDP is Chromium-only; fall back to a delay on other browsers.
-		if (browserName === 'chromium') {
-			const client = await page.context().newCDPSession(page);
-			await waitForPtrListeners(page, client, 'wheel');
-			await client.detach();
-		} else {
-			await page.waitForTimeout(2000);
-		}
+		// Wait for hydration — the wheel listener must be attached before interacting.
+		// PullToRefresh exposes data-ptr-ready once onMount registers listeners (all
+		// browsers), a deterministic signal in place of a fixed sleep / CDP probe.
+		await expect(page.locator('.ptr-wrap')).toHaveAttribute('data-ptr-ready', 'true', {
+			timeout: 20_000
+		});
 
 		// Reset scroll position so the wheel scroll guard (scrollTop === 0) is satisfied.
 		await page.evaluate(() => document.querySelector('main')?.scrollTo(0, 0));
 
-		// Position the mouse over the .ptr-wrap element before dispatching wheel events.
-		// page.mouse.wheel() dispatches the event at the current mouse cursor position;
-		// the cursor must be within .ptr-wrap so that the containerEl event listener fires.
-		const wrapBox = await page.locator('.ptr-wrap').boundingBox();
-		if (!wrapBox) throw new Error('.ptr-wrap not found');
-		const cx = Math.round(wrapBox.x + wrapBox.width / 2);
-		const cy = Math.round(wrapBox.y + 10);
-		await page.mouse.move(cx, cy);
-
 		// Send multiple wheel-up events (negative deltaY) to accumulate pull distance
-		// past the 64px refresh threshold.
+		// past the 64px refresh threshold, then read back the mid-gesture visual
+		// state -- all inside a single page.evaluate() so the observation never
+		// crosses the automation channel while the gesture window is open.
 		//
 		// The damping formula is: PULL_MAX * (1 - exp(-wheelAccumulator * 0.9 / 140)).
 		// To reach pullDistance >= 64px, wheelAccumulator must exceed ~95px.
 		// Sending 5 × 40px = 200px raw delta yields pullDistance ≈ 99px, well past threshold.
 		//
-		// page.mouse.wheel() dispatches real WheelEvent objects in DOM_DELTA_PIXEL mode,
-		// which the component's handleWheel handler normalises and accumulates.
-		for (let i = 0; i < 5; i++) {
-			await page.mouse.wheel(0, -40);
-		}
+		// handleWheel's gesture-end detection is a real, hardcoded 150ms debounce
+		// (PullToRefresh.svelte) that resets on every wheel event and starts the
+		// fade-out the moment it elapses with no new event. The indicator is only at
+		// opacity 1 (and the content only translated) during that ~150ms window.
+		// Earlier versions of this test dispatched the wheel events and then asserted
+		// opacity through a Playwright locator, so the assertion's own Node<->WebKit
+		// round trip had to land inside that window -- under CI load it frequently
+		// didn't, and the indicator was already mid-fade (tech-debt #051; opacity
+		// observed at 0.4959xx decaying to 0). Reducing the number of dispatch round
+		// trips only shrank that window, it never closed it. Dispatching AND reading
+		// in one evaluate() removes the round trip from the timed path entirely: the
+		// 150ms setTimeout runs on the same in-page event loop as this script, so it
+		// cannot fire before we read (see the microtask note below). deltaMode 0 is
+		// the DOM_DELTA_PIXEL normalizeDeltaY() reads as-is.
+		const gestureState = await page.evaluate(async () => {
+			const wrap = document.querySelector('.ptr-wrap');
+			if (!wrap) throw new Error('.ptr-wrap not found');
+			for (let i = 0; i < 5; i++) {
+				wrap.dispatchEvent(
+					new WheelEvent('wheel', { deltaY: -40, deltaMode: 0, bubbles: true, cancelable: true })
+				);
+			}
+			// Wait for Svelte to flush its reactive DOM update, then read -- all
+			// in-page. Deliberately NOT requestAnimationFrame: rAF is frame-throttled,
+			// and on a CPU-starved CI runner (2-core GitHub free runner) a single
+			// frame could stall past the 150ms debounce. Yielding via microtasks
+			// instead is not frame-throttled, resolves sub-millisecond, and -- because
+			// a tight microtask loop does not yield to the macrotask queue -- provably
+			// cannot let the 150ms wheel-end setTimeout fire before we read. Bounded by
+			// a wall-clock deadline well under 150ms so a genuine failure (opacity that
+			// never reaches 1) returns a clear value instead of hanging.
+			const indicatorEl = document.querySelector('.ptr-indicator');
+			const contentEl = document.querySelector('.ptr-content');
+			const readOpacity = () => (indicatorEl ? getComputedStyle(indicatorEl).opacity : null);
+			const deadline = performance.now() + 120;
+			let opacity = readOpacity();
+			while (opacity !== '1' && performance.now() < deadline) {
+				await Promise.resolve();
+				opacity = readOpacity();
+			}
+			return {
+				opacity,
+				contentStyle: contentEl?.getAttribute('style') ?? ''
+			};
+		});
 
-		// Check the debounce-sensitive assertion FIRST, immediately after the
-		// wheel loop: handleWheel's end-detection timer is a real, hardcoded
-		// 150ms debounce that resets on every wheel event (PullToRefresh.svelte)
-		// and starts the fade-out the moment it elapses with no new event. Each
-		// `expect()` round-trips to the browser, so checking anything else
-		// first burns into that same 150ms budget -- on a slower CI runner
-		// (WebKit's automation channel has measurably higher per-command
-		// latency than Chromium/Firefox's), that overhead alone was enough to
-		// let the debounce fire before this assertion ever ran, observed as
-		// the indicator having already completed its fade-out (opacity 0)
-		// instead of being caught fully visible (opacity 1).
-		await expect(indicator).toHaveCSS('opacity', '1');
-
-		// Content wrapper must be translated down during the active gesture.
-		// Safe to check after the opacity assertion above already confirmed
-		// we're still within the active (pre-debounce) window.
-		const content = page.locator('.ptr-content');
-		await expect(content).toHaveAttribute('style', /translateY\(/);
-		await expect(content).not.toHaveAttribute('style', /translateY\(0px\)/);
+		// Indicator fully visible and content translated down during the active gesture.
+		expect(gestureState.opacity).toBe('1');
+		expect(gestureState.contentStyle).toMatch(/translateY\(/);
+		expect(gestureState.contentStyle).not.toMatch(/translateY\(0px\)/);
 
 		// The wheel handler uses a 150ms debounce for gesture-end detection.
 		// After the last wheel event, allow the debounce to settle.
