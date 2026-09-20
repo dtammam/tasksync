@@ -588,7 +588,12 @@ export const tasks = {
 		pendingDeleteIds.set(staged);
 		pendingDeleteTimer = setTimeout(commitPendingDelete, GRACE_DELETE_MS);
 	},
-	/** Cancel the pending soft-delete for `id` (task reappears; no server call). */
+	/**
+	 * Cancel the pending grace window if `id` is staged in it (every staged task
+	 * reappears; no server call). Wired to the single-task undo toast, which only
+	 * shows at window size 1, so in practice this cancels exactly that one task;
+	 * `undoDeleteAll` is the size-agnostic form used by the batched toast.
+	 */
 	undoDelete(id: string) {
 		if (!get(pendingDeleteIds).has(id)) return;
 		clearPendingDeleteTimer();

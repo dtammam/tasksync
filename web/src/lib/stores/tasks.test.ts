@@ -1498,6 +1498,53 @@ describe('tasks bulk delete (batched grace window)', () => {
 		expect(get(pendingDelete)?.id).toBe(a.id);
 		expect(get(pendingDeleteBatch)).toBeNull();
 	});
+
+	it('deletes a recurring task in a batch like any other (deletes the series, no special branch)', async () => {
+		const recurring = synced(uuid(1), 'Water plants');
+		recurring.recurrence_id = 'daily';
+		recurring.due_date = '2026-02-02';
+		const normal = synced(uuid(2), 'One-off');
+		tasks.setAll([recurring, normal]);
+
+		tasks.softDeleteMany([recurring.id, normal.id]);
+		await vi.advanceTimersByTimeAsync(5000);
+
+		// The recurring task commits through the same deleteRemote → api.deleteTask
+		// path — the whole series is gone, no reschedule, no divergence from single delete.
+		expect(deleteSpy).toHaveBeenCalledTimes(2);
+		expect(deleteSpy.mock.calls.map((call: unknown[]) => call[0]).sort()).toEqual(
+			[recurring.id, normal.id].sort()
+		);
+		expect(tasks.getAll().some((t) => t.id === recurring.id)).toBe(false);
+	});
+
+	it('keeps staged tasks hidden while their real deletes are in-flight (no flash-back mid-commit)', async () => {
+		const a = synced(uuid(1), 'A');
+		const b = synced(uuid(2), 'B');
+		tasks.setAll([a, b]);
+
+		// A deleteTask that stays pending until we release it — models the network RTT.
+		let releaseDeletes: (() => void) | undefined;
+		const inFlight = new Promise<undefined>((resolve) => {
+			releaseDeletes = () => resolve(undefined);
+		});
+		deleteSpy.mockReturnValue(inFlight);
+
+		tasks.softDeleteMany([a.id, b.id]);
+		await vi.advanceTimersByTimeAsync(5000); // fires the commit → both deleteTask calls, still pending
+
+		// Mid-commit: both hidden from views, both still in the raw store (not yet removed),
+		// so a /sync/pull landing now can't resurrect them.
+		expect(deleteSpy).toHaveBeenCalledTimes(2);
+		expect(get(tasks).length).toBe(0);
+		expect(tasks.getAll().length).toBe(2);
+
+		releaseDeletes?.();
+		await vi.advanceTimersByTimeAsync(0); // flush the resolve → remove + unstage
+
+		expect(tasks.getAll().length).toBe(0);
+		expect(get(pendingDeleteBatch)).toBeNull();
+	});
 });
 
 describe('tasks checkAllInList (bulk complete)', () => {

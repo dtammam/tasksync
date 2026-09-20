@@ -2,9 +2,9 @@
 plan: feat-multi-select-bulk-delete
 harness: v2 · lean
 anchor: outcome
-status: Built (pre-gate)
-next: Run /gate (adversary + qa, escalate security-brief). Owner authorized intake+build; holds at gate.
-gate: pending
+status: Built (re-gate r2)
+next: Delta re-gate r2 (test/comment-only polish over r1-APPROVED). Then hold for owner review + merge.
+gate: r1 APPROVED (adversary + qa + security-brief) @6ef0148 — re-gating r2 after post-approval test/comment polish
 ---
 
 # Multi-select + bulk delete (Piece 4, slice 3)
@@ -161,9 +161,14 @@ branch). **No new wire verb** — bulk commit is N idempotent `deleteRemote` cal
 
 ## Verification (against acceptance)
 
-- **Unit:** `selection.test.ts` (6) + `tasks.ts` bulk-delete block (6, incl.
+- **Unit:** `selection.test.ts` (6) + `tasks.ts` bulk-delete block (8, incl.
   batched hide/undo, per-task commit, local+server mix, unknown-id drop, batch-of-
-  one parity). Full suite **439 passed** (was 427).
+  one parity, recurring-in-a-batch, and a deferred-promise mid-commit flash-back
+  guard). Full suite **441 passed** (was 427).
+- **r2 (post-gate polish, from seat suggestions):** added the recurring-batch and
+  in-flight flash-back unit tests (closing acceptance bullet 3's named recurring
+  test + locking the mid-commit no-flash-back invariant), and tightened the
+  `undoDelete` docstring. Test/comment-only — no behavior change.
 - **E2E `@smoke`** `bulk-delete.spec.ts`: list view (select 2 of 3 → delete →
   single batched toast → Undo restores) and My Day (select-all → delete → grace
   window commits). **Green on chromium + firefox + webkit.**
@@ -175,3 +180,9 @@ branch). **No new wire verb** — bulk commit is N idempotent `deleteRemote` cal
 Bulk **move to list**, **clone**, and per-tag-section check/uncheck — each its own
 later slice. This slice establishes the multi-select + batched-delete pattern the
 bulk-move/clone slices will reuse.
+
+Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — security-brief
+
+Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — qa
+
+Gate: APPROVED r1 @6ef01486d7ea5aca29d88aafc68c4a59fd81bd52 — adversary
