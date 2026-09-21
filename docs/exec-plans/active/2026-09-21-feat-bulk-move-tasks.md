@@ -3,9 +3,9 @@ plan: feat-bulk-move-tasks
 harness: v2 · lean
 branch: feat/bulk-move-tasks
 anchor: outcome
-status: Gate:APPROVED r2 @85c6500
-next: Gate APPROVED by both seats @85c6500 — run /release (push, mark Shipped, doc → completed/)
-gate: APPROVED r2 @85c6500 — adversary, qa
+status: Building
+next: Owner validating toolbar UX tweaks in beta; re-gate at new HEAD before /release
+gate: pending re-gate — the r2 approval (@85c6500) predates the toolbar UX tweaks; verdicts below are historical
 ---
 
 # Bulk move (reattribute) — Piece 4 remaining slice
@@ -144,9 +144,27 @@ clean · `npx vitest run` 448/448 pass. No server (Rust) change — cargo untouc
   single toast; the rest of the batch still moves. No partial-limbo state, no
   wedged batch. Exact toast copy to be settled in design.
 
+## Follow-up — toolbar UX (owner-requested, post-r2-gate, 2026-09-21)
+
+Owner validated bulk move in beta on a real device (it works). Two UX tweaks
+requested, which add NEW user-visible code on top of the r2-approved sha — so
+the r2 gate is stale and this needs a re-gate at the new HEAD before /release:
+
+1. **Remove the "Clear" button** from the bulk toolbar — it pushed the row to two
+   lines on mobile; the owner will use "Cancel" instead. (Semantic note: Clear
+   deselected while staying in select mode; Cancel exits select mode. The owner
+   accepted losing the in-mode "deselect all" affordance. `bulk-clear` had no
+   test depending on it.)
+2. **Sticky toolbar** — `position: sticky; top: 0; z-index: 5` on `.bulk-toolbar`
+   so it stays pinned to the top of the scroll area (above the sticky app-header,
+   z-index 2) while the user scrolls through tasks in select mode.
+
+Instruments after the tweak: `npm run check` 0/0 · `npm run lint` clean ·
+`npx vitest run` (selection + tasks) 89 pass. Pushed for beta validation.
+
 ## Gate
 
-Gate: APPROVED r1 @e74a6d6 — qa
-Gate: APPROVED r1 @e74a6d6 — adversary
-Gate: APPROVED r2 @85c6500 — adversary
-Gate: APPROVED r2 @85c6500 — qa
+Gate: r1 qa verdict — approved @e74a6d6 (bulk-move build). Historical: code moved since (toolbar UX tweaks); re-gate pending.
+Gate: r1 adversary verdict — approved @e74a6d6 (bulk-move build). Historical: code moved since; re-gate pending.
+Gate: r2 adversary verdict — approved @85c6500 (test hardening). Historical: code moved since (toolbar UX tweaks); re-gate pending.
+Gate: r2 qa verdict — approved @85c6500 (test hardening). Historical: code moved since; re-gate pending.

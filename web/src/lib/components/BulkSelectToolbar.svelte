@@ -35,7 +35,6 @@
 	};
 
 	const selectAll = () => selection.setMany(eligibleIds);
-	const clear = () => selection.clear();
 	const cancel = () => selection.exit();
 
 	const del = () => {
@@ -91,15 +90,6 @@
 			disabled={eligibleIds.length === 0 || count === eligibleIds.length}
 		>
 			Select all
-		</button>
-		<button
-			type="button"
-			class="ghost-pill"
-			data-testid="bulk-clear"
-			on:click={clear}
-			disabled={count === 0}
-		>
-			Clear
 		</button>
 		<button
 			type="button"
@@ -182,6 +172,14 @@
 		border-radius: 12px;
 		border: 1px solid var(--border-1);
 		background: var(--surface-2);
+		/* Pin to the top of the scroll area so it stays reachable while the user
+		   scrolls through tasks in select mode. Sits above the sticky app-header
+		   (z-index 2) and the task rows; opaque background so nothing bleeds
+		   through. */
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		box-shadow: var(--soft-shadow, 0 6px 18px rgba(0, 0, 0, 0.14));
 	}
 	.count {
 		font-weight: 600;
