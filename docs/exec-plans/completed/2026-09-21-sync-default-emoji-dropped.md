@@ -3,9 +3,9 @@ plan: sync-default-emoji-dropped
 harness: v2 · lean
 branch: fix/sync-default-emoji-dropped
 anchor: outcome
-status: Building
-next: Run /gate on the branch diff (fix + regression test); all local web gates green
-gate: pending
+status: Shipped PR#167
+next: Merged via PR #167 — nothing outstanding
+gate: APPROVED @5e93e23 — adversary + qa (r1)
 ---
 
 # Fix: list default tag dropped on sync-pull
@@ -74,3 +74,17 @@ first background sync overwrites the lists store and strips the tag.
 - Server-side `default_emoji` fallback in `tasks.rs` (kills the cold-hydration
   class too) — logged as a follow-up, not built here.
 - Cold-start hydration race for a task created before first list hydration.
+
+Gate: APPROVED r1 @5e93e23 — adversary
+- Fix verified binding: deleting `default_emoji: l.default_emoji ?? undefined` (sync.ts:199) turns the regression test RED (`expected undefined to be '🔥'`); restored → 28/28 sync tests pass.
+- Empty-string idiom safe: mapping keeps '' as '' (matching normalizeListFromApi), and both consumers tasks.ts:281/:306 use `|| undefined`, so a cleared default never applies a literal '' tag.
+- Enumeration complete: only two SyncList→List mappings exist (sync.ts + lists.ts normalizeListFromApi); both now carry default_emoji. hydrateFromDb round-trips full List objects; no other rebuild drops the field.
+- No regression to icon/color/order; svelte-check 0 errors/0 warnings; eslint exit 0; git diff --stat = plan doc + sync.ts(+1) + sync.test.ts, no server/Rust files.
+- Tree byte-identical after mutation cycle (git status clean apart from this line).
+
+Gate: APPROVED r1 @5e93e23 — qa
+- Fix matches acceptance #1: `sync.ts:199` adds `default_emoji: l.default_emoji ?? undefined` to the `toLists` map, byte-identical to `normalizeListFromApi` (lists.ts:22); `List`/`SyncList` both declare `default_emoji?: string`, so types agree.
+- Acceptance #2 independently verified red→green: in a throwaway worktree at base 43d2b0f (pre-fix sync.ts + the new test), the regression test FAILS `Expected "🔥" / Received undefined`; on HEAD the full suite passes — so it truly binds `setAll` overwrite and would catch a re-drop.
+- Acceptance #3 gates green, verbatim: `npm run lint` exit 0 (eslint clean); `npm run check` "0 errors and 0 warnings"; `npm run test` "29 passed (29) / 449 passed (449)"; `git diff --stat` = plan doc + sync.ts(+1) + sync.test.ts(+27), no server/Rust files.
+- Comment/commit accuracy confirmed: consumers `tasks.ts:281`/`:306` read `get(lists)...default_emoji || undefined`, so the store-strip mechanism the test comment describes is real; empty-string is coerced away by `|| undefined` — no literal '' tag applied.
+- Security surface: none. `default_emoji` is a server-originated string echoed through the store and rendered as auto-escaped text in Svelte; no new sink, no injection/traversal/SSRF/auth/PII exposure introduced. Tree left byte-identical (only gate verdict lines added; worktree removed and pruned).
