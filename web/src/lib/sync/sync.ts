@@ -196,6 +196,7 @@ export const syncFromServer = async () => {
 			name: l.name,
 			icon: l.icon ?? undefined,
 			color: l.color ?? undefined,
+			default_emoji: l.default_emoji ?? undefined,
 			order: l.order
 		}));
 		const deletedTasks: SyncDeletedTask[] = pull.deleted_tasks ?? [];
