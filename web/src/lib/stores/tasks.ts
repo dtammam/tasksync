@@ -628,6 +628,34 @@ export const tasks = {
 			)
 		);
 	},
+	/**
+	 * Reattribute many tasks to a single target list. Each moved task is a plain
+	 * `list_id` patch (dirty → the ordinary sync push, an `update_task_meta`
+	 * PATCH) — bulk move is N independent single moves, no new wire verb. A task
+	 * that is unknown, or already in the target list, is skipped as a no-op and
+	 * not counted, so a repeated move (or a My-Day selection that spans the
+	 * target) does nothing. Nothing but `list_id`/`dirty`/`updated_ts` changes;
+	 * `order` is untouched, so a moved task sorts into the target exactly where
+	 * a single move would land it. If the server later rejects a move (403 —
+	 * the caller lacked a grant on the target list), the sync layer clears its
+	 * dirty flag and a re-pull restores the source list; failed tasks stay put.
+	 * Returns the number of tasks actually moved.
+	 */
+	moveToListMany(ids: string[], list_id: string): number {
+		const target = new Set(ids);
+		if (target.size === 0) return 0;
+		const moving = new Set(
+			get(tasksStore)
+				.filter((t) => target.has(t.id) && t.list_id !== list_id)
+				.map((t) => t.id)
+		);
+		if (moving.size === 0) return 0;
+		const now = Date.now();
+		updateAndPersist((list) =>
+			list.map((t) => (moving.has(t.id) ? { ...t, list_id, dirty: true, updated_ts: now } : t))
+		);
+		return moving.size;
+	},
 	rename(id: string, title: string) {
 		const trimmed = title.trim();
 		if (!trimmed) return;

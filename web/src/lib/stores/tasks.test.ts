@@ -1604,6 +1604,73 @@ describe('tasks setEmojiMany (bulk tag)', () => {
 	});
 });
 
+describe('tasks moveToListMany (bulk move)', () => {
+	const t = (id: string, over: Partial<Task> = {}): Task =>
+		baseTask({ id, title: id, list_id: 'list-a', local: false, dirty: false, ...over });
+
+	beforeEach(() => {
+		tasks.setAll([]);
+	});
+
+	it('reattributes every eligible id to the target and marks them dirty; leaves the rest', () => {
+		tasks.setAll([t('a'), t('b'), t('c', { list_id: 'list-b' })]);
+
+		const moved = tasks.moveToListMany(['a', 'c'], 'list-b');
+
+		// 'a' moves list-a → list-b; 'c' is already in list-b, so it's a no-op.
+		expect(moved).toBe(1);
+		const byId = Object.fromEntries(tasks.getAll().map((task) => [task.id, task]));
+		expect(byId.a.list_id).toBe('list-b');
+		expect(byId.a.dirty).toBe(true);
+		// Already-in-target task is untouched (not re-dirtied).
+		expect(byId.c.list_id).toBe('list-b');
+		expect(byId.c.dirty).toBe(false);
+		// Unselected task stays put and clean.
+		expect(byId.b.list_id).toBe('list-a');
+		expect(byId.b.dirty).toBe(false);
+	});
+
+	it('changes only list_id/dirty/updated_ts — every other field is preserved', () => {
+		const before = t('a', {
+			title: 'buy milk',
+			emoji: '🧀',
+			status: 'done',
+			order: 'zzz',
+			my_day: true,
+			due_date: '2026-09-21'
+		});
+		tasks.setAll([before]);
+
+		tasks.moveToListMany(['a'], 'list-b');
+
+		const after = tasks.getAll()[0];
+		expect(after.list_id).toBe('list-b');
+		expect(after.dirty).toBe(true);
+		// Nothing else moved.
+		expect(after.title).toBe('buy milk');
+		expect(after.emoji).toBe('🧀');
+		expect(after.status).toBe('done');
+		expect(after.order).toBe('zzz');
+		expect(after.my_day).toBe(true);
+		expect(after.due_date).toBe('2026-09-21');
+	});
+
+	it('ignores unknown ids, an empty selection, and a repeated move (all return 0)', () => {
+		tasks.setAll([t('a', { list_id: 'list-a' })]);
+
+		expect(tasks.moveToListMany([], 'list-b')).toBe(0);
+		expect(tasks.moveToListMany(['nope'], 'list-b')).toBe(0);
+		// The known task is untouched by the no-op calls.
+		expect(tasks.getAll()[0].list_id).toBe('list-a');
+		expect(tasks.getAll()[0].dirty).toBe(false);
+
+		// First real move counts; the immediate repeat is a no-op (already there).
+		expect(tasks.moveToListMany(['a', 'nope'], 'list-b')).toBe(1);
+		expect(tasks.moveToListMany(['a'], 'list-b')).toBe(0);
+		expect(tasks.getAll()[0].list_id).toBe('list-b');
+	});
+});
+
 describe('tasks checkAllInList (bulk complete)', () => {
 	const mockedIncrement = vi.mocked(streak.increment);
 	const mockedUndo = vi.mocked(streak.undoCompletion);

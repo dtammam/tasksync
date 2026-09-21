@@ -1,18 +1,32 @@
 <script lang="ts">
 	import { selection, selectedCount } from '$lib/stores/selection';
 	import { tasks } from '$lib/stores/tasks';
+	import { lists } from '$lib/stores/lists';
 	import EmojiPicker from './EmojiPicker.svelte';
 
 	// Ids of every task in THIS view the user may act on (already scoped to what
 	// they can edit). Select-all, delete and tag are confined to this set, so a bulk
 	// op never touches a task the server would reject.
 	export let eligibleIds: string[] = [];
+	// The list these tasks currently sit in (list view). Excluded from the move
+	// picker — you can't move a task to the list it's already in. Undefined on My
+	// Day, whose selection can span lists, so nothing is excluded there but My Day.
+	export let excludeListId: string | undefined = undefined;
 	export let onDeleted: ((count: number) => void) | undefined = undefined;
 	export let onTagged: ((count: number, emoji?: string) => void) | undefined = undefined;
+	export let onMoved: ((count: number, listName: string) => void) | undefined = undefined;
 
 	let showTagPicker = false;
+	let showMovePicker = false;
 
 	$: count = $selectedCount;
+
+	// Lists a selection can be moved INTO: every real list bar the current one.
+	// `my-day` is a derived view, not a real list, so it is never a move target.
+	// For a contributor the server only returns granted (writable) lists, so this
+	// set is already the writable set; the server's grant-check on the target is
+	// the authority regardless (a rejected move degrades gracefully via sync).
+	$: moveTargets = $lists.filter((l) => l.id !== 'my-day' && l.id !== excludeListId);
 
 	// The currently-selected ids that this view is allowed to act on.
 	const eligibleSelection = () => {
@@ -42,6 +56,28 @@
 		selection.exit();
 		onTagged?.(changed, emoji);
 	};
+
+	// Reattribute the selection to one target list, then leave selection mode —
+	// the same "apply + exit" flow as tag. A task already in the target is a
+	// no-op (not counted); the returned count is the tasks actually moved.
+	const moveTo = (targetId: string, targetName: string) => {
+		const ids = eligibleSelection();
+		if (ids.length === 0) return;
+		const moved = tasks.moveToListMany(ids, targetId);
+		showMovePicker = false;
+		selection.exit();
+		onMoved?.(moved, targetName);
+	};
+
+	// Only one picker panel open at a time.
+	const toggleTagPicker = () => {
+		showTagPicker = !showTagPicker;
+		if (showTagPicker) showMovePicker = false;
+	};
+	const toggleMovePicker = () => {
+		showMovePicker = !showMovePicker;
+		if (showMovePicker) showTagPicker = false;
+	};
 </script>
 
 <div class="bulk-toolbar" data-testid="bulk-select-toolbar" role="region" aria-label="Bulk selection">
@@ -70,10 +106,20 @@
 			class="ghost-pill"
 			data-testid="bulk-tag"
 			aria-expanded={showTagPicker}
-			on:click={() => (showTagPicker = !showTagPicker)}
+			on:click={toggleTagPicker}
 			disabled={count === 0}
 		>
 			Tag
+		</button>
+		<button
+			type="button"
+			class="ghost-pill"
+			data-testid="bulk-move"
+			aria-expanded={showMovePicker}
+			on:click={toggleMovePicker}
+			disabled={count === 0 || moveTargets.length === 0}
+		>
+			Move
 		</button>
 		<button
 			type="button"
@@ -101,6 +147,25 @@
 			>
 				Clear tag
 			</button>
+		</div>
+	{/if}
+
+	{#if showMovePicker && count > 0}
+		<div class="tag-panel" data-testid="bulk-move-panel">
+			<span class="tag-panel-hint">Move {count} selected to…</span>
+			<div class="move-targets">
+				{#each moveTargets as list (list.id)}
+					<button
+						type="button"
+						class="ghost-pill"
+						data-testid="bulk-move-target"
+						data-list-id={list.id}
+						on:click={() => moveTo(list.id, list.name)}
+					>
+						{#if list.icon}<span aria-hidden="true">{list.icon}</span> {/if}{list.name}
+					</button>
+				{/each}
+			</div>
 		</div>
 	{/if}
 </div>
@@ -166,5 +231,13 @@
 	}
 	.tag-panel .ghost-pill {
 		align-self: flex-start;
+	}
+	.move-targets {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.move-targets .ghost-pill {
+		align-self: auto;
 	}
 </style>
