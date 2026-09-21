@@ -23,7 +23,7 @@ higher-cost model; execution of pieces 2–4 is intended for Opus sessions.
 | 1 | Install handoff-harness v2 (`--migrate`, lean) | `chore/harness-v2-migration` | **Shipped** — PR #138 (+ #139 cleanup), merged 2026-09-17 |
 | 2 | Add-task resilience (no reload on details open) | `fix/add-task-details-reload` | **Shipped** — PR #156, merged 2026-09-20 (bare-UUID task id keeps the drawer mounted across the create-sync ack; gate APPROVED, CI green all browsers) |
 | 3 | Optional per-task emoji, sort/group, in exports | `feat/task-emoji` | **Shipped** — PR #141, merged 2026-09-18; validated by owner in beta on a real device |
-| 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | (sliced) | **In progress — sliced.** Slice 1 (quick single-task delete + undo) **Shipped** — PR #158, merged 2026-09-20 (`feat/quick-task-delete-undo`; see completed/2026-09-20-feat-quick-task-delete-undo). Slice 3 (multi-select + bulk delete + bulk **tag** + tap-to-select, list view + My Day) **Shipped** — PR #162, merged 2026-09-20, owner-validated in beta (`feat/multi-select-bulk-delete`; see completed/2026-09-20-feat-multi-select-bulk-delete). Remaining slices: bulk **move**, **clone** — each its own branch/plan. (List-level bulk-clear already shipped out of band, PR #148; list-level Check all shipped PR #160.) |
+| 4 | Bulk task ops: delete, select, bulk delete, clone, bulk move | (sliced) | **In progress — sliced.** Slice 1 (quick single-task delete + undo) **Shipped** — PR #158, merged 2026-09-20 (`feat/quick-task-delete-undo`; see completed/2026-09-20-feat-quick-task-delete-undo). Slice 3 (multi-select + bulk delete + bulk **tag** + tap-to-select, list view + My Day) **Shipped** — PR #162, merged 2026-09-20, owner-validated in beta (`feat/multi-select-bulk-delete`; see completed/2026-09-20-feat-multi-select-bulk-delete). **Slice — bulk move (reattribute): intake open 2026-09-21** (`feat/bulk-move-tasks`, `outcome` anchor; see active/2026-09-21-feat-bulk-move-tasks). The per-task move primitive already exists (`tasks.moveToList` + server-authoritative `update_task_meta` target-list grant-check), so this slice is a bulk wrapper over a proven path, not new plumbing. Remaining after it: **clone** (single + bulk) — its own branch/plan. (List-level bulk-clear already shipped out of band, PR #148; list-level Check all shipped PR #160.) |
 
 Order: **3 → 2 → 4**, reprioritized by the owner 2026-09-17 (originally
 2 → 4 → 3, confirmed 2026-09-16). Piece 2's intake is complete and parked,
@@ -242,4 +242,11 @@ are genuinely still open. Moving the history out is the fix.
 - 2026-09-16 — roadmap drafted; piece 1 installed locally; pieces 2–4 scoped
   with inferred acceptance and blind-spot lists. Order and emoji sort semantics
   still need owner confirmation.
+- 2026-09-21 — status re-review: Pieces 1–3 all confirmed **Shipped** and
+  owner-validated in beta (emoji live on a real device). Piece 4 is the only
+  open piece. Owner chose **bulk move (reattribute)** as the next slice; intake
+  opened on `feat/bulk-move-tasks` (`outcome` anchor). Blind-spot pass found the
+  move primitive already exists server- and client-side, so the slice is a bulk
+  wrapper. **Clone** remains the last Piece-4 slice after this; once both land,
+  Piece 4 (and this umbrella) can move to `completed/`.
 

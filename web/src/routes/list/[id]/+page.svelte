@@ -116,6 +116,12 @@
 			? `Tagged ${count} task${count === 1 ? '' : 's'} ${emoji}.`
 			: `Cleared the tag on ${count} task${count === 1 ? '' : 's'}.`;
 	};
+	const onBulkMoved = (count: number, listName: string) => {
+		listActionMessage =
+			count === 0
+				? 'Nothing to move — those tasks are already there.'
+				: `Moved ${count} task${count === 1 ? '' : 's'} to ${listName}.`;
+	};
 
 	$: copyLines = [...pendingTasks, ...completedTasks].map(
 		(task) => `- [${task.status === 'done' ? 'x' : ' '}] ${task.title}`
@@ -253,8 +259,10 @@
 	{#if $selectionMode}
 		<BulkSelectToolbar
 			eligibleIds={selectableIds}
+			excludeListId={listId}
 			onDeleted={onBulkDeleted}
 			onTagged={onBulkTagged}
+			onMoved={onBulkMoved}
 		/>
 	{/if}
 
