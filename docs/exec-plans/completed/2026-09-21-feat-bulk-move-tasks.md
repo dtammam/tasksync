@@ -3,9 +3,9 @@ plan: feat-bulk-move-tasks
 harness: v2 · lean
 branch: feat/bulk-move-tasks
 anchor: outcome
-status: Building
-next: Owner validating toolbar UX tweaks in beta; re-gate at new HEAD before /release
-gate: pending re-gate — the r2 approval (@85c6500) predates the toolbar UX tweaks; verdicts below are historical
+status: Shipped 2026-09-21 (PR #165)
+next: Shipped — merged to main via PR #165; nothing further
+gate: APPROVED r3 @710ce09 — adversary, qa
 ---
 
 # Bulk move (reattribute) — Piece 4 remaining slice
@@ -164,7 +164,9 @@ Instruments after the tweak: `npm run check` 0/0 · `npm run lint` clean ·
 
 ## Gate
 
-Gate: r1 qa verdict — approved @e74a6d6 (bulk-move build). Historical: code moved since (toolbar UX tweaks); re-gate pending.
-Gate: r1 adversary verdict — approved @e74a6d6 (bulk-move build). Historical: code moved since; re-gate pending.
-Gate: r2 adversary verdict — approved @85c6500 (test hardening). Historical: code moved since (toolbar UX tweaks); re-gate pending.
-Gate: r2 qa verdict — approved @85c6500 (test hardening). Historical: code moved since; re-gate pending.
+Gate: r1 qa verdict — approved @e74a6d6 (bulk-move build). Historical: code moved since (toolbar UX tweaks); superseded by the live r3 @710ce09 below.
+Gate: r1 adversary verdict — approved @e74a6d6 (bulk-move build). Historical: code moved since; superseded by the live r3 @710ce09 below.
+Gate: r2 adversary verdict — approved @85c6500 (test hardening). Historical: code moved since (toolbar UX tweaks); superseded by the live r3 @710ce09 below.
+Gate: r2 qa verdict — approved @85c6500 (test hardening). Historical: code moved since; superseded by the live r3 @710ce09 below.
+Gate: APPROVED r3 @710ce09 — qa
+Gate: APPROVED r3 @710ce09 — adversary
