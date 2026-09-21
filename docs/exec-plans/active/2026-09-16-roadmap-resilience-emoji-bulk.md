@@ -255,3 +255,14 @@ are genuinely still open. Moving the history out is the fix.
   tweaks (drop Clear, sticky toolbar). **Clone** is now the sole remaining Piece 4
   slice; when it lands, Piece 4 and this umbrella move to `completed/`.
 
+## Gate history (pointers — this umbrella carries no bound markers)
+
+Per this doc's own convention (see the Piece 1 record), the umbrella holds
+status pointers, not bound `Gate:`/`Approved @sha` markers — those live in each
+piece's own plan. Each edit to this doc that shipped was slim-gated on its own
+docs branch:
+
+- Roadmap close-out for bulk move (PR #166): the docs slim-gate adversary
+  reviewed the claims-vs-tree and approved at r1 (branch `docs/close-out-bulk-move`);
+  recorded here as history, not a bound marker, so a squashed-away sha can't rot
+  this active doc.
