@@ -3,9 +3,9 @@ plan: feat-bulk-move-tasks
 harness: v2 · lean
 branch: feat/bulk-move-tasks
 anchor: outcome
-status: Building
-next: Commit the build, then run /gate (adversary + qa) at HEAD
-gate: pending
+status: Gate:APPROVED r2 @85c6500
+next: Gate APPROVED by both seats @85c6500 — run /release (push, mark Shipped, doc → completed/)
+gate: APPROVED r2 @85c6500 — adversary, qa
 ---
 
 # Bulk move (reattribute) — Piece 4 remaining slice
@@ -143,3 +143,10 @@ clean · `npx vitest run` 448/448 pass. No server (Rust) change — cargo untouc
   and move), the failed tasks **stay in their source list** and the user gets a
   single toast; the rest of the batch still moves. No partial-limbo state, no
   wedged batch. Exact toast copy to be settled in design.
+
+## Gate
+
+Gate: APPROVED r1 @e74a6d6 — qa
+Gate: APPROVED r1 @e74a6d6 — adversary
+Gate: APPROVED r2 @85c6500 — adversary
+Gate: APPROVED r2 @85c6500 — qa
