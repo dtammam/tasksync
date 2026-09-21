@@ -1631,13 +1631,16 @@ describe('tasks moveToListMany (bulk move)', () => {
 	});
 
 	it('changes only list_id/dirty/updated_ts — every other field is preserved', () => {
+		// Pin updated_ts to a clearly-old value so the "refreshed" assertion below
+		// can't be a same-millisecond tie with Date.now().
 		const before = t('a', {
 			title: 'buy milk',
 			emoji: '🧀',
 			status: 'done',
 			order: 'zzz',
 			my_day: true,
-			due_date: '2026-09-21'
+			due_date: '2026-09-21',
+			updated_ts: 1
 		});
 		tasks.setAll([before]);
 
@@ -1646,6 +1649,8 @@ describe('tasks moveToListMany (bulk move)', () => {
 		const after = tasks.getAll()[0];
 		expect(after.list_id).toBe('list-b');
 		expect(after.dirty).toBe(true);
+		// updated_ts is bumped so sync/LWW merge orders the move correctly.
+		expect(after.updated_ts).toBeGreaterThan(before.updated_ts);
 		// Nothing else moved.
 		expect(after.title).toBe('buy milk');
 		expect(after.emoji).toBe('🧀');

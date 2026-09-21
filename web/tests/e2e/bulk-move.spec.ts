@@ -57,4 +57,49 @@ test.describe('Multi-select + bulk move', () => {
 		await expect(page.getByTestId('task-row').filter({ hasText: a })).toHaveCount(1);
 		await expect(page.getByTestId('task-row').filter({ hasText: b })).toHaveCount(1);
 	});
+
+	test('@smoke My Day: select all, move to a list, tasks land there and leave their source list', async ({
+		page
+	}) => {
+		await setAuthenticatedClientState(page);
+		await page.goto('/');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
+			timeout: 30_000
+		});
+
+		// Tasks added from My Day land in the default list (goal-management) and
+		// show in My Day via the my_day flag — moving them changes list_id only,
+		// so they stay in My Day; we assert the move by their list membership.
+		const a = makeTitle('MyDay Move A');
+		const b = makeTitle('MyDay Move B');
+		for (const title of [a, b]) await addTask(page, title);
+
+		await page.getByTestId('myday-select-mode').click();
+		await page.getByTestId('bulk-select-all').click();
+		await expect(page.getByTestId('bulk-selected-count')).toHaveText('2 selected');
+
+		// Move to "Tasks". My Day spans lists, so the picker excludes only my-day.
+		await page.getByTestId('bulk-move').click();
+		await expect(page.getByTestId('bulk-move-panel')).toBeVisible();
+		await page.locator('[data-testid="bulk-move-target"][data-list-id="tasks"]').click();
+
+		// Selection exits (the Select pill returns).
+		await expect(page.getByTestId('myday-select-mode')).toBeVisible();
+
+		// They now belong to the target list…
+		await page.goto('/list/tasks');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
+			timeout: 30_000
+		});
+		await expect(page.getByTestId('task-row').filter({ hasText: a })).toHaveCount(1);
+		await expect(page.getByTestId('task-row').filter({ hasText: b })).toHaveCount(1);
+
+		// …and no longer sit in their original list.
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true', {
+			timeout: 30_000
+		});
+		await expect(page.getByTestId('task-row').filter({ hasText: a })).toHaveCount(0);
+		await expect(page.getByTestId('task-row').filter({ hasText: b })).toHaveCount(0);
+	});
 });
