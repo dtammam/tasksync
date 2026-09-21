@@ -5,7 +5,7 @@ import { tasks } from '$lib/stores/tasks';
 import { syncStatus } from './status';
 import type { Task } from '$shared/types/task';
 import type { SyncStatus } from './types';
-import type { Writable } from 'svelte/store';
+import { get, type Writable } from 'svelte/store';
 
 vi.mock('$lib/api/client', () => {
 	return {
@@ -360,7 +360,32 @@ describe('syncFromServer', () => {
 		expect(all.find((t) => t.id === 'srv-p3')?.priority).toBe(3);
 	});
 
-	it('hydrates priority and punt metadata from remote tasks', async () => {
+	it("preserves a list's default_emoji through the pull that overwrites the store", async () => {
+			// Regression: syncFromServer used to map pull.lists without default_emoji,
+			// so the first background sync after creating a task stripped the list's
+			// default tag from the store — later tasks then got no default tag.
+			mockedApi.syncPull.mockResolvedValue({
+				protocol: 'delta-v1',
+				cursor_ts: 1,
+				lists: [
+					{
+						id: 'goal-management',
+						space_id: 's1',
+						name: 'Goal Management',
+						default_emoji: '🔥',
+						order: 'b'
+					}
+				],
+				tasks: []
+			});
+
+			await syncFromServer();
+
+			const saved = get(lists).find((l) => l.id === 'goal-management');
+			expect(saved?.default_emoji).toBe('🔥');
+		});
+
+		it('hydrates priority and punt metadata from remote tasks', async () => {
 		mockedApi.syncPull.mockResolvedValue({
 			protocol: 'delta-v1',
 			cursor_ts: 15,
