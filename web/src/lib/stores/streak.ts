@@ -202,9 +202,9 @@ const markDayCompleteFired = (): void => {
 
 /**
  * Set to true when a new calendar day is detected in daily reset mode.
- * The actual zero-out is deferred until checkMissedTasksAndApplyDailyReset() runs, so we can
- * decide whether to show the animated break (missed tasks present) or silently
- * reset (no missed tasks).
+ * The actual zero-out is deferred until checkMissedTasksAndApplyDailyReset() runs, so it
+ * happens once tasks are loaded. The rollover reset is always silent — crossing
+ * midnight is not a live "combo dropped" moment.
  */
 let deferredDailyReset = false;
 
@@ -219,8 +219,8 @@ const applyResetRuleIfNeeded = (state: StreakState): StreakState => {
 	const prefs = uiPreferences.get();
 	if (prefs.streakSettings.resetMode !== 'daily') return state;
 	if (state.lastResetDate !== null && state.lastResetDate !== today) {
-		// New day detected. Defer the actual reset so checkMissedTasksAndApplyDailyReset() can
-		// decide whether to animate the break or silently zero out.
+		// New day detected. Defer the actual (silent) reset so it runs once tasks
+		// are loaded — see checkMissedTasksAndApplyDailyReset().
 		deferredDailyReset = true;
 		return state; // keep count intact until checkMissedTasksAndApplyDailyReset() runs
 	}
@@ -409,8 +409,9 @@ export const streak = {
 	},
 
 	/**
-	 * Break the streak (punt, cancel, delete, skip, missed tasks). Resets count
-	 * to 0. If the count was > 0, shows the break graphic for DISPLAY_TIMEOUT_MS
+	 * Break the streak from an active in-session action (punt, cancel, delete,
+	 * skip). Resets count to 0. If the count was > 0, shows the break graphic
+	 * (sound + red flash + overlay) for DISPLAY_TIMEOUT_MS
 	 * (same duration as a normal combo increment). Shows a random image from the
 	 * theme's missed/ folder if available; no image if that folder is empty.
 	 */
@@ -466,49 +467,50 @@ export const streak = {
 	},
 
 	/**
-	 * Call after tasks are loaded (local DB or server sync) to break the combo
+	 * Call after tasks are loaded (local DB or server sync) to zero the combo
 	 * when past-due tasks are visible — the DDR equivalent of a MISS judgment.
 	 *
-	 * - In daily reset mode: deferred zeroing from applyResetRuleIfNeeded runs
-	 *   here; shows the animated break if there are missed tasks, silently zeros
-	 *   otherwise.
-	 * - In endless mode: breaks with animation whenever missed tasks exist and
-	 *   the combo count is > 0.
+	 * This is the PASSIVE, on-load path (boot / sync / focus). Any combo loss it
+	 * detects is history the user already knows about — a daily-mode day rollover
+	 * that happened while the app was closed, or overdue tasks sitting there in
+	 * endless mode — not a live "combo dropped" moment. So it always zeros the
+	 * combo SILENTLY: no drop sound, no break overlay. The animated break is
+	 * reserved for active in-session actions (punt / skip / cancel / delete),
+	 * which call streak.break() directly.
+	 *
+	 * - In daily reset mode: performs the deferred zeroing from applyResetRuleIfNeeded.
+	 * - In endless mode: zeros whenever missed tasks exist and the combo is live.
 	 *
 	 * Safe to call multiple times per session; only acts once per calendar day.
 	 */
 	checkMissedTasksAndApplyDailyReset(missedCount: number) {
 		const today = todayIso();
-		// Skip if we've already acted today and there's no pending daily break.
+		// Skip if we've already acted today and there's no pending daily rollover.
 		if (!deferredDailyReset && lastMissedCheckDate === today) return;
 
 		const current = get(stateStore);
 		const hasMissed = missedCount > 0;
-
-		if (deferredDailyReset) {
-			deferredDailyReset = false;
-			lastMissedCheckDate = today;
-			if (hasMissed && current.count > 0) {
-				// New day + missed tasks → animated break
-				streak.break();
-			} else {
-				// New day, no missed tasks → silent reset; preserve dayCompleteDate guard
-				const next: StreakState = { count: 0, countedTaskIds: [], lastResetDate: today, dayCompleteDate: current.dayCompleteDate ?? null };
-				stateStore.set(next);
-				writeStreakStateToPrefsBlob(next);
-				queueStateSync(next);
-				nextAnnouncerAt = FIRST_ANNOUNCER_AT;
-				displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false }));
-			}
-			return;
-		}
-
-		// Endless mode (or same-day check): break if there are missed tasks and
-		// the combo count is still live.
+		const rolledOver = deferredDailyReset;
+		deferredDailyReset = false;
 		lastMissedCheckDate = today;
-		if (hasMissed && current.count > 0) {
-			streak.break();
-		}
+
+		// Zero the combo on a daily-mode day rollover, or when endless mode finds
+		// live combo + pre-existing missed tasks. Either way it's silent (see the
+		// doc comment above) — the theatrical break belongs only to active actions.
+		if (!rolledOver && !(hasMissed && current.count > 0)) return;
+
+		const next: StreakState = {
+			count: 0,
+			countedTaskIds: [],
+			lastResetDate: today,
+			// Preserve the once-per-day day-complete guard across the reset.
+			dayCompleteDate: current.dayCompleteDate ?? null
+		};
+		stateStore.set(next);
+		writeStreakStateToPrefsBlob(next);
+		queueStateSync(next);
+		nextAnnouncerAt = FIRST_ANNOUNCER_AT;
+		displayStore.update((d) => ({ ...d, count: 0, visible: false, breaking: false, isComboDropped: false }));
 	},
 
 	/** Return the current count for display in settings. */

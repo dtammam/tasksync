@@ -180,6 +180,14 @@ describe('streak store — break', () => {
 		streak.break();
 		expect(get(streakState).dayCompleteDate).toBe(today);
 	});
+
+	it('an active break shows the combo-dropped overlay (contrast with the silent passive path)', () => {
+		streak.increment('task-1');
+		streak.break();
+		expect(get(streakDisplay).isComboDropped).toBe(true);
+		expect(get(streakDisplay).breaking).toBe(true);
+		expect(get(streakDisplay).visible).toBe(true);
+	});
 });
 
 describe('streak store — DDR daily reset', () => {
@@ -236,7 +244,10 @@ describe('streak store — checkMissedTasksAndApplyDailyReset', () => {
 		streak.reset();
 	});
 
-	it('breaks combo with animation when missed tasks exist and combo is live (endless mode)', () => {
+	it('silently zeros combo (no drop overlay) when missed tasks exist and combo is live (endless mode)', () => {
+		// Sound enabled so a theatrical break() would surface a drop overlay — the
+		// passive on-load path must NOT do that; it just quietly zeros the combo.
+		mocks.soundSettings.get.mockReturnValue({ enabled: true, volume: 60 });
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('endless'));
 		streak.increment('task-1');
 		streak.increment('task-2');
@@ -245,6 +256,10 @@ describe('streak store — checkMissedTasksAndApplyDailyReset', () => {
 		streak.checkMissedTasksAndApplyDailyReset(3); // 3 missed tasks from prior day
 
 		expect(get(streakState).count).toBe(0);
+		// Silent: no combo-dropped celebration, overlay stays hidden.
+		expect(get(streakDisplay).isComboDropped).toBe(false);
+		expect(get(streakDisplay).breaking).toBe(false);
+		expect(get(streakDisplay).visible).toBe(false);
 	});
 
 	it('does nothing when count is 0, even with missed tasks (endless mode)', () => {
@@ -279,15 +294,22 @@ describe('streak store — checkMissedTasksAndApplyDailyReset', () => {
 		expect(get(streakState).count).toBe(2);
 	});
 
-	it('in DDR mode new day: breaks with animation when there are missed tasks', () => {
+	it('in DDR mode new day: silently zeros when there are missed tasks (no combo-dropped fanfare)', () => {
+		// The core friction fix: launching the first time after midnight with
+		// yesterday's tasks unfinished must NOT replay a "combo dropped" moment.
+		mocks.soundSettings.get.mockReturnValue({ enabled: true, volume: 60 });
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 		setPrefsBlob({ streakState: { count: 10, countedTaskIds: ['task-1'], lastResetDate: yesterday } });
 
-		streak.hydrateFromLocal(); // sets pendingDailyBreak
-		streak.checkMissedTasksAndApplyDailyReset(2); // new day + missed → animated break
+		streak.hydrateFromLocal(); // defers the daily rollover
+		streak.checkMissedTasksAndApplyDailyReset(2); // new day + missed → silent zero
 
 		expect(get(streakState).count).toBe(0);
+		// No theatrical break: overlay hidden, no combo-dropped celebration.
+		expect(get(streakDisplay).isComboDropped).toBe(false);
+		expect(get(streakDisplay).breaking).toBe(false);
+		expect(get(streakDisplay).visible).toBe(false);
 	});
 
 	it('in DDR mode new day: silently zeros when no missed tasks', () => {
