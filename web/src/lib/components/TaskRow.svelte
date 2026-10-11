@@ -121,6 +121,12 @@ const toggleTagPicker = () => {
 	if (showTagPicker) showActions = false;
 };
 
+const openTagFromMenu = () => {
+	if (!canEditTask) return;
+	showActions = false;
+	showTagPicker = true;
+};
+
 const applyTag = (emoji: string | undefined) => {
 	if (!canEditTask) return;
 	// Close first: in emoji group-by view setEmoji moves the row to another section.
@@ -312,6 +318,7 @@ $: isRecurringCompletedToday =
 					{#if canPunt}
 						<button type="button" on:click={punt} data-testid="task-punt">Punt</button>
 					{/if}
+					<button type="button" on:click={openTagFromMenu} data-testid="task-tag-menu">Tag</button>
 					<button type="button" on:click={addTomorrow}>Tomorrow</button>
 					<button type="button" on:click={addNextWeek}>Next week</button>
 					<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>

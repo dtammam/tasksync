@@ -219,4 +219,23 @@ describe('TaskRow quick tag', () => {
 			});
 		}
 	});
+
+	it('⋯ shelf Tag entry opens the picker and closes the shelf', async () => {
+		const { container, getByTestId, getByRole } = await openShelf(makeTask());
+		await fireEvent.click(getByTestId('task-tag-menu'));
+		expect(container.querySelector('.quick')).toBeNull();
+		expect(getByTestId('task-tag-picker')).toBeTruthy();
+		expect(getByRole('radio', { name: 'Goal-focused' })).toBeTruthy();
+	});
+
+	it('opening the shelf closes the picker', async () => {
+		const { container, getByTestId, queryByTestId, getByText } = render(TaskRow, {
+			props: { task: makeTask() }
+		});
+		await fireEvent.click(getByTestId('task-tag-chip'));
+		expect(getByTestId('task-tag-picker')).toBeTruthy();
+		await fireEvent.click(getByText('⋯'));
+		expect(queryByTestId('task-tag-picker')).toBeNull();
+		expect(container.querySelector('.quick')).toBeTruthy();
+	});
 });
