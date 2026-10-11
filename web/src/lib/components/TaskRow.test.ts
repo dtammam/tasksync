@@ -12,6 +12,7 @@ vi.mock('$lib/stores/tasks', () => ({
 		setDueDate: vi.fn(),
 		setDueToday: vi.fn(),
 		setPriority: vi.fn(),
+		setEmoji: vi.fn(),
 		punt: vi.fn(),
 		deleteRemote: vi.fn().mockResolvedValue(undefined),
 		softDelete: vi.fn(),
@@ -25,21 +26,20 @@ vi.mock('$lib/stores/lists', () => ({
 	lists: readable([])
 }));
 
-// Non-contributor role so canEditTask is always true in these tests.
-vi.mock('$lib/stores/auth', () => ({
-	auth: readable({
+// Mutable auth store: owner by default; the contributor case swaps the user.
+const { authState } = vi.hoisted(() => ({ authState: { current: null as unknown } }));
+vi.mock('$lib/stores/auth', async () => {
+	const { writable } = await import('svelte/store');
+	const store = writable({
 		status: 'authenticated' as const,
 		mode: 'token' as const,
 		source: null,
-		user: {
-			user_id: 'user-1',
-			role: 'owner',
-			name: 'Test User',
-			email: 'test@example.com',
-		},
+		user: { user_id: 'user-1', role: 'owner', name: 'Test User', email: 'test@example.com' },
 		error: null,
-	})
-}));
+	});
+	authState.current = store;
+	return { auth: store };
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -149,5 +149,93 @@ describe('TaskRow action shelf — closes after each action', () => {
 		await fireEvent.click(getByText('Details'));
 
 		expect(container.querySelector('.quick')).toBeNull();
+	});
+});
+
+describe('TaskRow quick tag', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('untagged: chip opens the picker; picking applies the tag and closes it', async () => {
+		const { container, getByTestId, queryByTestId, getByRole } = render(TaskRow, {
+			props: { task: makeTask() }
+		});
+		const chip = getByTestId('task-tag-chip');
+		expect(chip.nextElementSibling?.classList.contains('actions-chip')).toBe(true);
+
+		await fireEvent.click(chip);
+		expect(getByTestId('task-tag-picker')).toBeTruthy();
+		expect(container.querySelector('[data-testid="task-tag-clear"]')).toBeNull();
+
+		await fireEvent.click(getByRole('radio', { name: 'Goal-focused' }));
+		expect(tasks.setEmoji).toHaveBeenCalledWith('task-1', '🎯');
+		expect(queryByTestId('task-tag-picker')).toBeNull();
+	});
+
+	it('tagged: emoji is a button, chip is absent, current tag is checked, Clear tag clears', async () => {
+		const { getByTestId, queryByTestId, getByRole } = render(TaskRow, {
+			props: { task: makeTask({ emoji: '🎯' }) }
+		});
+		const indicator = getByTestId('task-emoji-indicator');
+		expect(indicator.tagName).toBe('BUTTON');
+		expect(queryByTestId('task-tag-chip')).toBeNull();
+
+		await fireEvent.click(indicator);
+		expect(getByRole('radio', { name: 'Goal-focused' }).getAttribute('aria-checked')).toBe('true');
+
+		await fireEvent.click(getByTestId('task-tag-clear'));
+		expect(tasks.setEmoji).toHaveBeenCalledWith('task-1', undefined);
+		expect(queryByTestId('task-tag-picker')).toBeNull();
+	});
+
+	it('contributor who is not the owner gets no chip and a non-interactive emoji', async () => {
+		(authState.current as ReturnType<typeof import('svelte/store').writable>).set({
+			status: 'authenticated',
+			mode: 'token',
+			source: null,
+			user: { user_id: 'user-2', role: 'contributor', name: 'C', email: 'c@example.com' },
+			error: null,
+		});
+		try {
+			const untagged = render(TaskRow, { props: { task: makeTask() } });
+			expect(untagged.queryByTestId('task-tag-chip')).toBeNull();
+			await fireEvent.click(untagged.getByText('⋯'));
+			expect(untagged.queryByTestId('task-tag-menu')).toBeNull();
+			untagged.unmount();
+
+			const tagged = render(TaskRow, { props: { task: makeTask({ emoji: '🎯' }) } });
+			const indicator = tagged.getByTestId('task-emoji-indicator');
+			expect(indicator.tagName).not.toBe('BUTTON');
+			await fireEvent.click(indicator);
+			expect(tagged.queryByTestId('task-tag-picker')).toBeNull();
+		} finally {
+			(authState.current as ReturnType<typeof import('svelte/store').writable>).set({
+				status: 'authenticated',
+				mode: 'token',
+				source: null,
+				user: { user_id: 'user-1', role: 'owner', name: 'Test User', email: 'test@example.com' },
+				error: null,
+			});
+		}
+	});
+
+	it('⋯ shelf Tag entry opens the picker and closes the shelf', async () => {
+		const { container, getByTestId, getByRole } = await openShelf(makeTask());
+		await fireEvent.click(getByTestId('task-tag-menu'));
+		expect(container.querySelector('.quick')).toBeNull();
+		expect(getByTestId('task-tag-picker')).toBeTruthy();
+		expect(getByRole('radio', { name: 'Goal-focused' })).toBeTruthy();
+	});
+
+	it('opening the shelf closes the picker', async () => {
+		const { container, getByTestId, queryByTestId, getByText } = render(TaskRow, {
+			props: { task: makeTask() }
+		});
+		await fireEvent.click(getByTestId('task-tag-chip'));
+		expect(getByTestId('task-tag-picker')).toBeTruthy();
+		await fireEvent.click(getByText('⋯'));
+		expect(queryByTestId('task-tag-picker')).toBeNull();
+		expect(container.querySelector('.quick')).toBeTruthy();
 	});
 });

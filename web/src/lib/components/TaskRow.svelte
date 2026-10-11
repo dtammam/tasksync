@@ -3,6 +3,7 @@ import { createEventDispatcher, onDestroy } from 'svelte';
 import { tasks } from '$lib/stores/tasks';
 import { lists } from '$lib/stores/lists';
 import { auth } from '$lib/stores/auth';
+import EmojiPicker from './EmojiPicker.svelte';
 import { nextDueForRecurrence, toLocalIsoDate } from '$lib/tasks/recurrence';
 import type { Task } from '$shared/types/task';
 
@@ -13,6 +14,7 @@ export let inMyDayView = false;
 
 const dispatch = createEventDispatcher();
 let showActions = false;
+let showTagPicker = false;
 let statusAck = false;
 let toggleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -108,6 +110,30 @@ const toggleStar = () => {
 
 const closeActions = () => (showActions = false);
 
+const toggleActions = () => {
+	showActions = !showActions;
+	if (showActions) showTagPicker = false;
+};
+
+const toggleTagPicker = () => {
+	if (!canEditTask) return;
+	showTagPicker = !showTagPicker;
+	if (showTagPicker) showActions = false;
+};
+
+const openTagFromMenu = () => {
+	if (!canEditTask) return;
+	showActions = false;
+	showTagPicker = true;
+};
+
+const applyTag = (emoji: string | undefined) => {
+	if (!canEditTask) return;
+	// Close first: in emoji group-by view setEmoji moves the row to another section.
+	showTagPicker = false;
+	tasks.setEmoji(task.id, emoji);
+};
+
 const deleteTask = () => {
 	if (!canEditTask) return;
 	// Soft-delete with an undo grace window (feat-quick-task-delete-undo): the
@@ -199,7 +225,18 @@ $: isRecurringCompletedToday =
 	<div class="meta">
 		<div class="title">
 			{#if task.emoji}
-				<span class="emoji-indicator" data-testid="task-emoji-indicator" aria-label="Tag">{task.emoji}</span>
+				{#if canEditTask}
+					<button
+						type="button"
+						class="emoji-indicator emoji-button"
+						data-testid="task-emoji-indicator"
+						aria-label="Change tag"
+						aria-expanded={showTagPicker}
+						on:click={toggleTagPicker}>{task.emoji}</button
+					>
+				{:else}
+					<span class="emoji-indicator" data-testid="task-emoji-indicator" aria-label="Tag">{task.emoji}</span>
+				{/if}
 			{/if}
 			{#if task.priority > 0}
 				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
@@ -249,9 +286,31 @@ $: isRecurringCompletedToday =
 					Catch Up
 				</button>
 			{/if}
-			<button class="chip ghost actions-chip" type="button" on:click={() => (showActions = !showActions)}>⋯</button>
+			{#if canEditTask && !task.emoji}
+				<button
+					class="chip ghost tag-chip"
+					type="button"
+					aria-label="Add tag"
+					aria-expanded={showTagPicker}
+					on:click={toggleTagPicker}
+					data-testid="task-tag-chip"
+				>
+					🏷
+				</button>
+			{/if}
+			<button class="chip ghost actions-chip" type="button" on:click={toggleActions}>⋯</button>
 		</div>
 	</div>
+		{#if showTagPicker && canEditTask}
+			<div class="tag-panel" data-testid="task-tag-picker">
+				<EmojiPicker value={task.emoji} on:change={(e) => applyTag(e.detail)} />
+				{#if task.emoji}
+					<button type="button" class="tag-clear" data-testid="task-tag-clear" on:click={() => applyTag(undefined)}>
+						Clear tag
+					</button>
+				{/if}
+			</div>
+		{/if}
 		{#if showActions}
 			<div class="quick">
 				<button type="button" on:click={openDetailFromMenu}>Details</button>
@@ -259,6 +318,7 @@ $: isRecurringCompletedToday =
 					{#if canPunt}
 						<button type="button" on:click={punt} data-testid="task-punt">Punt</button>
 					{/if}
+					<button type="button" on:click={openTagFromMenu} data-testid="task-tag-menu">Tag</button>
 					<button type="button" on:click={addTomorrow}>Tomorrow</button>
 					<button type="button" on:click={addNextWeek}>Next week</button>
 					<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
@@ -313,6 +373,31 @@ $: isRecurringCompletedToday =
 		height: 18px;
 		flex: 0 0 auto;
 		font-size: 14px;
+	}
+	.emoji-button {
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+		line-height: 1;
+	}
+	.tag-chip { opacity: 0.55; }
+	.tag-chip:hover, .tag-chip[aria-expanded='true'] { opacity: 1; }
+	.tag-panel {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		margin-top: 8px;
+	}
+	.tag-clear {
+		align-self: flex-start;
+		background: color-mix(in oklab, var(--surface-1) 94%, white 4%);
+		border: 1px solid var(--border-2);
+		color: var(--app-text);
+		border-radius: 9px;
+		padding: 6px 10px;
+		cursor: pointer;
 	}
 	.punt-indicator {
 		display: inline-flex;
