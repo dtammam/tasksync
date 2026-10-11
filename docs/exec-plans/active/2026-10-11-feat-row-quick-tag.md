@@ -4,8 +4,8 @@ harness: v2 · lean
 branch: feat/row-quick-tag
 anchor: outcome
 status: Approved @1e000c2
-next: builder (Standard / Sonnet) implements on feat/row-quick-tag, then /gate (adversary + qa)
-gate: pending
+next: owner validates :beta on device, then /release (plan to completed/, owner merges)
+gate: APPROVED r1 @de850c8
 builder: standard
 ---
 
@@ -191,14 +191,26 @@ re-confirm with the same instances. Verdicts recorded here, bound to the sha.
 
 ## Evidence (builder fills)
 
-- W1 tests: _
-- W2 tests: _
-- W3 E2E (+ the four existing specs): _
-- Full suites (vitest count, smoke count, CI run link): _
-- Gate verdicts: _
-- Device checks owed by the owner: _
+- W1 tests: TaskRow.test.ts 10/10 after W1 (7 existing unchanged + chip/pick, tagged/clear, contributor); lint + check clean
+- W2 tests: TaskRow.test.ts 12/12 (+ shelf Tag entry closes shelf, shelf closes picker)
+- W3 E2E (+ the four existing specs): row-quick-tag, bulk-tag, task-delete-undo, offline, add-task-details-resilience on chromium: 12 passed (28.5s)
+- Full suites (vitest count, smoke count, CI run link): vitest 29 files / 455 passed; `npm run test:e2e:smoke` 35 passed (1.1m); CI link: pending push
+- Gate verdicts: adversary + qa APPROVED r1 @de850c8, no CRITICAL/WARNING. Notes: untested chip-closes-shelf direction, untested close-before-setEmoji ordering (sync store, no live bug), no regroup test, ⋯ chip lacks aria-expanded (pre-existing)
+- Device checks owed by the owner:
+  1. Untagged row: faint 🏷 sits just before ⋯; two taps (chip, swatch) tag it.
+  2. Tagged row: tap the emoji, picker opens with the tag highlighted; Clear tag works, also for a tag not in the palette.
+  3. ⋯ then Tag opens the picker and closes the shelf; opening either closes the other.
+  4. 360px width with My Day chip + 🏷 + ⋯: no lone ⋯ line (plan stop rule 3), no horizontal overflow.
+  5. Selection mode: chip/emoji taps edit the tag without toggling selection.
+  6. Emoji group-by view: tagging moves the row cleanly, no stuck picker.
+  7. Contributor (non-owner) sees no chip/Tag and a plain emoji.
 
 ## Progress log
 - 2026-10-11 — intake: owner chose the faint row chip (over menu-only /
   emoji-only variants). Plan drafted.
 - 2026-10-11 — owner approved acceptance as written; builder launched (Standard).
+
+## Gate verdicts
+
+Gate: APPROVED r1 @de850c8 — qa
+Gate: APPROVED r1 @de850c8 — adversary
