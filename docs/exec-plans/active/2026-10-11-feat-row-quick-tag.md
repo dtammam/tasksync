@@ -108,6 +108,96 @@ existing, already-synced field; the owner will eyeball it on device via beta.
 - No change to the drawer's tag control or the bulk toolbar.
 - No "recently used" strip (possible later).
 
+## Step 0 — builder setup (read before any code)
+
+- **Read order:** `AGENTS.md` → this plan → `web/src/lib/components/TaskRow.svelte`,
+  `EmojiPicker.svelte`, `SelectableTask.svelte`, `BulkSelectToolbar.svelte`
+  (the Clear-tag pattern), `TaskRow.test.ts`, `web/tests/e2e/bulk-tag.spec.ts`.
+- **Environment:** work in the main checkout on `feat/row-quick-tag` (already
+  exists, plan committed). Web commands from `web/`: `npm run lint`,
+  `npm run check`, `npm run test`, `npm run test:e2e:smoke`, and
+  `npx playwright test tests/e2e/<file>` for a single spec.
+- **Git rules:** stage files by name (no `git add .`/`-A`), no force-push, no
+  `--no-verify`, never self-merge. PR body must lead with `## Summary`
+  (12+ char sentence) or the `pr-body` CI check fails.
+- **Stop rules — stop and ask the owner (AskUserQuestion):**
+  1. The change appears to need anything in "Out of scope" (a store method,
+     field, wire change, or drawer/toolbar change).
+  2. An existing test in Acceptance #3 needs editing to pass (they must stay
+     green *unchanged*).
+  3. The chip can't fit the `.sub` strip at 360px width without wrapping the ⋯
+     chip onto a lone line in the common case (My Day chip + ⋯) — show a
+     screenshot and ask.
+
+## Seams (verified 2026-10-11)
+
+- `TaskRow.svelte` — `showActions` (⋯ shelf state), `closeActions()`,
+  `canEditTask`, the `.emoji-indicator` span (`data-testid="task-emoji-indicator"`)
+  in `.title`, the `.sub` strip ending in `button.chip.ghost.actions-chip`,
+  the `.quick` shelf. Add a row-local `showTagPicker` boolean; opening it sets
+  `showActions = false` and vice versa.
+- `EmojiPicker.svelte` — `value` prop + `change` event (`string | undefined`;
+  re-picking the active tag dispatches `undefined`). Reuse as-is.
+- `tasks.setEmoji(id, emoji?)` — `web/src/lib/stores/tasks.ts:731`. The only
+  store call this change makes.
+- `BulkSelectToolbar.svelte` `bulk-tag-clear` — model for the row's
+  `task-tag-clear` button (`Clear tag`), shown only when `task.emoji` is set.
+- `SelectableTask.svelte` `onRowClick` — ignores targets inside `button`; no
+  change needed, only a test.
+- `TaskRow.test.ts` — the `$lib/stores/tasks` mock lacks `setEmoji`; add it.
+  The `$lib/stores/auth` mock is a fixed owner; the contributor case needs a
+  mutable store (e.g. `vi.hoisted` + `writable`) or a separate test file —
+  don't break the existing cases.
+- New testids: `task-tag-chip`, `task-tag-picker` (wrapper around the row's
+  `EmojiPicker`), `task-tag-clear`, `task-tag-menu` (the ⋯ shelf entry).
+
+## Waves
+
+1. **W1 — row picker + chip + emoji button.** `TaskRow.svelte`: faint chip
+   (ghost chip, ~0.55 opacity, `aria-label="Add tag"`), emoji indicator as a
+   `<button>` when `canEditTask` (span otherwise; keep the testid), inline
+   picker panel spanning the full row (`grid-column: 1 / -1`, like `.quick`)
+   with `Clear tag` when tagged; close-before-`setEmoji`. Unit tests in
+   `TaskRow.test.ts` for Acceptance #1 (chip / emoji / pick / clear) and #2
+   (contributor). Run `npm run test -- TaskRow`, `npm run check`, `npm run lint`.
+2. **W2 — ⋯ shelf Tag entry + mutual exclusion.** `Tag` button
+   (`task-tag-menu`) in `.quick` under `canEditTask`; opening the picker closes
+   the shelf and opening the shelf closes the picker. Unit tests for both.
+3. **W3 — E2E.** `web/tests/e2e/row-quick-tag.spec.ts`: the `@smoke` flow in
+   Acceptance #1 (use the `bulk-tag.spec.ts` helpers' shape and
+   `/list/goal-management`), plus Acceptance #3's selection-mode case (enter
+   `list-select-mode`, click the chip, pick, assert
+   `bulk-selected-count` still `0 selected`). Then the full web suite and
+   `npm run test:e2e:smoke`; run the four existing specs named in #3.
+
+## Gate
+
+`/gate` — `core-logic` row → **adversary + qa** (fresh seats, brief = branch,
+base `d7f51b7`, this plan, attack surfaces: permission gating of the new
+controls, selection-mode tap routing, picker state across a group-by regroup,
+the testid contract with `bulk-tag.spec.ts`). Fix CRITICAL/WARNING findings,
+re-confirm with the same instances. Verdicts recorded here, bound to the sha.
+
+## Release
+
+1. Push the branch (owner beta-tests on device: CI republishes `:beta` from any
+   non-main branch). Open the PR (feature → `main`), body led by `## Summary`.
+2. Owner validates on a real device in beta.
+3. `/release`: verify against Acceptance, set `status: Shipped (PR #<n>)`,
+   move this plan to `docs/exec-plans/completed/`, `grep -q '^status: Shipped'`
+   the moved file, commit (staged by name), run `.harness/lib/check-markers.sh`,
+   push — one PR carries code + close-out.
+4. **Merge is the owner's call** — ask; never self-merge.
+
+## Evidence (builder fills)
+
+- W1 tests: _
+- W2 tests: _
+- W3 E2E (+ the four existing specs): _
+- Full suites (vitest count, smoke count, CI run link): _
+- Gate verdicts: _
+- Device checks owed by the owner: _
+
 ## Progress log
 - 2026-10-11 — intake: owner chose the faint row chip (over menu-only /
   emoji-only variants). Plan drafted.
