@@ -3,8 +3,8 @@ plan: feat-row-quick-tag
 harness: v2 · lean
 branch: feat/row-quick-tag
 anchor: outcome
-status: Gate:APPROVED r1 @de850c8
-next: owner validates :beta on device, then /release (plan to completed/, owner merges)
+status: Shipped (PR #169)
+next: none (shipped; owner merges PR #169)
 gate: APPROVED r1 @de850c8
 builder: standard
 ---
@@ -194,7 +194,7 @@ re-confirm with the same instances. Verdicts recorded here, bound to the sha.
 - W1 tests: TaskRow.test.ts 10/10 after W1 (7 existing unchanged + chip/pick, tagged/clear, contributor); lint + check clean
 - W2 tests: TaskRow.test.ts 12/12 (+ shelf Tag entry closes shelf, shelf closes picker)
 - W3 E2E (+ the four existing specs): row-quick-tag, bulk-tag, task-delete-undo, offline, add-task-details-resilience on chromium: 12 passed (28.5s)
-- Full suites (vitest count, smoke count, CI run link): vitest 29 files / 455 passed; `npm run test:e2e:smoke` 35 passed (1.1m); CI link: pending push
+- Full suites (vitest count, smoke count, CI run link): vitest 29 files / 455 passed; `npm run test:e2e:smoke` 35 passed (1.1m); CI link: https://github.com/dtammam/tasksync/pull/169/checks
 - Gate verdicts: adversary + qa APPROVED r1 @de850c8, no CRITICAL/WARNING. Notes: untested chip-closes-shelf direction, untested close-before-setEmoji ordering (sync store, no live bug), no regroup test, ⋯ chip lacks aria-expanded (pre-existing)
 - Device checks owed by the owner:
   1. Untagged row: faint 🏷 sits just before ⋯; two taps (chip, swatch) tag it.
@@ -214,3 +214,4 @@ re-confirm with the same instances. Verdicts recorded here, bound to the sha.
 
 Gate: APPROVED r1 @de850c8 — qa
 Gate: APPROVED r1 @de850c8 — adversary
+- 2026-10-11 — owner validated on device (beta): "It's perfect." Closed out in PR #169; merge is the owner's call.
