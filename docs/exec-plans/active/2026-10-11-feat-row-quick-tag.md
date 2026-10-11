@@ -3,7 +3,7 @@ plan: feat-row-quick-tag
 harness: v2 · lean
 branch: feat/row-quick-tag
 anchor: outcome
-status: Approved @1e000c2
+status: Gate:APPROVED r1 @de850c8
 next: owner validates :beta on device, then /release (plan to completed/, owner merges)
 gate: APPROVED r1 @de850c8
 builder: standard
