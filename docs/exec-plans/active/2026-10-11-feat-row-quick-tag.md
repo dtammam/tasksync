@@ -3,8 +3,8 @@ plan: feat-row-quick-tag
 harness: v2 · lean
 branch: feat/row-quick-tag
 anchor: outcome
-status: Draft
-next: owner confirms acceptance → builder (Standard / Sonnet) implements on feat/row-quick-tag
+status: Approved @1e000c2
+next: builder (Standard / Sonnet) implements on feat/row-quick-tag, then /gate (adversary + qa)
 gate: pending
 builder: standard
 ---
@@ -110,4 +110,5 @@ existing, already-synced field; the owner will eyeball it on device via beta.
 
 ## Progress log
 - 2026-10-11 — intake: owner chose the faint row chip (over menu-only /
-  emoji-only variants). Plan drafted; awaiting acceptance confirmation.
+  emoji-only variants). Plan drafted.
+- 2026-10-11 — owner approved acceptance as written; builder launched (Standard).
