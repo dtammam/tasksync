@@ -9,7 +9,7 @@ RUN cargo build --release --bin tasksync-server --bin seed
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates \
+	&& apt-get install -y --no-install-recommends ca-certificates tzdata \
 	&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

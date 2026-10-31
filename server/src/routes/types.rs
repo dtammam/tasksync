@@ -6,8 +6,11 @@ use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 use std::{
     env,
+    path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+use super::clock::{validate_tz, Clock, ZONEINFO_DIR};
 
 /// Request header carrying the programmatic API token (F-B). Read by
 /// `ctx_from_api_token` only — `ctx_from_headers` never inspects it, and the
@@ -25,9 +28,15 @@ pub(super) struct AppState {
     pub(super) pool: SqlitePool,
     pub(super) jwt_secret: String,
     /// Optional static token for the programmatic task-creation API (F-B).
-    /// `None` when `TASK_API_TOKEN` is unset — the feature is off and
-    /// `ctx_from_api_token` rejects every request regardless of header.
+    /// `None` when `TASK_API_TOKEN` is unset. Scope: create only.
     pub(super) api_token: Option<String>,
+    /// Optional static token for the integration API (`TASK_AGENT_TOKEN`).
+    /// Scopes: read, complete, create. `None` hides the read/complete routes.
+    pub(super) agent_token: Option<String>,
+    /// `TASK_API_USER_EMAIL`: the user both API tokens act as. `None` means
+    /// the oldest admin membership.
+    pub(super) api_user_email: Option<String>,
+    pub(super) clock: Clock,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -51,16 +60,55 @@ pub(super) enum Role {
     Contributor,
 }
 
+/// One permission an API token can carry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ApiScope {
+    Read,
+    Complete,
+    Create,
+}
+
+/// The set of `ApiScope`s a static API token carries. Each configured token
+/// maps to one constant here; a new token kind is a new constant, not a new
+/// code path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct ApiScopes {
+    pub(super) read: bool,
+    pub(super) complete: bool,
+    pub(super) create: bool,
+}
+
+impl ApiScopes {
+    /// `TASK_API_TOKEN`.
+    pub(super) const CREATE_ONLY: Self = ApiScopes { read: false, complete: false, create: true };
+    /// `TASK_AGENT_TOKEN`.
+    pub(super) const AGENT: Self = ApiScopes { read: true, complete: true, create: true };
+
+    pub(super) fn allows(self, scope: ApiScope) -> bool {
+        match scope {
+            ApiScope::Read => self.read,
+            ApiScope::Complete => self.complete,
+            ApiScope::Create => self.create,
+        }
+    }
+}
+
 /// What kind of caller resolved this `RequestCtx`. Carried as
-/// defense-in-depth alongside `role`: a session login and the programmatic
-/// API token both resolve to `Role::Admin` for the owner, but `scope`
-/// distinguishes "a real session" from "the create-task-only API token" so
-/// `create_task_via_api_token` can assert the narrower scope even though the
-/// two paths already resolve disjoint identities.
+/// defense-in-depth alongside `role`: `scope` distinguishes "a real session"
+/// from "a static API token, limited to these scopes", so every integration
+/// handler asserts the scope it needs even though the two auth paths already
+/// resolve disjoint identities.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum AuthScope {
     Session,
-    ApiTaskCreate,
+    Api(ApiScopes),
+}
+
+impl AuthScope {
+    /// True only for an API-token caller whose scopes include `scope`.
+    pub(super) fn allows_api(self, scope: ApiScope) -> bool {
+        matches!(self, AuthScope::Api(scopes) if scopes.allows(scope))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -98,12 +146,30 @@ fn validate_secret(name: &str, value: Option<String>, denylist: &[&str]) -> Resu
 /// programmatic API is simply disabled; only a *present but too-short* value
 /// fails closed.
 fn validate_api_token_length(value: Option<&str>) -> Result<(), String> {
+    validate_named_token_length("TASK_API_TOKEN", value)
+}
+
+/// `validate_api_token_length` for any token variable, so `TASK_AGENT_TOKEN`
+/// gets the identical fail-closed minimum.
+fn validate_named_token_length(name: &str, value: Option<&str>) -> Result<(), String> {
     match value {
         None => Ok(()),
         Some(v) if v.trim().chars().count() < API_TOKEN_MIN_LEN => Err(format!(
-            "TASK_API_TOKEN is shorter than {API_TOKEN_MIN_LEN} characters — set a longer value in .env (see .env.example) or unset it to disable the programmatic task API"
+            "{name} is shorter than {API_TOKEN_MIN_LEN} characters — set a longer value in .env (see .env.example) or unset it to disable that API"
         )),
         Some(_) => Ok(()),
+    }
+}
+
+/// The two API tokens carry different scopes, so they must differ: with equal
+/// values a create-only caller would silently gain the agent scopes.
+fn validate_distinct_api_tokens(api: Option<&str>, agent: Option<&str>) -> Result<(), String> {
+    match (api.map(str::trim), agent.map(str::trim)) {
+        (Some(a), Some(b)) if !a.is_empty() && a == b => {
+            Err("TASK_AGENT_TOKEN must differ from TASK_API_TOKEN — they carry different scopes"
+                .to_string())
+        }
+        _ => Ok(()),
     }
 }
 
@@ -129,8 +195,22 @@ pub fn validate_boot_secrets() -> Result<(), String> {
     {
         failures.push(message);
     }
-    if let Err(message) = validate_api_token_length(env::var("TASK_API_TOKEN").ok().as_deref()) {
+    let api_token = env::var("TASK_API_TOKEN").ok();
+    let agent_token = env::var("TASK_AGENT_TOKEN").ok();
+    if let Err(message) = validate_api_token_length(api_token.as_deref()) {
         failures.push(message);
+    }
+    if let Err(message) = validate_named_token_length("TASK_AGENT_TOKEN", agent_token.as_deref()) {
+        failures.push(message);
+    }
+    if let Err(message) = validate_distinct_api_tokens(api_token.as_deref(), agent_token.as_deref())
+    {
+        failures.push(message);
+    }
+    match validate_tz(env::var("TZ").ok().as_deref(), Path::new(ZONEINFO_DIR)) {
+        Ok(Some(warning)) => tracing::warn!("{warning}"),
+        Ok(None) => {}
+        Err(message) => failures.push(message),
     }
     if failures.is_empty() {
         Ok(())
@@ -139,17 +219,83 @@ pub fn validate_boot_secrets() -> Result<(), String> {
     }
 }
 
+fn non_empty_env(name: &str) -> Option<String> {
+    env::var(name).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+}
+
 pub(super) fn app_state(pool: &SqlitePool) -> AppState {
-    let api_token =
-        env::var("TASK_API_TOKEN").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    let api_token = non_empty_env("TASK_API_TOKEN");
     if api_token.is_some() {
         tracing::info!("programmatic task-creation API enabled (TASK_API_TOKEN configured)");
+    }
+    let agent_token = non_empty_env("TASK_AGENT_TOKEN");
+    if agent_token.is_some() {
+        tracing::info!("integration API enabled (TASK_AGENT_TOKEN configured)");
     }
     AppState {
         pool: pool.clone(),
         jwt_secret: env::var("JWT_SECRET")
             .expect("JWT_SECRET validated by validate_boot_secrets at boot"),
         api_token,
+        agent_token,
+        api_user_email: non_empty_env("TASK_API_USER_EMAIL"),
+        clock: Clock::default(),
+    }
+}
+
+/// Resolves the identity both API tokens act as: the user named by
+/// `TASK_API_USER_EMAIL` (case-insensitive), or the oldest admin membership
+/// when unset. The role comes from that membership, so a contributor's
+/// permissions still apply. `Ok(None)` when no membership matches.
+pub(super) async fn resolve_api_identity(
+    pool: &SqlitePool,
+    email: Option<&str>,
+) -> Result<Option<(String, String, Role)>, sqlx::Error> {
+    let row: Option<(String, String, String)> = match email {
+        Some(email) => {
+            sqlx::query_as(
+                "select m.space_id, m.user_id, m.role from membership m join user u on u.id = m.user_id where lower(u.email) = lower(?1) order by m.rowid asc limit 1",
+            )
+            .bind(email)
+            .fetch_optional(pool)
+            .await?
+        }
+        None => {
+            sqlx::query_as(
+                "select m.space_id, m.user_id, m.role from membership m where m.role = 'admin' order by m.rowid asc limit 1",
+            )
+            .fetch_optional(pool)
+            .await?
+        }
+    };
+    Ok(row.and_then(|(space_id, user_id, role)| {
+        let role = match role.as_str() {
+            "admin" => Role::Admin,
+            "contributor" => Role::Contributor,
+            _ => return None,
+        };
+        Some((space_id, user_id, role))
+    }))
+}
+
+/// Post-migration boot check: a configured `TASK_API_USER_EMAIL` must name a
+/// member, or every API call would fail at request time instead of at boot.
+pub async fn validate_api_identity(pool: &SqlitePool) -> Result<(), String> {
+    check_api_identity(pool, non_empty_env("TASK_API_USER_EMAIL").as_deref()).await
+}
+
+/// `validate_api_identity` without the env read, for tests.
+pub(super) async fn check_api_identity(
+    pool: &SqlitePool,
+    email: Option<&str>,
+) -> Result<(), String> {
+    let Some(email) = email else { return Ok(()) };
+    match resolve_api_identity(pool, Some(email)).await {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => Err(format!(
+            "TASK_API_USER_EMAIL=\"{email}\" matches no member — fix it or unset it to act as the oldest admin"
+        )),
+        Err(err) => Err(format!("could not check TASK_API_USER_EMAIL: {err}")),
     }
 }
 
@@ -260,41 +406,50 @@ pub(super) fn constant_time_eq(a: &str, b: &str) -> bool {
     digest_a == digest_b
 }
 
-/// Resolves a `RequestCtx` for the programmatic task-creation API (F-B).
+/// Resolves a `RequestCtx` for the static-token integration API.
 ///
 /// Disjoint from `ctx_from_headers`: this verifier reads ONLY the
 /// `X-TaskSync-Api-Token` header and never inspects `Authorization`;
-/// `ctx_from_headers` never inspects the API-token header. A caller
-/// presenting a valid token does NOT get to pick an arbitrary `uid`/
-/// `space_id` — the identity is resolved server-side from the single owner
-/// admin membership, exactly like `auth_status`/`auth_setup` resolve
-/// "the owner" without trusting client input.
+/// `ctx_from_headers` never inspects the API-token header. The matched token
+/// fixes the scopes (`TASK_AGENT_TOKEN` → `ApiScopes::AGENT`,
+/// `TASK_API_TOKEN` → `ApiScopes::CREATE_ONLY`). A caller presenting a valid
+/// token does NOT get to pick an arbitrary `uid`/`space_id` — the identity is
+/// resolved server-side by `resolve_api_identity`, without trusting client
+/// input.
 ///
-/// Consumed by `create_task_via_api_token` (`POST /api/tasks`,
-/// `integrations.rs`).
+/// Consumed by every handler in `integrations.rs`.
 pub(super) async fn ctx_from_api_token(
     headers: &HeaderMap,
     state: &AppState,
 ) -> Result<RequestCtx, StatusCode> {
-    let Some(configured) = state.api_token.as_deref() else {
+    if state.api_token.is_none() && state.agent_token.is_none() {
         return Err(StatusCode::UNAUTHORIZED);
-    };
+    }
     let Some(provided) = headers.get(API_TOKEN_HEADER).and_then(|v| v.to_str().ok()) else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    if !constant_time_eq(provided, configured) {
+    // Both lookups run regardless of which one matches, so timing does not
+    // reveal WHICH configured token was presented. (An unset token skips its
+    // hash; whether `TASK_AGENT_TOKEN` is set is already observable through
+    // the concealed 404 by design.)
+    let matches =
+        |configured: Option<&str>| configured.is_some_and(|c| constant_time_eq(provided, c));
+    let agent_match = matches(state.agent_token.as_deref());
+    let create_match = matches(state.api_token.as_deref());
+    let scopes = if agent_match {
+        ApiScopes::AGENT
+    } else if create_match {
+        ApiScopes::CREATE_ONLY
+    } else {
         return Err(StatusCode::UNAUTHORIZED);
-    }
+    };
 
-    let owner: Option<(String, String)> = sqlx::query_as(
-        "select m.space_id, m.user_id from membership m where m.role = 'admin' limit 1",
-    )
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let (space_id, user_id) = owner.ok_or(StatusCode::UNAUTHORIZED)?;
-    Ok(RequestCtx { space_id, user_id, role: Role::Admin, scope: AuthScope::ApiTaskCreate })
+    let (space_id, user_id, role) =
+        resolve_api_identity(&state.pool, state.api_user_email.as_deref())
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+    Ok(RequestCtx { space_id, user_id, role, scope: AuthScope::Api(scopes) })
 }
 
 pub(super) fn normalize_avatar_icon(raw: Option<String>) -> Option<String> {
@@ -636,7 +791,8 @@ pub(super) fn normalize_task_priority(raw: Option<i64>) -> Result<Option<i64>, S
 #[cfg(test)]
 mod tests {
     use super::{
-        constant_time_eq, validate_api_token_length, validate_secret, JWT_SECRET_DENYLIST,
+        constant_time_eq, validate_api_token_length, validate_distinct_api_tokens,
+        validate_named_token_length, validate_secret, JWT_SECRET_DENYLIST,
     };
 
     // The full fail-closed matrix is tested through the PURE `validate_secret`
@@ -744,5 +900,27 @@ mod tests {
         let err = validate_api_token_length(Some(&value)).unwrap_err();
         assert!(err.contains("TASK_API_TOKEN"), "error should name the variable: {err}");
         assert!(err.contains("24"), "error should state the minimum length: {err}");
+    }
+
+    #[test]
+    fn agent_token_gets_the_same_minimum_length() {
+        let short = "a".repeat(super::API_TOKEN_MIN_LEN - 1);
+        let err = validate_named_token_length("TASK_AGENT_TOKEN", Some(&short)).unwrap_err();
+        assert!(err.contains("TASK_AGENT_TOKEN"), "error should name the variable: {err}");
+        assert!(validate_named_token_length("TASK_AGENT_TOKEN", Some("   ")).is_err());
+        let ok = "a".repeat(super::API_TOKEN_MIN_LEN);
+        validate_named_token_length("TASK_AGENT_TOKEN", Some(&ok)).expect("minimum length is fine");
+        validate_named_token_length("TASK_AGENT_TOKEN", None).expect("absent is fine");
+    }
+
+    #[test]
+    fn equal_api_and_agent_tokens_fail_boot() {
+        let token = "a-genuinely-random-32-char-token";
+        assert!(validate_distinct_api_tokens(Some(token), Some(token)).is_err());
+        assert!(validate_distinct_api_tokens(Some(token), Some(&format!(" {token} "))).is_err());
+        validate_distinct_api_tokens(Some(token), Some("another-genuinely-random-token"))
+            .expect("distinct tokens are fine");
+        validate_distinct_api_tokens(Some(token), None).expect("one token is fine");
+        validate_distinct_api_tokens(None, None).expect("no tokens is fine");
     }
 }

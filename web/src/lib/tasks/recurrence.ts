@@ -70,10 +70,15 @@ const subtractWeekdays = (dateStr: string, weekdays: number) => {
 	return toLocalIsoDate(d);
 };
 
+// Clamps to the last day of the target month (Jan 31 + 1 month = Feb 28/29),
+// matching chrono's `checked_add_months` on the server. A bare `setMonth` would
+// overflow into the following month (Jan 31 → Mar 3).
 const addMonths = (dateStr: string, months: number) => {
 	const d = parseIsoDate(dateStr);
-	d.setMonth(d.getMonth() + months);
-	return toLocalIsoDate(d);
+	const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
+	const daysInTarget = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+	target.setDate(Math.min(d.getDate(), daysInTarget));
+	return toLocalIsoDate(target);
 };
 
 const lastDayOfMonth = (dateStr: string, monthOffset: number): string => {
@@ -109,6 +114,29 @@ export const nextDueForRecurrence = (current: string | undefined, recur?: string
 		case 'lastDayOfMonth':
 			return lastDayOfMonth(anchor, 1);
 	}
+};
+
+/**
+ * The due date a recurring task moves to when its current occurrence is
+ * completed: one step from the anchor (`punted_from_due_date ?? due_date`),
+ * advanced until it is past the current `due_date`. Mirrored by
+ * `next_due_after_current` in `server/src/routes/recurrence.rs`; both are
+ * pinned by `shared/fixtures/recurrence-cases.json`.
+ */
+export const nextDueAfterCurrent = (
+	dueDate: string | undefined,
+	puntedFromDueDate: string | undefined,
+	recur?: string
+) => {
+	const anchor = puntedFromDueDate ?? dueDate;
+	let next = nextDueForRecurrence(anchor, recur);
+	if (!next) return dueDate;
+	while (dueDate && next <= dueDate) {
+		const candidate = nextDueForRecurrence(next, recur);
+		if (!candidate || candidate === next) break;
+		next = candidate;
+	}
+	return next;
 };
 
 export const prevDueForRecurrence = (current: string | undefined, recur?: string) => {

@@ -10,7 +10,7 @@ use axum::{
 };
 use routes::{
     auth_routes, integration_routes, list_routes, sync_routes, tag_routes, task_routes,
-    validate_boot_secrets,
+    validate_api_identity, validate_boot_secrets,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
@@ -129,6 +129,13 @@ async fn main() -> anyhow::Result<()> {
     let pool = SqlitePoolOptions::new().max_connections(5).connect_with(connect_opts).await?;
 
     sqlx::migrate!().run(&pool).await?;
+
+    // Fail-closed identity preflight: a TASK_API_USER_EMAIL that names no
+    // member would otherwise surface only as 401s at request time.
+    if let Err(message) = validate_api_identity(&pool).await {
+        tracing::error!("boot preflight failed:\n{message}");
+        anyhow::bail!("boot preflight failed — fix TASK_API_USER_EMAIL above and restart");
+    }
 
     // Mirrors `routes::types::API_TOKEN_HEADER` (not re-exported across the
     // module boundary) — the programmatic task-creation API's request

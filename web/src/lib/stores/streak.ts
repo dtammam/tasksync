@@ -4,6 +4,7 @@ import { auth } from '$lib/stores/auth';
 import { uiPreferences } from '$lib/stores/preferences';
 import { playUrl } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
+import { toLocalIsoDate } from '$lib/tasks/recurrence';
 import type { StreakState } from '$shared/types/settings';
 
 // ---------------------------------------------------------------------------
@@ -13,7 +14,21 @@ import type { StreakState } from '$shared/types/settings';
 // Always fire at count=5. After that, fire randomly every 10–20 completions.
 const FIRST_ANNOUNCER_AT = 5;
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+// Local calendar date, the same "today" My Day uses (tasks.ts). This was the
+// UTC date, so streak "today" and My Day "today" disagreed every evening west
+// of UTC.
+const todayIso = () => toLocalIsoDate(new Date());
+
+// A stored streak date written under the old UTC rule can be one day AHEAD of
+// the local date for the rest of that evening. Treat today or tomorrow as "the
+// current day" so that value neither triggers a reset nor re-arms day-complete.
+// Anything further ahead (a device with a wrong clock) is treated as stale,
+// so it recovers by the next day instead of freezing the guards until then.
+const isCurrentDay = (date: string) => {
+	const tomorrow = new Date();
+	tomorrow.setDate(tomorrow.getDate() + 1);
+	return date === todayIso() || date === toLocalIsoDate(tomorrow);
+};
 
 // ---------------------------------------------------------------------------
 // State + display stores
@@ -184,8 +199,10 @@ const writeStreakStateToPrefsBlob = (state: StreakState) => {
 // Day-complete — once-per-day tracking (reads/writes stateStore in memory)
 // ---------------------------------------------------------------------------
 
-const hasFiredDayCompleteToday = (): boolean =>
-	get(stateStore).dayCompleteDate === todayIso();
+const hasFiredDayCompleteToday = (): boolean => {
+	const fired = get(stateStore).dayCompleteDate;
+	return !!fired && isCurrentDay(fired);
+};
 
 const markDayCompleteFired = (): void => {
 	stateStore.update((current) => {
@@ -215,10 +232,9 @@ let deferredDailyReset = false;
 let lastMissedCheckDate: string | null = null;
 
 const applyResetRuleIfNeeded = (state: StreakState): StreakState => {
-	const today = todayIso();
 	const prefs = uiPreferences.get();
 	if (prefs.streakSettings.resetMode !== 'daily') return state;
-	if (state.lastResetDate !== null && state.lastResetDate !== today) {
+	if (state.lastResetDate !== null && !isCurrentDay(state.lastResetDate)) {
 		// New day detected. Defer the actual (silent) reset so it runs once tasks
 		// are loaded — see checkMissedTasksAndApplyDailyReset().
 		deferredDailyReset = true;

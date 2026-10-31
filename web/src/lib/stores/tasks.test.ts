@@ -1776,3 +1776,101 @@ describe('tasks checkAllInList (bulk complete)', () => {
 		expect(mockedPlayCompletion).not.toHaveBeenCalled();
 	});
 });
+
+describe('tasks mergeRemote day-complete (remote check-off)', () => {
+	const mockedTriggerDayComplete = vi.mocked(streak.triggerDayComplete);
+	const mockedIncrement = vi.mocked(streak.increment);
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-10-31T12:00'));
+		localStorage.clear();
+		auth.logout();
+		tasks.setAll([]);
+		mockedTriggerDayComplete.mockClear();
+		mockedIncrement.mockClear();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('fires day-complete once when a merge completes the last My Day task, without a combo bump', () => {
+		tasks.setAll([
+			baseTask({ id: 'a', my_day: true }),
+			baseTask({ id: 'b', my_day: true, status: 'done', completed_ts: Date.now() - 1000 })
+		]);
+		const remoteDone = baseTask({ id: 'a', my_day: true, status: 'done', completed_ts: Date.now() });
+		tasks.mergeRemote([remoteDone]);
+		expect(mockedTriggerDayComplete).toHaveBeenCalledTimes(1);
+		expect(mockedIncrement).not.toHaveBeenCalled();
+
+		// A repeat pull of the same state starts with nothing pending: no second call.
+		tasks.mergeRemote([remoteDone]);
+		expect(mockedTriggerDayComplete).toHaveBeenCalledTimes(1);
+	});
+
+	it('fires for a remotely completed recurring task (advanced, still pending)', () => {
+		tasks.setAll([baseTask({ id: 'r', due_date: '2026-10-31', recurrence_id: 'daily' })]);
+		tasks.mergeRemote([
+			baseTask({
+				id: 'r',
+				due_date: '2026-11-01',
+				recurrence_id: 'daily',
+				completed_ts: Date.now(),
+				occurrences_completed: 1
+			})
+		]);
+		expect(mockedTriggerDayComplete).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not fire when the last pending task leaves My Day without being completed', () => {
+		tasks.setAll([
+			baseTask({ id: 'a', my_day: true }),
+			baseTask({ id: 'b', my_day: true, status: 'done', completed_ts: Date.now() - 1000 })
+		]);
+		tasks.mergeRemote([baseTask({ id: 'a', my_day: false })]);
+		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
+	});
+
+	it('does not fire when another device punts the last pending task', () => {
+		tasks.setAll([
+			baseTask({ id: 'w', due_date: '2026-10-31', recurrence_id: 'weekly' }),
+			baseTask({ id: 'b', my_day: true, status: 'done', completed_ts: Date.now() - 1000 })
+		]);
+		tasks.mergeRemote([
+			baseTask({
+				id: 'w',
+				due_date: '2026-11-01',
+				recurrence_id: 'weekly',
+				punted_from_due_date: '2026-10-31',
+				punted_on_date: '2026-10-31'
+			})
+		]);
+		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
+	});
+
+	it('does not fire when a task completed earlier today merely leaves My Day', () => {
+		// A recurring task completed earlier today stays in myDayPending through its
+		// my_day flag; another device clearing that flag completes nothing.
+		const completedEarlier = {
+			id: 'r',
+			my_day: true,
+			due_date: '2026-11-01',
+			recurrence_id: 'daily',
+			completed_ts: Date.now() - 60_000,
+			occurrences_completed: 1
+		};
+		tasks.setAll([baseTask(completedEarlier)]);
+		tasks.mergeRemote([baseTask({ ...completedEarlier, my_day: false })]);
+		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
+	});
+
+	it('does not fire while My Day still has pending tasks', () => {
+		tasks.setAll([baseTask({ id: 'a', my_day: true }), baseTask({ id: 'c', my_day: true })]);
+		tasks.mergeRemote([
+			baseTask({ id: 'a', my_day: true, status: 'done', completed_ts: Date.now() })
+		]);
+		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
+	});
+});

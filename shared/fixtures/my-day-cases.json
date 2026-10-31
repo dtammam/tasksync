@@ -1,0 +1,27 @@
+{
+  "_comment": "My Day selection fixture. Consumed by web/src/lib/stores/myDay.parity.test.ts (real myDayPending/myDayCompleted stores) and server/src/routes/task_views.rs (GET /api/tasks?view=today). completed_at / updated_at are LOCAL wall-clock times (updated_at defaults to completed_at). Expected id lists are in fixture order.",
+  "today": "2026-10-31",
+  "user_id": "u-me",
+  "tasks": [
+    { "id": "a-myday-flag", "title": "Water plants", "status": "pending", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": null, "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "b-due-today", "title": "Pay rent", "status": "pending", "my_day": false, "due_date": "2026-10-31", "recur_rule": null, "completed_at": null, "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "c-due-tomorrow", "title": "Call mom", "status": "pending", "my_day": false, "due_date": "2026-11-01", "recur_rule": null, "completed_at": null, "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "d-missed-myday", "title": "File taxes", "status": "pending", "my_day": true, "due_date": "2026-10-30", "recur_rule": null, "completed_at": null, "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "e-other-user", "title": "Their task", "status": "pending", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": null, "assignee_user_id": "u-other", "created_by_user_id": "u-me" },
+    { "id": "f-assigned-to-me", "title": "Review PR", "status": "pending", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": null, "assignee_user_id": "u-me", "created_by_user_id": "u-other" },
+    { "id": "g-done-today", "title": "Buy milk", "status": "done", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": "2026-10-31T09:00", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "h-done-yesterday", "title": "Old chore", "status": "done", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": "2026-10-30T22:00", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "i-recurring-done-today", "title": "Morning meditation", "status": "pending", "my_day": false, "due_date": "2026-11-01", "recur_rule": "daily", "completed_at": "2026-10-31T07:00", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "j-recurring-due-today", "title": "Evening Meditation", "status": "pending", "my_day": false, "due_date": "2026-10-31", "recur_rule": "daily", "completed_at": "2026-10-30T21:00", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "k-recurring-myday-completed", "title": "Weekly review", "status": "pending", "my_day": true, "due_date": "2026-11-07", "recur_rule": "weekly", "completed_at": "2026-10-31T08:00", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "l-cancelled", "title": "Dropped idea", "status": "cancelled", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": null, "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "m-no-owner", "title": "Orphan", "status": "pending", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": null, "assignee_user_id": null, "created_by_user_id": null },
+    { "id": "n-done-today-not-myday", "title": "Side errand", "status": "done", "my_day": false, "due_date": null, "recur_rule": null, "completed_at": "2026-10-31T10:00", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "o-done-near-midnight", "title": "Late chore", "status": "done", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": "2026-10-31T23:50", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "p-done-after-midnight", "title": "Early chore", "status": "done", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": "2026-10-31T00:05", "assignee_user_id": null, "created_by_user_id": "u-me" },
+    { "id": "q-done-no-completed-ts", "title": "Legacy done", "status": "done", "my_day": true, "due_date": null, "recur_rule": null, "completed_at": null, "updated_at": "2026-10-31T08:00", "assignee_user_id": null, "created_by_user_id": "u-me", "note": "no completed_ts: updated_ts stands in" },
+    { "id": "r-recurring-marked-done", "title": "Recurring set done", "status": "done", "my_day": false, "due_date": "2026-10-29", "recur_rule": "daily", "completed_at": "2026-10-31T09:30", "assignee_user_id": null, "created_by_user_id": "u-me", "note": "recurring-completed-today requires status pending" }
+  ],
+  "expected_pending": ["a-myday-flag", "b-due-today", "f-assigned-to-me", "j-recurring-due-today", "k-recurring-myday-completed"],
+  "expected_done_today": ["g-done-today", "i-recurring-done-today", "k-recurring-myday-completed", "o-done-near-midnight", "p-done-after-midnight", "q-done-no-completed-ts"]
+}
