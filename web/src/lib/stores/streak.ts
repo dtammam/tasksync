@@ -4,6 +4,7 @@ import { auth } from '$lib/stores/auth';
 import { uiPreferences } from '$lib/stores/preferences';
 import { playUrl } from '$lib/sound/sound';
 import { soundSettings } from '$lib/stores/settings';
+import { toLocalIsoDate } from '$lib/tasks/recurrence';
 import type { StreakState } from '$shared/types/settings';
 
 // ---------------------------------------------------------------------------
@@ -13,7 +14,10 @@ import type { StreakState } from '$shared/types/settings';
 // Always fire at count=5. After that, fire randomly every 10–20 completions.
 const FIRST_ANNOUNCER_AT = 5;
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+// Local calendar date, the same "today" My Day uses (tasks.ts). This was the
+// UTC date, so streak "today" and My Day "today" disagreed every evening west
+// of UTC.
+const todayIso = () => toLocalIsoDate(new Date());
 
 // ---------------------------------------------------------------------------
 // State + display stores
@@ -184,8 +188,12 @@ const writeStreakStateToPrefsBlob = (state: StreakState) => {
 // Day-complete — once-per-day tracking (reads/writes stateStore in memory)
 // ---------------------------------------------------------------------------
 
-const hasFiredDayCompleteToday = (): boolean =>
-	get(stateStore).dayCompleteDate === todayIso();
+// `>=`, not `===`: a date written under the old UTC rule can be one day ahead
+// of the local date in the evening, and must not let day-complete fire twice.
+const hasFiredDayCompleteToday = (): boolean => {
+	const fired = get(stateStore).dayCompleteDate;
+	return !!fired && /^\d{4}-\d{2}-\d{2}$/.test(fired) && fired >= todayIso();
+};
 
 const markDayCompleteFired = (): void => {
 	stateStore.update((current) => {
@@ -218,7 +226,9 @@ const applyResetRuleIfNeeded = (state: StreakState): StreakState => {
 	const today = todayIso();
 	const prefs = uiPreferences.get();
 	if (prefs.streakSettings.resetMode !== 'daily') return state;
-	if (state.lastResetDate !== null && state.lastResetDate !== today) {
+	// `<`, not `!==`: a lastResetDate ahead of the local date (written under the
+	// old UTC rule) is not a new day.
+	if (state.lastResetDate !== null && state.lastResetDate < today) {
 		// New day detected. Defer the actual (silent) reset so it runs once tasks
 		// are loaded — see checkMissedTasksAndApplyDailyReset().
 		deferredDailyReset = true;
