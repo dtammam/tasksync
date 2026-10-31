@@ -438,6 +438,7 @@ export const tasks = {
 		void repo.saveTasks(next).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
 	},
 	mergeRemote(remote: Task[]) {
+		const pendingBeforeIds = new Set(get(myDayPending).map((task) => task.id));
 		updateAndPersist((current) => {
 			// Sync pull is incremental, so start with local cache and layer remote deltas on top.
 			const merged = new Map<string, Task>();
@@ -451,6 +452,18 @@ export const tasks = {
 			}
 			return Array.from(merged.values());
 		});
+		// A sync that finishes My Day (e.g. a check-off made through the integration
+		// API) gets the day-complete celebration, but never a combo bump: the combo
+		// stays a live tap game. Only fires when a task that was pending here is now
+		// completed, so a remote reassignment or My Day removal does not count.
+		// triggerDayComplete() is itself once-per-day.
+		if (
+			pendingBeforeIds.size > 0 &&
+			get(myDayPending).length === 0 &&
+			get(myDayCompleted).some((task) => pendingBeforeIds.has(task.id))
+		) {
+			streak.triggerDayComplete();
+		}
 	},
 	applyRemoteDeletes(deleted: { id: string; deleted_ts: number }[]) {
 		if (!deleted.length) return;
