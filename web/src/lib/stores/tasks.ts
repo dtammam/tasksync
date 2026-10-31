@@ -9,6 +9,7 @@ import { lists } from '$lib/stores/lists';
 import { api } from '$lib/api/client';
 import { streak } from '$lib/stores/streak';
 import {
+	nextDueAfterCurrent,
 	nextDueForRecurrence,
 	prevDueForRecurrence,
 	toLocalIsoDate
@@ -192,17 +193,8 @@ const sanitizeIncomingPuntState = (task: Task): Task => {
 	return { ...task, punted_from_due_date: undefined, punted_on_date: undefined };
 };
 
-const nextRecurringDueAfterCurrent = (task: Task) => {
-	const anchor = task.punted_from_due_date ?? task.due_date;
-	let next = nextDueForRecurrence(anchor, task.recurrence_id);
-	if (!next) return task.due_date;
-	while (task.due_date && next <= task.due_date) {
-		const candidate = nextDueForRecurrence(next, task.recurrence_id);
-		if (!candidate || candidate === next) break;
-		next = candidate;
-	}
-	return next;
-};
+const nextRecurringDueAfterCurrent = (task: Task) =>
+	nextDueAfterCurrent(task.due_date, task.punted_from_due_date, task.recurrence_id);
 
 const nextRecurringDueAfterToday = (task: Task) => {
 	const today = todayIso();
