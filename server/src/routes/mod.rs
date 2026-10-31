@@ -1,8 +1,14 @@
 mod auth;
+mod clock;
+#[cfg(test)]
+mod integration_api_tests;
 mod integrations;
 mod lists;
+mod recurrence;
 mod sync;
 mod tags;
+mod task_actions;
+mod task_views;
 mod tasks;
 pub(super) mod types;
 
@@ -12,7 +18,7 @@ pub use lists::list_routes;
 pub use sync::sync_routes;
 pub use tags::tag_routes;
 pub use tasks::task_routes;
-pub use types::validate_boot_secrets;
+pub use types::{validate_api_identity, validate_boot_secrets};
 
 #[cfg(test)]
 mod tests {
@@ -35,6 +41,7 @@ mod tests {
         SetListGrantBody, SetMemberPasswordBody, UpdateProfileBody, UpdateSoundSettingsBody,
         UpdateUiPreferencesBody,
     };
+    use super::clock::Clock;
     use super::integrations::{
         create_task_via_api_token, reject_log_message, unknown_list_log_message, ApiTaskError,
     };
@@ -48,8 +55,9 @@ mod tests {
         UpdateTaskMeta, UpdateTaskStatus,
     };
     use super::types::{
-        ctx_from_api_token, ctx_from_headers, hash_password, issue_token, unix_now_secs, AppState,
-        AuthClaims, AuthScope, Role, API_TOKEN_HEADER, BACKUP_SCHEMA_V1, UI_FONTS, UI_THEMES,
+        ctx_from_api_token, ctx_from_headers, hash_password, issue_token, unix_now_secs, ApiScopes,
+        AppState, AuthClaims, AuthScope, Role, API_TOKEN_HEADER, BACKUP_SCHEMA_V1, UI_FONTS,
+        UI_THEMES,
     };
 
     async fn setup_pool() -> SqlitePool {
@@ -138,7 +146,14 @@ mod tests {
     }
 
     fn test_state(pool: &SqlitePool) -> AppState {
-        AppState { pool: pool.clone(), jwt_secret: "test-secret".to_string(), api_token: None }
+        AppState {
+            pool: pool.clone(),
+            jwt_secret: "test-secret".to_string(),
+            api_token: None,
+            agent_token: None,
+            api_user_email: None,
+            clock: Clock::default(),
+        }
     }
 
     /// A state carrying a configured `TASK_API_TOKEN` (F-B enabled). Kept
@@ -150,6 +165,9 @@ mod tests {
             pool: pool.clone(),
             jwt_secret: "test-secret".to_string(),
             api_token: Some(token.to_string()),
+            agent_token: None,
+            api_user_email: None,
+            clock: Clock::default(),
         }
     }
 
@@ -2601,7 +2619,7 @@ mod tests {
         assert_eq!(ctx.user_id, "u-admin");
         assert_eq!(ctx.space_id, "s1");
         assert_eq!(ctx.role, Role::Admin);
-        assert_eq!(ctx.scope, AuthScope::ApiTaskCreate);
+        assert_eq!(ctx.scope, AuthScope::Api(ApiScopes::CREATE_ONLY));
     }
 
     #[tokio::test]
@@ -2846,10 +2864,10 @@ mod tests {
 
     #[tokio::test]
     async fn api_task_error_forbidden_scope_renders_403_with_coded_body() {
-        // `ctx_from_api_token` always resolves `AuthScope::ApiTaskCreate`,
-        // so gate 3 (the defense-in-depth scope assertion) cannot be driven
-        // to a mismatch through a full handler call on this route. Exercise
-        // the constructor the handler calls at that gate directly.
+        // Both configured tokens carry the create scope, so gate 3 (the
+        // defense-in-depth scope assertion) cannot be driven to a mismatch
+        // through a full handler call on this route. Exercise the
+        // constructor the handler calls at that gate directly.
         let err = ApiTaskError::forbidden_scope();
         assert_coded_error_response(err, axum::http::StatusCode::FORBIDDEN, "forbidden_scope")
             .await;
