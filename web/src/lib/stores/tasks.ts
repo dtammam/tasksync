@@ -455,12 +455,16 @@ export const tasks = {
 		// A sync that finishes My Day (e.g. a check-off made through the integration
 		// API) gets the day-complete celebration, but never a combo bump: the combo
 		// stays a live tap game. Only fires when a task that was pending here is now
-		// completed, so a remote reassignment or My Day removal does not count.
+		// completed today, so a remote punt, reassignment or My Day removal does not
+		// count (a punt-today task sits in myDayCompleted, hence the explicit check).
 		// triggerDayComplete() is itself once-per-day.
 		if (
-			pendingBeforeIds.size > 0 &&
 			get(myDayPending).length === 0 &&
-			get(myDayCompleted).some((task) => pendingBeforeIds.has(task.id))
+			get(tasksStore).some(
+				(task) =>
+					pendingBeforeIds.has(task.id) &&
+					(wasCompletedToday(task) || wasRecurringCompletedToday(task))
+			)
 		) {
 			streak.triggerDayComplete();
 		}

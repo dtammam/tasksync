@@ -214,6 +214,34 @@ describe('streak store — DDR daily reset', () => {
 		expect(get(streakState).countedTaskIds).toHaveLength(0);
 	});
 
+	it('a lastResetDate one day ahead (written under the old UTC rule) is not a new day', () => {
+		const originalTz = process.env.TZ;
+		process.env.TZ = 'America/New_York';
+		try {
+			// 23:30 on Oct 31 in New York; the old rule stored the UTC date, Nov 1.
+			vi.setSystemTime(new Date('2026-11-01T03:30:00Z'));
+			mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
+			setPrefsBlob({
+				streakState: { count: 42, countedTaskIds: ['task-1'], lastResetDate: '2026-11-01' }
+			});
+			streak.hydrateFromLocal();
+			streak.checkMissedTasksAndApplyDailyReset(0);
+			expect(get(streakState).count).toBe(42);
+		} finally {
+			process.env.TZ = originalTz;
+		}
+	});
+
+	it('a far-future lastResetDate (wrong device clock) still resets on a new day', () => {
+		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
+		setPrefsBlob({
+			streakState: { count: 42, countedTaskIds: ['task-1'], lastResetDate: '2099-05-01' }
+		});
+		streak.hydrateFromLocal();
+		streak.checkMissedTasksAndApplyDailyReset(0);
+		expect(get(streakState).count).toBe(0);
+	});
+
 	it('preserves count when lastResetDate is today in DDR mode', () => {
 		mocks.uiPreferences.get.mockReturnValue(enabledPrefs('daily'));
 		const today = localIso(new Date());
@@ -499,6 +527,13 @@ describe('streak store — day complete', () => {
 		} finally {
 			process.env.TZ = originalTz;
 		}
+	});
+
+	it('a far-future dayCompleteDate (wrong device clock) does not block day-complete', () => {
+		streak.hydrateFromServer(
+			JSON.stringify({ count: 0, countedTaskIds: [], lastResetDate: null, dayCompleteDate: '2099-05-01' })
+		);
+		expect(streak.triggerDayComplete()).toBe(true);
 	});
 
 	it('triggerDayComplete returns true on first call today', () => {

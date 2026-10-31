@@ -14,7 +14,7 @@ apps pick the change up on their next sync.
 | `TASK_API_TOKEN` | no | Create-only token: `POST /api/tasks`. At least 24 characters. |
 | `TASK_AGENT_TOKEN` | no | Read, complete, uncomplete and create. At least 24 characters, and must differ from `TASK_API_TOKEN`. Without it, the read and complete routes do not exist (empty `404`). |
 | `TASK_API_USER_EMAIL` | no | The member both tokens act as. "Today" and permissions follow this member. Unset means the oldest admin. If the email matches no member, the server refuses to boot. |
-| `TZ` | recommended | IANA zone (`America/New_York`) or a POSIX TZ string. Decides the server's "today". Unset means the host zone (UTC in the stock image), with a boot warning. An unknown zone refuses to boot. |
+| `TZ` | recommended | IANA zone (`America/New_York`) or a complete POSIX TZ string (`EST5EDT,M3.2.0,M11.1.0`; a DST zone needs both rules). Decides the server's "today". Unset means `/etc/localtime` (UTC in the stock image); set-but-empty means UTC. Both log a boot warning. A value the server can't load refuses to boot, rather than silently running on the wrong day. |
 
 Leave unused tokens out of the environment rather than setting them to an empty
 value: an empty token fails the length check at boot.
@@ -159,15 +159,20 @@ What completion does:
   including `emoji`, is untouched.
 - **One-off task:** `status` becomes `done` and `completed_ts` becomes now.
 
-Idempotency. The first two cases return `200` and write nothing:
+Idempotency. Every row that returns `already_done` writes nothing:
 
 | Situation | Result |
 |---|---|
 | One-off already `done` | `200`, `already_done: true` |
+| One-off pending, `expected_due_date` ≠ current `due_date` | `409 due_date_mismatch` |
 | Recurring, `expected_due_date` ≠ current `due_date`, completed today | `200`, `already_done: true` (your retry) |
 | Recurring, `expected_due_date` ≠ current `due_date`, not completed today | `409 due_date_mismatch` |
 | Recurring, no `expected_due_date`, completed today | `200`, `already_done: true` |
 | Recurring, `expected_due_date` = current `due_date` | Completes that occurrence, even if an earlier one was completed today |
+
+Always send `expected_due_date`. Without it, "completed today" is the only
+retry signal, so a retry that lands after local midnight completes the task
+again.
 
 ```sh
 curl -s -X POST https://api.example.com/api/tasks/6b0f…/complete \
@@ -199,10 +204,16 @@ response):
 
 - **Recurring task completed today:** `due_date` steps back,
   `occurrences_completed` goes down by 1 (never below 0), and `completed_ts` is
-  cleared. When `previous_due_date` is within one recurrence step before the
-  current due date, it is restored exactly. That matters at month ends and for
-  punted tasks. Otherwise the server steps back one occurrence, as the web
-  app's undo does. Punt state is not restored.
+  cleared (the earlier completion time is not kept, as in the web app's undo).
+  - When completing from `previous_due_date` would produce the current due
+    date, `previous_due_date` is restored exactly. That makes month-end undo
+    exact: Jan 31 → Feb 28 → Jan 31.
+  - Otherwise the server steps back one occurrence, as the web app's undo
+    does. A `previous_due_date` the task's cadence couldn't have produced is
+    ignored, so undo can't move a task to an arbitrary date.
+  - A punted task also takes the one-step-back path, since its pre-punt date
+    is gone after completion. Punt state is not restored.
+  - A recurring task with no due date ends with today's date as its due date.
 - **Done task:** `status` becomes `pending` and `completed_ts` is cleared.
 - **Nothing to undo** (a recurring task not completed today, or a task that is
   not `done`): `409 not_completed`.

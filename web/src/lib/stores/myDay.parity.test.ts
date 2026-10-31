@@ -30,7 +30,11 @@ const toTask = (t: (typeof fixture.tasks)[number]): Task => ({
 	checklist: [],
 	order: 'a',
 	created_ts: 0,
-	updated_ts: t.completed_at ? new Date(t.completed_at).getTime() : 0,
+	updated_ts: (() => {
+		const updatedAt = 'updated_at' in t ? t.updated_at : undefined;
+		const at = updatedAt ?? t.completed_at;
+		return at ? new Date(at).getTime() : 0;
+	})(),
 	dirty: false,
 	occurrences_completed: 0,
 	due_date: t.due_date ?? undefined,

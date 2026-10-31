@@ -16,7 +16,11 @@ use tower::Service;
 use super::clock::Clock;
 use super::integrations::integration_router;
 use super::sync::{sync_pull, SyncPullBody};
-use super::types::{issue_token, resolve_api_identity, AppState, Role, API_TOKEN_HEADER};
+use super::task_actions::{complete_loaded, uncomplete_loaded, ActionError, TASK_COLUMNS};
+use super::tasks::TaskRow;
+use super::types::{
+    check_api_identity, issue_token, resolve_api_identity, AppState, Role, API_TOKEN_HEADER,
+};
 
 const CREATE_TOKEN: &str = "create-only-token-0123456789abcdef";
 const AGENT_TOKEN: &str = "agent-token-0123456789abcdef-xyz";
@@ -80,6 +84,7 @@ struct Task<'a> {
     occurrences: i64,
     completed_ts: Option<i64>,
     created_by: &'a str,
+    updated_ts: i64,
 }
 
 impl Default for Task<'_> {
@@ -96,6 +101,7 @@ impl Default for Task<'_> {
             occurrences: 0,
             completed_ts: None,
             created_by: "u-admin",
+            updated_ts: SEEDED_UPDATED_TS,
         }
     }
 }
@@ -110,7 +116,7 @@ async fn insert(pool: &SqlitePool, t: Task<'_>) {
     .bind(t.title)
     .bind(t.status)
     .bind(i64::from(t.my_day))
-    .bind(SEEDED_UPDATED_TS)
+    .bind(t.updated_ts)
     .bind(t.rule)
     .bind(t.due)
     .bind(t.punted_from)
@@ -557,11 +563,27 @@ async fn uncomplete_without_previous_due_date_steps_back_like_the_web_app() {
 }
 
 #[tokio::test]
-async fn uncomplete_of_punted_task_restores_due_with_previous_due_date() {
+async fn uncomplete_of_punted_tasks() {
     let pool = pool().await;
+    // Punted daily: previous_due_date is an exact inverse, so it is restored.
     insert(
         &pool,
         Task {
+            id: "pd",
+            due: Some("2026-10-31"),
+            rule: Some("daily"),
+            punted_from: Some("2026-10-30"),
+            punted_on: Some("2026-10-30"),
+            ..Task::default()
+        },
+    )
+    .await;
+    // Punted weekly: the pre-punt date is not an inverse of the new due date,
+    // so undo steps back one occurrence onto the task's cadence instead.
+    insert(
+        &pool,
+        Task {
+            id: "pw",
             due: Some("2026-10-25"),
             rule: Some("weekly"),
             punted_from: Some("2026-10-24"),
@@ -570,9 +592,48 @@ async fn uncomplete_of_punted_task_restores_due_with_previous_due_date() {
         },
     )
     .await;
-    let (before, after) = complete_then_uncomplete(&pool, "t1", true).await;
-    for field in ["status", "due_date", "occurrences_completed", "completed_ts"] {
+    let (before, after) = complete_then_uncomplete(&pool, "pd", true).await;
+    for field in ["status", "due_date", "occurrences_completed"] {
         assert_eq!(after[field], before[field], "{field}");
+    }
+    let (_, after) = complete_then_uncomplete(&pool, "pw", true).await;
+    assert_eq!(after["due_date"], "2026-10-24");
+    assert_eq!(after["occurrences_completed"], 0);
+}
+
+#[tokio::test]
+async fn complete_uncomplete_cycles_cannot_walk_the_due_date() {
+    let pool = pool().await;
+    insert(
+        &pool,
+        Task { id: "w", due: Some("2026-10-31"), rule: Some("weekly"), ..Task::default() },
+    )
+    .await;
+    insert(
+        &pool,
+        Task { id: "a", due: Some("2026-10-31"), rule: Some("annual"), ..Task::default() },
+    )
+    .await;
+    let router = agent_router(&pool).await;
+    for (id, forged) in [
+        ("w", "2026-11-06"),
+        ("w", "2026-11-12"),
+        ("w", "2026-10-30"),
+        ("a", "2027-03-15"),
+        ("a", "2026-01-01"),
+    ] {
+        call(&router, Method::POST, &format!("/tasks/{id}/complete"), Some(AGENT_TOKEN), None)
+            .await;
+        let (status, _) = call_json(
+            &router,
+            Method::POST,
+            &format!("/tasks/{id}/uncomplete"),
+            Some(AGENT_TOKEN),
+            Some(json!({ "previous_due_date": forged })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(row(&pool, id).await["due_date"], "2026-10-31", "{id} {forged}");
     }
 }
 
@@ -712,4 +773,176 @@ async fn read_routes_return_today_view_and_lists() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body[0]["id"], "l-test");
     assert_eq!(body[0]["name"], "Agent Test");
+}
+
+// ── Guards (gate r1: each survived mutation before these tests) ─────────────
+
+async fn load(pool: &SqlitePool, id: &str) -> TaskRow {
+    sqlx::query_as::<_, TaskRow>(&format!("select {TASK_COLUMNS} from task where id = ?1"))
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .expect("load task")
+}
+
+async fn touch(pool: &SqlitePool, id: &str) {
+    sqlx::query(
+        "update task set updated_ts = updated_ts + 5, title = 'edited elsewhere' where id = ?1",
+    )
+    .bind(id)
+    .execute(pool)
+    .await
+    .expect("touch");
+}
+
+#[tokio::test]
+async fn a_write_that_lost_the_race_is_rejected_and_changes_nothing() {
+    let pool = pool().await;
+    insert(
+        &pool,
+        Task { id: "r", due: Some("2026-10-31"), rule: Some("daily"), ..Task::default() },
+    )
+    .await;
+    insert(&pool, Task { id: "o", ..Task::default() }).await;
+    let st = state(&pool, None, Some(AGENT_TOKEN));
+
+    for id in ["r", "o"] {
+        let stale = load(&pool, id).await;
+        touch(&pool, id).await;
+        let edited = row(&pool, id).await;
+        let err = complete_loaded(&st, stale, None).await.err();
+        assert_eq!(err, Some(ActionError::ConcurrentUpdate), "complete {id}");
+        assert_eq!(row(&pool, id).await, edited, "complete {id} must not write");
+    }
+
+    // Uncomplete, both branches.
+    let router = integration_router(st.clone());
+    for id in ["r", "o"] {
+        call(&router, Method::POST, &format!("/tasks/{id}/complete"), Some(AGENT_TOKEN), None)
+            .await;
+        let stale = load(&pool, id).await;
+        touch(&pool, id).await;
+        let edited = row(&pool, id).await;
+        let err = uncomplete_loaded(&st, stale, None, None).await.err();
+        assert_eq!(err, Some(ActionError::ConcurrentUpdate), "uncomplete {id}");
+        assert_eq!(row(&pool, id).await, edited, "uncomplete {id} must not write");
+    }
+}
+
+#[tokio::test]
+async fn stale_preconditions_are_rejected_on_every_branch() {
+    let pool = pool().await;
+    insert(&pool, Task { id: "o", due: Some("2026-11-02"), ..Task::default() }).await;
+    insert(
+        &pool,
+        Task { id: "r", due: Some("2026-10-31"), rule: Some("daily"), ..Task::default() },
+    )
+    .await;
+    let router = agent_router(&pool).await;
+
+    // One-off complete with a stale due date.
+    let (status, body) = call_json(
+        &router,
+        Method::POST,
+        "/tasks/o/complete",
+        Some(AGENT_TOKEN),
+        Some(json!({"expected_due_date": "2026-11-01"})),
+    )
+    .await;
+    assert_eq!(
+        (status, body["error"]["code"].as_str()),
+        (StatusCode::CONFLICT, Some("due_date_mismatch"))
+    );
+    assert_eq!(row(&pool, "o").await["status"], "pending");
+
+    // Uncomplete with a stale due date, recurring and one-off.
+    for id in ["r", "o"] {
+        call(&router, Method::POST, &format!("/tasks/{id}/complete"), Some(AGENT_TOKEN), None)
+            .await;
+        let before = row(&pool, id).await;
+        let (status, body) = call_json(
+            &router,
+            Method::POST,
+            &format!("/tasks/{id}/uncomplete"),
+            Some(AGENT_TOKEN),
+            Some(json!({"expected_due_date": "1999-01-01"})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT, "{id}");
+        assert_eq!(body["error"]["code"], "due_date_mismatch", "{id}");
+        assert_eq!(row(&pool, id).await, before, "{id} must not write");
+    }
+}
+
+#[tokio::test]
+async fn updated_ts_advances_past_a_future_stored_value() {
+    let pool = pool().await;
+    let future = noon_ms() + 10 * 60 * 1000;
+    insert(
+        &pool,
+        Task {
+            due: Some("2026-10-31"),
+            rule: Some("daily"),
+            updated_ts: future,
+            ..Task::default()
+        },
+    )
+    .await;
+    let router = agent_router(&pool).await;
+    call(&router, Method::POST, "/tasks/t1/complete", Some(AGENT_TOKEN), None).await;
+    assert_eq!(row(&pool, "t1").await["updated_ts"], future + 1);
+    call(&router, Method::POST, "/tasks/t1/uncomplete", Some(AGENT_TOKEN), None).await;
+    assert_eq!(row(&pool, "t1").await["updated_ts"], future + 2);
+}
+
+#[tokio::test]
+async fn a_recurring_task_marked_done_behaves_as_a_one_off() {
+    let pool = pool().await;
+    insert(
+        &pool,
+        Task {
+            status: "done",
+            due: Some("2026-10-31"),
+            rule: Some("daily"),
+            occurrences: 2,
+            ..Task::default()
+        },
+    )
+    .await;
+    let router = agent_router(&pool).await;
+    let before = row(&pool, "t1").await;
+    let (_, body) =
+        call_json(&router, Method::POST, "/tasks/t1/complete", Some(AGENT_TOKEN), None).await;
+    assert_eq!(body["already_done"], true);
+    assert_eq!(row(&pool, "t1").await, before);
+    call(&router, Method::POST, "/tasks/t1/uncomplete", Some(AGENT_TOKEN), None).await;
+    let after = row(&pool, "t1").await;
+    assert_eq!(after["status"], "pending");
+    assert_eq!(after["due_date"], "2026-10-31", "due date untouched");
+    assert_eq!(after["occurrences_completed"], 2);
+}
+
+#[tokio::test]
+async fn an_unparseable_query_is_coded_and_only_after_the_gates() {
+    let pool = pool().await;
+    let uri = "/tasks?view=today&view=all";
+    let off = integration_router(state(&pool, Some(CREATE_TOKEN), None));
+    let (status, body) = call(&off, Method::GET, uri, Some(CREATE_TOKEN), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body.is_empty(), "feature-off must stay concealed");
+
+    let on = agent_router(&pool).await;
+    let (status, _) = call(&on, Method::GET, uri, None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, body) = call_json(&on, Method::GET, uri, Some(AGENT_TOKEN), None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"]["code"], "invalid_query");
+}
+
+#[tokio::test]
+async fn boot_identity_check_rejects_an_unknown_email() {
+    let pool = pool().await;
+    check_api_identity(&pool, None).await.expect("unset is fine");
+    check_api_identity(&pool, Some("Admin@Example.com")).await.expect("known email is fine");
+    assert!(check_api_identity(&pool, Some("nobody@example.com")).await.is_err());
 }

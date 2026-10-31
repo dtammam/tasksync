@@ -1833,6 +1833,23 @@ describe('tasks mergeRemote day-complete (remote check-off)', () => {
 		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
 	});
 
+	it('does not fire when another device punts the last pending task', () => {
+		tasks.setAll([
+			baseTask({ id: 'w', due_date: '2026-10-31', recurrence_id: 'weekly' }),
+			baseTask({ id: 'b', my_day: true, status: 'done', completed_ts: Date.now() - 1000 })
+		]);
+		tasks.mergeRemote([
+			baseTask({
+				id: 'w',
+				due_date: '2026-11-01',
+				recurrence_id: 'weekly',
+				punted_from_due_date: '2026-10-31',
+				punted_on_date: '2026-10-31'
+			})
+		]);
+		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
+	});
+
 	it('does not fire while My Day still has pending tasks', () => {
 		tasks.setAll([baseTask({ id: 'a', my_day: true }), baseTask({ id: 'c', my_day: true })]);
 		tasks.mergeRemote([

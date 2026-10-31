@@ -281,8 +281,16 @@ pub(super) async fn resolve_api_identity(
 /// Post-migration boot check: a configured `TASK_API_USER_EMAIL` must name a
 /// member, or every API call would fail at request time instead of at boot.
 pub async fn validate_api_identity(pool: &SqlitePool) -> Result<(), String> {
-    let Some(email) = non_empty_env("TASK_API_USER_EMAIL") else { return Ok(()) };
-    match resolve_api_identity(pool, Some(&email)).await {
+    check_api_identity(pool, non_empty_env("TASK_API_USER_EMAIL").as_deref()).await
+}
+
+/// `validate_api_identity` without the env read, for tests.
+pub(super) async fn check_api_identity(
+    pool: &SqlitePool,
+    email: Option<&str>,
+) -> Result<(), String> {
+    let Some(email) = email else { return Ok(()) };
+    match resolve_api_identity(pool, Some(email)).await {
         Ok(Some(_)) => Ok(()),
         Ok(None) => Err(format!(
             "TASK_API_USER_EMAIL=\"{email}\" matches no member — fix it or unset it to act as the oldest admin"
@@ -420,8 +428,10 @@ pub(super) async fn ctx_from_api_token(
     let Some(provided) = headers.get(API_TOKEN_HEADER).and_then(|v| v.to_str().ok()) else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    // Both comparisons always run, so timing does not reveal which token
-    // (if any) is configured.
+    // Both lookups run regardless of which one matches, so timing does not
+    // reveal WHICH configured token was presented. (An unset token skips its
+    // hash; whether `TASK_AGENT_TOKEN` is set is already observable through
+    // the concealed 404 by design.)
     let matches =
         |configured: Option<&str>| configured.is_some_and(|c| constant_time_eq(provided, c));
     let agent_match = matches(state.agent_token.as_deref());
@@ -781,7 +791,8 @@ pub(super) fn normalize_task_priority(raw: Option<i64>) -> Result<Option<i64>, S
 #[cfg(test)]
 mod tests {
     use super::{
-        constant_time_eq, validate_api_token_length, validate_secret, JWT_SECRET_DENYLIST,
+        constant_time_eq, validate_api_token_length, validate_distinct_api_tokens,
+        validate_named_token_length, validate_secret, JWT_SECRET_DENYLIST,
     };
 
     // The full fail-closed matrix is tested through the PURE `validate_secret`
@@ -889,5 +900,27 @@ mod tests {
         let err = validate_api_token_length(Some(&value)).unwrap_err();
         assert!(err.contains("TASK_API_TOKEN"), "error should name the variable: {err}");
         assert!(err.contains("24"), "error should state the minimum length: {err}");
+    }
+
+    #[test]
+    fn agent_token_gets_the_same_minimum_length() {
+        let short = "a".repeat(super::API_TOKEN_MIN_LEN - 1);
+        let err = validate_named_token_length("TASK_AGENT_TOKEN", Some(&short)).unwrap_err();
+        assert!(err.contains("TASK_AGENT_TOKEN"), "error should name the variable: {err}");
+        assert!(validate_named_token_length("TASK_AGENT_TOKEN", Some("   ")).is_err());
+        let ok = "a".repeat(super::API_TOKEN_MIN_LEN);
+        validate_named_token_length("TASK_AGENT_TOKEN", Some(&ok)).expect("minimum length is fine");
+        validate_named_token_length("TASK_AGENT_TOKEN", None).expect("absent is fine");
+    }
+
+    #[test]
+    fn equal_api_and_agent_tokens_fail_boot() {
+        let token = "a-genuinely-random-32-char-token";
+        assert!(validate_distinct_api_tokens(Some(token), Some(token)).is_err());
+        assert!(validate_distinct_api_tokens(Some(token), Some(&format!(" {token} "))).is_err());
+        validate_distinct_api_tokens(Some(token), Some("another-genuinely-random-token"))
+            .expect("distinct tokens are fine");
+        validate_distinct_api_tokens(Some(token), None).expect("one token is fine");
+        validate_distinct_api_tokens(None, None).expect("no tokens is fine");
     }
 }

@@ -86,7 +86,7 @@ taken as intent, not as spec; deviations from it are recorded below.
 
 - A1 `cargo test`: create-only token → 403 `forbidden_scope` on `GET /api/tasks`, `GET /api/lists`, `POST …/complete`, `POST …/uncomplete`; agent token → 2xx on all four and on `POST /api/tasks`; no/wrong token → 401 `unauthorized`; no tokens configured → empty-body 404.
 - A2 `cargo test`: completing a daily, weekly, punted daily, and one-off task yields the field values in D4; a second identical call returns `already_done:true` and leaves `updated_ts` unchanged.
-- A3 `cargo test`: uncomplete after complete restores `due_date`, `occurrences_completed`, `completed_ts`, `status` byte-identical, including a Jan 31 monthly and a punted task when `previous_due_date` is supplied.
+- A3 `cargo test`: uncomplete after complete restores `due_date`, `occurrences_completed` and `status` byte-identical, including a Jan 31 monthly when `previous_due_date` is supplied. `completed_ts` returns to null, which is byte-identical only when it was null before; an earlier completion time is not kept, matching the web undo. A punted task steps back onto its cadence. *(Amended at gate r1: Adversary W5, QA S8.)*
 - A4 `cargo test`: a completion's row appears in `/sync/pull` with `since_ts` = pre-completion cursor.
 - A5 vitest + `cargo test` both consume the same case-table file and pass; the table has ≥1 case per rule, plus month-end, leap-day, punt and DST cases; Jan 31 monthly → Feb 28 (2026) / Feb 29 (2028).
 - A6 `cargo test`: `view=today` on a seeded fixture returns exactly the ids the web `myDayPending` predicate selects for the same fixture and date (fixture shared, or ids asserted on both sides).
@@ -178,8 +178,8 @@ records the design rather than holding for a separate approval.
   the current `due_date`.
 - `POST /api/tasks/:id/uncomplete` `{previous_due_date?, expected_due_date?}` →
   `200 {task, uncompleted:true}`. `previous_due_date` is honored only if
-  `prev_due(current) <= previous < current`; otherwise `prev_due(current)` is
-  used. One-off: any `done` task. Recurring: only when completed today.
+  `next_due(previous) == current` (an exact inverse, as D5 says); otherwise
+  `prev_due(current)` is used. One-off: any `done` task. Recurring: only when completed today.
 - Errors:
   - 401 `unauthorized`
   - 403 `forbidden_scope` / `forbidden`
@@ -187,7 +187,7 @@ records the design rather than holding for a separate approval.
   - 400 `invalid_request` (malformed date)
   - 409 `due_date_mismatch` (expected ≠ current and not completed today)
   - 409 `not_completed` (uncomplete with nothing to undo)
-  - 409 `conflict` (concurrent write lost the race)
+  - 409 `concurrent_update` (concurrent write lost the race)
 
 ### Steps
 
@@ -220,7 +220,7 @@ records the design rather than holding for a separate approval.
 
 - Read `GET /api/lists` returns full `ListRow` (superset), not the brief's 4 fields.
 - 409 is split into three codes (`due_date_mismatch`, `not_completed`,
-  `conflict`) instead of one `conflict`. The status is still 409, and the
+  `concurrent_update`) instead of one `conflict`. The status is still 409, and the
   consumer will be told at ship.
 - D11: `docs/SECURITY.md` has no token section, so the security-relevant
   contract lives in the `ARCHITECTURE.md` API bullet and in `docs/API.md`.
@@ -234,6 +234,12 @@ records the design rather than holding for a separate approval.
   and stays there (the overflow it replaces drifted too). `lastDayOfMonth` is the
   rule for true month-end tasks. Documented in `docs/API.md`.
 
+- Gate r1, D5: the Design briefly widened D5's exact-inverse check to a
+  `[prev_due(current), current)` window, to make punted undo exact. The
+  Adversary showed that window can walk a due date forward without limit
+  through complete/uncomplete cycles. Reverted to D5 as approved: exact inverse
+  only. Punted undo steps back onto the cadence (A3 amended).
+
 ## Follow-ups (not in this change)
 
 - The web app's own undo (`undoRecurringCompletion`) still steps back with
@@ -242,3 +248,43 @@ records the design rather than holding for a separate approval.
 - On deploy to beta: set `TZ`, `TASK_AGENT_TOKEN`, and optionally
   `TASK_API_USER_EMAIL` in `/srv/docker/tasksync-beta`'s server environment, then
   notify SANDYJAR Host Root with the `docs/API.md` path and the commit or tag.
+
+## Gate
+
+Seats: adversary, qa, security-brief (scrutiny: auth-and-secrets via `.env.example`, `force = true`). Base `af599b1`, reviewed `a1d3d50`.
+
+Gate: APPROVED r1 @a1d3d50 — security-brief
+- GAP: the seat has no shell, so it could not run `git diff af599b1..a1d3d50`. It read the HEAD files directly. A11 (`Cargo.toml` deps unchanged vs. base) is NOT verified by this seat. The current `[dependencies]` contain no surprising crate, and `Dockerfile` adds only Debian `tzdata`.
+- LOW: uncomplete's `previous_due_date` accepts any date in `[prev_due(current), current)`. That is looser than D5's "next_due(previous) == current". An agent-token holder can complete and then uncomplete to move a recurring task's due date back by up to one step (a year for yearly rules), which flags it as missed. The move is bounded, needs the agent token, and loses no data. Accept, or tighten to `next_due_after_current(previous) == current`.
+- INFO: the `ctx_from_api_token` comment says timing "does not reveal which token is configured". That is inaccurate: `is_some_and` skips hashing for an unset token, so 0, 1 or 2 SHA-256 runs happen. The difference can't be measured remotely, and the concealed 404 already reveals whether the agent token is set, by design. Fix the comment.
+- INFO: a contributor identity gets 403 `forbidden` rather than 404 for a task that exists but isn't theirs, which confirms the id exists. Completion checks creator only, not `list_grant`. Both mirror `update_task_status_for_ctx`, so this is not new.
+- INFO: an absolute-path `TZ` accepts any existing file (chrono then silently falls back to UTC). Only the operator can set it, and no request data reaches `validate_tz`.
+- Verified clean: scope gating on all 5 routes; the create-only token gets 403 on read and complete; boot rejects equal or short tokens; no token in any log; error bodies are static; `TASK_COLUMNS` is the only `format!` input to SQL.
+
+
+Gate: CHANGES r1 @a1d3d50 — qa
+- WARNING server/src/routes/integrations.rs:337 (`Query<TaskQuery>`): a duplicated key (`GET /api/tasks?view=a&view=b`) fails serde_urlencoded ("duplicate field `view`", verified) inside axum's extractor, before the handler runs. With TASK_AGENT_TOKEN unset that returns a plain-text 400 instead of the concealed empty 404, which reveals the route exists. With it set, the 400 is uncoded and breaks API.md's "every error has the same shape". The TaskQuery doc comment says this cannot happen. Fix: take `Result<Query<TaskQuery>, QueryRejection>` (or RawQuery), run the feature-off gate and authorize first, then map the rejection to `invalid_query`. Test both modes.
+- WARNING web/src/lib/stores/streak.ts:196,231: the `>=` / `<` comparisons place no upper limit on a stored date. If any device once wrote a future dayCompleteDate or lastResetDate (a wrong clock, a bad blob; the state syncs through the prefs blob), day-complete and the daily reset stay off until that date. Before this change, `!==` recovered the next day. Fix: only treat a value as "today" when it equals today or today+1 (the UTC-skew window), and treat anything else as a new day.
+- WARNING docs/ARCHITECTURE.md:89 and server/src/routes/integrations.rs:242-249: both still say the feature-off gate is `TASK_API_TOKEN` unset and name `AuthScope::ApiTaskCreate`. That type is gone, and TASK_AGENT_TOKEN alone now enables POST /api/tasks (`agent_token_alone_enables_create`). Fix: update both to match the code.
+- SUGGESTION server/src/routes/clock.rs:78-83: validate_tz accepts any regular file, such as `TZ=zone.tab`, `TZ=iso3166.tab` or `TZ=/etc/passwd`. chrono then fails to parse it and silently uses UTC, which is the exact case D3 says boot catches. Fix: check for the `TZif` magic.
+- SUGGESTION clock.rs:71 and docker-compose.yml `TZ: ${TZ:-}`: an empty TZ makes chrono use UTC, not /etc/localtime, but the boot warning says "host zone". This makes no difference in the stock image.
+- SUGGESTION docs/API.md, idempotency table: "The first two cases return 200" should be three rows (1, 2 and 4). The table also omits that a pending one-off with a wrong expected_due_date returns 409 due_date_mismatch.
+- SUGGESTION, this plan: Design and Deviations still name `409 conflict` for a lost race, but the code and API.md use `concurrent_update`. D5's "next_due(prev)==current" check became the range `[prev_due(cur), cur)`, and Deviations does not record that.
+- SUGGESTION A3 / task_actions.rs uncomplete: a prior non-null completed_ts (for example yesterday's) becomes null, not "byte-identical". The tests only seed a null completed_ts, so this part of A3 is unbound. Nothing visible changes, since only today-checks read it, and the web undo does the same. Reword A3 or record it.
+- SUGGESTION, tests: there are no tests for validate_distinct_api_tokens (the scope-escalation guard), TASK_AGENT_TOKEN length, validate_api_identity boot failure, or next_updated_ts with a stored updated_ts greater than now. The A4 test seeds updated_ts=1000.
+
+Gate: CHANGES r1 @a1d3d50 — adversary
+- Instruments @a1d3d50: cargo fmt --check exit 0; clippy --all-targets -D warnings exit 0; cargo test 144 passed / 0 failed (seed bin 0 tests); web lint exit 0; svelte-check 0 errors 0 warnings; vitest 31 files, 475 passed. Recurrence fixture: all 84 expected values match an independent Python model. A11: no diff in Cargo.toml, Cargo.lock or package*.json between af599b1 and a1d3d50.
+- WARNING server/src/routes/clock.rs:282-332 (A12/D3): validate_tz returns Ok for values that chrono 0.4.43 cannot parse, so chrono falls back to UTC (offset/local/unix.rs:103 current_zone; tz_info/rule.rs from_tz_string returns "DST start and end rules must be provided"). Verified by running the test binary's clock child at 2026-10-31T23:30Z: `CET-1CEST`, `AEST-10AEDT`, `XYZ-3garbage`, `Europe/Paris ` (trailing space; validate trims and chrono does not) and `zone1970.tab` all give 2026-10-31, the UTC date, where the zone's date is 11-01. `EST5EDT,M3.2.0` is also accepted. The clock test `posix_strings_are_accepted_without_zoneinfo` treats `CET-1CEST` as valid. Fix: mirror chrono's grammar (a DST name requires `,start,end`, no trailing data), reject a value that trim changes, and require the TZif magic for files. Add these values as tests that must be rejected.
+- WARNING web/src/lib/stores/tasks.ts:460-466 (D10): a remote punt of the last pending My Day task fires day-complete. myDayCompleted includes wasPuntedToday, and the guard only checks membership in it. Verified with vitest: setAll a pending weekly task due 2026-10-31, then mergeRemote the punted version (my_day false, due 11-01, punted_on 10-31). triggerDayComplete is called once. A local `tasks.punt()` of the same task calls streak.break and does not fire. The comment "only fires when a task that was pending here is now completed" is false. Fix: require `wasCompletedToday || wasRecurringCompletedToday` on the transitioned task, not myDayCompleted membership. Add the punt test.
+- WARNING server/src/routes/task_actions.rs:229-233 (D5): the `[prev_due(current), current)` window lets a caller write due dates the task never had, and repeated cycles move a due date forward with no limit. Verified: a weekly task due 10-31 went through 4 complete→uncomplete cycles with previous_due_date 11-06, 11-12, 11-18, 11-24. Every call returned 200, the due date ended at 2026-11-24 (off its cadence), and occurrences stayed at 3. An annual task went to 2027-03-15 in one cycle. This contradicts D5 ("validated, so not arbitrary write") and the comment at :203 ("can only undo, never move a task arbitrarily"). Deviations does not record the change. Fix: accept only exact inverses (`next_due(prev)==current` or `prev==prev_due(current)`) and restate A3 for punted tasks, or return an unforgeable undo token from complete (an HMAC over the pre-completion fields and the post-write updated_ts) and restore from it. The token would also make punt and completed_ts exact. Add a test that a complete/uncomplete loop cannot move the due date past its original value.
+- WARNING server/src/routes/task_actions.rs:138,167,239,261,101 + :225,:257/:163: these guards are present but no test exercises them. Each mutant passed all 22 integration tests. Mutants: drop `updated_ts = ?N` from the recurring or one-off UPDATE (the lost-update CAS, named surface 1); drop uncomplete's expected_due_date check; drop the one-off complete expected check; change `next_updated_ts` to `now`. Fix: split the write step out so a test can bump updated_ts between read and write and assert 409 concurrent_update with the row unchanged. Add a stale-expected test for uncomplete and for the one-off, and seed updated_ts > now.
+- WARNING A3 (and the tests at integration_api_tests.rs:517-578): completed_ts is not restored "byte-identical". Verified: a daily task with completed_ts from yesterday evening ends with completed_ts null after complete+uncomplete. Every A3 fixture seeds null, so the fixture never reaches this path. Fix: restore it (the undo token above would) or amend A3.
+- SUGGESTION task_actions.rs:128: a retry without expected_due_date that crosses local midnight completes twice. Verified: complete at 23:59:59, retry at 00:00:01, and the task ends with occurrences 2 and due 11-02. Fix: state the midnight case in API.md next to "send the due_date you read".
+- SUGGESTION task_actions.rs:236: undo of a recurring task that had no due_date sets due_date to today (verified: null before, 2026-10-31 after).
+- SUGGESTION tasks.ts:461: `pendingBeforeIds.size > 0` is dead code because `.some(...has)` implies it. The mutant that removes it passes all 87 tasks tests.
+- SUGGESTION shared/fixtures/my-day-cases.json: two cases are missing on both sides. Without a done task whose completed_ts is null, the updated_ts-fallback mutant survives in TS and in Rust (tasks.ts:995, task_views.rs:89). Without a recurring task in `done`, dropping `status==='pending'` from wasRecurringCompletedToday (TS) and dropping `status!="done"` from uses_recurring_path (Rust) both survive.
+- SUGGESTION streak.ts:196,231: the `<` reset change and the date regex both survive mutation (55/55 green). QA's upper-bound finding is the same issue.
+- SUGGESTION boot checks have no tests. validate_distinct_api_tokens survives its mutant (139/139). Removing safe_name from clock.rs:321 also survives.
+- SUGGESTION stale text: ARCHITECTURE.md:89 and integrations.rs:241-250 (`ApiTaskCreate`, gate "api_token.is_none()"). This plan's Design and Deviations still say `409 conflict`, but the wire code is `concurrent_update`.
+- Clean (mutant killed): retry→already_done (both variants), the window's lower bound, uncomplete's completed-today check, contributor 403, punt clearing, My Day missed/assignee/in-my-day, recurrence `<=`, anchor order, weekdays and lastDayOfMonth prev, the TS setMonth overflow, the merge trigger and `.some` guard, streak `>=` and the UTC todayIso, the agent feature-off gate, role-from-membership, and create-only scope.

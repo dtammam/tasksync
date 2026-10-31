@@ -13,7 +13,7 @@
 
 use axum::{
     body::Bytes,
-    extract::{Path, Query, State},
+    extract::{rejection::QueryRejection, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -240,14 +240,15 @@ fn log_create_rejection(err: &ApiTaskError, list_id: &str) {
 /// Ingest handler for the programmatic task-creation API.
 ///
 /// Order matters:
-/// 1. Feature-off gate — `state.api_token.is_none()` means `TASK_API_TOKEN`
-///    was never configured, so the endpoint does not exist at all (`404`),
-///    checked BEFORE calling the verifier so an unset token never reaches
-///    `ctx_from_api_token` (which would otherwise return `401`).
+/// 1. Feature-off gate — neither `TASK_API_TOKEN` nor `TASK_AGENT_TOKEN` is
+///    configured (both carry the create scope), so the endpoint does not
+///    exist at all (`404`), checked BEFORE calling the verifier so an unset
+///    token never reaches `ctx_from_api_token` (which would otherwise return
+///    `401`).
 /// 2. `ctx_from_api_token` authenticates the header against the configured
-///    token and resolves the owner identity server-side.
-/// 3. A defense-in-depth scope assertion — this is the read that makes
-///    `AuthScope::ApiTaskCreate` and `RequestCtx.scope` genuinely used.
+///    tokens and resolves the acting identity server-side.
+/// 3. A defense-in-depth scope assertion (`ApiScope::Create`) via
+///    `authorize`.
 /// 4. The shared `create_task_for_ctx` path — identical validation,
 ///    idempotency, and tombstone-clear behavior to the browser create-task
 ///    route and the sync path.
@@ -328,8 +329,10 @@ pub(super) async fn get_lists_via_api_token(
 }
 
 /// Query string for `GET /api/tasks`. Every field is a raw string so a bad
-/// value yields the coded `invalid_query` error rather than axum's
-/// plain-text extractor rejection.
+/// value yields the coded `invalid_query` error. The handler takes the
+/// extractor as a `Result`, so a query serde cannot parse at all (e.g. a
+/// repeated `view=`) is also mapped to `invalid_query` — and only after the
+/// feature-off gate and authentication, so it cannot reveal the route.
 #[derive(Deserialize)]
 pub(super) struct TaskQuery {
     pub(super) view: Option<String>,
@@ -369,11 +372,13 @@ pub(super) struct TaskListResponse {
 pub(super) async fn get_tasks_via_api_token(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Query(query): Query<TaskQuery>,
+    query: Result<Query<TaskQuery>, QueryRejection>,
 ) -> Result<Json<TaskListResponse>, ApiTaskError> {
     agent_routes_enabled(&state)?;
     let ctx = authorize(&state, &headers, ApiScope::Read).await?;
-    let filters = parse_task_query(query)
+    let filters = query
+        .ok()
+        .and_then(|Query(query)| parse_task_query(query))
         .ok_or_else(|| reject(ApiTaskError::coded(StatusCode::BAD_REQUEST, "invalid_query")))?;
     let rows = get_tasks_for_ctx(&state, &ctx)
         .await

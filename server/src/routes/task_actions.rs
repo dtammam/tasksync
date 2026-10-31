@@ -15,11 +15,13 @@ use chrono::NaiveDate;
 use serde::Serialize;
 
 use super::clock::local_date_of_ms;
-use super::recurrence::{is_recurrence_rule, next_due_after_current, parse_iso_date, prev_due};
+use super::recurrence::{
+    format_iso_date, is_recurrence_rule, next_due, next_due_after_current, parse_iso_date, prev_due,
+};
 use super::tasks::TaskRow;
 use super::types::{AppState, RequestCtx, Role};
 
-const TASK_COLUMNS: &str = "id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id";
+pub(super) const TASK_COLUMNS: &str = "id, space_id, title, status, list_id, my_day, priority, task_order as \"order\", updated_ts, created_ts, url, recur_rule, due_date, punted_from_due_date, punted_on_date, emoji, occurrences_completed, completed_ts, notes, assignee_user_id, created_by_user_id";
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum ActionError {
@@ -109,6 +111,17 @@ pub(super) async fn complete_task_for_ctx(
 ) -> Result<CompleteOutcome, ActionError> {
     validate_optional_date(expected_due_date)?;
     let task = load_task(state, ctx, id).await?;
+    complete_loaded(state, task, expected_due_date).await
+}
+
+/// The decision and the guarded write for an already-loaded (and
+/// permission-checked) `task`. Split from `complete_task_for_ctx` so a test
+/// can change the row between the read and the write.
+pub(super) async fn complete_loaded(
+    state: &AppState,
+    task: TaskRow,
+    expected_due_date: Option<&str>,
+) -> Result<CompleteOutcome, ActionError> {
     let today = state.clock.today();
     let now = state.clock.now_ms();
 
@@ -198,12 +211,16 @@ fn already_done(task: TaskRow) -> CompleteOutcome {
 /// Undo a completion.
 ///
 /// - Recurring task completed today: due date steps back, occurrences
-///   decrement (floor 0), `completed_ts` clears. `previous_due_date` (from the
-///   complete response) is restored when it lies in
-///   `[prev_due(current), current)` — one recurrence step, so it can only undo,
-///   never move a task arbitrarily — which makes the undo exact for month-end
-///   and punted tasks. Otherwise the step back is `prev_due(current)`, as the
-///   web app does. Punt state is not restored (the web undo does not either).
+///   decrement (floor 0), `completed_ts` clears (the prior completion time is
+///   not kept anywhere; the web undo clears it too). `previous_due_date` (from
+///   the complete response) is restored only when it is an exact inverse —
+///   `next_due(previous) == current` — which makes month-end undo exact
+///   (Jan 31 → Feb 28 → Jan 31) while giving a caller no way to pick a date
+///   the task's cadence would not produce: repeated complete/uncomplete cycles
+///   cannot walk the due date anywhere. Otherwise the step back is
+///   `prev_due(current)`, as the web app does; that is also what a punted
+///   task gets (its pre-punt anchor is not recoverable). Punt state is not
+///   restored (the web undo does not either).
 /// - Done task: back to `pending`, `completed_ts` cleared.
 pub(super) async fn uncomplete_task_for_ctx(
     state: &AppState,
@@ -215,6 +232,17 @@ pub(super) async fn uncomplete_task_for_ctx(
     validate_optional_date(previous_due_date)?;
     validate_optional_date(expected_due_date)?;
     let task = load_task(state, ctx, id).await?;
+    uncomplete_loaded(state, task, previous_due_date, expected_due_date).await
+}
+
+/// The decision and the guarded write for an already-loaded `task`; see
+/// `complete_loaded`.
+pub(super) async fn uncomplete_loaded(
+    state: &AppState,
+    task: TaskRow,
+    previous_due_date: Option<&str>,
+    expected_due_date: Option<&str>,
+) -> Result<UncompleteOutcome, ActionError> {
     let today = state.clock.today();
     let now = state.clock.now_ms();
 
@@ -228,10 +256,11 @@ pub(super) async fn uncomplete_task_for_ctx(
         let rule = task.recur_rule.as_deref().unwrap_or_default();
         let restored = match task.due_date.as_deref().and_then(parse_iso_date) {
             Some(current) => {
-                let floor = prev_due(current, rule);
-                let requested = previous_due_date.and_then(parse_iso_date);
-                let date = requested.filter(|p| floor <= *p && *p < current).unwrap_or(floor);
-                Some(super::recurrence::format_iso_date(date))
+                let exact = previous_due_date
+                    .and_then(parse_iso_date)
+                    .filter(|previous| next_due(*previous, rule) == Some(current));
+                let date = exact.unwrap_or_else(|| prev_due(current, rule));
+                Some(format_iso_date(date))
             }
             None => task.due_date.clone(),
         };

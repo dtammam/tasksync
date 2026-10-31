@@ -173,6 +173,8 @@ mod tests {
         due_date: Option<String>,
         recur_rule: Option<String>,
         completed_at: Option<String>,
+        #[serde(default)]
+        updated_at: Option<String>,
         assignee_user_id: Option<String>,
         created_by_user_id: Option<String>,
     }
@@ -197,6 +199,7 @@ mod tests {
 
     fn row(t: FixtureTask) -> TaskRow {
         let completed_ts = t.completed_at.as_deref().map(local_ms);
+        let updated_ts = t.updated_at.as_deref().map(local_ms).or(completed_ts).unwrap_or(0);
         TaskRow {
             id: t.id,
             space_id: "s1".into(),
@@ -206,7 +209,7 @@ mod tests {
             my_day: i64::from(t.my_day),
             priority: 0,
             order: "a".into(),
-            updated_ts: completed_ts.unwrap_or(0),
+            updated_ts,
             created_ts: 0,
             url: None,
             recur_rule: t.recur_rule,
