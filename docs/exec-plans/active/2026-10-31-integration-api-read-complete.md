@@ -4,8 +4,8 @@ harness: v2 · lean
 branch: feat/integration-api-read-complete
 anchor: spec
 status: Approved
-next: Run /gate (Adversary + QA + Security) against HEAD
-gate: pending
+next: Dean merges the PR; then /release (deploy env: TZ, TASK_AGENT_TOKEN, TASK_API_USER_EMAIL) and notify SANDYJAR Host Root
+gate: APPROVED @22f2b5f (adversary r4, qa r4, security-brief r4)
 ---
 
 # Scoped integration API: read, complete, uncomplete
@@ -347,3 +347,23 @@ Gate: CHANGES r3 @60a565e — adversary
 
   r2 restored all three exactly. The day-of-month change is permanent: the task then recurs on the 30th, or the 28th. Only Jan 31 is tested, and it passes because December has 31 days. docs/API.md still promises "month-end undo exact". Fix: replace the generic clause with a per-rule check: `weekdays` → previous is not a weekend; `lastDayOfMonth` → previous is the last day of its month; every other rule → true. Add round-trip tests for monthly 03-31 and 10-31 and annual 2024-02-29. The cadence mutants (R1/R2) are killed today, and the Sunday and 10-03 rejections still hold under the per-rule check.
 - SUGGESTION: whitespace check kept as defense-in-depth. Accepted.
+
+Gate: APPROVED r4 @22f2b5f — security-brief
+- Correction to my r3: I approved the generic `next_due(prev_due(P)) == P` clause as "narrows, never widens". That was true for security, but I missed that it also refused real month ends (Mar 31, Feb 29), which the Adversary caught.
+- The no-walk argument still holds, checked by reading the code (no shell). Line 116 still requires `next_due(previous, rule) == Some(current)` as a conjunct. The new per-rule clause (`weekdays` not a weekend; `lastDayOfMonth` where `succ().day() == 1`; every other rule `true`) can only remove dates from the exact-preimage set, never add any. So every accepted P is a one-step preimage of `current`. Completing from P (punt cleared, due = P): `next_due_after_current(P, None, rule)` = `next_due(P)` = `current`, which is greater than P, so the advance loop does not run and the due date returns to `current`. A refused P falls back to `prev_due(current)`, which `uncomplete_loaded` computes on the server and the caller does not control. The write stays bounded to one step, with no walk.
+- No new security surface: no change to auth, scopes, logging, SQL or `TZ`. GAP: this seat has no shell, so tests and A11 rely on the QA and Adversary runs.
+
+Gate: APPROVED r4 @22f2b5f — qa
+- Instruments @22f2b5f: cargo fmt --check exit 0; clippy --all-targets -D warnings exit 0; cargo test "154 passed; 0 failed" (seed bin 0); web lint exit 0; svelte-check "0 errors and 0 warnings"; vitest "31 passed (31) / 480 passed (480)".
+- Correction to my r3: I checked the generic cadence clause only against Jan 31. It does reject Mar 31 (prev_due → Feb 28 → Mar 28 ≠ Mar 31) and Feb 29. The Adversary's r3 block was right, and my r3 approval missed it.
+- task_actions.rs `is_exact_previous`: correct now. weekdays rejects only Sat/Sun, lastDayOfMonth accepts only a month's last day (`succ().day()==1`), and every other rule is exact-inverse only. Checked by hand: the preimages of a weekdays Monday are Fri/Sat/Sun → Fri only; lastDayOfMonth the 3rd/17th rejected; monthly Mar 31 → Apr 30 → Mar 31 exact; the cycle test (`complete_uncomplete_cycles_cannot_walk_the_due_date`, forged l/k cases) still passes.
+- The new test `uncomplete_with_previous_due_date_is_exact_for_every_month_end` round-trips 8 rule/date pairs byte-identical (minus updated_ts), including the r3 regression cases.
+- API.md: the new sentence about weekend-dated weekdays tasks is accurate and closes my r3 suggestion.
+- No new findings.
+
+Gate: APPROVED r4 @22f2b5f — adversary
+- Instruments @22f2b5f: cargo fmt --check exit 0; clippy -D warnings exit 0; cargo test 154 passed / 0 failed (seed 0); web lint exit 0; svelte-check 0 errors 0 warnings; vitest 31 files, 480 passed.
+- r3 WARNING (month-end undo regression): fixed as prescribed. An exhaustive scratch test covered every start date from 2024-01-01 to 2029-12-31 under all 9 rules. For each on-cadence start D, `is_exact_previous(D, next_due(D))` held: 0 failures in 15,992 checks. That includes every 31st that follows a shorter month and every Feb 29. For every `current` it also enumerated the accepted `previous` dates in ±400 days. None is on or after `current`, so cycles cannot walk the date. 0 off-cadence dates were accepted (no weekends for `weekdays`, nothing but month-ends for `lastDayOfMonth`). Rules other than daily/weekly/biweekly accept more than one `previous` only through month-end clamping (at most 4 for monthly and biannual, 3 for quarterly, 2 for annual), and all of those are legitimate due dates for the rule.
+- Mutants on `is_exact_previous`, each failing tests: weekday predicate set to true, lastDayOfMonth predicate set to true, `on_cadence` dropped, the r3 generic clause restored, and the exact-inverse clause dropped.
+- API.md's new sentence on weekend-dated weekdays tasks matches the code (reasoned, not run: Sat → Mon on complete, Sat rejected on undo, so prev_due(Mon) = Fri).
+- No open findings. The whitespace check in `validate_tz` stays as accepted defense-in-depth.
