@@ -209,8 +209,10 @@ response):
     date, `previous_due_date` is restored exactly. That makes month-end undo
     exact: Jan 31 → Feb 28 → Jan 31.
   - Otherwise the server steps back one occurrence, as the web app's undo
-    does. A `previous_due_date` the task's cadence couldn't have produced is
-    ignored, so undo can't move a task to an arbitrary date.
+    does. A `previous_due_date` that completion couldn't have come from, or
+    that is off the task's cadence (a weekend for `weekdays`, a mid-month date
+    for `lastDayOfMonth`), is ignored, so undo can't move a task to an
+    arbitrary date.
   - A punted task also takes the one-step-back path, since its pre-punt date
     is gone after completion. Punt state is not restored.
   - A recurring task with no due date ends with today's date as its due date.

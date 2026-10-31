@@ -614,6 +614,16 @@ async fn complete_uncomplete_cycles_cannot_walk_the_due_date() {
         Task { id: "a", due: Some("2026-10-31"), rule: Some("annual"), ..Task::default() },
     )
     .await;
+    insert(
+        &pool,
+        Task { id: "l", due: Some("2026-10-31"), rule: Some("lastDayOfMonth"), ..Task::default() },
+    )
+    .await;
+    insert(
+        &pool,
+        Task { id: "k", due: Some("2026-10-30"), rule: Some("weekdays"), ..Task::default() },
+    )
+    .await;
     let router = agent_router(&pool).await;
     for (id, forged) in [
         ("w", "2026-11-06"),
@@ -621,6 +631,11 @@ async fn complete_uncomplete_cycles_cannot_walk_the_due_date() {
         ("w", "2026-10-30"),
         ("a", "2027-03-15"),
         ("a", "2026-01-01"),
+        // Exact preimages that are off the cadence (gate r2).
+        ("l", "2026-10-03"),
+        ("l", "2026-10-17"),
+        ("k", "2026-11-01"),
+        ("k", "2026-10-31"),
     ] {
         call(&router, Method::POST, &format!("/tasks/{id}/complete"), Some(AGENT_TOKEN), None)
             .await;
@@ -633,7 +648,8 @@ async fn complete_uncomplete_cycles_cannot_walk_the_due_date() {
         )
         .await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(row(&pool, id).await["due_date"], "2026-10-31", "{id} {forged}");
+        let original = if id == "k" { "2026-10-30" } else { "2026-10-31" };
+        assert_eq!(row(&pool, id).await["due_date"], original, "{id} {forged}");
     }
 }
 

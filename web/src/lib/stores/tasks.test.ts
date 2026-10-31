@@ -1850,6 +1850,22 @@ describe('tasks mergeRemote day-complete (remote check-off)', () => {
 		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
 	});
 
+	it('does not fire when a task completed earlier today merely leaves My Day', () => {
+		// A recurring task completed earlier today stays in myDayPending through its
+		// my_day flag; another device clearing that flag completes nothing.
+		const completedEarlier = {
+			id: 'r',
+			my_day: true,
+			due_date: '2026-11-01',
+			recurrence_id: 'daily',
+			completed_ts: Date.now() - 60_000,
+			occurrences_completed: 1
+		};
+		tasks.setAll([baseTask(completedEarlier)]);
+		tasks.mergeRemote([baseTask({ ...completedEarlier, my_day: false })]);
+		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
+	});
+
 	it('does not fire while My Day still has pending tasks', () => {
 		tasks.setAll([baseTask({ id: 'a', my_day: true }), baseTask({ id: 'c', my_day: true })]);
 		tasks.mergeRemote([

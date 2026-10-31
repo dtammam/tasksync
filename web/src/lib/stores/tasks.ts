@@ -438,7 +438,14 @@ export const tasks = {
 		void repo.saveTasks(next).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
 	},
 	mergeRemote(remote: Task[]) {
-		const pendingBeforeIds = new Set(get(myDayPending).map((task) => task.id));
+		const isDoneToday = (task: Task) => wasCompletedToday(task) || wasRecurringCompletedToday(task);
+		// Pending in My Day AND not already completed today: a recurring task
+		// completed earlier today can still sit in myDayPending via its my_day flag.
+		const pendingBeforeIds = new Set(
+			get(myDayPending)
+				.filter((task) => !isDoneToday(task))
+				.map((task) => task.id)
+		);
 		updateAndPersist((current) => {
 			// Sync pull is incremental, so start with local cache and layer remote deltas on top.
 			const merged = new Map<string, Task>();
@@ -456,15 +463,12 @@ export const tasks = {
 		// API) gets the day-complete celebration, but never a combo bump: the combo
 		// stays a live tap game. Only fires when a task that was pending here is now
 		// completed today, so a remote punt, reassignment or My Day removal does not
-		// count (a punt-today task sits in myDayCompleted, hence the explicit check).
+		// count (a punt-today task sits in myDayCompleted, hence the explicit check),
+		// nor does one that was already completed before this merge.
 		// triggerDayComplete() is itself once-per-day.
 		if (
 			get(myDayPending).length === 0 &&
-			get(tasksStore).some(
-				(task) =>
-					pendingBeforeIds.has(task.id) &&
-					(wasCompletedToday(task) || wasRecurringCompletedToday(task))
-			)
+			get(tasksStore).some((task) => pendingBeforeIds.has(task.id) && isDoneToday(task))
 		) {
 			streak.triggerDayComplete();
 		}

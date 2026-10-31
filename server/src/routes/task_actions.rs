@@ -99,6 +99,16 @@ async fn load_task(state: &AppState, ctx: &RequestCtx, id: &str) -> Result<TaskR
     Ok(task)
 }
 
+/// `previous` may be restored by undo only if completing from it yields
+/// `current` (an exact inverse) AND it is itself on the rule's cadence —
+/// one step from its own predecessor. The second clause rejects dates no
+/// occurrence could have had, e.g. a Sunday for `weekdays` or the 3rd for
+/// `lastDayOfMonth`, which are still exact preimages (gate r2).
+fn is_exact_previous(previous: NaiveDate, current: NaiveDate, rule: &str) -> bool {
+    next_due(previous, rule) == Some(current)
+        && next_due(prev_due(previous, rule), rule) == Some(previous)
+}
+
 fn next_updated_ts(task: &TaskRow, now: i64) -> i64 {
     now.max(task.updated_ts + 1)
 }
@@ -258,7 +268,7 @@ pub(super) async fn uncomplete_loaded(
             Some(current) => {
                 let exact = previous_due_date
                     .and_then(parse_iso_date)
-                    .filter(|previous| next_due(*previous, rule) == Some(current));
+                    .filter(|previous| is_exact_previous(*previous, current, rule));
                 let date = exact.unwrap_or_else(|| prev_due(current, rule));
                 Some(format_iso_date(date))
             }

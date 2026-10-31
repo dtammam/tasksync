@@ -88,23 +88,41 @@ fn posix_name(c: &mut Cursor) -> Option<()> {
     (3..=7).contains(&name.len()).then_some(())
 }
 
-/// `hh[:mm[:ss]]`, with an optional sign when `signed`.
-fn posix_hhmmss(c: &mut Cursor, signed: bool) -> Option<()> {
-    if signed && !c.eat(b'+') {
-        c.eat(b'-');
+/// `hh[:mm[:ss]]` (hour ≤ 24, minute and second ≤ 59, as chrono parses
+/// them), with an optional sign when `signed`. Returns signed seconds.
+fn posix_hhmmss(c: &mut Cursor, signed: bool) -> Option<i64> {
+    let mut sign = 1;
+    if signed {
+        if c.eat(b'-') {
+            sign = -1;
+        } else {
+            c.eat(b'+');
+        }
     }
-    if c.int()? > 24 {
+    let hour = c.int()?;
+    if hour > 24 {
         return None;
     }
-    for _ in 0..2 {
+    let mut seconds = i64::from(hour) * 3600;
+    for unit in [60, 1] {
         if !c.eat(b':') {
             break;
         }
-        if c.int()? > 59 {
+        let value = c.int()?;
+        if value > 59 {
             return None;
         }
+        seconds += i64::from(value) * unit;
     }
-    Some(())
+    Some(sign * seconds)
+}
+
+/// A zone offset: parsed like `posix_hhmmss`, but it must also be under 24
+/// hours in magnitude. chrono's parser accepts `24`, yet `FixedOffset`
+/// cannot hold it and `Local` then PANICS on every lookup (gate r2) — so
+/// boot must refuse it.
+fn posix_offset(c: &mut Cursor) -> Option<i64> {
+    posix_hhmmss(c, true).filter(|seconds| seconds.abs() < 86_400)
 }
 
 /// A DST transition rule: `Mm.w.d`, `Jn` or `n`, then optional `/time`.
@@ -121,6 +139,7 @@ fn posix_rule(c: &mut Cursor) -> Option<()> {
     } else {
         (c.int()? <= 365).then_some(())?;
     }
+    // A rule time is not an offset: chrono allows up to 24:59:59 here.
     if c.eat(b'/') {
         posix_hhmmss(c, false)?;
     }
@@ -135,13 +154,18 @@ fn is_posix_tz(value: &str) -> bool {
     let mut c = Cursor { rest: value.as_bytes() };
     let parsed = (|| {
         posix_name(&mut c)?;
-        posix_hhmmss(&mut c, true)?;
+        let std_offset = posix_offset(&mut c)?;
         if c.peek().is_none() {
             return Some(());
         }
         posix_name(&mut c)?;
-        if c.peek() != Some(b',') {
-            posix_hhmmss(&mut c, true)?;
+        // chrono derives an omitted DST offset as one hour ahead of
+        // standard (`std_offset - 3600` in POSIX's west-positive sign),
+        // which can itself reach 24 hours.
+        let dst_offset =
+            if c.peek() == Some(b',') { std_offset - 3600 } else { posix_offset(&mut c)? };
+        if dst_offset.abs() >= 86_400 {
+            return None;
         }
         c.eat(b',').then_some(())?;
         posix_rule(&mut c)?;
@@ -238,6 +262,8 @@ mod tests {
             "EST5EDT,M3.2.0,M11.1.0",
             "CET-1CEST,M3.5.0,M10.5.0/3",
             "AEST-10AEDT,M10.1.0,M4.1.0/3",
+            "ABC23:59:59",
+            "EST5EDT,M3.2.0/24:59:59,M11.1.0",
             "<-03>3<-02>,M3.5.0/-2,M10.5.0/-1",
         ] {
             let accepted = validate_tz(Some(value), empty) == Ok(None);
@@ -261,6 +287,13 @@ mod tests {
             "EST5EDT,M3.2.0,M11.1.0x",
             "EST25",
             "ABCDEFGH5",
+            "ABC24",
+            "ABC24:25",
+            "ABC-24:30",
+            "EST5EDT24,M3.2.0,M11.1.0",
+            "ABC-12XYZ-24,M3.2.0,M11.1.0",
+            "ABC-23:30XYZ,M3.2.0,M11.1.0",
+            "CET-1CEST-2",
             "EST5EDT,M13.2.0,M11.1.0",
             "Not/AZone",
             "America/New_York",
@@ -337,6 +370,10 @@ mod tests {
     fn today_follows_tz_across_local_midnight() {
         assert_eq!(today_in_child("UTC0"), "2026-11-01");
         assert_eq!(today_in_child("EST5EDT,M3.2.0,M11.1.0"), "2026-10-31");
+        // The largest offset and rule time validate_tz accepts must load
+        // without panicking (gate r2: 24-hour offsets panicked chrono).
+        assert_eq!(today_in_child("ABC23:59:59"), "2026-10-31");
+        assert_eq!(today_in_child("EST5EDT,M3.2.0/24:59:59,M11.1.0"), "2026-10-31");
         // 23:30Z on Oct 31 is 00:30 on Nov 1 in CET, while UTC (chrono's
         // silent fallback) would still say Oct 31: pins that an accepted DST
         // string is really applied.
