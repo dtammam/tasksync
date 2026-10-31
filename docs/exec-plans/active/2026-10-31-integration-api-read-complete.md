@@ -4,7 +4,7 @@ harness: v2 · lean
 branch: feat/integration-api-read-complete
 anchor: spec
 status: Approved
-next: Write ## Design (D1-D11 interfaces, file-by-file), then launch the Smart-tier builder
+next: Run /gate (Adversary + QA + Security) against HEAD
 gate: pending
 ---
 
@@ -201,12 +201,44 @@ records the design rather than holding for a separate approval.
 5. Day-complete on remote merge. *Demo:* vitest merge that empties My Day fires once.
 6. Docs.
 
+## Build log
+
+- Step 1: `9691cdd`, the TS clamp plus the shared case table. The Rust port moved
+  into the step 2 commit because pre-commit clippy rejects a module nothing uses yet.
+- Steps 2 and 3: `aee5cf3`, scopes, identity, `TZ`, read routes, complete and
+  uncomplete. They are one commit because the routes and the auth change land
+  together.
+- Step 4: `bb950dc`, the local date in `streak.ts`, with a guard for dates written
+  under the old UTC rule.
+- Step 5: `360ca0a`, day-complete on remote merge.
+- Step 6: the docs commit (`docs/API.md`, `ARCHITECTURE.md`, this plan).
+- Mutation checks run while building: putting back the `setMonth` overflow fails
+  the parity table; putting back the UTC `todayIso` fails the streak TZ test;
+  dropping the merge guard's "was pending here" check fails the reassignment test.
+
 ## Deviations
 
 - Read `GET /api/lists` returns full `ListRow` (superset), not the brief's 4 fields.
 - 409 is split into three codes (`due_date_mismatch`, `not_completed`,
   `conflict`) instead of one `conflict`. The status is still 409, and the
   consumer will be told at ship.
+- D11: `docs/SECURITY.md` has no token section, so the security-relevant
+  contract lives in the `ARCHITECTURE.md` API bullet and in `docs/API.md`.
+- No new crates: the router tests call `tower::Service::call`, since `oneshot`
+  would need tower's `util` feature, a `Cargo.toml` change.
+- Compose: the repo's `docker-compose.yml` passes `TZ` through only. The token
+  variables are not passed through with blank defaults, because a blank token
+  fails the boot length check. Operators add them when enabling the API, as the
+  existing beta stack already does for `TASK_API_TOKEN`.
 - Clamping causes drift: monthly from the 31st becomes the 28th after February
   and stays there (the overflow it replaces drifted too). `lastDayOfMonth` is the
   rule for true month-end tasks. Documented in `docs/API.md`.
+
+## Follow-ups (not in this change)
+
+- The web app's own undo (`undoRecurringCompletion`) still steps back with
+  `prevDueForRecurrence`, which is lossy at month ends (Jan 31 → Feb 28 → Jan 28)
+  and for punted tasks. The API's validated `previous_due_date` shows the fix.
+- On deploy to beta: set `TZ`, `TASK_AGENT_TOKEN`, and optionally
+  `TASK_API_USER_EMAIL` in `/srv/docker/tasksync-beta`'s server environment, then
+  notify SANDYJAR Host Root with the `docs/API.md` path and the commit or tag.
