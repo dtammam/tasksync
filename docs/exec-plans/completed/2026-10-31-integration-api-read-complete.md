@@ -3,8 +3,8 @@ plan: integration-api-read-complete
 harness: v2 · lean
 branch: feat/integration-api-read-complete
 anchor: spec
-status: Approved
-next: Dean merges the PR; then /release (deploy env: TZ, TASK_AGENT_TOKEN, TASK_API_USER_EMAIL) and notify SANDYJAR Host Root
+status: Shipped (PR #170, merged to main @1d92c8d)
+next: none — deployed to beta 2026-10-31 (TZ=America/New_York, agent token set); follow-up: web undoRecurringCompletion lossy at month ends
 gate: APPROVED @22f2b5f (adversary r4, qa r4, security-brief r4)
 ---
 
