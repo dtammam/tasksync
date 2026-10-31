@@ -554,6 +554,26 @@ async fn uncomplete_with_previous_due_date_is_exact_at_month_end() {
 }
 
 #[tokio::test]
+async fn uncomplete_with_previous_due_date_is_exact_for_every_month_end() {
+    // Gate r3: real month ends after a shorter month, and Feb 29.
+    for (rule, due) in [
+        ("monthly", "2026-03-31"),
+        ("monthly", "2026-10-31"),
+        ("monthly", "2026-05-31"),
+        ("quarterly", "2026-05-31"),
+        ("annual", "2024-02-29"),
+        ("lastDayOfMonth", "2026-03-31"),
+        ("lastDayOfMonth", "2028-02-29"),
+        ("weekdays", "2026-10-30"),
+    ] {
+        let pool = pool().await;
+        insert(&pool, Task { due: Some(due), rule: Some(rule), ..Task::default() }).await;
+        let (before, after) = complete_then_uncomplete(&pool, "t1", true).await;
+        assert_eq!(without_updated_ts(after), without_updated_ts(before), "{rule} {due}");
+    }
+}
+
+#[tokio::test]
 async fn uncomplete_without_previous_due_date_steps_back_like_the_web_app() {
     let pool = pool().await;
     insert(&pool, Task { due: Some("2026-01-31"), rule: Some("monthly"), ..Task::default() }).await;

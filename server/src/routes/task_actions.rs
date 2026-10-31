@@ -11,7 +11,7 @@
 //! the stored value) so `/sync/pull` carries the change even when a client
 //! wrote a future timestamp.
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate, Weekday};
 use serde::Serialize;
 
 use super::clock::local_date_of_ms;
@@ -100,13 +100,20 @@ async fn load_task(state: &AppState, ctx: &RequestCtx, id: &str) -> Result<TaskR
 }
 
 /// `previous` may be restored by undo only if completing from it yields
-/// `current` (an exact inverse) AND it is itself on the rule's cadence —
-/// one step from its own predecessor. The second clause rejects dates no
-/// occurrence could have had, e.g. a Sunday for `weekdays` or the 3rd for
-/// `lastDayOfMonth`, which are still exact preimages (gate r2).
+/// `current` (an exact inverse) AND it is a date the rule itself can land on.
+/// Only two rules have dates they never land on: `weekdays` (weekends) and
+/// `lastDayOfMonth` (anything but a month's last day). Those dates can still
+/// be exact preimages — a Sunday for a Monday, the 3rd for the 31st — so
+/// they are refused (gate r2). Every other rule's preimages are all
+/// legitimate: a generic "one step from its own predecessor" test would also
+/// refuse real month ends such as Mar 31 or Feb 29 (gate r3).
 fn is_exact_previous(previous: NaiveDate, current: NaiveDate, rule: &str) -> bool {
-    next_due(previous, rule) == Some(current)
-        && next_due(prev_due(previous, rule), rule) == Some(previous)
+    let on_cadence = match rule {
+        "weekdays" => !matches!(previous.weekday(), Weekday::Sat | Weekday::Sun),
+        "lastDayOfMonth" => previous.succ_opt().is_some_and(|next| next.day() == 1),
+        _ => true,
+    };
+    on_cadence && next_due(previous, rule) == Some(current)
 }
 
 fn next_updated_ts(task: &TaskRow, now: i64) -> i64 {

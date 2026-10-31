@@ -212,7 +212,8 @@ response):
     does. A `previous_due_date` that completion couldn't have come from, or
     that is off the task's cadence (a weekend for `weekdays`, a mid-month date
     for `lastDayOfMonth`), is ignored, so undo can't move a task to an
-    arbitrary date.
+    arbitrary date. A weekdays task the user manually dated on a weekend
+    therefore steps back to the previous weekday on undo.
   - A punted task also takes the one-step-back path, since its pre-punt date
     is gone after completion. Punt state is not restored.
   - A recurring task with no due date ends with today's date as its due date.

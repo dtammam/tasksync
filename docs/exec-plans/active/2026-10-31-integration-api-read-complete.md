@@ -320,3 +320,30 @@ Gate: CHANGES r2 @fd3a674 — adversary
 - SUGGESTION clock.rs tests: two guards still survive their mutants. A DST name plus an offset with no rules is never tested (add `CET-1CEST-2`). Removing the whitespace check survives because the parser already rejects every tested whitespace case, so the check is redundant as tested.
 - SUGGESTION tasks.ts:461-467: day-complete fires when another device removes `my_day` from a recurring task that was completed earlier today and was the last item left in pending (verified with vitest). The task was "completed today" before the merge, so the merge did not complete anything. Fix: record which tasks were already done-today before the merge and require that the flag flipped.
 - SUGGESTION ARCHITECTURE.md:89: the tail still says "The feature-off `404` (`TASK_API_TOKEN` unset)". It should say "neither token set".
+
+Gate: APPROVED r3 @60a565e — security-brief
+- Correction to my r2: I wrote that weekday preimages (Fri/Sat/Sun → Mon) are "on-cadence dates". That was wrong, as the Adversary showed (Sat and Sun are not on the `weekdays` cadence).
+- Offset panic (Adversary r2 blocker), checked by reading the code, not by running it. `posix_offset` rejects a std offset of 86400 s or more in magnitude. The DST offset is checked against the same bound, both when it is given and when it is derived (`std_offset - 3600`), so `-23:xx` plus the derived hour is caught. The rule `/time` keeps `posix_hhmmss` up to 24:59:59, which is not an offset. This closes the boot-passes-then-every-request-panics path. Impact in this deployment context: `TZ` is set only by the operator, so this was a self-inflicted availability fault, not an attacker path.
+- `is_exact_previous` adds `next_due(prev_due(P)) == P`. That narrows the accepted set and never widens it: Sat/Sun for `weekdays` and non-last days for `lastDayOfMonth` now fall back to `prev_due(current)`. The r2 argument still holds (one-step preimage, a cycle returns to `current`, no walk).
+- tasks.ts mergeRemote guard and docs: only client-side streak behaviour, no security surface.
+- No new findings. GAP: this seat still has no shell. Instruments and A11 rely on the QA and Adversary runs.
+
+Gate: APPROVED r3 @60a565e — qa
+- Instruments @60a565e: cargo fmt --check exit 0; clippy --all-targets -D warnings exit 0; cargo test "153 passed; 0 failed" (seed bin 0; the new cases extend existing tests); web lint exit 0; svelte-check "0 errors and 0 warnings"; vitest "31 passed (31) / 479→480 passed (480)".
+- clock.rs `posix_offset`: correct. Std and explicit-DST offsets need |s| < 86400. An omitted DST offset is derived as std−3600 and checked. Rule times stay ≤ 24:59:59, per chrono. The child-process test proves the largest accepted values (`ABC23:59:59`, `/24:59:59`) load without a panic, and the rejection matrix covers 24h, ±24:xx, and the derived-DST overflow.
+- task_actions.rs `is_exact_previous`: correct. Checked by hand: weekdays Sun/Sat preimages rejected, Fri accepted; lastDayOfMonth the 3rd/17th rejected, month-end accepted; monthly Jan 31 → Feb 28 → Jan 31 still exact.
+- tasks.ts merge guard: correct. Tasks already done today are excluded from the pending-before set, and the new test binds it. `wasCompletedToday`/`wasRecurringCompletedToday` are module consts declared later but only called at runtime, so there is no TDZ issue.
+- SUGGESTION (non-blocking) task_actions.rs:107: the on-cadence clause also rejects a genuine off-cadence ORIGINAL due date. Example: a weekdays task the user dated Sat Oct 31, completed that day (due → Mon Nov 2). Uncomplete with previous_due_date=2026-10-31 now restores Fri Oct 30 (shows as missed), where fd3a674 restored Oct 31. This is rare, bounded, and equal to the web undo (prevDue), and API.md's new wording describes the behavior. Accept, or mention "a user-picked off-cadence date also steps back" in API.md.
+
+Gate: CHANGES r3 @60a565e — adversary
+- Instruments @60a565e: cargo fmt --check exit 0; clippy -D warnings exit 0; cargo test 153 passed / 0 failed (seed 0); web lint exit 0; svelte-check 0 errors 0 warnings; vitest 31 files, 480 passed.
+- r2 24h-offset WARNING: fixed. The differential fuzz, re-run (4000 strings against chrono in a child process), found 0 fail-open, 0 accepted values that panic chrono, 85 stricter (the 24h offsets chrono panics on, trailing whitespace, 4-digit hours), 685 both accept, and 3230 both reject. Mutants that drop the offset cap, drop the derived-dst cap, or change `<` to `<=` each fail a clock test.
+- Merge my_day removal: fixed. Dropping the pre-merge done-today filter fails 1 test, and swapping the post-merge check fails 1 test.
+- ARCHITECTURE.md wording: fixed.
+- WARNING server/src/routes/task_actions.rs:107-110 (`is_exact_previous`, the new cadence clause): this regresses the month-end exact undo that W3/D5 were meant to provide. `next_due(prev_due(p)) == p` fails for every 31st that follows a shorter month, and for Feb 29. Verified with complete→uncomplete and `previous_due_date` supplied:
+  - monthly 2026-03-31 ends due 03-30 (prev_due(03-31) = 02-28, and next_due of that is 03-28);
+  - monthly 2026-10-31 ends due 10-30;
+  - annual 2024-02-29 ends due 2024-02-28.
+
+  r2 restored all three exactly. The day-of-month change is permanent: the task then recurs on the 30th, or the 28th. Only Jan 31 is tested, and it passes because December has 31 days. docs/API.md still promises "month-end undo exact". Fix: replace the generic clause with a per-rule check: `weekdays` → previous is not a weekend; `lastDayOfMonth` → previous is the last day of its month; every other rule → true. Add round-trip tests for monthly 03-31 and 10-31 and annual 2024-02-29. The cadence mutants (R1/R2) are killed today, and the Sunday and 10-03 rejections still hold under the per-rule check.
+- SUGGESTION: whitespace check kept as defense-in-depth. Accepted.
