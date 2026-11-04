@@ -266,7 +266,7 @@ $: isRecurringCompletedToday =
 				<span
 					class={`slot-date chip subtle date-chip ${dateSlotIsNext ? 'recur-next-chip' : ''}`}
 					data-testid="task-date"
-					title={dateSlotIsNext ? `Next occurrence ${dateSlotText}` : undefined}>{#if dateSlotIsNext}<span class="recur-glyph" aria-hidden="true">↻</span>{' '}{/if}{dateSlotText}</span
+					title={dateSlotIsNext ? `Next occurrence ${dateSlotText}` : undefined}>{#if dateSlotIsNext}<span class="recur-glyph" aria-hidden="true">↻</span><span class="sr-only">Next</span>{' '}{/if}<span class="date-full">{dateSlotText}</span><span class="date-short">{dateSlotText.slice(5)}</span></span
 				>
 			{/if}
 			{#if showCatchUp}
@@ -359,7 +359,8 @@ $: isRecurringCompletedToday =
 	.status:hover { transform: translateY(-1px); }
 	.status.ack { color:#22c55e; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,0.2); transform:scale(1.06); }
 	.status:disabled { cursor:not-allowed; opacity:0.6; }
-	.meta { min-width:0; }
+	/* Container for the narrow slot tier (R7): the strip, not the viewport, decides. */
+	.meta { min-width:0; container: task-meta / inline-size; }
 	.meta .title { font-weight:600; color:var(--app-text); display:flex; gap:8px; align-items:center; min-width:0; }
 	.star-indicator {
 		display: inline-flex;
@@ -468,6 +469,15 @@ $: isRecurringCompletedToday =
 	.slot-tag { grid-column: 4; justify-self: stretch; justify-content: center; }
 	.slot-more { grid-column: 5; justify-self: stretch; justify-content: center; }
 	.label-icon { display: none; }
+	.date-short { display: none; }
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
 	.chip {
 		display:inline-flex;
 		align-items:center;
@@ -507,7 +517,8 @@ $: isRecurringCompletedToday =
 		.title-text { font-size: var(--text-md, 14px); line-height: 1.18; }
 			.task.compact .chip { min-height: 22px; padding: 2px 7px; }
 		/* Phones (R6): slim slots — plain-text date (86px max-content, Sono), icon-only
-		   actions, 4px gaps. Leaves the list name ~52px in My Day at 360px. */
+		   actions, 4px gaps (180px total). List name at 360px: ~52px for top-level My Day
+		   rows, ~26px inside the nested Missed card; narrower strips use the R7 tier. */
 		.task {
 			--slot-date: 88px;
 			--slot-action: 28px;
@@ -524,5 +535,18 @@ $: isRecurringCompletedToday =
 		.task.compact .sub > .slot-more { padding-inline: 0; }
 		.label-full { display: none; }
 		.label-icon { display: inline; font-size: 14px; }
+	}
+	/* Narrow strip (R7) — Select mode on phones, 320px screens: the date drops its year
+	   ("↻ 12-31", 51px max-content, Sono) and tag/⋯ shrink, so the slots never leave the row. */
+	@container task-meta (max-width: 199.98px) {
+		.sub {
+			--slot-date: 54px;
+			--slot-action: 28px;
+			--slot-tag: 22px;
+			--slot-more: 22px;
+			--slot-gap: 4px;
+		}
+		.date-full { display: none; }
+		.date-short { display: inline; }
 	}
 </style>

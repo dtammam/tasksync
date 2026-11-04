@@ -92,6 +92,9 @@ each control at the same x on every row (plan `2026-11-04-row-fixed-slots`):
   slot's testid — `task-myday-btn`, `task-catchup`, `task-tag-chip`, `task-date` exist only when they apply.
 - List name (My Day only): truncates with `…`, full name in `title`. List views leave the column empty.
 - Date: `↻ <iso>` for the next recurrence (My Day only), else a one-off `due_date`, ISO, right-aligned.
+- Narrow strip (container query on `.meta` under 200px — Select mode on phones, 320px screens): the date drops
+  its year (`↻ 11-11`) and tag/⋯ shrink to 22px, so the slots never leave the row. Slots are pinned per tier.
+- Date for screen readers: ↻ is `aria-hidden`; a visually hidden "Next" carries its meaning.
 - Action: Catch Up wins over My Day (My Day stays in the details drawer). On phones both are icon buttons (`⤼`, `☀︎`)
   with the word as `aria-label`.
 - Tag: 🏷 only for an editable, untagged task. ⋯ always.

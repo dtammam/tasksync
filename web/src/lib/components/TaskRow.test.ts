@@ -264,7 +264,17 @@ describe('TaskRow fixed slots', () => {
 		const { getByTestId, container } = render(TaskRow, {
 			props: { task: makeTask({ due_date: due, recurrence_id: 'weekly' }), inMyDayView: true }
 		});
-		expect(getByTestId('task-date').textContent?.replace(/\s+/g, ' ').trim()).toBe(`↻ ${next}`);
+		const date = getByTestId('task-date');
+		// Visible text is "↻ <iso>"; the screen-reader-only "Next" carries the meaning of ↻.
+		const visible = [...date.childNodes]
+			.filter((n) => !(n instanceof HTMLElement && (n.classList.contains('sr-only') || n.classList.contains('date-short'))))
+			.map((n) => n.textContent)
+			.join('');
+		expect(visible.replace(/\s+/g, ' ').trim()).toBe(`↻ ${next}`);
+		// Narrow strips (R7) swap in the year-less form via a container query.
+		expect(date.querySelector('.date-short')?.textContent).toBe(next.slice(5));
+		expect(date.querySelector('.sr-only')?.textContent).toBe('Next');
+		expect(date.querySelector('.recur-glyph')?.getAttribute('aria-hidden')).toBe('true');
 		expect(container.textContent).not.toContain('Next:');
 	});
 
@@ -278,7 +288,9 @@ describe('TaskRow fixed slots', () => {
 	it('non-recurring dated: date slot shows the bare ISO date', () => {
 		const due = isoPlusDays(2);
 		const { getByTestId } = render(TaskRow, { props: { task: makeTask({ due_date: due }) } });
-		expect(getByTestId('task-date').textContent?.trim()).toBe(due);
+		const date = getByTestId('task-date');
+		expect(date.querySelector('.date-full')?.textContent).toBe(due);
+		expect(date.querySelector('.date-short')?.textContent).toBe(due.slice(5));
 	});
 
 	it('undated: no date element renders', () => {
@@ -294,7 +306,8 @@ describe('TaskRow fixed slots', () => {
 				inMyDayView: false
 			}
 		});
-		expect(getByTestId('task-catchup')).toBeTruthy();
+		// On phones the label is an icon, so aria-label is the button's only accessible name.
+		expect(getByTestId('task-catchup').getAttribute('aria-label')).toBe('Catch Up');
 		expect(queryByTestId('task-myday-btn')).toBeNull();
 	});
 

@@ -4,7 +4,7 @@ harness: v2 · lean
 branch: feat/row-fixed-slots
 anchor: outcome
 status: In progress
-next: builder — merge origin/main, full suites, /gate
+next: builder — gate r2 (re-engage adversary + qa)
 gate: pending
 builder: smart
 ---
@@ -29,6 +29,7 @@ deviate between tasks" — so the eye and thumb can process rows efficiently.
 | R4 | Punted chip | **Drop the "Punted" / "Punted today" chips.** The ▶ indicator before the title is the only punt marker. |
 | R5 | My Day vs Catch Up | **One shared action slot.** Catch Up wins if both apply; My Day stays reachable another way (see findings). |
 | R6 | Phone fit (asked under stop rule 1, 2026-11-04) | Measured: at 360px the My Day `.sub` is 232px; date + Catch Up + 🏷 + ⋯ need 246px (Sora) / 261px (widest font) — list name 0px, ⋯ overflowed. **Slim + icon actions** at `max-width: 900px`: plain-text date (no pill), zero side padding on action/tag/⋯, 4px gaps, Catch Up → `⤼` and My Day → `☀︎` (word kept as `aria-label`/`title`). Desktop keeps word labels. |
+| R7 | Narrow strips (asked after gate r1, 2026-11-04) | Adversary measured ⋯ 19px past the row at 320px in Select mode (strip 149px vs 180px of phone slots) and a 9px list name in Select mode at 360. **Short date when narrow:** container query on `.meta` < 200px → date drops the year (`↻ 11-11`, 51px max-content → 54px slot), tag/⋯ 22px. Normal phone and desktop rows keep full ISO. Slots are pinned per tier. |
 
 ## Outcome Dean will see
 
@@ -155,4 +156,7 @@ second line.
 - W3: `web/tests/e2e/row-fixed-slots.spec.ts` (4 × `@smoke`: My Day + list view × 360/1280). Seeds IDB with the app not running (no 052 clobber race): 9 tasks varying list name (64-char vs short), dated/↻/undated, Catch Up/My Day/neither, tagged/untagged. Asserts per slot (⋯, action, tag, date): present in ≥2 rows and absent in ≥1; right-edge offset from its own row's edge spread ≤1px across all rows; absolute right spread ≤1px within a container; strip heights equal across rows; strip ≤ tallest chip (one line); ⋯ inside row; list name computed `text-overflow: ellipsis` + `nowrap`, clear of the slots, truncated at 360. Green 4/4 on chromium, firefox, webkit. Mutation: `.sub` back to flex → 4/4 fail ("more offset from row edge"). Found and fixed while writing it: the date chip is a `<span>` (content-box) and stood 34px vs 24px button chips, so dated rows were 10px taller — slot cells are now `box-sizing: border-box`. Screenshots (360/1280 × My Day/list) attached to the PR.
 - W4: `docs/FRONTEND.md` gains "Task row slots" (columns, measured widths, testid absence, per-slot rules, phone icons, spec pointer).
 - Gate:
+  - Gate: CHANGES r1 @3e939bb — adversary
+  - Gate: APPROVED r1 @3e939bb — qa
+  - r1 fixes: adversary W1 (≤340px / Select overflow) → owner ruling R7, narrow tier via container query, spec adds 320 + Select cases (8 cases, green on chromium/firefox/webkit; mutant "no narrow tier" → 3 fail). Adversary W2 (spec too weak) → each slot must sit right-pinned in its own grid track and its content must fit its box; surviving mutants S1/S8 now 4/4 fail, S2 (desktop) 2/2, S3/S6 (phone) 2/2. N1 Catch Up `aria-label` asserted. N2 + QA NOTE 2: visually hidden "Next" in recurring dates. QA WARNING 1: comment/FRONTEND numbers corrected (52px top-level, ~26px Missed card at 360).
 - PR:
