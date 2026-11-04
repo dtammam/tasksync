@@ -3,8 +3,8 @@ plan: row-fixed-slots
 harness: v2 · lean
 branch: feat/row-fixed-slots
 anchor: outcome
-status: Planned
-next: builder — Step 0, then W1
+status: In progress
+next: builder — W2 (punted chips out)
 gate: pending
 builder: smart
 ---
@@ -28,6 +28,7 @@ deviate between tasks" — so the eye and thumb can process rows efficiently.
 | R3 | Recurring "Next:" | **Replace the word "Next:" with a ↻ glyph**: `↻ 2026-11-11`. Same slot as the due date. (Ruled after the width estimate: ISO + "Next:" left the list name ~25px on a 390px phone.) |
 | R4 | Punted chip | **Drop the "Punted" / "Punted today" chips.** The ▶ indicator before the title is the only punt marker. |
 | R5 | My Day vs Catch Up | **One shared action slot.** Catch Up wins if both apply; My Day stays reachable another way (see findings). |
+| R6 | Phone fit (asked under stop rule 1, 2026-11-04) | Measured: at 360px the My Day `.sub` is 232px; date + Catch Up + 🏷 + ⋯ need 246px (Sora) / 261px (widest font) — list name 0px, ⋯ overflowed. **Slim + icon actions** at `max-width: 900px`: plain-text date (no pill), zero side padding on action/tag/⋯, 4px gaps, Catch Up → `⤼` and My Day → `☀︎` (word kept as `aria-label`/`title`). Desktop keeps word labels. |
 
 ## Outcome Dean will see
 
@@ -149,7 +150,7 @@ second line.
 
 ## Evidence (builder fills)
 
-- W1:
+- W1: `.sub` is a 5-track grid; every cell has an explicit `grid-column`, so an absent chip leaves its fixed track empty (no placeholder elements, testids stay absent). Widths measured as max-content across all 23 UI fonts in Chromium: desktop date 100 (Sono `↻ 2026-12-31`), action 78 (Comfortaa `Catch Up`), tag/⋯ 30; phones (R6) date 88 (plain text, 86 measured), action 28 (icon), tag/⋯ 24, gap 4 → list name 52px in My Day at 360px (Missed-card rows ~28px, nested container). Unit: `TaskRow.test.ts` 21/21 (9 new); full vitest 489/489 (31 files); lint + check clean. Ellipsis is asserted as computed style in W3 (vitest doesn't process component CSS). Punted chips parked on grid row 2 until W2.
 - W2:
 - W3:
 - W4:

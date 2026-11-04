@@ -199,6 +199,13 @@ $: showPuntedCompletedTag =
 	task.punted_on_date === todayKey &&
 	!!task.punted_from_due_date;
 $: showPuntIndicator = showPuntedArrivalTag || showPuntedCompletedTag;
+$: listName = taskList?.name ?? 'Unknown list';
+// Fixed slots under the title (see docs/FRONTEND.md "Task row slots"): one date
+// slot — the next recurrence (My Day only, as before) or a one-off due date.
+$: dateSlotIsNext = inMyDayView && !!nextRecurrenceDate;
+$: dateSlotText = dateSlotIsNext ? nextRecurrenceDate : !task.recurrence_id && task.due_date ? task.due_date : '';
+// One shared action slot: Catch Up wins; My Day stays reachable from the drawer.
+$: showMyDayButton = !inMyDayView && !task.my_day && task.due_date !== todayKey;
 $: isRecurringCompletedToday =
 	completedContext && !!task.recurrence_id && task.status !== 'done' && isTodayTs(task.completed_ts);
 </script>
@@ -250,15 +257,16 @@ $: isRecurringCompletedToday =
 				<span class="title-text" data-testid="task-title">{task.title}</span>
 			{/if}
 		</div>
-		<div class="sub">
+		<div class="sub" data-testid="task-sub">
 			{#if inMyDayView}
-				<span class="meta-inline list-name">{taskList?.name ?? 'Unknown list'}</span>
+				<span class="slot-list meta-inline list-name" title={listName} data-testid="task-list-name">{listName}</span>
 			{/if}
-			{#if inMyDayView && nextRecurrenceDate}
-				<span class="chip subtle recur-next-chip">Next: {nextRecurrenceDate}</span>
-			{/if}
-			{#if !task.recurrence_id && task.due_date}
-				<span class="chip subtle date-chip">{task.due_date}</span>
+			{#if dateSlotText}
+				<span
+					class={`slot-date chip subtle date-chip ${dateSlotIsNext ? 'recur-next-chip' : ''}`}
+					data-testid="task-date"
+					title={dateSlotIsNext ? `Next occurrence ${dateSlotText}` : undefined}>{#if dateSlotIsNext}<span class="recur-glyph" aria-hidden="true">↻</span>{' '}{/if}{dateSlotText}</span
+				>
 			{/if}
 			{#if showPuntedArrivalTag}
 				<span class="chip subtle punted-chip">Punted</span>
@@ -266,29 +274,32 @@ $: isRecurringCompletedToday =
 			{#if showPuntedCompletedTag}
 				<span class="chip subtle punted-chip">Punted today</span>
 			{/if}
-			{#if !inMyDayView && !task.my_day && task.due_date !== todayKey}
-				<button
-					class="chip ghost day-chip"
-					type="button"
-					on:click={addToMyDay}
-					data-testid="task-myday-btn"
-				>
-					My Day
-				</button>
-			{/if}
 			{#if showCatchUp}
 				<button
-					class="chip ghost catchup-chip"
+					class="slot-action chip ghost catchup-chip"
 					type="button"
 					on:click={() => tasks.catchUp(task.id)}
 					data-testid="task-catchup"
+					aria-label="Catch Up"
+					title="Catch Up"
 				>
-					Catch Up
+					<span class="label-full">Catch Up</span><span class="label-icon" aria-hidden="true">⤼</span>
+				</button>
+			{:else if showMyDayButton}
+				<button
+					class="slot-action chip ghost day-chip"
+					type="button"
+					on:click={addToMyDay}
+					data-testid="task-myday-btn"
+					aria-label="My Day"
+					title="Add to My Day"
+				>
+					<span class="label-full">My Day</span><span class="label-icon" aria-hidden="true">☀&#xFE0E;</span>
 				</button>
 			{/if}
 			{#if canEditTask && !task.emoji}
 				<button
-					class="chip ghost tag-chip"
+					class="slot-tag chip ghost tag-chip"
 					type="button"
 					aria-label="Add tag"
 					aria-expanded={showTagPicker}
@@ -298,7 +309,7 @@ $: isRecurringCompletedToday =
 					🏷
 				</button>
 			{/if}
-			<button class="chip ghost actions-chip" type="button" on:click={toggleActions}>⋯</button>
+			<button class="slot-more chip ghost actions-chip" type="button" on:click={toggleActions}>⋯</button>
 		</div>
 	</div>
 		{#if showTagPicker && canEditTask}
@@ -427,7 +438,40 @@ $: isRecurringCompletedToday =
 	.list-name {
 		font-weight: 500;
 	}
-	.sub { display:flex; flex-wrap:wrap; gap:8px; color:var(--app-muted); font-size:12px; margin-top:4px; align-items:center; }
+	/* Fixed slots: list name takes the leftover width; date · action · tag · ⋯ are
+	   fixed tracks pinned right. Every cell is placed explicitly, so an absent chip
+	   leaves its track empty instead of sliding the others left. */
+	/* Widths measured as max-content across all 23 UI fonts (widest: Sono for the
+	   date "↻ 2026-12-31", Comfortaa for "Catch Up"), 2026-11-04. */
+	.task {
+		--slot-date: 100px;
+		--slot-action: 78px;
+		--slot-tag: 30px;
+		--slot-more: 30px;
+		--slot-gap: 6px;
+	}
+	.sub {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) var(--slot-date) var(--slot-action) var(--slot-tag) var(--slot-more);
+		column-gap: var(--slot-gap);
+		align-items: center;
+		color: var(--app-muted);
+		font-size: 12px;
+		margin-top: 4px;
+	}
+	.sub > * { grid-row: 1; min-width: 0; }
+	.slot-list {
+		grid-column: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.slot-date { grid-column: 2; justify-self: end; max-width: 100%; }
+	.slot-action { grid-column: 3; justify-self: stretch; justify-content: center; }
+	.slot-tag { grid-column: 4; justify-self: stretch; justify-content: center; }
+	.slot-more { grid-column: 5; justify-self: stretch; justify-content: center; }
+	.label-icon { display: none; }
+	.sub > .punted-chip { grid-row: 2; grid-column: 1 / -1; justify-self: start; }
 	.chip {
 		display:inline-flex;
 		align-items:center;
@@ -469,8 +513,26 @@ $: isRecurringCompletedToday =
 		.task.compact { padding: 10px 11px; gap: 10px; }
 		.status { width:40px; height:40px; min-width:40px; min-height:40px; font-size:16px; }
 		.task.compact .status { width:36px; height:36px; min-width:36px; min-height:36px; font-size:15px; }
-		.task.compact .sub { gap: 6px; margin-top: 5px; }
+		.task.compact .sub { margin-top: 5px; }
 		.title-text { font-size: var(--text-md, 14px); line-height: 1.18; }
 			.task.compact .chip { min-height: 22px; padding: 2px 7px; }
+		/* Phones (R6): slim slots — plain-text date (86px max-content, Sono), icon-only
+		   actions, 4px gaps. Leaves the list name ~52px in My Day at 360px. */
+		.task {
+			--slot-date: 88px;
+			--slot-action: 28px;
+			--slot-tag: 24px;
+			--slot-more: 24px;
+			--slot-gap: 4px;
+		}
+		.task .sub > .date-chip { background: transparent; border-color: transparent; padding-inline: 0; }
+		.sub > .slot-action,
+		.sub > .slot-tag,
+		.sub > .slot-more,
+		.task.compact .sub > .slot-action,
+		.task.compact .sub > .slot-tag,
+		.task.compact .sub > .slot-more { padding-inline: 0; }
+		.label-full { display: none; }
+		.label-icon { display: inline; font-size: 14px; }
 	}
 </style>
