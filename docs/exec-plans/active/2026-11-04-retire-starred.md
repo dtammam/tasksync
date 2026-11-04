@@ -3,8 +3,8 @@ plan: retire-starred
 harness: v2 · lean
 branch: feat/retire-starred
 anchor: outcome
-status: Planned
-next: builder — Step 0, then W1
+status: Building
+next: full web suite + cargo test, then /gate (adversary + qa)
 gate: pending
 builder: smart
 ---
@@ -155,8 +155,32 @@ tag system. Tags fully replace it — the default palette already has a ⭐
 
 ## Evidence (builder fills)
 
-- W1:
-- W2:
-- W3:
+- W1: `2c057cf` — `migrateStarsToTag` + pure `sweepStarredTasks` in `tasks.ts`, wired after
+  `hydrateFromDb` and inside `mergeRemote`'s single write. 12 new tests in `tasks.test.ts`
+  (Acceptance 1 a–f, + auth-loading skip, + contributor `my_day` skip); tasks.test.ts 101/101,
+  full vitest 492/492. Mutations: always-return-list → 3 tests fail ((c),(d),(f)-no-op);
+  drop `!task.my_day` guard → (e) fails. Extra guard beyond TaskRow's rule (deliberate): a
+  contributor's `my_day` task is skipped because the server 403s any contributor push carrying
+  `my_day: true` (`server/src/routes/tasks.rs` `update_task_meta_for_ctx`). Sweep also skips while
+  `auth.status === 'loading'`.
+- W2: `389d1fd` — row ★ + CSS + `toggleStar` + shelf button; drawer toggle + local `priority` +
+  CSS; `saveFromDetails` no longer takes/writes `priority`; `setPriority` deleted; both
+  `compareStarredFirst` removed by extracting one shared `lib/tasks/sort.ts` (My Day modes are only
+  `created`/`alpha`, a subset of the list sort, so behaviour is otherwise identical). Tests:
+  `TaskRow.test.ts` (2 star tests deleted, 2 negative tests added), new `TaskDetailDrawer.test.ts`
+  (no toggle; save payload has no `priority`), new `sort.test.ts` (4, Acceptance 3),
+  `tasks.test.ts` drawer round-trip asserts `priority` unchanged. The 4 new UI tests fail against
+  the pre-W2 components (verified). E2E: the plan's `myday.spec.ts:~60-80` was actually the
+  `seedSuggestions` helper (stars an undated task so Suggestions appear) → now seeds via the
+  shelf's Tomorrow (a due-tomorrow task is a suggestion source); two further star-sort E2Es
+  (`keeps starred tasks at top…` ×2) retired, covered by `sort.test.ts`; `@smoke Star action
+  closes the quick shelf` repurposed to assert no Star button + Close closes. Not stop rule 3: they
+  encode exactly the behaviour R2 removes. vitest 498/498; `myday.spec.ts`+`smoke.spec.ts`
+  chromium 34/34. Acceptance-2 grep over `web/src` excluding `*.test.ts`: no matches (the only hits
+  are the negative assertions in the new tests).
+- W3: FRONTEND.md "Task visual affordances" updated (Starred retired, sort, sweep). Tech debt:
+  054 (drop inert `priority` from schema/wire), 055 (`myDaySuggestions`/`myDayMissed` still read
+  `priority` — out of scope, owner to decide), 049 closed (resolved by this plan), 042 text
+  trimmed (`toggleStar` gone).
 - Gate:
 - PR:

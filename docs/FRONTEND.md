@@ -72,8 +72,8 @@ Within `web/src/lib/`:
 - `TaskRow` and `TaskDetailDrawer` must render punt state with a theme-aware shift glyph style:
   - inactive/actionable punt uses `▷`
   - active/punted state uses `▶`
-- Task detail status controls (`Mark Done`, `My Day`, `Star`, `Punt`) should share consistent button sizing, text sizing, and centering.
-- Task detail starred state should be conveyed by the star control itself (`☆ Star` / `★ Starred`), not by a separate starred pill above metadata.
+- Task detail status controls (`Mark Done`, `My Day`, `Tag`, `Punt`) should share consistent button sizing, text sizing, and centering.
+- **Starred is retired (2026-11-04).** The ⭐ tag (top of the default palette) replaces it: there is no ★ indicator, no Star/Unstar quick action and no Starred drawer toggle, and task views sort purely by the chosen mode (`lib/tasks/sort.ts` — no starred-first tier). `task.priority` stays in the data model but is inert in the UI; the drawer save never writes it. A one-time, idempotent store sweep (`tasks.migrateStarsToTag`, run after `hydrateFromDb` and inside `mergeRemote`) turns any `priority > 0` task into `priority: 0` + `emoji: '⭐'` (only if untagged) on tasks this device may edit.
 - Punt actions in the details drawer are visibility-gated by the same rule as row quick actions:
   - pending status
   - due today
