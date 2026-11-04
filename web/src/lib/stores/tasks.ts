@@ -239,6 +239,57 @@ const preservePuntState = (incoming: Task, existing?: Task) => {
 	};
 };
 
+// ── Retire Starred (2026-11-04) ──────────────────────────────────────────────
+// The legacy hard-coded star (`priority > 0`) is replaced by the ⭐ tag. Every
+// device sweeps its local cache: a starred task gets `priority: 0` and, only if
+// it has no tag, `emoji: '⭐'` (an existing tag is never overwritten). Zeroing
+// `priority` is what makes the sweep idempotent across devices — once one
+// device's write syncs, the others pull `priority: 0` and have nothing to do.
+// `priority` itself stays in the data model, inert (no schema/wire change).
+export const STARRED_TAG = '⭐';
+
+/**
+ * May this device rewrite `task`? Mirrors TaskRow's `canEditTask` (admin, or
+ * the task's creator), and additionally skips a contributor's `my_day` task:
+ * the server 403s any contributor push carrying `my_day: true`, and a rejected
+ * sweep would only bounce. Unswept tasks are migrated by the owner's device.
+ */
+const canSweepTask = (task: Task, user: { user_id: string; role: string } | null) => {
+	if (user?.role !== 'contributor') return true;
+	return task.created_by_user_id === user.user_id && !task.my_day;
+};
+
+/**
+ * Pure: the swept list, or null when nothing needed migrating (the caller must
+ * then write nothing — no store update, no `updated_ts` bump, no persist).
+ */
+export const sweepStarredTasks = (
+	list: Task[],
+	user: { user_id: string; role: string } | null,
+	now: number
+): Task[] | null => {
+	let changed = false;
+	const next = list.map((task) => {
+		if (!((task.priority ?? 0) > 0) || !canSweepTask(task, user)) return task;
+		changed = true;
+		return {
+			...task,
+			priority: 0 as Task['priority'],
+			emoji: task.emoji || STARRED_TAG,
+			dirty: true,
+			updated_ts: now
+		};
+	});
+	return changed ? next : null;
+};
+
+/** Auth snapshot for the sweep, or undefined while auth is still resolving (skip). */
+const sweepUser = () => {
+	const state = auth.get();
+	if (state.status === 'loading') return undefined;
+	return state.user;
+};
+
 const updateAndPersist = (fn: (list: Task[]) => Task[]) => {
 	tasksStore.update(fn);
 	void repo.saveTasks(get(tasksStore)).catch((err: unknown) => console.error('[repo] saveTasks failed', err));
@@ -457,7 +508,11 @@ export const tasks = {
 				if (existing?.dirty) continue;
 				merged.set(task.id, preservePuntState(sanitizeIncomingPuntState(task), existing));
 			}
-			return Array.from(merged.values());
+			const mergedList = Array.from(merged.values());
+			// A pull can deliver a still-starred task from a device that hasn't
+			// updated yet — sweep it in the same write (no extra persist).
+			const user = sweepUser();
+			return (user !== undefined && sweepStarredTasks(mergedList, user, Date.now())) || mergedList;
 		});
 		// A sync that finishes My Day (e.g. a check-off made through the integration
 		// API) gets the day-complete celebration, but never a combo bump: the combo
@@ -957,9 +1012,23 @@ export const tasks = {
 			)
 		);
 	},
+	/**
+	 * Migrate starred tasks to the ⭐ tag (see sweepStarredTasks). Returns the
+	 * number of tasks rewritten; a strict no-op (no write, no persist) when none.
+	 */
+	migrateStarsToTag(): number {
+		const user = sweepUser();
+		if (user === undefined) return 0;
+		const before = get(tasksStore);
+		const next = sweepStarredTasks(before, user, Date.now());
+		if (!next) return 0;
+		updateAndPersist(() => next);
+		return next.filter((task, i) => task !== before[i]).length;
+	},
 	async hydrateFromDb() {
 		const { tasks: stored } = await repo.loadAll();
 		tasksStore.set(stored);
+		tasks.migrateStarsToTag();
 	}
 };
 
