@@ -781,21 +781,6 @@ export const tasks = {
 			})
 		);
 	},
-	setPriority(id: string, priority: Task['priority']) {
-		const now = Date.now();
-		updateAndPersist((list) =>
-			list.map((t) =>
-				t.id === id
-					? {
-							...t,
-							priority,
-							dirty: true,
-							updated_ts: now
-						}
-					: t
-			)
-		);
-	},
 	setEmoji(id: string, emoji?: string) {
 		const now = Date.now();
 		updateAndPersist((list) =>
@@ -927,7 +912,6 @@ export const tasks = {
 			recurrence_id?: string;
 			due_date?: string;
 			notes: string;
-			priority: Task['priority'];
 			my_day: boolean;
 			list_id: string;
 			assignee_user_id?: string;
@@ -948,7 +932,6 @@ export const tasks = {
 					recurrence_id: details.recurrence_id,
 					due_date: details.due_date,
 					notes: details.notes,
-					priority: details.priority,
 					my_day: details.my_day,
 					list_id: details.list_id || t.list_id,
 					assignee_user_id: details.assignee_user_id,

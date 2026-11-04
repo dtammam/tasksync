@@ -812,7 +812,8 @@ describe('tasks store helpers', () => {
 				title: 'Original title',
 				list_id: 'goal-management',
 				status: 'pending',
-				my_day: false
+				my_day: false,
+				priority: 2
 			})
 		]);
 		saveSpy.mockClear();
@@ -823,7 +824,6 @@ describe('tasks store helpers', () => {
 			recurrence_id: 'weekly',
 			url: 'https://example.com',
 			notes: 'Updated notes',
-			priority: 1,
 			my_day: true,
 			list_id: 'goal-management',
 			assignee_user_id: 'u-me'
@@ -836,12 +836,13 @@ describe('tasks store helpers', () => {
 			recurrence_id: 'weekly',
 			url: 'https://example.com',
 			notes: 'Updated notes',
-			priority: 1,
 			my_day: true,
 			list_id: 'goal-management',
 			assignee_user_id: 'u-me',
 			dirty: true
 		});
+		// The drawer save never touches priority (retire-starred): it round-trips unchanged.
+		expect(updated?.priority).toBe(2);
 		expect(saveSpy).toHaveBeenCalledTimes(1);
 		saveSpy.mockRestore();
 	});
@@ -865,12 +866,10 @@ describe('tasks store helpers', () => {
 		expect(suggestions.map((t) => t.id)).toEqual(['due-tomorrow', 'no-due']);
 	});
 
-	it('sets due date and priority via helpers', () => {
+	it('sets due date via helper', () => {
 		tasks.setAll([baseTask({ id: 'p1', priority: 0, due_date: undefined })]);
-		tasks.setPriority('p1', 2);
 		tasks.setDueDate('p1', '2026-02-10');
 		const updated = tasks.getAll().find((t) => t.id === 'p1');
-		expect(updated?.priority).toBe(2);
 		expect(updated?.due_date).toBe('2026-02-10');
 		expect(updated?.dirty).toBe(true);
 	});

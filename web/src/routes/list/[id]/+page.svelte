@@ -12,6 +12,7 @@
 	import { lists } from '$lib/stores/lists';
 	import { uiPreferences } from '$lib/stores/preferences';
 	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
+	import { sortTasks } from '$lib/tasks/sort';
 	import { tagPalette } from '$lib/stores/tagPalette';
 	import type { Task } from '$shared/types/task';
 
@@ -24,55 +25,6 @@
 	$: listTasks = tasksByList(listId);
 	$: listName = $lists.find((l) => l.id === listId)?.name ?? 'List';
 	$: detailTask = detailId ? ($tasks.find((t) => t.id === detailId) ?? null) : null;
-
-	const compareAlpha = (left: string | undefined, right: string | undefined): number => {
-		const a = (left ?? '').trim().toLowerCase();
-		const b = (right ?? '').trim().toLowerCase();
-		if (a === b) return 0;
-		return a < b ? -1 : 1;
-	};
-
-	const compareStarredFirst = (left: Task, right: Task): number => {
-		const leftStarred = (left?.priority ?? 0) > 0;
-		const rightStarred = (right?.priority ?? 0) > 0;
-		if (leftStarred === rightStarred) return 0;
-		return leftStarred ? -1 : 1;
-	};
-
-	const sortTasks = (arr: Task[], mode = 'created', direction = 'asc'): Task[] => {
-		const copy = [...arr];
-		const isAscending = direction !== 'desc';
-		copy.sort((a, b) => {
-			const starredOrder = compareStarredFirst(a, b);
-			if (starredOrder !== 0) return starredOrder;
-
-			if (mode === 'due_date') {
-				const dueA = typeof a.due_date === 'string' ? a.due_date : '';
-				const dueB = typeof b.due_date === 'string' ? b.due_date : '';
-				const hasDueA = !!dueA;
-				const hasDueB = !!dueB;
-				if (hasDueA && hasDueB && dueA !== dueB) {
-					return isAscending ? (dueA < dueB ? -1 : 1) : dueA > dueB ? -1 : 1;
-				}
-				if (hasDueA !== hasDueB) {
-					// Keep undated tasks at the bottom for both ascending and descending due-date sort.
-					return hasDueA ? -1 : 1;
-				}
-				return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
-			}
-
-			if (mode === 'alpha') {
-				const byTitle = compareAlpha(a.title, b.title);
-				if (byTitle === 0) {
-					return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
-				}
-				return isAscending ? byTitle : byTitle * -1;
-			}
-
-			return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
-		});
-		return copy;
-	};
 
 	$: pendingTasks = sortTasks(
 		($listTasks ?? []).filter((task) => task.status === 'pending'),
