@@ -67,7 +67,8 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	completed_ts: overrides.completed_ts,
 	assignee_user_id: overrides.assignee_user_id,
 	created_by_user_id: overrides.created_by_user_id,
-	emoji: overrides.emoji
+	emoji: overrides.emoji,
+	local: overrides.local
 });
 
 describe('tasks store helpers', () => {
@@ -859,7 +860,11 @@ describe('tasks store helpers', () => {
 			}),
 			baseTask({ id: 'already-myday', my_day: true, due_date: '2026-02-02' }),
 			baseTask({ id: 'done-task', due_date: '2026-02-02', status: 'done' }),
-			baseTask({ id: 'no-due', priority: 1 })
+			// R4: an undated ⭐-tagged task is a suggestion source (replaced Starred);
+			// an undated legacy priority:1 task without the tag no longer is.
+			baseTask({ id: 'no-due', emoji: '⭐' }),
+			baseTask({ id: 'no-due-other-tag', emoji: '🎯' }),
+			baseTask({ id: 'no-due-legacy-priority', priority: 1 })
 		]);
 
 		const suggestions = get(myDaySuggestions);
@@ -1958,11 +1963,12 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 	it('(e) leaves tasks a contributor cannot edit untouched', async () => {
 		await signInAs('contributor', 'u-c');
 		tasks.setAll([
-			baseTask({ id: 'mine', priority: 1, created_by_user_id: 'u-c', updated_ts: 1 }),
-			baseTask({ id: 'theirs', priority: 1, created_by_user_id: 'u-admin', updated_ts: 2 }),
-			baseTask({ id: 'legacy', priority: 1, created_by_user_id: undefined, updated_ts: 3 }),
+			// All local-only so cache-eligibility isn't what's under test here.
+			baseTask({ id: 'mine', priority: 1, local: true, created_by_user_id: 'u-c', updated_ts: 1 }),
+			baseTask({ id: 'theirs', priority: 1, local: true, created_by_user_id: 'u-admin', updated_ts: 2 }),
+			baseTask({ id: 'legacy', priority: 1, local: true, created_by_user_id: undefined, updated_ts: 3 }),
 			// The server 403s a contributor push carrying my_day: true — never sweep it.
-			baseTask({ id: 'mine-myday', priority: 1, my_day: true, created_by_user_id: 'u-c', updated_ts: 4 })
+			baseTask({ id: 'mine-myday', priority: 1, local: true, my_day: true, created_by_user_id: 'u-c', updated_ts: 4 })
 		]);
 		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
 
@@ -1978,7 +1984,7 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 
 	it('(e) an admin sweeps tasks regardless of creator', async () => {
 		await signInAs('admin', 'u-admin');
-		tasks.setAll([baseTask({ id: 'contrib', priority: 1, created_by_user_id: 'u-c', my_day: true })]);
+		tasks.setAll([baseTask({ id: 'contrib', priority: 1, local: true, created_by_user_id: 'u-c', my_day: true })]);
 		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
 
 		expect(tasks.migrateStarsToTag()).toBe(1);
@@ -2046,5 +2052,83 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 		tasks.mergeRemote([baseTask({ id: 'admins', priority: 1, created_by_user_id: 'u-admin' })]);
 
 		expect(byId('admins')).toMatchObject({ priority: 1, dirty: false });
+	});
+	it('signed in, hydrate sweeps only local-only / dirty rows — never a clean (possibly stale) server row', async () => {
+		await signInAs('admin', 'u-admin');
+		vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({
+			lists: [],
+			tasks: [
+				baseTask({ id: 'server-clean', priority: 1, updated_ts: 1 }),
+				baseTask({ id: 'local-only', priority: 1, local: true, dirty: true }),
+				baseTask({ id: 'server-dirty', priority: 1, dirty: true, notes: 'my offline edit' })
+			]
+		});
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		await tasks.hydrateFromDb();
+
+		expect(byId('server-clean')).toMatchObject({ priority: 1, dirty: false, updated_ts: 1 });
+		expect(byId('server-clean')?.emoji).toBeUndefined();
+		expect(byId('local-only')).toMatchObject({ emoji: '⭐', priority: 0 });
+		expect(byId('server-dirty')).toMatchObject({ emoji: '⭐', priority: 0, notes: 'my offline edit' });
+	});
+
+	it('stale starred cache never overwrites newer server edits (hydrate → pull)', async () => {
+		await signInAs('admin', 'u-admin');
+		// This device last synced while T was starred, untagged, pending, notes OLD.
+		vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({
+			lists: [],
+			tasks: [baseTask({ id: 'T', priority: 1, status: 'pending', notes: 'OLD', updated_ts: 1 })]
+		});
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+		await tasks.hydrateFromDb();
+		expect(byId('T')?.dirty).toBe(false);
+
+		// Meanwhile another device tagged it 🎯, edited notes, completed it (and swept it).
+		const fresh = baseTask({
+			id: 'T',
+			priority: 0,
+			emoji: '🎯',
+			status: 'done',
+			notes: 'NEW',
+			completed_ts: Date.now(),
+			updated_ts: 50
+		});
+		tasks.mergeRemote([fresh]);
+
+		expect(byId('T')).toMatchObject({ emoji: '🎯', status: 'done', notes: 'NEW', priority: 0, dirty: false });
+		expect(tasks.getAll().filter((t) => t.dirty)).toEqual([]);
+	});
+
+	it('signed in, mergeRemote sweeps a fresh starred row but not a clean stale row it did not receive', async () => {
+		await signInAs('admin', 'u-admin');
+		tasks.setAll([baseTask({ id: 'cached-stale', priority: 1, updated_ts: 1 })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.mergeRemote([baseTask({ id: 'fresh', priority: 1, emoji: '🎯', updated_ts: 9 })]);
+
+		expect(byId('fresh')).toMatchObject({ emoji: '🎯', priority: 0, dirty: true });
+		expect(byId('cached-stale')).toMatchObject({ priority: 1, dirty: false, updated_ts: 1 });
+	});
+
+	it('signed in, a dirty local row still wins the merge and is swept as the user’s own edit', async () => {
+		await signInAs('admin', 'u-admin');
+		tasks.setAll([baseTask({ id: 'd', priority: 1, dirty: true, notes: 'local edit' })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.mergeRemote([baseTask({ id: 'd', priority: 1, notes: 'server', updated_ts: 9 })]);
+
+		// The local dirty row wins (as before); sweeping it only adds the ⭐ to the user's own edit.
+		expect(byId('d')).toMatchObject({ notes: 'local edit', emoji: '⭐', priority: 0, dirty: true });
+	});
+
+	it('R4: a swept undated starred task stays in Suggestions via its ⭐ tag', () => {
+		tasks.setAll([baseTask({ id: 'call-dentist', priority: 1, status: 'pending' })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.migrateStarsToTag();
+
+		expect(byId('call-dentist')).toMatchObject({ emoji: '⭐', priority: 0 });
+		expect(get(myDaySuggestions).map((t) => t.id)).toEqual(['call-dentist']);
 	});
 });

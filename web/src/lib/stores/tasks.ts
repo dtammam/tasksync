@@ -266,11 +266,12 @@ const canSweepTask = (task: Task, user: { user_id: string; role: string } | null
 export const sweepStarredTasks = (
 	list: Task[],
 	user: { user_id: string; role: string } | null,
-	now: number
+	now: number,
+	eligible: (task: Task) => boolean = () => true
 ): Task[] | null => {
 	let changed = false;
 	const next = list.map((task) => {
-		if (!((task.priority ?? 0) > 0) || !canSweepTask(task, user)) return task;
+		if (!((task.priority ?? 0) > 0) || !eligible(task) || !canSweepTask(task, user)) return task;
 		changed = true;
 		return {
 			...task,
@@ -282,6 +283,19 @@ export const sweepStarredTasks = (
 	});
 	return changed ? next : null;
 };
+
+/*
+ * WHICH rows may be swept matters as much as how. A push sends the whole row and
+ * the server has no updated_ts conflict check, and mergeRemote keeps a dirty local
+ * row over the incoming one — so sweeping a STALE cached server row would push its
+ * old status/notes/tag over newer edits made elsewhere. Server-backed rows are
+ * therefore swept only from a FRESH copy: the rows a pull just delivered (the
+ * first pull of a session is a full pull, so every server task gets its turn).
+ * Local-only rows (never on the server) and already-dirty rows (the user's own
+ * unpushed edit, which mergeRemote keeps and the next push sends anyway) are
+ * always safe, as is the anonymous scope, which never pushes to an account.
+ */
+const isSafeFromCache = (task: Task) => !!task.local || !!task.dirty;
 
 /** Auth snapshot for the sweep, or undefined while auth is still resolving (skip). */
 const sweepUser = () => {
@@ -503,16 +517,22 @@ export const tasks = {
 			for (const task of current) {
 				merged.set(task.id, task);
 			}
+			const freshIds = new Set<string>();
 			for (const task of remote) {
 				const existing = merged.get(task.id);
 				if (existing?.dirty) continue;
 				merged.set(task.id, preservePuntState(sanitizeIncomingPuntState(task), existing));
+				freshIds.add(task.id);
 			}
 			const mergedList = Array.from(merged.values());
 			// A pull can deliver a still-starred task from a device that hasn't
-			// updated yet — sweep it in the same write (no extra persist).
+			// updated yet — sweep the fresh rows in the same write (no extra persist).
 			const user = sweepUser();
-			return (user !== undefined && sweepStarredTasks(mergedList, user, Date.now())) || mergedList;
+			if (user === undefined) return mergedList;
+			return (
+				sweepStarredTasks(mergedList, user, Date.now(), (t) => freshIds.has(t.id) || isSafeFromCache(t)) ??
+				mergedList
+			);
 		});
 		// A sync that finishes My Day (e.g. a check-off made through the integration
 		// API) gets the day-complete celebration, but never a combo bump: the combo
@@ -996,14 +1016,19 @@ export const tasks = {
 		);
 	},
 	/**
-	 * Migrate starred tasks to the ⭐ tag (see sweepStarredTasks). Returns the
-	 * number of tasks rewritten; a strict no-op (no write, no persist) when none.
+	 * Migrate starred cached tasks to the ⭐ tag (see sweepStarredTasks) — only
+	 * rows safe to rewrite from cache (see the eligibility note above). Returns
+	 * the number rewritten; a strict no-op (no write, no persist) when none.
 	 */
 	migrateStarsToTag(): number {
+		const state = auth.get();
 		const user = sweepUser();
 		if (user === undefined) return 0;
+		// Cached rows may be stale: when signed in, only local-only / dirty rows
+		// here; clean server rows are swept by mergeRemote from the next (full) pull.
+		const eligible = state.status === 'anonymous' ? () => true : isSafeFromCache;
 		const before = get(tasksStore);
-		const next = sweepStarredTasks(before, user, Date.now());
+		const next = sweepStarredTasks(before, user, Date.now(), eligible);
 		if (!next) return 0;
 		updateAndPersist(() => next);
 		return next.filter((task, i) => task !== before[i]).length;
@@ -1113,14 +1138,17 @@ export const myDaySuggestions = derived(
 					t.status === 'pending' &&
 					!t.recurrence_id &&
 					!inMyDay(t) &&
-					(t.due_date === today || t.due_date === tomorrow || (!t.due_date && t.priority > 0))
+					(t.due_date === today || t.due_date === tomorrow || (!t.due_date && t.emoji === STARRED_TAG))
 			)
 			.sort((a, b) => {
-				// Prioritize due today, then tomorrow, then priority
+				// Prioritize due today, then tomorrow, then ⭐-tagged (R4: the ⭐ tag
+				// replaced Starred as the undated Suggestions source).
 				const aScore = a.due_date === today ? 2 : a.due_date === tomorrow ? 1 : 0;
 				const bScore = b.due_date === today ? 2 : b.due_date === tomorrow ? 1 : 0;
 				if (aScore !== bScore) return bScore - aScore;
-				if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+				const aStar = a.emoji === STARRED_TAG ? 1 : 0;
+				const bStar = b.emoji === STARRED_TAG ? 1 : 0;
+				if (aStar !== bStar) return bStar - aStar;
 				return a.created_ts - b.created_ts;
 			})
 			.slice(0, 6);
