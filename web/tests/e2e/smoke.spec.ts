@@ -12,7 +12,7 @@ test('@smoke runtime config asset is served', async ({ page }) => {
 	expect(response.status()).toBe(200);
 });
 
-test('@smoke Star action closes the quick shelf', async ({ page }) => {
+test('@smoke quick shelf has no Star action and Close closes it', async ({ page }) => {
 	await setAuthenticatedClientState(page);
 	await page.goto('/');
 	await expect(page.getByRole('heading', { name: 'My Day' })).toBeVisible();
@@ -31,7 +31,10 @@ test('@smoke Star action closes the quick shelf', async ({ page }) => {
 	await row.getByRole('button', { name: '⋯' }).click();
 	await expect(row.locator('.quick')).toBeVisible();
 
-	// Tap Star — the shelf should close immediately.
-	await row.getByRole('button', { name: 'Star' }).click();
+	// Starred is retired (the ⭐ tag replaces it): no Star / Unstar in the shelf.
+	await expect(row.getByRole('button', { name: /^(un)?star$/i })).toHaveCount(0);
+	await expect(row.getByTestId('task-star-indicator')).toHaveCount(0);
+
+	await row.getByRole('button', { name: 'Close' }).click();
 	await expect(row.locator('.quick')).not.toBeVisible();
 });

@@ -62,18 +62,19 @@ const seedSuggestions = async (page: Page) => {
 
 	const row = page.getByTestId('task-row').filter({ hasText: title });
 	await expect(row).toHaveCount(1);
+	// A task due tomorrow (not in My Day) is a suggestion source. (This seed
+	// used to star an undated task; Starred was retired for the ⭐ tag.)
 	await row.getByRole('button', { name: '⋯' }).click();
-	await page.getByRole('button', { name: 'Star' }).click();
-	// Star now auto-closes the shelf; no manual Close click needed.
+	await row.getByRole('button', { name: 'Tomorrow' }).click();
 
-	// The star write persists to IDB asynchronously (repo.saveTasks is
+	// The due-date write persists to IDB asynchronously (repo.saveTasks is
 	// fire-and-forget). page.goto('/') below is a full page navigation (not a
 	// SvelteKit client-side route change), which tears down the JS context —
-	// wait for the priority write to land in IDB first so it survives the
-	// reload instead of racing it.
+	// wait for the write to land in IDB first so it survives the reload
+	// instead of racing it.
 	await expect
-		.poll(async () => (await readTaskFromIdb(page, title))?.priority ?? 0)
-		.toBeGreaterThan(0);
+		.poll(async () => (await readTaskFromIdb(page, title))?.due_date)
+		.toBe(addDaysLocalIso(1));
 
 	await page.goto('/');
 	await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
@@ -362,34 +363,6 @@ test.describe('My Day', () => {
 		await expect(page.getByTestId('detail-punt-indicator')).toContainText(yesterday);
 	});
 
-	test('keeps starred tasks at top in My Day sorting', async ({ page }) => {
-		const marker = makeTitle('MyDay star sort');
-		const titleA = `${marker} A`;
-		const titleB = `${marker} B`;
-
-		await page.getByTestId('new-task-input').fill(titleA);
-		await page.getByTestId('new-task-submit').click();
-		await page.getByTestId('new-task-input').fill(titleB);
-		await page.getByTestId('new-task-submit').click();
-
-		const rowB = page.getByTestId('task-row').filter({ hasText: titleB });
-		await rowB.getByRole('button', { name: '⋯' }).click();
-		await rowB.getByRole('button', { name: 'Star' }).click();
-		await expect(rowB.getByTestId('task-star-indicator')).toHaveCount(1);
-
-		await page.getByLabel('Sort tasks').selectOption('created');
-		await page.getByLabel('Sort direction').selectOption('asc');
-		const plannedSection = page.locator('section.block', {
-			has: page.locator('.section-title', { hasText: 'Planned' }),
-		});
-		const markerRows = plannedSection.getByTestId('task-row').filter({ hasText: marker });
-		await expect(markerRows.first()).toContainText(titleB);
-
-		await page.getByLabel('Sort tasks').selectOption('alpha');
-		await page.getByLabel('Sort direction').selectOption('asc');
-		await expect(markerRows.first()).toContainText(titleB);
-	});
-
 	test('completing last pending My Day non-recurring task triggers day-complete', async ({
 		page
 	}) => {
@@ -531,49 +504,6 @@ test.describe('List view', () => {
 		await expect(pendingRows.nth(0)).toContainText(dueLaterTitle);
 		await expect(pendingRows.nth(1)).toContainText(dueSoonTitle);
 		await expect(pendingRows.nth(2)).toContainText(noDueTitle);
-	});
-
-	test('shows starred indicator and keeps starred tasks at top for created/alpha sorting', async ({
-		page,
-	}) => {
-		await page.goto('/list/goal-management');
-		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
-
-		const marker = makeTitle('Star sort');
-		const titleA = `${marker} A`;
-		const titleB = `${marker} B`;
-
-		await page.getByTestId('new-task-input').fill(titleA);
-		await page.getByTestId('new-task-submit').click();
-		await page.getByTestId('new-task-input').fill(titleB);
-		await page.getByTestId('new-task-submit').click();
-
-		const rowB = page.getByTestId('task-row').filter({ hasText: titleB });
-		await expect(rowB).toHaveCount(1);
-		await rowB.getByRole('button', { name: '⋯' }).click();
-		await rowB.getByRole('button', { name: 'Star' }).click();
-		await expect(rowB.getByTestId('task-star-indicator')).toHaveCount(1);
-
-		// Star auto-closes the shelf; re-open it to access Details.
-		await rowB.getByRole('button', { name: '⋯' }).click();
-		await rowB.getByRole('button', { name: 'Details' }).click();
-		const detailStarToggle = page.getByTestId('detail-star-toggle');
-		await expect(detailStarToggle).toHaveText(/Starred/);
-		await expect(detailStarToggle).toHaveClass(/active/);
-		await page.getByRole('button', { name: '×' }).click();
-
-		const pendingSection = page.locator('section.block', {
-			has: page.locator('.section-title', { hasText: 'Pending' }),
-		});
-		const markerRows = pendingSection.getByTestId('task-row').filter({ hasText: marker });
-
-		await page.getByTestId('list-sort-mode').selectOption('created');
-		await page.getByTestId('list-sort-direction').selectOption('asc');
-		await expect(markerRows.first()).toContainText(titleB);
-
-		await page.getByTestId('list-sort-mode').selectOption('alpha');
-		await page.getByTestId('list-sort-direction').selectOption('asc');
-		await expect(markerRows.first()).toContainText(titleB);
 	});
 
 	test('imports plain text and Joplin-style markdown tasks into the active list', async ({ page }) => {

@@ -72,8 +72,8 @@ Within `web/src/lib/`:
 - `TaskRow` and `TaskDetailDrawer` must render punt state with a theme-aware shift glyph style:
   - inactive/actionable punt uses `▷`
   - active/punted state uses `▶`
-- Task detail status controls (`Mark Done`, `My Day`, `Star`, `Punt`) should share consistent button sizing, text sizing, and centering.
-- Task detail starred state should be conveyed by the star control itself (`☆ Star` / `★ Starred`), not by a separate starred pill above metadata.
+- Task detail status controls (`Mark Done`, `My Day`, `Tag`, `Punt`) should share consistent button sizing, text sizing, and centering.
+- **Starred is retired (2026-11-04).** The ⭐ tag (top of the default palette) replaces it: there is no ★ indicator, no Star/Unstar quick action and no Starred drawer toggle, and task views sort purely by the chosen mode (`lib/tasks/sort.ts` — no starred-first tier). `task.priority` stays in the data model but no UI writes it (the drawer save never does); an undated ⭐-tagged task is a My Day Suggestions source in place of the old undated-starred rule. An idempotent store sweep (no-op when nothing is starred) turns any `priority > 0` task into `priority: 0` + `emoji: '⭐'` (only if untagged) on tasks this device may edit — and only from a fresh copy: inside `mergeRemote` for rows the pull just delivered, and after `hydrateFromDb` only for local-only/dirty rows, signed in or not (a stale cached server row pushed whole would overwrite newer edits from other devices; auth can flip to anonymous mid-hydrate, so there is no sweep-everything branch).
 - Punt actions in the details drawer are visibility-gated by the same rule as row quick actions:
   - pending status
   - due today
