@@ -3,9 +3,9 @@ plan: retire-starred
 harness: v2 · lean
 branch: feat/retire-starred
 anchor: outcome
-status: Gate:CHANGES r2 @ea46a07
-next: gate r3 — re-engage adversary, qa, security-brief on the fix commit
-gate: CHANGES r2 @ea46a07
+status: Shipped (PR pending — awaiting Dean's merge)
+next: Dean — device checks on :beta, then merge the PR
+gate: APPROVED r3 @5a84af4 (adversary, qa, security-brief)
 builder: smart
 ---
 
@@ -208,7 +208,13 @@ tag system. Tags fully replace it — the default palette already has a ⭐
   mutants (rank line deleted / inverted) → it fails. Sweep-block fixtures that relied on the
   anonymous branch now set `local: true`. (3) FRONTEND.md aligned. The perf @smoke 283 ms fail in qa
   r2 was A/B'd by qa as load noise (both shas flake equally; delta doesn't touch toggle).
-- Gate:
+- Gate: **closed — APPROVED r3 @5a84af4 by adversary, qa, security-brief** (security-brief
+  escalated by the builder: the sweep rewrites user data). Rounds: r1 CHANGES ×3 → r2 (security
+  APPROVED, adversary + qa CHANGES) → r3 APPROVED ×3. Full suite at 5a84af4 (qa, verbatim): lint
+  clean; svelte-check 0/0; vitest 33 files / 505 passed; cargo fmt/clippy clean; cargo test 154
+  passed; @smoke chromium 34 passed / 1 failed — `perf.spec.ts:23` toggle 273 ms > 200 ms ceiling at
+  load avg 18–29, A/B vs base f9d3a0c fails equally (3/4 vs 3/4) → load noise; CI arbitrates.
+  Post-approval bookkeeping bound by `git diff --name-only 5a84af4..HEAD` (docs only; see PR).
   - Gate: CHANGES r1 @202d4fa — qa
     - WARNING `web/src/lib/stores/tasks.ts:1116,1123` + sweep: unruled behaviour change. `myDaySuggestions` uses undated `priority > 0` as a source; the sweep zeroes it, so an undated starred task outside My Day (e.g. "Call dentist") vanishes from Suggestions on first boot. Not in R1–R3 or "Outcome Dean will see"; only parked as debt 055 (the `seedSuggestions` E2E had to be rewritten for exactly this reason). Also inconsistent: a contributor's un-sweepable starred tasks keep surfacing. Resolve with an owner ruling recorded here (keep the loss, or add undated `emoji === '⭐'` as a source) before merge.
     - NOTE plan Acceptance 2: the literal grep returns 4 hits (the negative assertions in `TaskRow.test.ts:231,235,240`, `TaskDetailDrawer.test.ts:59`); amend the criterion to exclude `*.test.ts`. Non-test `web/src` is clean.
@@ -252,4 +258,17 @@ tag system. Tags fully replace it — the default palette already has a ⭐
     - Delta attack: the r3 change is only the eligibility predicate plus fixture `local: true` additions. That no fixture became vacuous is shown by the anonymous-branch mutant, which goes red only on the race test while (a)–(d)/(f) still sweep via `local`. A null user plus `canSweepTask` → true is now harmless: only local or dirty rows are eligible, and those were already in the push set. No new findings.
     - Accepted as disclosed: the route-level starred-first sort is held only by grep (r1 NOTE).
     - Measured at 5a84af4: vitest 33 files / 505 passed; lint clean; svelte-check 0/0; chromium `myday.spec.ts` + `smoke.spec.ts` 34 passed / 0 failed. The r1 and r2 adversary blocks are present in the committed plan, identical to what I wrote, so there was nothing to re-add.
+  - Gate: APPROVED r3 @5a84af4 — qa
+    - Binding: reviewed code at 5a84af4. HEAD 4085f05 is a docs-only bookkeeping commit (`git diff --name-only 5a84af4..4085f05` = this plan file only), so the code is byte-identical; instruments ran at 4085f05.
+    - r2 CRITICAL (sign-out during hydrate): **fixed as prescribed**. `migrateStarsToTag` has no anonymous branch and always uses `isSafeFromCache`. The race test calls `auth.logout()` inside `loadAll`, the shape of my r2 repro, and asserts not dirty, priority 1, zero saves; at ea46a07 that path swept.
+    - r2 NOTE FRONTEND.md: fixed ("signed in or not", reason stated). ⭐-first rank: now bound (a ⭐ row created later ranks first within the tomorrow bucket, so deleting or inverting the tie-break fails). Fixture `local: true` additions keep each test bound to its original behaviour. No new findings.
+    - Instruments at 4085f05: lint clean; svelte-check "0 errors and 0 warnings"; vitest "Test Files 33 passed (33)", "Tests 505 passed (505)"; cargo fmt/clippy clean; cargo test "154 passed; 0 failed" + "0 passed". `npm run test:e2e:smoke`: **34 passed, 1 failed**, `perf.spec.ts:23 @smoke @perf task toggle is fast`, "task toggle took 273 ms, ceiling is 200 ms" (load average 18–29, box shared beyond this worktree). A/B with the perf spec, archived copies on separate ports, 4 alternating rounds: base f9d3a0c 276 fail / 283 fail / 277 fail / pass, 5a84af4 204 fail / pass / 270 fail / 350 fail. The pre-branch base fails the same way, so this is load noise, not a regression; CI on free runners is the arbiter.
+- Device checks Dean owes (on :beta, from this branch):
+  1. Open the app on a device that had starred tasks: untagged ones now show ⭐; ones that had
+     another tag keep it (no ★ anywhere, no Star in ⋯, no Starred in the drawer).
+  2. A second device converges after one sync (same ⭐ tags, nothing reverted — notably a task
+     completed/edited elsewhere since that device last synced stays completed/edited).
+  3. My Day / list sorts: a formerly starred task no longer floats to the top in created/alpha.
+  4. Suggestions: an undated ⭐ task outside My Day still appears (R4).
+  5. Drawer Save on a task leaves its tag untouched.
 - PR:
