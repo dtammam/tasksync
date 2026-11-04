@@ -454,7 +454,9 @@ $: isRecurringCompletedToday =
 		font-size: 12px;
 		margin-top: 4px;
 	}
-	.sub > * { grid-row: 1; min-width: 0; }
+	/* border-box: the date is a <span> (content-box by default) and stood ~10px taller
+	   than the button chips, so dated rows were taller than undated ones. */
+	.sub > * { grid-row: 1; min-width: 0; box-sizing: border-box; }
 	.slot-list {
 		grid-column: 1;
 		overflow: hidden;
