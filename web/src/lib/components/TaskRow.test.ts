@@ -10,7 +10,6 @@ vi.mock('$lib/stores/tasks', () => ({
 	tasks: {
 		setDueDate: vi.fn(),
 		setDueToday: vi.fn(),
-		setPriority: vi.fn(),
 		setEmoji: vi.fn(),
 		punt: vi.fn(),
 		deleteRemote: vi.fn().mockResolvedValue(undefined),
@@ -85,24 +84,6 @@ async function openShelf(task: Task) {
 describe('TaskRow action shelf — closes after each action', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-	});
-
-	it('toggleStar closes the shelf when starring a task', async () => {
-		const { container, getByText } = await openShelf(makeTask({ priority: 0 }));
-		expect(container.querySelector('.quick')).toBeTruthy();
-
-		await fireEvent.click(getByText('Star'));
-
-		expect(container.querySelector('.quick')).toBeNull();
-	});
-
-	it('toggleStar closes the shelf when unstarring a task', async () => {
-		const { container, getByText } = await openShelf(makeTask({ priority: 1 }));
-		expect(container.querySelector('.quick')).toBeTruthy();
-
-		await fireEvent.click(getByText('Unstar'));
-
-		expect(container.querySelector('.quick')).toBeNull();
 	});
 
 	it('punt closes the shelf (task due today, not daily-recurring)', async () => {
@@ -372,5 +353,27 @@ describe('TaskRow fixed slots', () => {
 		});
 		expect(getByTestId('task-punt-indicator')).toBeTruthy();
 		expect(container.textContent).not.toMatch(/Punted/);
+	});
+});
+
+describe('TaskRow — Starred is retired (the ⭐ tag replaces it)', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('renders no star indicator for a task that still has priority > 0', () => {
+		const { container, queryByTestId } = render(TaskRow, { props: { task: makeTask({ priority: 1 }) } });
+		expect(queryByTestId('task-star-indicator')).toBeNull();
+		expect(container.textContent).not.toContain('★');
+	});
+
+	it('the ⋯ shelf has no Star / Unstar button', async () => {
+		for (const priority of [0, 1] as const) {
+			const { container, queryByText, unmount } = await openShelf(makeTask({ priority }));
+			expect(container.querySelector('.quick')).toBeTruthy();
+			expect(queryByText('Star')).toBeNull();
+			expect(queryByText('Unstar')).toBeNull();
+			unmount();
+		}
 	});
 });

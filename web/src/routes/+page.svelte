@@ -14,6 +14,7 @@
 	import { uiPreferences, DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
 	import { hydrated } from '$lib/stores/hydration';
 	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
+	import { sortTasks } from '$lib/tasks/sort';
 	import { tagPalette } from '$lib/stores/tagPalette';
 	import type { Task } from '$shared/types/task';
 
@@ -44,18 +45,6 @@
 	const updateMobileViewport = () => {
 		if (typeof window === 'undefined') return;
 		isMobilePwaViewport = window.matchMedia('(max-width: 900px)').matches;
-	};
-	const compareAlpha = (left: string | undefined, right: string | undefined): number => {
-		const a = (left ?? '').trim().toLowerCase();
-		const b = (right ?? '').trim().toLowerCase();
-		if (a === b) return 0;
-		return a < b ? -1 : 1;
-	};
-	const compareStarredFirst = (left: Task, right: Task): number => {
-		const leftStarred = (left?.priority ?? 0) > 0;
-		const rightStarred = (right?.priority ?? 0) > 0;
-		if (leftStarred === rightStarred) return 0;
-		return leftStarred ? -1 : 1;
 	};
 	$: detailTask = detailId ? ($tasks.find((t) => t.id === detailId) ?? null) : null;
 	const today = new Date();
@@ -155,26 +144,6 @@
 
 	$: defaultListId =
 		($lists ?? []).find((l) => l.id !== 'my-day')?.id ?? ($lists ?? [])[0]?.id ?? 'goal-management';
-
-	const sortTasks = (arr: Task[], mode = sortMode, direction = sortDirection): Task[] => {
-		const copy = [...arr];
-		const isAscending = direction !== 'desc';
-		copy.sort((a, b) => {
-			const starredOrder = compareStarredFirst(a, b);
-			if (starredOrder !== 0) return starredOrder;
-
-			if (mode === 'alpha') {
-				const byTitle = compareAlpha(a.title, b.title);
-				if (byTitle === 0) {
-					return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
-				}
-				return isAscending ? byTitle : byTitle * -1;
-			}
-
-			return isAscending ? a.created_ts - b.created_ts : b.created_ts - a.created_ts;
-		});
-		return copy;
-	};
 
 	$: sortedPending = sortTasks($myDayPending ?? [], sortMode, sortDirection);
 	$: sortedMissed = sortTasks($myDayMissed ?? [], sortMode, sortDirection);

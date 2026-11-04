@@ -67,7 +67,8 @@ const baseTask = (overrides: Partial<Task> = {}): Task => ({
 	completed_ts: overrides.completed_ts,
 	assignee_user_id: overrides.assignee_user_id,
 	created_by_user_id: overrides.created_by_user_id,
-	emoji: overrides.emoji
+	emoji: overrides.emoji,
+	local: overrides.local
 });
 
 describe('tasks store helpers', () => {
@@ -812,7 +813,8 @@ describe('tasks store helpers', () => {
 				title: 'Original title',
 				list_id: 'goal-management',
 				status: 'pending',
-				my_day: false
+				my_day: false,
+				priority: 2
 			})
 		]);
 		saveSpy.mockClear();
@@ -823,7 +825,6 @@ describe('tasks store helpers', () => {
 			recurrence_id: 'weekly',
 			url: 'https://example.com',
 			notes: 'Updated notes',
-			priority: 1,
 			my_day: true,
 			list_id: 'goal-management',
 			assignee_user_id: 'u-me'
@@ -836,12 +837,13 @@ describe('tasks store helpers', () => {
 			recurrence_id: 'weekly',
 			url: 'https://example.com',
 			notes: 'Updated notes',
-			priority: 1,
 			my_day: true,
 			list_id: 'goal-management',
 			assignee_user_id: 'u-me',
 			dirty: true
 		});
+		// The drawer save never touches priority (retire-starred): it round-trips unchanged.
+		expect(updated?.priority).toBe(2);
 		expect(saveSpy).toHaveBeenCalledTimes(1);
 		saveSpy.mockRestore();
 	});
@@ -858,19 +860,21 @@ describe('tasks store helpers', () => {
 			}),
 			baseTask({ id: 'already-myday', my_day: true, due_date: '2026-02-02' }),
 			baseTask({ id: 'done-task', due_date: '2026-02-02', status: 'done' }),
-			baseTask({ id: 'no-due', priority: 1 })
+			// R4: an undated ⭐-tagged task is a suggestion source (replaced Starred);
+			// an undated legacy priority:1 task without the tag no longer is.
+			baseTask({ id: 'no-due', emoji: '⭐' }),
+			baseTask({ id: 'no-due-other-tag', emoji: '🎯' }),
+			baseTask({ id: 'no-due-legacy-priority', priority: 1 })
 		]);
 
 		const suggestions = get(myDaySuggestions);
 		expect(suggestions.map((t) => t.id)).toEqual(['due-tomorrow', 'no-due']);
 	});
 
-	it('sets due date and priority via helpers', () => {
+	it('sets due date via helper', () => {
 		tasks.setAll([baseTask({ id: 'p1', priority: 0, due_date: undefined })]);
-		tasks.setPriority('p1', 2);
 		tasks.setDueDate('p1', '2026-02-10');
 		const updated = tasks.getAll().find((t) => t.id === 'p1');
-		expect(updated?.priority).toBe(2);
 		expect(updated?.due_date).toBe('2026-02-10');
 		expect(updated?.dirty).toBe(true);
 	});
@@ -1872,5 +1876,289 @@ describe('tasks mergeRemote day-complete (remote check-off)', () => {
 			baseTask({ id: 'a', my_day: true, status: 'done', completed_ts: Date.now() })
 		]);
 		expect(mockedTriggerDayComplete).not.toHaveBeenCalled();
+	});
+});
+
+describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
+	const signInAs = async (role: 'admin' | 'contributor', user_id = 'u-me') => {
+		const meSpy = vi.spyOn(api, 'me').mockResolvedValueOnce({
+			user_id,
+			email: 'me@example.com',
+			display: 'Me',
+			space_id: 's1',
+			role
+		});
+		localStorage.setItem('tasksync:auth-token', 'test-token');
+		await auth.hydrate();
+		meSpy.mockRestore();
+	};
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-11-04T12:00:00Z'));
+		localStorage.clear();
+		auth.logout();
+		tasks.setAll([]);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
+	const byId = (id: string) => tasks.getAll().find((t) => t.id === id);
+
+	it('(a) tags a starred, untagged task ⭐, zeroes priority, marks dirty and persists', () => {
+		tasks.setAll([baseTask({ id: 's', priority: 1, local: true, updated_ts: 1 })]);
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		expect(tasks.migrateStarsToTag()).toBe(1);
+
+		expect(byId('s')).toMatchObject({ emoji: '⭐', priority: 0, dirty: true });
+		expect(byId('s')?.updated_ts).toBe(Date.now());
+		expect(saveSpy).toHaveBeenCalledTimes(1);
+		expect(saveSpy.mock.calls[0][0].find((t) => t.id === 's')).toMatchObject({ emoji: '⭐', priority: 0 });
+	});
+
+	it('(b) keeps an existing tag on a starred task and only drops the star', () => {
+		tasks.setAll([baseTask({ id: 's', priority: 2, local: true, emoji: '🎯' })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.migrateStarsToTag();
+
+		expect(byId('s')).toMatchObject({ emoji: '🎯', priority: 0, dirty: true });
+	});
+
+	it('(c) is a strict no-op when nothing is starred: zero persists, no updated_ts change', () => {
+		const original = [
+			baseTask({ id: 'a', priority: 0, updated_ts: 111 }),
+			baseTask({ id: 'b', priority: 0, emoji: '🎯', updated_ts: 222 })
+		];
+		tasks.setAll(original);
+		const before = tasks.getAll();
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		expect(tasks.migrateStarsToTag()).toBe(0);
+
+		expect(saveSpy).not.toHaveBeenCalled();
+		expect(tasks.getAll()).toBe(before);
+		expect(tasks.getAll().map((t) => t.updated_ts)).toEqual([111, 222]);
+		expect(tasks.getAll().every((t) => !t.dirty)).toBe(true);
+	});
+
+	it('(d) running it twice changes nothing the second time', () => {
+		tasks.setAll([baseTask({ id: 's', priority: 1, local: true }), baseTask({ id: 'p', priority: 0 })]);
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		expect(tasks.migrateStarsToTag()).toBe(1);
+		const afterFirst = tasks.getAll();
+		saveSpy.mockClear();
+		vi.advanceTimersByTime(5000);
+
+		expect(tasks.migrateStarsToTag()).toBe(0);
+		expect(saveSpy).not.toHaveBeenCalled();
+		expect(tasks.getAll()).toBe(afterFirst);
+	});
+
+	it('(e) leaves tasks a contributor cannot edit untouched', async () => {
+		await signInAs('contributor', 'u-c');
+		tasks.setAll([
+			// All local-only so cache-eligibility isn't what's under test here.
+			baseTask({ id: 'mine', priority: 1, local: true, created_by_user_id: 'u-c', updated_ts: 1 }),
+			baseTask({ id: 'theirs', priority: 1, local: true, created_by_user_id: 'u-admin', updated_ts: 2 }),
+			baseTask({ id: 'legacy', priority: 1, local: true, created_by_user_id: undefined, updated_ts: 3 }),
+			// The server 403s a contributor push carrying my_day: true — never sweep it.
+			baseTask({ id: 'mine-myday', priority: 1, local: true, my_day: true, created_by_user_id: 'u-c', updated_ts: 4 })
+		]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		expect(tasks.migrateStarsToTag()).toBe(1);
+
+		expect(byId('mine')).toMatchObject({ emoji: '⭐', priority: 0, dirty: true });
+		for (const id of ['theirs', 'legacy', 'mine-myday']) {
+			expect(byId(id)).toMatchObject({ priority: 1, dirty: false });
+			expect(byId(id)?.emoji).toBeUndefined();
+		}
+		expect(tasks.getAll().map((t) => t.updated_ts)).toEqual([Date.now(), 2, 3, 4]);
+	});
+
+	it('(e) an admin sweeps tasks regardless of creator', async () => {
+		await signInAs('admin', 'u-admin');
+		tasks.setAll([baseTask({ id: 'contrib', priority: 1, local: true, created_by_user_id: 'u-c', my_day: true })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		expect(tasks.migrateStarsToTag()).toBe(1);
+		expect(byId('contrib')).toMatchObject({ emoji: '⭐', priority: 0 });
+	});
+
+	it('does nothing while auth is still resolving', () => {
+		const user = { user_id: 'u-c', email: 'c@x', display: 'C', space_id: 's1', role: 'contributor' as const };
+		vi.spyOn(auth, 'get').mockReturnValue({ status: 'loading', source: null, user: null, error: null });
+		tasks.setAll([baseTask({ id: 's', priority: 1, created_by_user_id: user.user_id })]);
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		expect(tasks.migrateStarsToTag()).toBe(0);
+		expect(saveSpy).not.toHaveBeenCalled();
+		expect(byId('s')?.priority).toBe(1);
+	});
+
+	it('(f) runs after hydrateFromDb', async () => {
+		vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({
+			lists: [],
+			tasks: [baseTask({ id: 'stored', priority: 1, local: true }), baseTask({ id: 'plain', priority: 0, updated_ts: 9 })]
+		});
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		await tasks.hydrateFromDb();
+
+		expect(byId('stored')).toMatchObject({ emoji: '⭐', priority: 0, dirty: true });
+		expect(byId('plain')).toMatchObject({ priority: 0, dirty: false, updated_ts: 9 });
+		expect(saveSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it('(f) hydrateFromDb with nothing starred persists nothing', async () => {
+		vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({ lists: [], tasks: [baseTask({ id: 'plain' })] });
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		await tasks.hydrateFromDb();
+
+		expect(saveSpy).not.toHaveBeenCalled();
+	});
+
+	it('(f) runs after mergeRemote: a merged-in starred task is swept in the same single persist', () => {
+		tasks.setAll([baseTask({ id: 'local', priority: 0, updated_ts: 5 })]);
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.mergeRemote([baseTask({ id: 'from-stale-device', priority: 1, updated_ts: 7 })]);
+
+		expect(byId('from-stale-device')).toMatchObject({ emoji: '⭐', priority: 0, dirty: true });
+		expect(byId('local')).toMatchObject({ dirty: false, updated_ts: 5 });
+		expect(saveSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it('mergeRemote with nothing starred leaves remote tasks clean (no re-push churn)', () => {
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.mergeRemote([baseTask({ id: 'r', priority: 0, updated_ts: 7 })]);
+
+		expect(byId('r')).toMatchObject({ dirty: false, updated_ts: 7 });
+		expect(saveSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it('mergeRemote skips a starred task the contributor cannot edit (no 403 loop)', async () => {
+		await signInAs('contributor', 'u-c');
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.mergeRemote([baseTask({ id: 'admins', priority: 1, created_by_user_id: 'u-admin' })]);
+
+		expect(byId('admins')).toMatchObject({ priority: 1, dirty: false });
+	});
+	it('signed in, hydrate sweeps only local-only / dirty rows — never a clean (possibly stale) server row', async () => {
+		await signInAs('admin', 'u-admin');
+		vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({
+			lists: [],
+			tasks: [
+				baseTask({ id: 'server-clean', priority: 1, updated_ts: 1 }),
+				baseTask({ id: 'local-only', priority: 1, local: true, dirty: true }),
+				baseTask({ id: 'server-dirty', priority: 1, dirty: true, notes: 'my offline edit' })
+			]
+		});
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		await tasks.hydrateFromDb();
+
+		expect(byId('server-clean')).toMatchObject({ priority: 1, dirty: false, updated_ts: 1 });
+		expect(byId('server-clean')?.emoji).toBeUndefined();
+		expect(byId('local-only')).toMatchObject({ emoji: '⭐', priority: 0 });
+		expect(byId('server-dirty')).toMatchObject({ emoji: '⭐', priority: 0, notes: 'my offline edit' });
+	});
+
+	it('stale starred cache never overwrites newer server edits (hydrate → pull)', async () => {
+		await signInAs('admin', 'u-admin');
+		// This device last synced while T was starred, untagged, pending, notes OLD.
+		vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({
+			lists: [],
+			tasks: [baseTask({ id: 'T', priority: 1, status: 'pending', notes: 'OLD', updated_ts: 1 })]
+		});
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+		await tasks.hydrateFromDb();
+		expect(byId('T')?.dirty).toBe(false);
+
+		// Meanwhile another device tagged it 🎯, edited notes, completed it (and swept it).
+		const fresh = baseTask({
+			id: 'T',
+			priority: 0,
+			emoji: '🎯',
+			status: 'done',
+			notes: 'NEW',
+			completed_ts: Date.now(),
+			updated_ts: 50
+		});
+		tasks.mergeRemote([fresh]);
+
+		expect(byId('T')).toMatchObject({ emoji: '🎯', status: 'done', notes: 'NEW', priority: 0, dirty: false });
+		expect(tasks.getAll().filter((t) => t.dirty)).toEqual([]);
+	});
+
+	it('signed in, mergeRemote sweeps a fresh starred row but not a clean stale row it did not receive', async () => {
+		await signInAs('admin', 'u-admin');
+		tasks.setAll([baseTask({ id: 'cached-stale', priority: 1, updated_ts: 1 })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.mergeRemote([baseTask({ id: 'fresh', priority: 1, emoji: '🎯', updated_ts: 9 })]);
+
+		expect(byId('fresh')).toMatchObject({ emoji: '🎯', priority: 0, dirty: true });
+		expect(byId('cached-stale')).toMatchObject({ priority: 1, dirty: false, updated_ts: 1 });
+	});
+
+	it('signed in, a dirty local row still wins the merge and is swept as the user’s own edit', async () => {
+		await signInAs('admin', 'u-admin');
+		tasks.setAll([baseTask({ id: 'd', priority: 1, dirty: true, notes: 'local edit' })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.mergeRemote([baseTask({ id: 'd', priority: 1, notes: 'server', updated_ts: 9 })]);
+
+		// The local dirty row wins (as before); sweeping it only adds the ⭐ to the user's own edit.
+		expect(byId('d')).toMatchObject({ notes: 'local edit', emoji: '⭐', priority: 0, dirty: true });
+	});
+
+	it('R4: a swept undated starred task stays in Suggestions via its ⭐ tag', () => {
+		tasks.setAll([baseTask({ id: 'call-dentist', priority: 1, local: true, status: 'pending' })]);
+		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		tasks.migrateStarsToTag();
+
+		expect(byId('call-dentist')).toMatchObject({ emoji: '⭐', priority: 0 });
+		expect(get(myDaySuggestions).map((t) => t.id)).toEqual(['call-dentist']);
+	});
+	it('a sign-out (background 401) during hydrate never sweeps the account’s clean cached rows', async () => {
+		await signInAs('admin', 'u-admin');
+		vi.spyOn(repo, 'loadAll').mockImplementationOnce(async () => {
+			auth.logout(); // reconcileSession got a 401 while IDB was being read
+			return { lists: [], tasks: [baseTask({ id: 'T', priority: 1, notes: 'OLD', updated_ts: 1 })] };
+		});
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		await tasks.hydrateFromDb();
+
+		expect(byId('T')).toMatchObject({ priority: 1, dirty: false, updated_ts: 1 });
+		expect(saveSpy).not.toHaveBeenCalled();
+	});
+
+	it('R4: ⭐ ranks first within a due bucket; due tomorrow still outranks undated ⭐', () => {
+		// (Due-today tasks are already in My Day, so they are never suggestions.)
+		tasks.setAll([
+			baseTask({ id: 'tomorrow-plain', due_date: '2026-11-05', created_ts: 1 }),
+			baseTask({ id: 'tomorrow-star', due_date: '2026-11-05', emoji: '⭐', created_ts: 2 }),
+			baseTask({ id: 'undated-star-late', emoji: '⭐', created_ts: 4 }),
+			baseTask({ id: 'undated-star-early', emoji: '⭐', created_ts: 3 })
+		]);
+
+		expect(get(myDaySuggestions).map((t) => t.id)).toEqual([
+			'tomorrow-star',
+			'tomorrow-plain',
+			'undated-star-early',
+			'undated-star-late'
+		]);
 	});
 });

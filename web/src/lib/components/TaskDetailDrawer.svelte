@@ -19,7 +19,6 @@ let due = '';
 let recur = '';
 let url = '';
 let notes = '';
-let priority: 0 | 1 | 2 | 3 = 0;
 let listId = '';
 let assigneeUserId = '';
 let statusValue = 'pending';
@@ -49,7 +48,6 @@ function hydrate(t: Task) {
 	recur = t.recurrence_id ?? '';
 	url = t.url ?? '';
 	notes = t.notes ?? '';
-	priority = t.priority ?? 0;
 	listId = t.list_id;
 	assigneeUserId = t.assignee_user_id ?? '';
 	statusValue = t.status ?? 'pending';
@@ -93,7 +91,6 @@ $: isRecurringCompletedToday =
 $: isStatusAcknowledged = statusValue === 'done' || isRecurringCompletedToday;
 $: isPuntedControlActive = puntedFromDrawer || (showPuntedBadge && !canPunt);
 $: puntGlyph = isPuntedControlActive ? '▶' : '▷';
-$: starGlyph = priority > 0 ? '★' : '☆';
 $: isInMyDay = due === todayKey || (!due && (task?.my_day ?? false));
 
 const save = () => {
@@ -104,7 +101,6 @@ const save = () => {
 		recurrence_id: recur || undefined,
 		url: url || undefined,
 		notes,
-		priority,
 		my_day: canEditMyDay ? false : (task.my_day ?? false),
 		list_id: listId,
 		assignee_user_id: canEditAssignee ? assigneeUserId || undefined : task.assignee_user_id,
@@ -128,11 +124,6 @@ const toggleStatus = () => {
 	}
 	statusValue = statusValue === 'done' ? 'pending' : 'done';
 	recurringCompletionAck = false;
-};
-
-const toggleStar = () => {
-	if (!canEditTask) return;
-	priority = priority > 0 ? 0 : 1;
 };
 
 const punt = () => {
@@ -210,19 +201,6 @@ const memberAvatar = (member: SpaceMember): string => {
 							disabled={!canEditTask}
 						>Add to My Day</button>
 					{/if}
-				</label>
-				<label>
-					Starred
-					<button
-						class={`ghost detail-toggle star-toggle ${priority > 0 ? 'active' : ''}`}
-						type="button"
-						data-testid="detail-star-toggle"
-						on:click={toggleStar}
-						disabled={!canEditTask}
-					>
-						<span class="star-glyph" aria-hidden="true">{starGlyph}</span>
-						{priority > 0 ? 'Starred' : 'Star'}
-					</button>
 				</label>
 				<label>
 					Tag
@@ -393,7 +371,6 @@ const memberAvatar = (member: SpaceMember): string => {
 		text-align: center;
 	}
 	.status-toggle.active,
-	button.ghost.star-toggle.active,
 	button.ghost.punt-toggle.active,
 	button.ghost.myday-toggle.active,
 	button.ghost.tag-toggle.active {
@@ -442,14 +419,5 @@ const memberAvatar = (member: SpaceMember): string => {
 		font-weight: 800;
 		font-size: 13px;
 		color: color-mix(in oklab, var(--surface-accent) 64%, var(--app-text) 36%);
-	}
-	.star-glyph {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 14px;
-		font-size: 13px;
-		font-weight: 700;
-		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
 	}
 </style>

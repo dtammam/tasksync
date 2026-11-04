@@ -102,12 +102,6 @@ onDestroy(() => {
 	}
 });
 
-const toggleStar = () => {
-	if (!canEditTask) return;
-	tasks.setPriority(task.id, task.priority > 0 ? 0 : 1);
-	closeActions();
-};
-
 const closeActions = () => (showActions = false);
 
 const toggleActions = () => {
@@ -246,9 +240,6 @@ $: isRecurringCompletedToday =
 					<span class="emoji-indicator" data-testid="task-emoji-indicator" aria-label="Tag">{task.emoji}</span>
 				{/if}
 			{/if}
-			{#if task.priority > 0}
-				<span class="star-indicator" data-testid="task-star-indicator" aria-label="Starred">★</span>
-			{/if}
 			{#if showPuntIndicator}
 				<span class="punt-indicator" data-testid="task-punt-indicator" aria-label="Punted">▶</span>
 			{/if}
@@ -327,7 +318,6 @@ $: isRecurringCompletedToday =
 					<button type="button" on:click={openTagFromMenu} data-testid="task-tag-menu">Tag</button>
 					<button type="button" on:click={addTomorrow}>Tomorrow</button>
 					<button type="button" on:click={addNextWeek}>Next week</button>
-					<button type="button" on:click={toggleStar}>{task.priority > 0 ? 'Unstar' : 'Star'}</button>
 					<button class="danger" type="button" on:click={deleteTask}>Delete</button>
 				{/if}
 				<button class="ghost" type="button" on:click={closeActions}>Close</button>
@@ -362,16 +352,6 @@ $: isRecurringCompletedToday =
 	/* Container for the narrow slot tier (R7): the strip, not the viewport, decides. */
 	.meta { min-width:0; container: task-meta / inline-size; }
 	.meta .title { font-weight:600; color:var(--app-text); display:flex; gap:8px; align-items:center; min-width:0; }
-	.star-indicator {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 18px;
-		height: 18px;
-		flex: 0 0 auto;
-		font-size: 14px;
-		color: color-mix(in oklab, var(--surface-accent) 62%, #facc15 38%);
-	}
 	.emoji-indicator {
 		display: inline-flex;
 		align-items: center;
