@@ -3,9 +3,9 @@ plan: row-fixed-slots
 harness: v2 · lean
 branch: feat/row-fixed-slots
 anchor: outcome
-status: In progress
-next: builder — gate r2 (re-engage adversary + qa)
-gate: pending
+status: In review
+next: Dean — device check on :beta, then merge
+gate: APPROVED r3 @af72be6 (adversary + qa)
 builder: smart
 ---
 
@@ -161,4 +161,7 @@ second line.
   - Gate: APPROVED r2 @fc8fd5a — qa
   - r1 fixes: adversary W1 (≤340px / Select overflow) → owner ruling R7, narrow tier via container query, spec adds 320 + Select cases (8 cases, green on chromium/firefox/webkit; mutant "no narrow tier" → 3 fail). Adversary W2 (spec too weak) → each slot must sit right-pinned in its own grid track and its content must fit its box; surviving mutants S1/S8 now 4/4 fail, S2 (desktop) 2/2, S3/S6 (phone) 2/2. N1 Catch Up `aria-label` asserted. N2 + QA NOTE 2: visually hidden "Next" in recurring dates. QA WARNING 1: comment/FRONTEND numbers corrected (52px top-level, ~26px Missed card at 360).
   - Gate: APPROVED r2 @fc8fd5a — adversary
+  - Gate: APPROVED r3 @af72be6 — adversary
+  - Gate: APPROVED r3 @af72be6 — qa
+  - Merge: origin/main 4cd7589 (retire-starred #172) merged as af72be6. Conflicts: TaskRow.test.ts (both sides appended a describe; both kept), tech-debt-tracker.md (ID 054 taken by main → port-reuse row is 056). TaskRow.svelte auto-merged; main's hunks are only the ★ indicator, Star shelf button and CSS. Post-merge: vitest 516/516 (33 files), svelte-check 0/0, eslint clean, @smoke 39/39 chromium, row/myday/quick-tag/bulk-tag/smoke specs × 3 browsers 226 passed / 0 failed / 0 flaky / 17 pre-existing non-chromium skips, cargo test 154/154. QA r3: one webkit myday.spec:835 readiness crash under box load (load avg ~17); 6/6 green on af72be6, fc8fd5a and main at lower load.
 - PR:
