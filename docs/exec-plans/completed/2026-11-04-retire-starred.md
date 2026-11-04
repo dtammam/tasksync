@@ -3,7 +3,7 @@ plan: retire-starred
 harness: v2 · lean
 branch: feat/retire-starred
 anchor: outcome
-status: Shipped (PR pending — awaiting Dean's merge)
+status: Shipped (PR #172 — awaiting Dean's merge)
 next: Dean — device checks on :beta, then merge the PR
 gate: APPROVED r3 @5a84af4 (adversary, qa, security-brief)
 builder: smart
@@ -271,4 +271,4 @@ tag system. Tags fully replace it — the default palette already has a ⭐
   3. My Day / list sorts: a formerly starred task no longer floats to the top in created/alpha.
   4. Suggestions: an undated ⭐ task outside My Day still appears (R4).
   5. Drawer Save on a task leaves its tag untouched.
-- PR:
+- PR: [#172](https://github.com/dtammam/tasksync/pull/172) — opened 2026-11-04; Dean merges. Post-approval diff `5a84af4..HEAD` = this file only (bookkeeping).
