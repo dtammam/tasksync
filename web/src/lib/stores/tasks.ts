@@ -293,7 +293,9 @@ export const sweepStarredTasks = (
  * first pull of a session is a full pull, so every server task gets its turn).
  * Local-only rows (never on the server) and already-dirty rows (the user's own
  * unpushed edit, which mergeRemote keeps and the next push sends anyway) are
- * always safe, as is the anonymous scope, which never pushes to an account.
+ * always safe. There is deliberately no "signed out → sweep everything" branch:
+ * auth can flip to anonymous mid-hydrate (a background 401) while the rows came
+ * from the account's scope, and tasks created signed-out are `local` anyway.
  */
 const isSafeFromCache = (task: Task) => !!task.local || !!task.dirty;
 
@@ -1021,14 +1023,12 @@ export const tasks = {
 	 * the number rewritten; a strict no-op (no write, no persist) when none.
 	 */
 	migrateStarsToTag(): number {
-		const state = auth.get();
 		const user = sweepUser();
 		if (user === undefined) return 0;
-		// Cached rows may be stale: when signed in, only local-only / dirty rows
-		// here; clean server rows are swept by mergeRemote from the next (full) pull.
-		const eligible = state.status === 'anonymous' ? () => true : isSafeFromCache;
+		// Cached rows may be stale: only local-only / dirty rows here; clean server
+		// rows are swept by mergeRemote from the next (full) pull.
 		const before = get(tasksStore);
-		const next = sweepStarredTasks(before, user, Date.now(), eligible);
+		const next = sweepStarredTasks(before, user, Date.now(), isSafeFromCache);
 		if (!next) return 0;
 		updateAndPersist(() => next);
 		return next.filter((task, i) => task !== before[i]).length;

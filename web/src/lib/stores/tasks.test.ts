@@ -1909,7 +1909,7 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 	const byId = (id: string) => tasks.getAll().find((t) => t.id === id);
 
 	it('(a) tags a starred, untagged task ⭐, zeroes priority, marks dirty and persists', () => {
-		tasks.setAll([baseTask({ id: 's', priority: 1, updated_ts: 1 })]);
+		tasks.setAll([baseTask({ id: 's', priority: 1, local: true, updated_ts: 1 })]);
 		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
 
 		expect(tasks.migrateStarsToTag()).toBe(1);
@@ -1921,7 +1921,7 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 	});
 
 	it('(b) keeps an existing tag on a starred task and only drops the star', () => {
-		tasks.setAll([baseTask({ id: 's', priority: 2, emoji: '🎯' })]);
+		tasks.setAll([baseTask({ id: 's', priority: 2, local: true, emoji: '🎯' })]);
 		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
 
 		tasks.migrateStarsToTag();
@@ -1947,7 +1947,7 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 	});
 
 	it('(d) running it twice changes nothing the second time', () => {
-		tasks.setAll([baseTask({ id: 's', priority: 1 }), baseTask({ id: 'p', priority: 0 })]);
+		tasks.setAll([baseTask({ id: 's', priority: 1, local: true }), baseTask({ id: 'p', priority: 0 })]);
 		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
 
 		expect(tasks.migrateStarsToTag()).toBe(1);
@@ -2005,7 +2005,7 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 	it('(f) runs after hydrateFromDb', async () => {
 		vi.spyOn(repo, 'loadAll').mockResolvedValueOnce({
 			lists: [],
-			tasks: [baseTask({ id: 'stored', priority: 1 }), baseTask({ id: 'plain', priority: 0, updated_ts: 9 })]
+			tasks: [baseTask({ id: 'stored', priority: 1, local: true }), baseTask({ id: 'plain', priority: 0, updated_ts: 9 })]
 		});
 		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
 
@@ -2123,12 +2123,42 @@ describe('tasks migrateStarsToTag (retire Starred → ⭐ tag)', () => {
 	});
 
 	it('R4: a swept undated starred task stays in Suggestions via its ⭐ tag', () => {
-		tasks.setAll([baseTask({ id: 'call-dentist', priority: 1, status: 'pending' })]);
+		tasks.setAll([baseTask({ id: 'call-dentist', priority: 1, local: true, status: 'pending' })]);
 		vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
 
 		tasks.migrateStarsToTag();
 
 		expect(byId('call-dentist')).toMatchObject({ emoji: '⭐', priority: 0 });
 		expect(get(myDaySuggestions).map((t) => t.id)).toEqual(['call-dentist']);
+	});
+	it('a sign-out (background 401) during hydrate never sweeps the account’s clean cached rows', async () => {
+		await signInAs('admin', 'u-admin');
+		vi.spyOn(repo, 'loadAll').mockImplementationOnce(async () => {
+			auth.logout(); // reconcileSession got a 401 while IDB was being read
+			return { lists: [], tasks: [baseTask({ id: 'T', priority: 1, notes: 'OLD', updated_ts: 1 })] };
+		});
+		const saveSpy = vi.spyOn(repo, 'saveTasks').mockResolvedValue(undefined);
+
+		await tasks.hydrateFromDb();
+
+		expect(byId('T')).toMatchObject({ priority: 1, dirty: false, updated_ts: 1 });
+		expect(saveSpy).not.toHaveBeenCalled();
+	});
+
+	it('R4: ⭐ ranks first within a due bucket; due tomorrow still outranks undated ⭐', () => {
+		// (Due-today tasks are already in My Day, so they are never suggestions.)
+		tasks.setAll([
+			baseTask({ id: 'tomorrow-plain', due_date: '2026-11-05', created_ts: 1 }),
+			baseTask({ id: 'tomorrow-star', due_date: '2026-11-05', emoji: '⭐', created_ts: 2 }),
+			baseTask({ id: 'undated-star-late', emoji: '⭐', created_ts: 4 }),
+			baseTask({ id: 'undated-star-early', emoji: '⭐', created_ts: 3 })
+		]);
+
+		expect(get(myDaySuggestions).map((t) => t.id)).toEqual([
+			'tomorrow-star',
+			'tomorrow-plain',
+			'undated-star-early',
+			'undated-star-late'
+		]);
 	});
 });
