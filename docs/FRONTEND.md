@@ -80,6 +80,24 @@ Within `web/src/lib/`:
   - non-daily recurrence
 - If a task is already punted for the current cycle, details shows a disabled `Punted` state control instead of an active punt button.
 
+## Task row slots
+
+The line under a task title (`TaskRow.svelte` `.sub`) is a one-row grid with fixed slots, so the eye and thumb find
+each control at the same x on every row (plan `2026-11-04-row-fixed-slots`):
+
+- Columns: `minmax(0,1fr)` list name · `--slot-date` · `--slot-action` · `--slot-tag` · `--slot-more`. Widths are
+  custom properties on `.task`, measured as max-content across all UI fonts; the `max-width: 900px` block slims them
+  for phones. Re-measure when adding a font or changing chip text.
+- Every cell has an explicit `grid-column`; an absent chip leaves its track empty. Never render a placeholder with a
+  slot's testid — `task-myday-btn`, `task-catchup`, `task-tag-chip`, `task-date` exist only when they apply.
+- List name (My Day only): truncates with `…`, full name in `title`. List views leave the column empty.
+- Date: `↻ <iso>` for the next recurrence (My Day only), else a one-off `due_date`, ISO, right-aligned.
+- Action: Catch Up wins over My Day (My Day stays in the details drawer). On phones both are icon buttons (`⤼`, `☀︎`)
+  with the word as `aria-label`.
+- Tag: 🏷 only for an editable, untagged task. ⋯ always.
+- The strip never wraps; no chips beyond these. Punt state is the ▶ before the title only.
+- Covered by `web/tests/e2e/row-fixed-slots.spec.ts` (positions at 360/1280, both views).
+
 ## Target layered model (directional dependencies)
 
 Within a domain, dependencies should flow:
