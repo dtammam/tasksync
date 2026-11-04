@@ -158,5 +158,7 @@ second line.
 - Gate:
   - Gate: CHANGES r1 @3e939bb — adversary
   - Gate: APPROVED r1 @3e939bb — qa
+  - Gate: APPROVED r2 @fc8fd5a — qa
   - r1 fixes: adversary W1 (≤340px / Select overflow) → owner ruling R7, narrow tier via container query, spec adds 320 + Select cases (8 cases, green on chromium/firefox/webkit; mutant "no narrow tier" → 3 fail). Adversary W2 (spec too weak) → each slot must sit right-pinned in its own grid track and its content must fit its box; surviving mutants S1/S8 now 4/4 fail, S2 (desktop) 2/2, S3/S6 (phone) 2/2. N1 Catch Up `aria-label` asserted. N2 + QA NOTE 2: visually hidden "Next" in recurring dates. QA WARNING 1: comment/FRONTEND numbers corrected (52px top-level, ~26px Missed card at 360).
+  - Gate: APPROVED r2 @fc8fd5a — adversary
 - PR:
