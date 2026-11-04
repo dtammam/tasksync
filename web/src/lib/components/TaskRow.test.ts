@@ -329,4 +329,35 @@ describe('TaskRow fixed slots', () => {
 		const { queryByTestId } = render(TaskRow, { props: { task: makeTask(), inMyDayView: false } });
 		expect(queryByTestId('task-list-name')).toBeNull();
 	});
+
+	it('punted (arrived today): ▶ indicator present, no "Punted" text in the row', () => {
+		const { getByTestId, container } = render(TaskRow, {
+			props: {
+				task: makeTask({
+					due_date: todayIso(),
+					punted_from_due_date: isoPlusDays(-1),
+					punted_on_date: isoPlusDays(-1)
+				}),
+				inMyDayView: true
+			}
+		});
+		expect(getByTestId('task-punt-indicator')).toBeTruthy();
+		expect(container.textContent).not.toMatch(/Punted/);
+	});
+
+	it('punted today (completed context): ▶ indicator present, no "Punted today" text', () => {
+		const { getByTestId, container } = render(TaskRow, {
+			props: {
+				task: makeTask({
+					due_date: isoPlusDays(1),
+					punted_from_due_date: todayIso(),
+					punted_on_date: todayIso()
+				}),
+				completedContext: true,
+				inMyDayView: true
+			}
+		});
+		expect(getByTestId('task-punt-indicator')).toBeTruthy();
+		expect(container.textContent).not.toMatch(/Punted/);
+	});
 });

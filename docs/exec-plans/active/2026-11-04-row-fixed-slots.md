@@ -4,7 +4,7 @@ harness: v2 · lean
 branch: feat/row-fixed-slots
 anchor: outcome
 status: In progress
-next: builder — W2 (punted chips out)
+next: builder — W3 (position spec + screenshots)
 gate: pending
 builder: smart
 ---
@@ -151,7 +151,7 @@ second line.
 ## Evidence (builder fills)
 
 - W1: `.sub` is a 5-track grid; every cell has an explicit `grid-column`, so an absent chip leaves its fixed track empty (no placeholder elements, testids stay absent). Widths measured as max-content across all 23 UI fonts in Chromium: desktop date 100 (Sono `↻ 2026-12-31`), action 78 (Comfortaa `Catch Up`), tag/⋯ 30; phones (R6) date 88 (plain text, 86 measured), action 28 (icon), tag/⋯ 24, gap 4 → list name 52px in My Day at 360px (Missed-card rows ~28px, nested container). Unit: `TaskRow.test.ts` 21/21 (9 new); full vitest 489/489 (31 files); lint + check clean. Ellipsis is asserted as computed style in W3 (vitest doesn't process component CSS). Punted chips parked on grid row 2 until W2.
-- W2:
+- W2: both `punted-chip` spans + CSS removed; `showPuntedArrivalTag`/`showPuntedCompletedTag` kept (feed ▶). 2 new unit cases (arrival + completed-context punt: ▶ present, no /Punted/ text). `TaskRow.test.ts` 23/23. `myday.spec.ts:287` `/Punted/` is the drawer's `detail-punt-toggle`, not the chip — verified by reading.
 - W3:
 - W4:
 - Gate:

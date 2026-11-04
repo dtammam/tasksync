@@ -198,6 +198,7 @@ $: showPuntedCompletedTag =
 	task.due_date > todayKey &&
 	task.punted_on_date === todayKey &&
 	!!task.punted_from_due_date;
+// R4: the ▶ before the title is the only punt marker (no "Punted" chips).
 $: showPuntIndicator = showPuntedArrivalTag || showPuntedCompletedTag;
 $: listName = taskList?.name ?? 'Unknown list';
 // Fixed slots under the title (see docs/FRONTEND.md "Task row slots"): one date
@@ -267,12 +268,6 @@ $: isRecurringCompletedToday =
 					data-testid="task-date"
 					title={dateSlotIsNext ? `Next occurrence ${dateSlotText}` : undefined}>{#if dateSlotIsNext}<span class="recur-glyph" aria-hidden="true">↻</span>{' '}{/if}{dateSlotText}</span
 				>
-			{/if}
-			{#if showPuntedArrivalTag}
-				<span class="chip subtle punted-chip">Punted</span>
-			{/if}
-			{#if showPuntedCompletedTag}
-				<span class="chip subtle punted-chip">Punted today</span>
 			{/if}
 			{#if showCatchUp}
 				<button
@@ -471,7 +466,6 @@ $: isRecurringCompletedToday =
 	.slot-tag { grid-column: 4; justify-self: stretch; justify-content: center; }
 	.slot-more { grid-column: 5; justify-self: stretch; justify-content: center; }
 	.label-icon { display: none; }
-	.sub > .punted-chip { grid-row: 2; grid-column: 1 / -1; justify-self: start; }
 	.chip {
 		display:inline-flex;
 		align-items:center;
@@ -492,12 +486,6 @@ $: isRecurringCompletedToday =
 	.date-chip {
 		font-size: 11px;
 		padding-inline: 7px;
-	}
-	.punted-chip {
-		font-size: 11px;
-		border-color: color-mix(in oklab, var(--surface-accent) 52%, var(--border-2) 48%);
-		background: color-mix(in oklab, var(--surface-accent) 32%, var(--surface-2) 68%);
-		color: var(--app-text);
 	}
 	.quick { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-top:8px; }
 	.quick button {
