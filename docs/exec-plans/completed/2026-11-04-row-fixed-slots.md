@@ -3,7 +3,7 @@ plan: row-fixed-slots
 harness: v2 · lean
 branch: feat/row-fixed-slots
 anchor: outcome
-status: In review
+status: Complete (awaiting merge)
 next: Dean — device check on :beta, then merge
 gate: APPROVED r3 @af72be6 (adversary + qa)
 builder: smart
@@ -164,4 +164,4 @@ second line.
   - Gate: APPROVED r3 @af72be6 — adversary
   - Gate: APPROVED r3 @af72be6 — qa
   - Merge: origin/main 4cd7589 (retire-starred #172) merged as af72be6. Conflicts: TaskRow.test.ts (both sides appended a describe; both kept), tech-debt-tracker.md (ID 054 taken by main → port-reuse row is 056). TaskRow.svelte auto-merged; main's hunks are only the ★ indicator, Star shelf button and CSS. Post-merge: vitest 516/516 (33 files), svelte-check 0/0, eslint clean, @smoke 39/39 chromium, row/myday/quick-tag/bulk-tag/smoke specs × 3 browsers 226 passed / 0 failed / 0 flaky / 17 pre-existing non-chromium skips, cargo test 154/154. QA r3: one webkit myday.spec:835 readiness crash under box load (load avg ~17); 6/6 green on af72be6, fc8fd5a and main at lower load.
-- PR:
+- PR: https://github.com/dtammam/tasksync/pull/173 — close-out after approval @af72be6 is bookkeeping only: `git diff --name-only af72be6..HEAD` = docs/exec-plans/completed/2026-11-04-row-fixed-slots.md (moved from active/), no seat re-check.
