@@ -4,7 +4,7 @@ harness: v2 · lean
 branch: fix/regroup-on-load
 anchor: outcome
 status: In progress
-next: builder — W2 (fix)
+next: builder — W3 (docs)
 gate: pending
 builder: smart
 ---
@@ -141,7 +141,27 @@ Other candidates the builder must rule in or out with the same measurement:
   - Out of scope, logged to tech-debt: an offline reload of a deep
     `/list/<id>` URL renders an empty body (app never boots) on unchanged
     code; the offline arm uses `/` (PWA start URL).
-- W2 (after numbers):
+- W2 (after numbers): `tagPalette.hydrateFromLocal()` (sync, per-space key
+  `tasksync:tag-palette:<space_id>`, wire-validated) runs first in
+  `hydrateScopedStores()`; `hydrateFromServer()`/`save()` persist; server
+  `null` → key removed, `[]` → `"[]"`. A fetch is discarded if the space
+  changed or `save()`/`clear()` ran meanwhile.
+  - `regroup-on-load.spec.ts`, chromium, `--repeat-each=5`: 20/20 pass, 0 flaky.
+    List and My Day timelines: 1 order each run,
+    `["🥛 Dairy run","⭐ Top","Untagged"]` from first render (was 2). Control:
+    1 order. Offline (My Day): customized order (was default).
+  - Stress `--workers=4 --repeat-each=20`: 80/80 pass.
+  - Mutation (comment out the `hydrateFromLocal()` call in `+layout.svelte`):
+    list, My Day and offline FAIL with the W1 2-order timeline; control
+    passes. Restored.
+  - Spec setup fix: 2/60 first-load setups (before the reload under test)
+    showed no tasks after a 200 pull — suspected pre-existing startup race,
+    logged as tech-debt 058; setup now drives one focus-path pull
+    (`settleFirstLoad`).
+  - Unit: `tagPalette.test.ts` 8 → 28 (round-trip, 7 invalid-cache shapes,
+    null vs `[]`, save persists, failed save/fetch keep cache, per-space
+    isolation, signed-out, fetch-after-switch, fetch-after-logout,
+    stale fetch vs save, throwing localStorage).
 - W3:
 - Gate:
 - PR:

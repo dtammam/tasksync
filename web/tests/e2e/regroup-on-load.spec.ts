@@ -29,6 +29,7 @@ const CUSTOM_PALETTE = [
 	},
 ];
 const CUSTOM_ORDER = ['🥛 Dairy run', '⭐ Top', 'Untagged'];
+const DEFAULT_ORDER = ['⭐ Starred', '🥛 Dairy', 'Untagged'];
 
 const serverTasks = [
 	{ title: 'Regroup alpha', emoji: '⭐' },
@@ -136,6 +137,18 @@ const seedClient = async (page: Page) => {
 	});
 };
 
+// First-ever load (empty IndexedDB): on a loaded box the startup pull's tasks
+// are occasionally not applied (suspected startup race, tech-debt 058 -- out
+// of this plan's scope). Drive one more pull through the app's own focus path
+// so the setup is deterministic; the warm reopen under test is unaffected.
+const settleFirstLoad = async (page: Page, order: string[] = CUSTOM_ORDER) => {
+	await expectAppSynced(page);
+	const focusPull = page.waitForResponse((r) => r.url().endsWith('/sync/pull'));
+	await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+	await focusPull;
+	await expect(page.getByTestId('tag-group-title')).toHaveText(order);
+};
+
 const measureWarmReopen = async (page: Page, path: string) => {
 	await installMockServer(page, CUSTOM_PALETTE);
 	await seedClient(page);
@@ -144,9 +157,8 @@ const measureWarmReopen = async (page: Page, path: string) => {
 	// First (online) load: tasks land in IDB, the palette arrives from the server.
 	const firstTags = page.waitForResponse((r) => r.url().endsWith('/tags'));
 	await page.goto(path);
-	await expectAppSynced(page);
 	await firstTags;
-	await expect(page.getByTestId('tag-group-title')).toHaveText(CUSTOM_ORDER);
+	await settleFirstLoad(page);
 
 	// Warm reopen.
 	const reloadTags = page.waitForResponse((r) => r.url().endsWith('/tags'));
@@ -187,19 +199,18 @@ test.describe('Tag-group order is stable across a warm reopen', () => {
 		await seedClient(page);
 		await installGroupOrderRecorder(page);
 		await page.goto(`/list/${LIST_ID}`);
-		await expectAppSynced(page);
+		await settleFirstLoad(page, DEFAULT_ORDER);
 		const reloadTags = page.waitForResponse((r) => r.url().endsWith('/tags'));
 		await page.reload({ waitUntil: 'domcontentloaded' });
 		await expectAppSynced(page);
 		await reloadTags;
-		const defaultOrder = ['⭐ Starred', '🥛 Dairy', 'Untagged'];
-		await expect(page.getByTestId('tag-group-title')).toHaveText(defaultOrder);
+		await expect(page.getByTestId('tag-group-title')).toHaveText(DEFAULT_ORDER);
 		const timeline = nonEmpty(await readTimeline(page));
 		test.info().annotations.push({
 			type: 'group-order-timeline',
 			description: JSON.stringify(timeline),
 		});
-		expect(timeline, `timeline: ${JSON.stringify(timeline)}`).toEqual([defaultOrder]);
+		expect(timeline, `timeline: ${JSON.stringify(timeline)}`).toEqual([DEFAULT_ORDER]);
 	});
 });
 
@@ -220,9 +231,8 @@ test.describe('Tag-group order offline', () => {
 		// tech-debt, out of this plan's scope.
 		const firstTags = page.waitForResponse((r) => r.url().endsWith('/tags'));
 		await page.goto('/');
-		await expectAppSynced(page);
 		await firstTags;
-		await expect(page.getByTestId('tag-group-title')).toHaveText(CUSTOM_ORDER);
+		await settleFirstLoad(page);
 
 		const controlled = await page
 			.evaluate(async () => {
