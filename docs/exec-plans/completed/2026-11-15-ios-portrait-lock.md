@@ -3,9 +3,9 @@ plan: ios-portrait-lock
 harness: v2 · lean
 branch: chore/ios-portrait-lock
 anchor: outcome
-status: Planned
-next: builder — Step 0, then W1
-gate: pending
+status: Complete (awaiting merge)
+next: Dean — build on Mac, check portrait lock, merge
+gate: APPROVED r1 @93dd2e1 (adversary + qa)
 builder: standard
 ---
 
@@ -73,6 +73,10 @@ it in landscape. Stop it rotating.
 
 ## Evidence (builder fills)
 
-- W1:
-- Gate:
-- PR:
+- W1: `93dd2e1` — iPhone `UISupportedInterfaceOrientations` = Portrait only; iPad array unchanged (diff vs main: only the two Landscape strings removed from the iPhone array); `plistlib` parses OK; guard test `web/src/lib/ios/infoPlist.test.ts` (3 tests; mutation re-adding landscape -> red); `docs/IOS.md` Orientation line. Suite: lint clean, svelte-check 0 errors/0 warnings, vitest 34 files / 519 tests passed, @smoke 39 passed (Chromium).
+- Gate: adversary + qa (qa escalated: `src/**` row may match the test file), both APPROVED r1 @93dd2e1. Notes, not fixed (tech-debt-worthy only): guard regex is not XML-comment-aware; well-formed check is tag-count only.
+- PR: see PR link in the hand-off message.
+- Dean owes (Mac, device): `cd web && npm run build && npx cap sync ios`, build in Xcode, install. Check: iPhone app stays portrait when rotated (incl. from Home-screen launch); iPad (if available) still rotates and Split View still works.
+
+Gate: APPROVED r1 @93dd2e1d88868e83e4fbfdcb1214a2692d943934 — adversary
+Gate: APPROVED r1 @93dd2e1d88868e83e4fbfdcb1214a2692d943934 — qa
