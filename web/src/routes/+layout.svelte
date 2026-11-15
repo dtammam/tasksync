@@ -198,6 +198,9 @@
 	const hydrateScopedStores = async () => {
 		const scope = storageScopeFromAuth(auth.get());
 		setDbScope(scope);
+		// Cached tag palette first (sync), so tag groups render in their final
+		// order instead of regrouping once the server palette lands.
+		tagPalette.hydrateFromLocal();
 		await Promise.all([
 			lists.hydrateFromDb(),
 			tasks.hydrateFromDb(),
