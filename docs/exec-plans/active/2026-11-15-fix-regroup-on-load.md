@@ -4,7 +4,7 @@ harness: v2 · lean
 branch: fix/regroup-on-load
 anchor: outcome
 status: In progress
-next: builder — W3 (docs)
+next: gate (adversary + qa)
 gate: pending
 builder: smart
 ---
@@ -162,6 +162,8 @@ Other candidates the builder must rule in or out with the same measurement:
     null vs `[]`, save persists, failed save/fetch keep cache, per-space
     isolation, signed-out, fetch-after-switch, fetch-after-logout,
     stale fetch vs save, throwing localStorage).
-- W3:
+- W3: one bullet in `docs/ARCHITECTURE.md` (feature list, next to the other
+  local fast-boot caches) — "Tag palette (boot order)". Neither doc had a
+  dedicated boot-order section.
 - Gate:
 - PR:
