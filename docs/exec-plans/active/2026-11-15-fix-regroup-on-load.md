@@ -3,8 +3,8 @@ plan: fix-regroup-on-load
 harness: v2 · lean
 branch: fix/regroup-on-load
 anchor: outcome
-status: Planned
-next: builder — Step 0, then W1 (measure)
+status: In progress
+next: builder — W2 (fix)
 gate: pending
 builder: smart
 ---
@@ -122,7 +122,25 @@ Other candidates the builder must rule in or out with the same measurement:
 
 ## Evidence (builder fills)
 
-- W1 (before numbers):
+- W1 (before numbers): `regroup-on-load.spec.ts` on unchanged code (chromium,
+  private preview port 4391): an init-script MutationObserver records every
+  distinct `tag-group-title` order from the first byte of the reload.
+  - List view: 2 orders — `["⭐ Starred","🥛 Dairy","Untagged"]` →
+    `["🥛 Dairy run","⭐ Top","Untagged"]` (FAIL, bug proven).
+  - My Day, group-by on: same 2-order timeline (FAIL).
+  - Offline reload (My Day): default order sticks — `toHaveText(CUSTOM_ORDER)`
+    fails after the offline reload (FAIL).
+  - Control (server palette `null`, same no-op `/sync/pull` returning identical
+    lists+tasks, server prefs = defaults, My Day sort from localStorage): 1
+    order, never rearranges (PASS) → the no-op pull, `listSort` and My Day
+    sort are ruled out; the palette is the only mover. Stop rule 1 not hit.
+  - Committed un-skipped, no `test.fail`: pre-commit runs no e2e and W1 is
+    not pushed before W2.
+  - Finding: `context.setOffline()` does not stop `page.route()` mocks, so the
+    offline arm also aborts its mocks (it passed vacuously on main otherwise).
+  - Out of scope, logged to tech-debt: an offline reload of a deep
+    `/list/<id>` URL renders an empty body (app never boots) on unchanged
+    code; the offline arm uses `/` (PWA start URL).
 - W2 (after numbers):
 - W3:
 - Gate:
