@@ -11,7 +11,7 @@ permissions:
 jobs:
   pr-body:
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validate required summary
         uses: actions/github-script@v8

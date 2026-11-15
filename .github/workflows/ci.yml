@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -62,7 +62,7 @@ jobs:
 
   web-e2e-matrix:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -108,7 +108,7 @@ jobs:
           retention-days: 7
 
   server:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: server
@@ -132,7 +132,7 @@ jobs:
   publish:
     if: github.event_name == 'push'
     needs: [web, server]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: docker-publish-${{ github.ref_name }}
       cancel-in-progress: true
