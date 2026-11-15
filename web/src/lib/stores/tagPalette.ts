@@ -112,7 +112,8 @@ export const tagPalette = {
 			if (!hydrateGuard.isCurrent(snap) || storageKey() !== key) return;
 			tagPaletteStore.set(loaded ?? DEFAULT_TAG_PALETTE);
 			if (key) writeLocal(key, loaded);
-		} catch {
+		} catch (err) {
+			console.warn('[tagPalette] palette fetch failed, keeping current palette', err);
 			// Leave the store as-is on a fetch error (the cached palette, the
 			// default, or whatever was last successfully hydrated) rather than
 			// clobbering it -- an empty palette is a meaningfully different (and

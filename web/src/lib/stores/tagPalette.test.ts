@@ -165,6 +165,10 @@ describe('tagPalette store', () => {
 				'an entry missing its label',
 				JSON.stringify([{ section: 'x', entries: [{ emoji: '🚀' }] }]),
 			],
+			[
+				'an entry missing its emoji',
+				JSON.stringify([{ section: 'x', entries: [{ label: 'Launch' }] }]),
+			],
 			['a null element', JSON.stringify([null])],
 			['JSON null', 'null'],
 		])('invalid cache (%s) → default palette + console.warn, never throws', (_name, raw) => {
@@ -204,6 +208,26 @@ describe('tagPalette store', () => {
 			expect(currentTagPalette()).toEqual([]);
 		});
 
+		it('a save() that resolves after a space switch caches for its own space but is not shown in the new one', async () => {
+			signedInTo('s1');
+			let resolveSave: (value: TagPaletteSection[]) => void = () => undefined;
+			mockedApi.updateTagPalette.mockReturnValue(
+				new Promise<TagPaletteSection[]>((resolve) => {
+					resolveSave = resolve;
+				})
+			);
+			const inFlight = tagPalette.save(CUSTOM);
+
+			signedInTo('s2');
+			tagPalette.hydrateFromLocal();
+			resolveSave(CUSTOM);
+			await inFlight;
+
+			expect(currentTagPalette()).toEqual(DEFAULT_TAG_PALETTE);
+			expect(JSON.parse(localStorage.getItem(KEY_S1) ?? 'null')).toEqual(CUSTOM);
+			expect(localStorage.getItem(KEY_S2)).toBeNull();
+		});
+
 		it('save() persists the server-confirmed palette', async () => {
 			signedInTo('s1');
 			mockedApi.updateTagPalette.mockResolvedValue(CUSTOM);
@@ -228,9 +252,11 @@ describe('tagPalette store', () => {
 			localStorage.setItem(KEY_S1, JSON.stringify(CUSTOM));
 			tagPalette.hydrateFromLocal();
 			mockedApi.getTagPalette.mockRejectedValue(new Error('offline'));
+			const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 			await tagPalette.hydrateFromServer();
 
+			expect(warn).toHaveBeenCalledTimes(1);
 			expect(currentTagPalette()).toEqual(CUSTOM);
 			expect(JSON.parse(localStorage.getItem(KEY_S1) ?? 'null')).toEqual(CUSTOM);
 		});

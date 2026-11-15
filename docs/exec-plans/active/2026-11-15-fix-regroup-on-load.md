@@ -166,4 +166,6 @@ Other candidates the builder must rule in or out with the same measurement:
   local fast-boot caches) — "Tag palette (boot order)". Neither doc had a
   dedicated boot-order section.
 - Gate:
+  - Gate: APPROVED r1 @d6bdf98 — adversary
+  - Gate: APPROVED r1 @d6bdf98 — qa
 - PR:
