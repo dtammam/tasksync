@@ -3,9 +3,9 @@ plan: fix-regroup-on-load
 harness: v2 · lean
 branch: fix/regroup-on-load
 anchor: outcome
-status: In progress
-next: gate (adversary + qa)
-gate: pending
+status: Shipped (PR #175 — awaiting Dean's merge)
+next: Dean — device checks on :beta, then merge PR #175
+gate: APPROVED r2 @99023cc (adversary, qa)
 builder: smart
 ---
 
@@ -165,7 +165,19 @@ Other candidates the builder must rule in or out with the same measurement:
 - W3: one bullet in `docs/ARCHITECTURE.md` (feature list, next to the other
   local fast-boot caches) — "Tag palette (boot order)". Neither doc had a
   dedicated boot-order section.
-- Gate:
+- Gate: full gate, adversary + qa (scrutiny: core-logic; no force rule matched).
+  r1 @d6bdf98 both APPROVED; QA WARNING (silent catch in `hydrateFromServer`)
+  and adversary surviving mutants M4/M7 fixed in 99023cc; r2 delta both
+  APPROVED. Close-out after 99023cc is bookkeeping only — bound by
+  `git diff --name-only 99023cc..HEAD` (docs/** only) in the PR.
   - Gate: APPROVED r1 @d6bdf98 — adversary
   - Gate: APPROVED r1 @d6bdf98 — qa
-- PR:
+  - Gate: APPROVED r2 @99023cc — qa
+  - Gate: APPROVED r2 @99023cc — adversary
+- PR: https://github.com/dtammam/tasksync/pull/175 — suites at 99023cc:
+  lint clean, check 0/0, vitest 538/538, chromium @smoke 42/42 (port 4391);
+  pre-push hook passed (cargo test 154/154).
+- Device checks Dean owes (:beta, customized palette): (1) reopen a tagged
+  list — no rearrangement; (2) My Day with group-by on — same; (3) airplane
+  mode reopen — your order; (4) edit the palette, reopen — new order from
+  first paint.
