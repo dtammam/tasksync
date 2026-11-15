@@ -62,6 +62,7 @@ These settings are already configured in the generated Xcode project, but are wo
 - **Deployment target:** iOS 16.0+. This ensures stable WKWebView features including service worker support and modern Web API coverage. Do not lower this below 16.0.
 - **Bundle identifier:** `com.tasksync.app`. This is set in `web/capacitor.config.ts` and synced to Xcode automatically. To change it, edit `capacitor.config.ts` and re-run `npx cap sync ios`.
 - **Development team:** Required for device builds. To configure it, open the Xcode project, select the **App** target, go to the **Signing & Capabilities** tab, and select your team from the "Team" dropdown.
+- **Orientation:** the iPhone app is portrait-only by design (`UISupportedInterfaceOrientations` in `web/ios/App/App/Info.plist`); iPad keeps all orientations so Split View / Slide Over keep working. A guard test (`web/src/lib/ios/infoPlist.test.ts`) fails if landscape is re-added.
 
 ## Simulator vs device builds
 
