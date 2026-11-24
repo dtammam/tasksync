@@ -3,9 +3,9 @@ plan: fix-doubled-tag-heading
 harness: v2 · lean
 branch: fix/cold-start-tag-order
 anchor: outcome
-status: Building
-next: Fixes verified locally; return to the existing Adversary/QA sessions for r2
-gate: pending
+status: Gate:APPROVED r2 @05035f6
+next: Dean reviews and merges the PR; deploying to beta stays his step. The launch re-sort stays open (out of scope).
+gate: APPROVED r2 @05035f6 (adversary, qa)
 ---
 
 # Fix: cold-launch tag heading shows the emoji twice
@@ -112,3 +112,26 @@ Both headings on each affected surface are pinned to their exact visible text:
 | # | Question | Ruling |
 |---|----------|--------|
 |   |          | none yet |
+
+## Gate record
+
+Code written by the local coding agent (Qwen3.8-Flash-Next via OpenCode on SANDYJAR, coding-mode test 2026-11-23);
+the seats are Claude reviewers spawned by the Architect.
+
+Gate: CHANGES r1 @2267f97 — adversary, qa
+- adversary MAJOR: no test pinned the four rendered headings; a faithful revert of the templates left vitest 544/544
+  and the e2e green (6 of 9 mutants killed); the existing "doubled-emoji fallback" check only asserted the label word
+  was absent. MINOR: stale comments describing "🌙 🌙" as expected; FRONTEND.md promise not backed by a test.
+- qa WARNING: same test-binding gap (the first red was a missing export); WARNING: stale plan markers and no
+  Verification section. SUGGESTIONS: Symptom wording, FRONTEND.md "exposes one pure helper".
+
+Gate: APPROVED r2 @05035f6 — adversary, qa
+- adversary: the old inline heading expression put back at each of the four sites in turn is caught every time
+  (+page.svelte:341 and :378 by task-tags.spec.ts:170; list/[id]/+page.svelte:230 and :257 by :57), 4 of 4 killed;
+  both new tests are @smoke and ran; vitest 544, svelte-check 0, eslint 0; smoke 42 passed, 2 failed (the baseline
+  bulk-move.spec.ts:61 and row-quick-tag.spec.ts:24, which also fail on main on this Mac; CI on Linux is green).
+- qa: r1 findings resolved; lint, check, vitest 544, cargo fmt, clippy, cargo test 154 match; headings still rendered
+  as escaped text (no {@html}). Carried suggestions, disclosed not fixed: the "Since #175" wording in the Symptom and in
+  task-tags.spec.ts:132 (the doubling never depended on #175: a tag outside the active palette doubled on every render);
+  the Verification section's smoke line (41 passed / 3 failed) includes offline.spec.ts:448, which passed in both seat
+  runs (flaky or sandbox-only).
