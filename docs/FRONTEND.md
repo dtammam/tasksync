@@ -82,7 +82,7 @@ Within `web/src/lib/`:
 
 ## Tag group headings
 
-- `web/src/lib/tags/grouping.ts` exposes one pure helper, `tagGroupTitle(group)`,
+- `web/src/lib/tags/grouping.ts` adds a pure helper, `tagGroupTitle(group)`,
   which all four grouped-task heading sites use to build the section title.
 - An off-palette tag's fallback label is its raw emoji, so the helper returns
   that label alone rather than printing `"<emoji> <emoji>"`; an in-palette tag
