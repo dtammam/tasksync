@@ -54,6 +54,36 @@ test.describe('Task tags', () => {
 		).toBeVisible();
 	});
 
+	test('@smoke a list’s pending and completed headings show an off-palette tag once', async ({
+		page
+	}) => {
+		await resetClientState(page);
+		await page.goto('/list/goal-management');
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const pendingTitle = makeTitle('Unicorn in progress');
+		const completedTitle = makeTitle('Unicorn finished');
+		for (const title of [pendingTitle, completedTitle]) {
+			await page.getByTestId('new-task-input').fill(title);
+			await page.getByTestId('new-task-submit').click();
+			await waitForTaskInIdb(page, title);
+		}
+
+		await updateTaskInIdb(page, pendingTitle, { emoji: '🦄' });
+		await updateTaskInIdb(page, completedTitle, { emoji: '🦄', status: 'done' });
+
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		const unicornGroups = page.getByTestId('tag-group-title').filter({ hasText: '🦄' });
+		await expect(unicornGroups).toHaveCount(2);
+		await expect(unicornGroups.nth(0)).toHaveText('🦄');
+		await expect(unicornGroups.nth(1)).toHaveText('🦄');
+
+		await expect(page.getByTestId('task-title').filter({ hasText: pendingTitle })).toBeVisible();
+		await expect(page.getByTestId('task-title').filter({ hasText: completedTitle })).toBeVisible();
+	});
+
 	test('group headers update once a custom palette finishes hydrating, with no reload or extra edit', async ({
 		page
 	}) => {
@@ -65,9 +95,10 @@ test.describe('Task tags', () => {
 		// not block first paint). The tag's own emoji glyph still rendered fine
 		// (TaskRow reads task.emoji directly), but the group *header* stayed
 		// frozen at whatever the palette looked like on first render -- the
-		// built-in default, since a real palette hasn't hydrated yet. A custom
-		// tag not in the default palette (like this one) renders a doubled-emoji
-		// fallback label until the fix makes the header depend on `$tagPalette`.
+		// built-in default, since a real palette hasn't hydrated yet. A tag outside
+		// that default previously rendered its emoji twice (the key plus the same
+		// emoji as fallback label); it now renders that fallback exactly once until
+		// the mocked `/tags` response supplies the custom `Night` label.
 		let releaseTagsResponse: (() => void) | null = null;
 		const tagsResponseGate = new Promise<void>((resolve) => {
 			releaseTagsResponse = resolve;
@@ -98,13 +129,13 @@ test.describe('Task tags', () => {
 		await page.reload({ waitUntil: 'domcontentloaded' });
 		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
 
-		// Before hydration resolves: 🌙 isn't in the built-in default palette,
-		// so the group falls back to the raw emoji as its own label -- the
-		// bug's exact symptom (a doubled emoji, never a real label) if this
-		// never clears without further interaction.
+		// Since #175, this is not merely cold-start-only: a tag missing from the
+		// active palette kept rendering its fallback label twice on every render.
+		// The current helper renders that fallback once before hydration and uses
+		// `Night` after the custom palette arrives.
 		const nightGroup = page.getByTestId('tag-group-title').filter({ hasText: '🌙' });
 		await expect(nightGroup).toBeVisible();
-		await expect(nightGroup).not.toContainText('Night');
+		await expect(nightGroup).toHaveText('🌙');
 
 		releaseTagsResponse!();
 
@@ -134,5 +165,41 @@ test.describe('Task tags', () => {
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
 		await expect(page.getByTestId('tag-group-title').first()).toContainText('🎯');
+	});
+
+	test('@smoke My Day’s pending and completed headings show an off-palette tag once', async ({
+		page
+	}) => {
+		await resetClientState(page);
+
+		const pendingTitle = makeTitle('My Day unicorn in progress');
+		const completedTitle = makeTitle('My Day unicorn finished');
+		for (const title of [pendingTitle, completedTitle]) {
+			await page.getByTestId('new-task-input').fill(title);
+			await page.getByTestId('new-task-submit').click();
+			await waitForTaskInIdb(page, title);
+		}
+
+		await updateTaskInIdb(page, pendingTitle, { emoji: '🦄', my_day: true });
+		await updateTaskInIdb(page, completedTitle, { emoji: '🦄', my_day: true, status: 'done' });
+
+		await page.reload({ waitUntil: 'domcontentloaded' });
+		await expect(page.getByTestId('app-shell')).toHaveAttribute('data-ready', 'true');
+
+		// Grouping remains off by default even while these tasks are visible.
+		await expect(page.getByTestId('tag-group-title')).toHaveCount(0);
+
+		const toggle = page.getByTestId('myday-group-by-tag-toggle');
+		await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+		await toggle.click();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+		const unicornGroups = page.getByTestId('tag-group-title').filter({ hasText: '🦄' });
+		await expect(unicornGroups).toHaveCount(2);
+		await expect(unicornGroups.nth(0)).toHaveText('🦄');
+		await expect(unicornGroups.nth(1)).toHaveText('🦄');
+
+		await expect(page.getByTestId('task-title').filter({ hasText: pendingTitle })).toBeVisible();
+		await expect(page.getByTestId('task-title').filter({ hasText: completedTitle })).toBeVisible();
 	});
 });
