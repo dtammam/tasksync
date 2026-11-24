@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupTasksByTag, isUntaggedGroupKey } from './grouping';
+import { groupTasksByTag, isUntaggedGroupKey, tagGroupTitle } from './grouping';
 import { DEFAULT_TAG_PALETTE } from './palette';
 
 interface Fixture {
@@ -71,5 +71,27 @@ describe('groupTasksByTag', () => {
 		const withCustom = groupTasksByTag([item('a', '🌙')], customPalette);
 		expect(withDefault[0].label).toBe('🌙'); // unrecognized against the default -> falls back to the key
 		expect(withCustom[0].label).toBe('Night');
+	});
+});
+
+describe('tagGroupTitle', () => {
+	const headingFor = (emoji: string | undefined): string => {
+		const [group] = groupTasksByTag([item('x', emoji)], DEFAULT_TAG_PALETTE);
+		return tagGroupTitle(group);
+	};
+
+	it('shows an off-palette emoji exactly once', () => {
+		// Regression: a cold boot renders a not-in-palette tag's heading as
+		// "🦄 🦄" -- the raw emoji is its fallback label AND its key, and the
+		// headings printed `${key} ${label}`, doubling it. Expected: one copy.
+		expect(headingFor('🦄')).toBe('🦄');
+	});
+
+	it('shows an in-palette tag as "emoji label"', () => {
+		expect(headingFor('⭐')).toBe('⭐ Starred');
+	});
+
+	it('shows untagged as "Untagged"', () => {
+		expect(headingFor(undefined)).toBe('Untagged');
 	});
 });
