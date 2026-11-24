@@ -11,7 +11,7 @@
 	import { selection, selectionMode } from '$lib/stores/selection';
 	import { lists } from '$lib/stores/lists';
 	import { uiPreferences } from '$lib/stores/preferences';
-	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
+	import { groupTasksByTag, tagGroupTitle } from '$lib/tags/grouping';
 	import { sortTasks } from '$lib/tasks/sort';
 	import { tagPalette } from '$lib/stores/tagPalette';
 	import type { Task } from '$shared/types/task';
@@ -227,7 +227,7 @@
 		{#if pendingTasks.length}
 			{#each pendingGroups as group (group.key)}
 				{#if group.label}
-					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+					<div class="tag-group-title" data-testid="tag-group-title">{tagGroupTitle(group)}</div>
 				{/if}
 				<div class="stack">
 					{#each group.tasks as task (task.id)}
@@ -254,7 +254,7 @@
 		{#if completedTasks.length}
 			{#each completedGroups as group (group.key)}
 				{#if group.label}
-					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+					<div class="tag-group-title" data-testid="tag-group-title">{tagGroupTitle(group)}</div>
 				{/if}
 				<div class="stack">
 					{#each group.tasks as task (task.id)}

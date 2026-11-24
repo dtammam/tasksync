@@ -80,6 +80,17 @@ Within `web/src/lib/`:
   - non-daily recurrence
 - If a task is already punted for the current cycle, details shows a disabled `Punted` state control instead of an active punt button.
 
+## Tag group headings
+
+- `web/src/lib/tags/grouping.ts` exposes one pure helper, `tagGroupTitle(group)`,
+  which all four grouped-task heading sites use to build the section title.
+- An off-palette tag's fallback label is its raw emoji, so the helper returns
+  that label alone rather than printing `"<emoji> <emoji>"`; an in-palette tag
+  still renders `"<emoji> <label>"`, and untagged renders `"Untagged"`.
+- Do not rebuild the heading text inline in components or route templates —
+  call the shared helper instead, so a missing palette entry can never double
+  the emoji again.
+
 ## Task row slots
 
 The line under a task title (`TaskRow.svelte` `.sub`) is a one-row grid with fixed slots, so the eye and thumb find

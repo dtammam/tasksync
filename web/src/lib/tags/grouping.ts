@@ -57,3 +57,17 @@ export const groupTasksByTag = <T extends { emoji?: string }>(
 };
 
 export const isUntaggedGroupKey = (key: string): boolean => key === UNTAGGED_KEY;
+
+// One source of truth for a section heading's display text, shared by every
+// tag-grouped list template. An off-palette group's label falls back to the raw
+// emoji (`key === label`, see `groupTasksByTag`) -- printing `${key} ${label}`
+// there would show the same emoji twice, so when the label IS the key we render
+// just it once. In-palette groups keep the familiar "emoji label". Untagged
+// renders its own fixed title from the group's label.
+export const tagGroupTitle = <T extends { emoji?: string }>(group: TagGroup<T>): string => {
+	if (isUntaggedGroupKey(group.key)) return group.label;
+	// A no-tag/'all' collection has an empty label; templates guard on that, but
+	// returning it unchanged keeps this helper total.
+	if (!group.label || group.label === group.key) return group.label;
+	return `${group.key} ${group.label}`;
+};

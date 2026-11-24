@@ -13,7 +13,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import { uiPreferences, DEFAULT_COMPLETION_QUOTES } from '$lib/stores/preferences';
 	import { hydrated } from '$lib/stores/hydration';
-	import { groupTasksByTag, isUntaggedGroupKey } from '$lib/tags/grouping';
+	import { groupTasksByTag, tagGroupTitle } from '$lib/tags/grouping';
 	import { sortTasks } from '$lib/tasks/sort';
 	import { tagPalette } from '$lib/stores/tagPalette';
 	import type { Task } from '$shared/types/task';
@@ -338,7 +338,7 @@
 		{#if sortedPending.length}
 			{#each pendingGroups as group (group.key)}
 				{#if group.label}
-					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+					<div class="tag-group-title" data-testid="tag-group-title">{tagGroupTitle(group)}</div>
 				{/if}
 				<div class="stack">
 					{#each group.tasks as task (task.id)}
@@ -375,7 +375,7 @@
 		{#if sortedCompleted.length}
 			{#each completedGroups as group (group.key)}
 				{#if group.label}
-					<div class="tag-group-title" data-testid="tag-group-title">{isUntaggedGroupKey(group.key) ? group.label : `${group.key} ${group.label}`}</div>
+					<div class="tag-group-title" data-testid="tag-group-title">{tagGroupTitle(group)}</div>
 				{/if}
 				<div class="stack">
 					{#each group.tasks as task (task.id)}

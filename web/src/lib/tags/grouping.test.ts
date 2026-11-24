@@ -92,6 +92,9 @@ describe('tagGroupTitle', () => {
 	});
 
 	it('shows untagged as "Untagged"', () => {
-		expect(headingFor(undefined)).toBe('Untagged');
+		const groups = groupTasksByTag([item('a', '⭐'), item('b')], DEFAULT_TAG_PALETTE);
+		const untagged = groups.find((g) => isUntaggedGroupKey(g.key));
+		expect(untagged).toBeDefined();
+		expect(tagGroupTitle(untagged!)).toBe('Untagged');
 	});
 });
